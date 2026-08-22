@@ -32,6 +32,11 @@ option explicit
 '$include: 'q_cam.bi'
 
 '$static
+''
+'' Quake's turbsin. A table because two sines per vertex of every
+'' liquid face is not something to compute in the draw loop.
+''
+dim shared turbsin( 255 ) as single
 dim shared poly(64) as u3dVector4f
 dim shared polyb(32) as u3dVector4f
 dim shared prj_u(32) as single
@@ -166,10 +171,16 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
     dim zl as single
     dim miplevel as integer, tex_indx as integer
     dim p2 as integer, p3 as integer
+    dim liquid as integer
+    dim tu as single, tv as single
+    dim tqi as long, tqj as long
+    dim turbph as single
 
    ''
    '' Draw nodes
    ''       
+    turbph = rdr.anim_time * TURB_RATE#
+
     for mi = 0 to vis.ord_count-1
         m = order_list(mi)
             
@@ -226,6 +237,8 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
             tex = tri_buffer(i).texinfoid
             mipidx = tex_inf_buff(tex).miptex
             vcnt = tri_buffer(i).ledgenum
+
+            liquid = mip_buff_inf(mipidx).liquid
                     
             ''
             '' Texture axes, scaled by the texture size once per
@@ -252,24 +265,10 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
             ''
             '' Animation, once per face rather than per vertex.
             ''
-            '' A liquid flows: su3 and sv3 are the constant terms of the
-            '' texture axes, so adding to them shifts every vertex of the
-            '' face by the same amount, which is a scroll. Two adds and a
-            '' test, against the alternative of warping each vertex with a
-            '' sine -- Quake's real warp, and far too expensive here.
-            ''
-            '' The rate is in texture widths per second, not texels: tw and
-            '' th are reciprocals of the texture size, so su3 and sv3 are
-            '' already normalised. A rate of 8 here scrolled eight whole
-            '' textures a second, which looked like static.
-            ''
             '' An animated texture swaps which image is sampled, so it costs
             '' nothing but the index arithmetic.
             ''
-            if ( mip_buff_inf(mipidx).liquid ) then
-                su3 = su3 + rdr.anim_time * LIQ_FLOW_U#
-                sv3 = sv3 + rdr.anim_time * LIQ_FLOW_V#
-            elseif ( mip_buff_inf(mipidx).anim_count > 1 ) then
+            if ( mip_buff_inf(mipidx).anim_count > 1 ) then
                 mipidx = mip_buff_inf(mipidx).anim_base + _
                          (int( rdr.anim_time * 5.0 ) mod mip_buff_inf(mipidx).anim_count)
             end if
@@ -299,6 +298,23 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
                         
                 uvbuffb(j).u = su0*vx + su1*vy + su2*vz + su3
                 uvbuffb(j).v = sv0*vx + sv1*vy + sv2*vz + sv3
+
+                ''
+                '' A liquid displaces each coordinate by a sine of the
+                '' other, so the surface rolls rather than slides.
+                ''
+                '' Per vertex, which is as fine as this renderer can do
+                '' it: Quake perturbs per span, inside its own texture
+                '' mapper, and uGL's mapper is not ours to change.
+                ''
+                if ( liquid ) then
+                    tu = uvbuffb(j).u
+                    tv = uvbuffb(j).v
+                    tqi = int( tv*TURB_FREQ# + turbph ) and 255
+                    tqj = int( tu*TURB_FREQ# + turbph ) and 255
+                    uvbuffb(j).u = tu + turbsin(tqi)
+                    uvbuffb(j).v = tv + turbsin(tqj)
+                end if
             next j
                     
             ''
@@ -446,4 +462,21 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
 next_face:
         next ti
     next mi        
+end sub
+
+
+
+''::::::::::
+'' name: d_init_turb
+'' desc: Builds the turbulence table once. Quake's is 8 texels of a 64 wide
+''       texture; ours is in the normalised units the draw loop works in, so
+''       the amplitude is that ratio.
+''::::::::::
+sub d_init_turb
+    dim i as integer
+
+    for  i = 0 to 255
+        turbsin(i) = TURB_AMP# * sin( i * (2.0*3.14159265 / 256.0) )
+    next i
+
 end sub

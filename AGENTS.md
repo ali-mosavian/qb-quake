@@ -376,11 +376,21 @@ a leading `+N` is one frame of an animation whose other frames share the name
 after the digit. `mod_load_textures` classifies them and `mod_link_anims`
 groups the chains; `d_draw_faces` applies both once per face, not per vertex.
 
-A liquid scrolls by adding to `su3`/`sv3`, the constant terms of the texture
-axes, which shifts every vertex of a face equally. **Those are normalised, not
-texel, units** -- `tw` and `th` are reciprocals of the texture size. A rate of
-8 there means eight whole textures a second, which looks like static rather
-than water, and is what the first version did.
+A liquid is perturbed, not scrolled: each coordinate is displaced by a sine of
+the *other* one, from a 256-entry table, which is what makes a surface roll
+instead of slide. Quake's amplitude is 8 texels of 64 and its index is
+`(other*0.125 + time) * 256/2pi`; ours works in normalised coordinates, so the
+amplitude is 8/64 and the 0.125 absorbs the texture width.
+
+**Those coordinates are normalised, not texels** -- `tw` and `th` are
+reciprocals of the texture size. An earlier version scrolled by `time * 8`
+there, believing it was texels, and moved the texture eight entire widths a
+second: consecutive frames were uncorrelated, which looks like static and which
+a two-frame diff reported as "no animation at all".
+
+The perturbation is per vertex, which is as fine as this renderer goes. Quake
+does it per span inside its own texture mapper, and uGL's mapper is not ours to
+change.
 
 dm3ish has two liquids and no `+N` textures at all, so the frame chains are
 implemented and unexercised.

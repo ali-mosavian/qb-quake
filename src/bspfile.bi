@@ -269,6 +269,7 @@ declare sub pl_move ( byval fwd as single, byval strafe as single, _
 
 declare sub v_open_script ( )
 declare function in_keystroke ( key_down as integer ) as integer
+declare sub d_init_turb ( )
 declare sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
                            xresh as single, yresh as single )
 declare sub scr_draw_hud ( h_dst_dc as long )

@@ -181,6 +181,7 @@ sub host_init
     '' arguments and subsystems
     sys_parse_args
     sys_init_tables
+    d_init_turb
     vid_init_ugl
     s_init
     s_start_music
