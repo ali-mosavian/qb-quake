@@ -25,7 +25,8 @@ bsp_pvs dm3ish.bsp
 | `dosbox/`     | headless DOSBox-X configs used to build and run on a host |
 
 `bsp_pvs_refactored.bas` is a superseded rewrite kept for reference. It is not
-built by `mkvbd.bat` and does not compile.
+built by `mkvbd.bat`. It has not been compiled; it uses `uglPalLoad` without
+including `pal.bi`, so it carries that defect too.
 
 ## Building
 
@@ -65,13 +66,16 @@ memory and run fullscreen — µGL's VESA probe wants a real video context.
 
 ### Building and running on a host
 
-`dosbox/` holds the DOSBox-X configs used to build and run this without a DOS
-machine. They mount the project at `C:`, VBDOS at `V:` and µGL at `M:`, then
-run a `.bat` and leave the results in `build/vbd/` on the host side:
+`tools/dosbox.sh` builds and runs this under DOSBox-X with no DOS machine, by
+filling in `dosbox/template.conf` and dropping the results in `build/`:
 
 ```bash
-SDL_VIDEODRIVER=dummy DOSBOX_CONF=dosbox/qrender-vbd.conf dosbox-x -exit
+tools/dosbox.sh build          # VBDOS
+tools/dosbox.sh run            # against dm3ish.bsp
 ```
+
+`build qb45` and `build pds` reproduce the two failures above. Paths come from
+`MGL`, `TOOLCHAINS` and `DOSBOX_BIN`; see `dosbox/README.md`.
 
 ## Fixes this build needed
 
