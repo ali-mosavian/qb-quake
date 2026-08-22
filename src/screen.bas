@@ -79,16 +79,16 @@ end sub
 ''
 '' :::::::::::::
 defint a-z
-sub draw_bar ( hDC as long, x as integer, y as integer, wdt as integer, _
+sub draw_bar ( h_dc as long, x as integer, y as integer, wdt as integer, _
                     hgt as integer, percent as single, col as long )
-    dim drwWidth as integer
+    dim drw_width as integer
     
     if ( percent < 0   ) then percent = 0
     if ( percent > 100 ) then percent = 100
     
-    drwWidth = (wdt * percent) / 100.0    
-    uglRect  hDC, x-2, y-2, x+wdt+2, y+hgt+2, col
-    uglRectF hDC, x, y, x+drwWidth, y+hgt, col  
+    drw_width = (wdt * percent) / 100.0    
+    uglRect  h_dc, x-2, y-2, x+wdt+2, y+hgt+2, col
+    uglRectF h_dc, x, y, x+drw_width, y+hgt, col  
     
 end sub
 
@@ -100,7 +100,7 @@ defint a-z
 function draw_load_font% ( flname as string, colb as long )
     dim col as long
     dim trn as long
-    dim fHndl as integer
+    dim f_hndl as integer
     dim char(3) as integer
     
     dim file as UAR
@@ -131,7 +131,7 @@ function draw_load_font% ( flname as string, colb as long )
     
     
     'if ( idstr <> "font" ) then
-    '    initFont% = 0
+    '    draw_load_font% = 0
     '    exit function        
     'end if
     
@@ -195,58 +195,58 @@ end sub
 '' desc: Sound VU bars, the statistics overlay and the watermark.
 ''::::::::::
 defint a-z
-sub scr_draw_hud ( hDstDC as long )
+sub scr_draw_hud ( h_dst_dc as long )
     dim l as integer, r as integer
 
     ''
     '' Draw VUs
     ''
     sndMasterGetVU l, r
-    draw_bar hDstDC, env.x_res-80, env.y_res-29, 70, 3, l*100/255, 254
-    draw_bar hDstDC, env.x_res-80, env.y_res-20, 70, 3, r*100/255, 254
+    draw_bar h_dst_dc, env.x_res-80, env.y_res-29, 70, 3, l*100/255, 254
+    draw_bar h_dst_dc, env.x_res-80, env.y_res-20, 70, 3, r*100/255, 254
     
 
     ''
     '' Print stuff
     ''
     if ( scr.stats ) then                    
-        draw_string hDstDC, 0, 8*0, "Fps: " + str$( scr.fps )
-        draw_string hDstDC, 0, 8*1, "Renderd polys: " + str$( rdr.polys )
-        draw_string hDstDC, 0, 8*2, "Renderd triangles: " + str$( rdr.tris )
+        draw_string h_dst_dc, 0, 8*0, "Fps: " + str$( scr.fps )
+        draw_string h_dst_dc, 0, 8*1, "Renderd polys: " + str$( rdr.polys )
+        draw_string h_dst_dc, 0, 8*2, "Renderd triangles: " + str$( rdr.tris )
         
         if ( rdr.usemips ) then 
-            draw_string hDstDC, 0, 8*3, "Mipmapping: enabled, press f1 to disable"
+            draw_string h_dst_dc, 0, 8*3, "Mipmapping: enabled, press f1 to disable"
         else
-            draw_string hDstDC, 0, 8*3, "Mipmapping: disabled, press f1 to enable"
+            draw_string h_dst_dc, 0, 8*3, "Mipmapping: disabled, press f1 to enable"
         end if
         
         if ( rdr.rendmode = 0 ) then 
-            draw_string hDstDC, 0, 8*4, "Render mode: perspective correct, press f2 to change"
+            draw_string h_dst_dc, 0, 8*4, "Render mode: perspective correct, press f2 to change"
         elseif ( rdr.rendmode = 1 ) then 
-            draw_string hDstDC, 0, 8*4, "Render mode: affine, press f2 to change"
+            draw_string h_dst_dc, 0, 8*4, "Render mode: affine, press f2 to change"
         else
-            draw_string hDstDC, 0, 8*4, "Render mode: wireframe, press f2 to change"
+            draw_string h_dst_dc, 0, 8*4, "Render mode: wireframe, press f2 to change"
         end if       
         
         if ( rdr.backface ) then 
-            draw_string hDstDC, 0, 8*5, "Backface culling: enabled, press 'b' to disable"
+            draw_string h_dst_dc, 0, 8*5, "Backface culling: enabled, press 'b' to disable"
         else
-            draw_string hDstDC, 0, 8*5, "Backface culling: disabled, press 'b' to enable"
+            draw_string h_dst_dc, 0, 8*5, "Backface culling: disabled, press 'b' to enable"
         end if
         
-        draw_string hDstDC, 0, env.y_res-8*7-6, "Resolution: " + str$( env.x_res ) + "x" + ltrim$(str$( env.y_res ))
-        draw_string hDstDC, 0, env.y_res-8*6-6, "Vertices:" + str$( wld.vtx_count )
-        draw_string hDstDC, 0, env.y_res-8*5-6, "Edges:" + str$( wld.edg_count )
-        draw_string hDstDC, 0, env.y_res-8*4-6, "Polygons:" + str$( wld.tri_count )
-        draw_string hDstDC, 0, env.y_res-8*3-6, "Nodes:" + str$( wld.nds_count )
-        draw_string hDstDC, 0, env.y_res-8*2-6, "Leaves:" + str$( wld.lef_count )
-        draw_string hDstDC, 0, env.y_res-8*1-6, "PVS entries:" + str$( wld.lef_count^2 )
-        draw_string hDstDC, 0, env.y_res-8*0-6, "Stats: enabled, press f12 to disable"             
+        draw_string h_dst_dc, 0, env.y_res-8*7-6, "Resolution: " + str$( env.x_res ) + "x" + ltrim$(str$( env.y_res ))
+        draw_string h_dst_dc, 0, env.y_res-8*6-6, "Vertices:" + str$( wld.vtx_count )
+        draw_string h_dst_dc, 0, env.y_res-8*5-6, "Edges:" + str$( wld.edg_count )
+        draw_string h_dst_dc, 0, env.y_res-8*4-6, "Polygons:" + str$( wld.tri_count )
+        draw_string h_dst_dc, 0, env.y_res-8*3-6, "Nodes:" + str$( wld.nds_count )
+        draw_string h_dst_dc, 0, env.y_res-8*2-6, "Leaves:" + str$( wld.lef_count )
+        draw_string h_dst_dc, 0, env.y_res-8*1-6, "PVS entries:" + str$( wld.lef_count^2 )
+        draw_string h_dst_dc, 0, env.y_res-8*0-6, "Stats: enabled, press f12 to disable"             
     else 
-        draw_string hDstDC, 0, env.y_res-8*0-6, "Stats: disabled, press f12 to enable"
+        draw_string h_dst_dc, 0, env.y_res-8*0-6, "Stats: disabled, press f12 to enable"
     end if
     
-    draw_string hDstDC, env.x_res-56, env.y_res-6, "Powered by UGL"
+    draw_string h_dst_dc, env.x_res-56, env.y_res-6, "Powered by UGL"
 end sub
 
 

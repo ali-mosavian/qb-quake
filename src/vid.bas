@@ -93,13 +93,13 @@ end sub
 '' Once per frame, at the end of it.
 ''::::::::::
 defint a-z
-sub vid_update ( hDstDC as long, page as integer )
+sub vid_update ( h_dst_dc as long, page as integer )
 
     ''
     '' Take screenshoot ?
     '' 
     if ( env.keyboard.s ) then            
-        scr_screenshot "scrn" + ltrim$(rtrim$(str$( screenie ))) + ".bmp", hDstDC
+        scr_screenshot "scrn" + ltrim$(rtrim$(str$( screenie ))) + ".bmp", h_dst_dc
         screenie = screenie + 1
     end if
     

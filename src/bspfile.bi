@@ -212,7 +212,7 @@ const DEG2RAD# = 3.14159265359 / 180.0
 
 '' defined in main.bas, called from model.bas -- within one module
 '' BASIC auto-declares, across modules it needs this.
-declare sub draw_bar ( hDC as long, x as integer, y as integer, wdt as integer, _
+declare sub draw_bar ( h_dc as long, x as integer, y as integer, wdt as integer, _
                             hgt as integer, percent as single, col as long )
 declare sub scr_load_tick ( )
 declare sub mod_close ( )
@@ -223,14 +223,14 @@ declare sub host_shutdown     ( )
 declare sub sys_error ( msg as string )
 declare sub r_mark_leaves ( byval nodenr as integer )
 declare sub r_draw_world ( model as integer )
-declare sub v_update_camera ( pa as integer, crrPnt as integer, cntPnts as integer, _
+declare sub v_update_camera ( pa as integer, crr_pnt as integer, cnt_pnts as integer, _
                         ppos() as PNT3D, plok() as PNT3D, _
                         cbzp() as PNT3D, cbzl() as PNT3D, last_point as integer )
 declare sub in_handle_toggles ( )
-declare sub d_draw_faces ( hDstDC as long, mtxFin as u3dMtrx, _
+declare sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
                            xresh as single, yresh as single )
-declare sub scr_draw_hud ( hDstDC as long )
-declare sub vid_update ( hDstDC as long, page as integer )
+declare sub scr_draw_hud ( h_dst_dc as long )
+declare sub vid_update ( h_dst_dc as long, page as integer )
 
 '' Startup steps, in the order doInit runs them. Each is entered once,
 '' which is the whole reason they are separate routines.
@@ -266,9 +266,6 @@ declare sub com_check_args ( strm() as string, strm_cnt as integer, _
                        byval want as integer, byval linenum as integer )
 declare sub com_tokenize ( strm() as string, strm_cnt as integer, _
                      tokenlist as string, stream as string )
-declare function bspCheckCollision% ( byval nodenr as integer, _
-                              strPnt as u3dVector3f, _ 
-                              endPnt as u3dVector3f )                     
                         
                         
 type uv
@@ -283,10 +280,9 @@ declare function draw_load_font% ( flname as string, col as long )
 declare sub draw_string ( dc as long, x as integer, y as integer, _
                             text as string ) 
                             
-declare function bspIsInside% ( byval nodenr as integer, strPnt as u3dVector3f )                                                      
 declare sub scr_screenshot ( flname as string, byval dc as long )
 
                          
-declare sub d_clip_z ( otVtx() as u3dVector4f, otUV() as uv, otCnt as integer, _
-                         inVtx() as u3dVector4f, inUV() as uv, inCnt as integer )
+declare sub d_clip_z ( ot_vtx() as u3dVector4f, ot_uv() as uv, ot_cnt as integer, _
+                         in_vtx() as u3dVector4f, in_uv() as uv, in_cnt as integer )
                                                     

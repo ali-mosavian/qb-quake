@@ -259,7 +259,7 @@ end sub
 defint a-z
 function r_cull_box% ( bbox as bboundbox, frustum() as plane )
     dim dp as single
-    dim nearPoint as vertex
+    dim near_point as vertex
     dim i as integer
 
 
@@ -267,51 +267,51 @@ function r_cull_box% ( bbox as bboundbox, frustum() as plane )
         if ( frustum(i).norm.x > 0.0 ) then
             if ( frustum(i).norm.y > 0.0 ) then
                 if ( frustum(i).norm.z > 0.0 ) then
-                    NearPoint.x = bbox.min.x
-                    NearPoint.y = bbox.min.z
-                    NearPoint.z = bbox.min.y
+                    near_point.x = bbox.min.x
+                    near_point.y = bbox.min.z
+                    near_point.z = bbox.min.y
                 else
-                    NearPoint.x = bbox.min.x
-                    NearPoint.y = bbox.min.z
-                    NearPoint.z = bbox.max.y
+                    near_point.x = bbox.min.x
+                    near_point.y = bbox.min.z
+                    near_point.z = bbox.max.y
                 end if
             else
                 if ( frustum(i).norm.z > 0.0 ) then
-                    NearPoint.x = bbox.min.x
-                    NearPoint.y = bbox.max.z
-                    NearPoint.z = bbox.min.y
+                    near_point.x = bbox.min.x
+                    near_point.y = bbox.max.z
+                    near_point.z = bbox.min.y
                 else
-                    NearPoint.x = bbox.min.x
-                    NearPoint.y = bbox.max.z
-                    NearPoint.z = bbox.max.y
+                    near_point.x = bbox.min.x
+                    near_point.y = bbox.max.z
+                    near_point.z = bbox.max.y
                 end if
             end if
         else
             if ( frustum(i).norm.y > 0.0 ) then
                 if ( frustum(i).norm.z > 0.0 ) then
-                    NearPoint.x = bbox.max.x
-                    NearPoint.y = bbox.min.z
-                    NearPoint.z = bbox.min.y
+                    near_point.x = bbox.max.x
+                    near_point.y = bbox.min.z
+                    near_point.z = bbox.min.y
                 else
-                    NearPoint.x = bbox.max.x
-                    NearPoint.y = bbox.min.z
-                    NearPoint.z = bbox.max.y
+                    near_point.x = bbox.max.x
+                    near_point.y = bbox.min.z
+                    near_point.z = bbox.max.y
                 end if
             else
                 if ( frustum(i).norm.z > 0.0 ) then
-                    NearPoint.x = bbox.max.x
-                    NearPoint.y = bbox.max.z
-                    NearPoint.z = bbox.min.y
+                    near_point.x = bbox.max.x
+                    near_point.y = bbox.max.z
+                    near_point.z = bbox.min.y
                 else
-                    NearPoint.x = bbox.max.x
-                    NearPoint.y = bbox.max.z
-                    NearPoint.z = bbox.max.y
+                    near_point.x = bbox.max.x
+                    near_point.y = bbox.max.z
+                    near_point.z = bbox.max.y
                 end if
             end if
         end if            
             
-        dp = frustum(i).norm.x*NearPoint.x + frustum(i).norm.y*NearPoint.y + _
-             frustum(i).norm.z*NearPoint.z
+        dp = frustum(i).norm.x*near_point.x + frustum(i).norm.y*near_point.y + _
+             frustum(i).norm.z*near_point.z
              
         if ( (dp+frustum(i).dist) > 0 ) then
             r_cull_box% = 0

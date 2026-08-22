@@ -40,7 +40,7 @@ sub s_get_blaster  ( port as integer, irq as integer, ldma as integer, _
     dim tmpstr as string
     dim sbvstr as string
     dim strpos as integer
-    dim currChar as string
+    dim curr_char as string
                          
     port = false
     irq  = false
@@ -60,9 +60,9 @@ sub s_get_blaster  ( port as integer, irq as integer, ldma as integer, _
     ''
     while ( strpos <= len( sbvstr ) )
     
-        currChar = mid$( sbvstr, strpos, 1 )              
+        curr_char = mid$( sbvstr, strpos, 1 )              
         
-        select case ( currChar )            
+        select case ( curr_char )            
             case "A", "a"
                 tmpstr = "&h" + mid$( sbvstr, strpos+1, 3 )
                 port = val( tmpstr )
