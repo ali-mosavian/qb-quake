@@ -1,10 +1,9 @@
 option explicit
 ''
-'' r_main.bas -- the camera.
+'' view.bas -- where the camera is and where it looks. Quake's view.c.
 ''
-'' Mouse look, movement with collision, and the view toggles. Quake's
-'' r_main.c is the same layer: it decides where the eye is before r_bsp
-'' decides what it can see.
+''             Was r_main.bas, which also held the render-mode key
+''             handling; that is input and now lives in in_main.bas.
 ''
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
@@ -135,48 +134,4 @@ sub v_update_camera ( pa as integer, crr_pnt as integer, cnt_pnts as integer, _
         cam.look_at.y = cam.look_at.y + cam.pos.y 
         cam.look_at.z = cam.look_at.z + cam.pos.z
     end if
-end sub
-
-
-
-''::::::::::
-'' name: inputToggles
-'' desc: The function-key toggles. Each waits for the key to come back
-''       up so one press is one toggle.
-''::::::::::
-function in_keystroke ( key_down as integer ) as integer
-    ''
-    '' True once per press, not once per frame. The key is passed by
-    '' reference, so the loop below re-reads the live flag the keyboard
-    '' handler writes -- which is what makes waiting for the release work.
-    ''
-    '' Five toggles each carried their own copy of this test-and-spin.
-    ''
-    if ( key_down = false ) then
-        in_keystroke = false
-        exit function
-    end if
-
-    do
-    loop while ( key_down )
-
-    in_keystroke = true
-
-end function
-
-
-
-
-''::::::::::
-'' name: in_handle_toggles
-'' desc: The render-mode keys. One line each now.
-''::::::::::
-sub in_handle_toggles
-
-    if ( in_keystroke( env.keyboard.f1  ) ) then rdr.usemips  = not rdr.usemips
-    if ( in_keystroke( env.keyboard.f2  ) ) then rdr.rendmode = (rdr.rendmode + 1) mod 3
-    if ( in_keystroke( env.keyboard.f3  ) ) then cam.fpsview  = not cam.fpsview
-    if ( in_keystroke( env.keyboard.f12 ) ) then scr.stats    = not scr.stats
-    if ( in_keystroke( env.keyboard.b   ) ) then rdr.backface = not rdr.backface
-
 end sub

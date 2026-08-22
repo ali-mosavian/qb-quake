@@ -4,19 +4,26 @@ Hard-won things, mostly the kind that cost an hour before they cost a minute.
 
 ## Layout
 
-    src/main.bas      doInit/doMain/doEnd/ExitError  (Quake host.c, Host_Init)
-    src/sys_init.bas  one-shot startup steps         (called once from doInit)
-    src/d_poly.bas    the rasteriser                 (Quake d_*.c)
-    src/r_bsp.bas     traversal + visibility         (Quake r_bsp.c)
-    src/r_main.bas    the camera                      (Quake r_main.c)
-    src/model.bas     Mod_Load* lump readers          (Quake model.c)
-    src/r_tex.bas     textures, mips, palette
-    src/common.bas    COM_Parse + config               (Quake common.c)
-    src/screen.bas    overlay, font, screenshot         (Quake screen.c/sbar.c)
-    src/vid.bas       video mode, back buffer, present  (Quake vid_*.c)
+    src/main.bas      host_init / host_main / host_shutdown   (Quake host.c)
+    src/sys.bas       command line, stuff.ini, sys_error       (Quake sys_*.c)
+    src/model.bas     mod_load_* lump readers                  (Quake model.c)
+    src/mod_tex.bas   texture headers, preprocessed bitmaps
+    src/r_bsp.bas     traversal + visibility                   (Quake r_bsp.c)
+    src/d_poly.bas    the rasteriser                           (Quake d_*.c)
+    src/view.bas      where the camera is and looks            (Quake view.c)
+    src/in_main.bas   keyboard, mouse, the toggles             (Quake in_*.c)
+    src/snd.bas       sound device and loading music           (Quake snd_*.c)
+    src/screen.bas    overlay, font, screenshot        (Quake draw.c/screen.c)
+    src/vid.bas       video mode, back buffer, present         (Quake vid_*.c)
+    src/common.bas    tokeniser + config                       (Quake common.c)
     src/bspfile.bi    on-disk structures + cross-module DECLAREs (Quake bspfile.h)
-    src/q_*.bi        one COMMON block per subsystem    (Quake quakedef.h)
+    src/q_*.bi        one COMMON block per subsystem           (Quake quakedef.h)
     attic/            superseded rewrite, out of the build
+
+Every module holds exactly one subsystem, which the prefixes make checkable:
+list the routines in a file and their prefixes should collapse to one.
+`screen.bas` is the single exception, holding `draw_` and `scr_`, which is
+what Quake does too.
 
 Quake uses both conventions and so does this: prefixed families for subsystems
 (`r_`, `d_`, and in Quake also `cl_`, `sv_`, `snd_`, `in_`, `vid_`, `sys_`),
