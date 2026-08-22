@@ -45,7 +45,7 @@ const MIPBAR_Y  = LOADBAR_Y-15
 '' are allocated at load with no code to run, so non-main modules must
 '' declare their arrays here.
 '$static
-dim shared hFontChar(255) as long
+dim shared h_font_char(255) as long
 
 
 
@@ -109,7 +109,7 @@ function draw_load_font% ( flname as string, colb as long )
     
     trn = uglColor8( 7, 0, 3 )    
     
-    if ( not uglNewMult( hFontChar(), 256, UGL.EMS, env.cfmt, 8, 8 ) ) then
+    if ( not uglNewMult( h_font_char(), 256, UGL.EMS, env.c_fmt, 8, 8 ) ) then
         draw_load_font% = 0
         exit function
     end if        
@@ -153,7 +153,7 @@ function draw_load_font% ( flname as string, colb as long )
                     col = trn                         
                 end if
                 
-                uglPset hFontChar(i), x, y, col
+                uglPset h_font_char(i), x, y, col
                 
                 bit = bit + 1
             next x
@@ -180,7 +180,7 @@ sub draw_string ( dc as long, x as integer, y as integer, _
         char = asc( mid$( text, i+1 ) )
         
         if ( (char >= 0) or (char <= 255) ) then
-            uglPutMsk dc, posx, y, hFontChar(char)        
+            uglPutMsk dc, posx, y, h_font_char(char)        
         end if
     
         posx = posx + 4
@@ -202,8 +202,8 @@ sub scr_draw_hud ( hDstDC as long )
     '' Draw VUs
     ''
     sndMasterGetVU l, r
-    draw_bar hDstDC, env.xres-80, env.yres-29, 70, 3, l*100/255, 254
-    draw_bar hDstDC, env.xres-80, env.yres-20, 70, 3, r*100/255, 254
+    draw_bar hDstDC, env.x_res-80, env.y_res-29, 70, 3, l*100/255, 254
+    draw_bar hDstDC, env.x_res-80, env.y_res-20, 70, 3, r*100/255, 254
     
 
     ''
@@ -234,19 +234,19 @@ sub scr_draw_hud ( hDstDC as long )
             draw_string hDstDC, 0, 8*5, "Backface culling: disabled, press 'b' to enable"
         end if
         
-        draw_string hDstDC, 0, env.yres-8*7-6, "Resolution: " + str$( env.xres ) + "x" + ltrim$(str$( env.yres ))
-        draw_string hDstDC, 0, env.yres-8*6-6, "Vertices:" + str$( wld.vtxCount )
-        draw_string hDstDC, 0, env.yres-8*5-6, "Edges:" + str$( wld.edgCount )
-        draw_string hDstDC, 0, env.yres-8*4-6, "Polygons:" + str$( wld.triCount )
-        draw_string hDstDC, 0, env.yres-8*3-6, "Nodes:" + str$( wld.ndsCount )
-        draw_string hDstDC, 0, env.yres-8*2-6, "Leaves:" + str$( wld.lefCount )
-        draw_string hDstDC, 0, env.yres-8*1-6, "PVS entries:" + str$( wld.lefCount^2 )
-        draw_string hDstDC, 0, env.yres-8*0-6, "Stats: enabled, press f12 to disable"             
+        draw_string hDstDC, 0, env.y_res-8*7-6, "Resolution: " + str$( env.x_res ) + "x" + ltrim$(str$( env.y_res ))
+        draw_string hDstDC, 0, env.y_res-8*6-6, "Vertices:" + str$( wld.vtx_count )
+        draw_string hDstDC, 0, env.y_res-8*5-6, "Edges:" + str$( wld.edg_count )
+        draw_string hDstDC, 0, env.y_res-8*4-6, "Polygons:" + str$( wld.tri_count )
+        draw_string hDstDC, 0, env.y_res-8*3-6, "Nodes:" + str$( wld.nds_count )
+        draw_string hDstDC, 0, env.y_res-8*2-6, "Leaves:" + str$( wld.lef_count )
+        draw_string hDstDC, 0, env.y_res-8*1-6, "PVS entries:" + str$( wld.lef_count^2 )
+        draw_string hDstDC, 0, env.y_res-8*0-6, "Stats: enabled, press f12 to disable"             
     else 
-        draw_string hDstDC, 0, env.yres-8*0-6, "Stats: disabled, press f12 to enable"
+        draw_string hDstDC, 0, env.y_res-8*0-6, "Stats: disabled, press f12 to enable"
     end if
     
-    draw_string hDstDC, env.xres-56, env.yres-6, "Powered by UGL"
+    draw_string hDstDC, env.x_res-56, env.y_res-6, "Powered by UGL"
 end sub
 
 
@@ -280,8 +280,8 @@ sub scr_screenshot ( flname as string, byval dc as long )
     dim row as string
     dim buf as string
 
-    w   = env.xRes
-    h   = env.yRes
+    w   = env.x_res
+    h   = env.y_res
     pad = (4 - (w mod 4)) mod 4
 
     rowlen  = w + pad

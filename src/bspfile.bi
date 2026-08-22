@@ -1,28 +1,28 @@
 type vec3
-    x       as single
-    y       as single
-    z       as single
+    x           as single
+    y           as single
+    z           as single
 end type
 
 type vec3i
-    x       as integer
-    y       as integer
-    z       as integer
+    x           as integer
+    y           as integer
+    z           as integer
 end type
 
 type boundbox
-    min     as vec3
-    max     as vec3
+    min         as vec3
+    max         as vec3
 end type
 
 type bboundbox
-    min     as vec3i
-    max     as vec3i
+    min         as vec3i
+    max         as vec3i
 end type
 
 type dentry
-    offs    as long
-    size    as long
+    offs        as long
+    size        as long
 end type
 
 type header
@@ -64,10 +64,10 @@ type vertex
 end type
 
 type surface
-    vectorS     as vec3
-    distS       as single
-    vectorT     as vec3
-    distT       as single    
+    vector_s    as vec3
+    dist_s      as single
+    vector_t    as vec3
+    dist_t      as single    
     textureid   as long
     animated    as long
 end type
@@ -176,22 +176,22 @@ const FALSE = 0
 const TRUE  = -1
 
 type EnvType
-    zFar        as single
-    zNear       as single    
+    z_far       as single
+    z_near      as single    
     
-    hFont       as long
-    hVideoDC    as long
-    hBackBDC    as long
+    h_font      as long
+    h_video_dc  as long
+    h_back_bdc  as long
     
     mouse       as MOUSEINF
-    Keyboard    as TKBD
+    keyboard    as TKBD
     
-    fpsTimer    as TMR                      '' expires every frame
-    secTimer    as TMR                      '' /       every second
+    fps_timer   as TMR                      '' expires every frame
+    sec_timer   as TMR                      '' /       every second
     
-    xRes        as integer
-    yRes        as integer
-    cFmt        as integer
+    x_res       as integer
+    y_res       as integer
+    c_fmt       as integer
     pages       as integer
     usepag      as integer
     disclear    as integer
@@ -203,8 +203,8 @@ type EnvType
     camscrpt    as string * 40
 
     '' Set from the command line, not from stuff.ini.
-    mapName     as string * 64
-    benchFrames as integer      '' 0 = run until ESC
+    map_name    as string * 64
+    bench_frames as integer      '' 0 = run until ESC
     
 end type
 
@@ -272,8 +272,8 @@ declare function bspCheckCollision% ( byval nodenr as integer, _
                         
                         
 type uv
-    u   as single
-    v   as single
+    u           as single
+    v           as single
 end type
 
 

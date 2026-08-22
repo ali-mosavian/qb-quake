@@ -59,8 +59,8 @@ sub vid_init
         pages = 1
     end if
             
-    env.hVideoDC = uglSetVideoDC( env.cFmt, env.xRes, env.yRes, pages )
-    if ( env.hVideoDC = FALSE ) then 
+    env.h_video_dc = uglSetVideoDC( env.c_fmt, env.x_res, env.y_res, pages )
+    if ( env.h_video_dc = FALSE ) then 
         sys_error "0x0001, Could not set video mode..."
     end if
     
@@ -69,8 +69,8 @@ sub vid_init
     '' Create a backbuffer
     '' 
     if ( env.usepag = false ) then
-        env.hBackBDC = uglNew( ugl.mem, env.cFmt, env.xRes, env.yRes )
-        if ( env.hBackBDC = FALSE ) then 
+        env.h_back_bdc = uglNew( ugl.mem, env.c_fmt, env.x_res, env.y_res )
+        if ( env.h_back_bdc = FALSE ) then 
             sys_error "0x0002, Could not create a backbuffer..."
         end if
     end if     
@@ -107,7 +107,7 @@ sub vid_update ( hDstDC as long, page as integer )
     '' Paging/backbuffer
     ''
     if ( env.usepag = false ) then
-        uglPut env.hVideoDC, 0, 0, env.hBackBDC
+        uglPut env.h_video_dc, 0, 0, env.h_back_bdc
     else        
         uglSetVisPage page
         uglSetWrkPage (page+1) mod env.pages
@@ -116,11 +116,11 @@ sub vid_update ( hDstDC as long, page as integer )
     
     fps1 = fps1 + 1
     
-    if env.secTimer.counter > 0 then
+    if env.sec_timer.counter > 0 then
         scr.fps = fps1
         fps1 = 0
-        env.secTimer.counter = 0
-        scr.benchSecs = scr.benchSecs + 1
+        env.sec_timer.counter = 0
+        scr.bench_secs = scr.bench_secs + 1
     end if        
     
     rdr.tris = 0

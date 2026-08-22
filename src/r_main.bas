@@ -75,9 +75,9 @@ sub v_update_camera ( pa as integer, crrPnt as integer, cntPnts as integer, _
         cam.pos.x = ppos(pa).x
         cam.pos.y = ppos(pa).y
         cam.pos.z = ppos(pa).z        
-        cam.lookAt.x = cam.pos.x+plok(pa).x
-        cam.lookAt.y = cam.pos.y+plok(pa).y
-        cam.lookAt.z = cam.pos.z+plok(pa).z
+        cam.look_at.x = cam.pos.x+plok(pa).x
+        cam.look_at.y = cam.pos.y+plok(pa).y
+        cam.look_at.z = cam.pos.z+plok(pa).z
     end if
     
     
@@ -85,27 +85,27 @@ sub v_update_camera ( pa as integer, crrPnt as integer, cntPnts as integer, _
     '' Mode: freelook or script_edit
     ''
     if ( env.cammode = 0 or env.cammode = 2 ) then            
-        if env.mouse.x < 1 then  mousepos env.xres-4, env.mouse.y
-        if env.mouse.x > env.xres-3 then  mousepos 1, env.mouse.y
+        if env.mouse.x < 1 then  mousepos env.x_res-4, env.mouse.y
+        if env.mouse.x > env.x_res-3 then  mousepos 1, env.mouse.y
         
         if env.mouse.y < 0        then  mousepos env.mouse.x, 0
-        if env.mouse.y > env.yres then  mousepos env.mouse.x, env.yres-1
+        if env.mouse.y > env.y_res then  mousepos env.mouse.x, env.y_res-1
         
         tmx = env.mouse.x + 1
         tmy = env.mouse.y + 2
 
-        theta! = 2 * 3.14159 * ((env.xRes-1)-tmx) / env.xRes
-        phi! = 3.14159 * tmy / env.yRes
+        theta! = 2 * 3.14159 * ((env.x_res-1)-tmx) / env.x_res
+        phi! = 3.14159 * tmy / env.y_res
         
-        cam.lookAt.x = cos( theta! ) * sin( phi! )
-        cam.lookAt.y = cos( phi! )
-        cam.lookAt.z = sin( theta! ) * sin( phi! )
+        cam.look_at.x = cos( theta! ) * sin( phi! )
+        cam.look_at.y = cos( phi! )
+        cam.look_at.z = sin( theta! ) * sin( phi! )
         
 
         if ( env.mouse.left  ) then 
-            camPosC.x = cam.pos.x + cam.lookAt.x*3
-            camPosC.y = cam.pos.y + cam.lookAt.y*3
-            camPosC.z = cam.pos.z + cam.lookAt.z*3
+            camPosC.x = cam.pos.x + cam.look_at.x*3
+            camPosC.y = cam.pos.y + cam.look_at.y*3
+            camPosC.z = cam.pos.z + cam.look_at.z*3
 
     		cam.pos.x = camPosC.x
     		cam.pos.y = camPosC.y
@@ -113,9 +113,9 @@ sub v_update_camera ( pa as integer, crrPnt as integer, cntPnts as integer, _
         end if
                     
         if ( env.mouse.right ) then
-            camPosC.x = cam.pos.x - cam.lookAt.x*3
-            camPosC.y = cam.pos.y - cam.lookAt.y*3
-            camPosC.z = cam.pos.z - cam.lookAt.z*3                
+            camPosC.x = cam.pos.x - cam.look_at.x*3
+            camPosC.y = cam.pos.y - cam.look_at.y*3
+            camPosC.z = cam.pos.z - cam.look_at.z*3                
             
     		cam.pos.x = camPosC.x
     		cam.pos.y = camPosC.y
@@ -123,16 +123,16 @@ sub v_update_camera ( pa as integer, crrPnt as integer, cntPnts as integer, _
         end if            
         
         if ( env.keyboard.n and env.cammode = 2 ) then
-            print #cam.scriptFile, cam.pos.x, cam.pos.y, cam.pos.z
-            print #cam.scriptFile, cam.lookAt.x, cam.lookAt.y, cam.lookAt.z
+            print #cam.script_file, cam.pos.x, cam.pos.y, cam.pos.z
+            print #cam.script_file, cam.look_at.x, cam.look_at.y, cam.look_at.z
             
             while ( env.keyboard.n )
             wend
         end if
         
-        cam.lookAt.x = cam.lookAt.x + cam.pos.x 
-        cam.lookAt.y = cam.lookAt.y + cam.pos.y 
-        cam.lookAt.z = cam.lookAt.z + cam.pos.z
+        cam.look_at.x = cam.look_at.x + cam.pos.x 
+        cam.look_at.y = cam.look_at.y + cam.pos.y 
+        cam.look_at.z = cam.look_at.z + cam.pos.z
     end if
 end sub
 

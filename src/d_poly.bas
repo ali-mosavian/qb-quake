@@ -31,11 +31,11 @@ defint a-z
 '$static
 dim shared poly(64) as u3dVector4f
 dim shared polyb(32) as u3dVector4f
-dim shared prjU(32) as single
-dim shared prjV(32) as single
-dim shared prjW(32) as single
-dim shared prjX(32) as single
-dim shared prjY(32) as single
+dim shared prj_u(32) as single
+dim shared prj_v(32) as single
+dim shared prj_w(32) as single
+dim shared prj_x(32) as single
+dim shared prj_y(32) as single
 dim shared su0 as single, su1 as single, su2 as single, su3 as single
 dim shared sv0 as single, sv1 as single, sv2 as single, sv3 as single
 dim shared tw as single, th as single
@@ -62,7 +62,7 @@ sub d_clip_z ( otVtx() as u3dVector4f, otUV() as uv, otCnt as integer, _
         src1 = n
         src2 = (n + 1) mod inCnt
         
-        if ( inVtx(src1).w >= env.zNear ) then
+        if ( inVtx(src1).w >= env.z_near ) then
             otVtx(dsti).x = inVtx(src1).x
             otVtx(dsti).y = inVtx(src1).y
             otVtx(dsti).z = inVtx(src1).z
@@ -72,21 +72,21 @@ sub d_clip_z ( otVtx() as u3dVector4f, otUV() as uv, otCnt as integer, _
             
             dsti = dsti + 1 
             
-            if ( inVtx(src2).w >= env.zNear ) then
+            if ( inVtx(src2).w >= env.z_near ) then
                 goto continuenfa
             end if
         else
-            if ( inVtx(src2).w < env.zNear ) then
+            if ( inVtx(src2).w < env.z_near ) then
                 goto continuenfa
             end if
         end if
 
-        scl = ((env.zNear - inVtx(src1).w) / (inVtx(src2).w - inVtx(src1).w))
+        scl = ((env.z_near - inVtx(src1).w) / (inVtx(src2).w - inVtx(src1).w))
      
         otVtx(dsti).x = inVtx(src1).x + (inVtx(src2).x-inVtx(src1).x)*scl
         otVtx(dsti).y = inVtx(src1).y + (inVtx(src2).y-inVtx(src1).y)*scl
         otVtx(dsti).z = inVtx(src1).z
-        otVtx(dsti).w = env.zNear        
+        otVtx(dsti).w = env.z_near        
         otUV(dsti).u = inUV(src1).u + (inUV(src2).u-inUV(src1).u)*scl
         otUV(dsti).v = inUV(src1).v + (inUV(src2).v-inUV(src1).v)*scl
     
@@ -103,7 +103,7 @@ continuenfa:
         src1 = n
         src2 = (n + 1) mod otCnt
         
-        if ( otVtx(src1).w <= env.zFar ) then
+        if ( otVtx(src1).w <= env.z_far ) then
             inVtx(dsti).x = otVtx(src1).x
             inVtx(dsti).y = otVtx(src1).y
             inVtx(dsti).z = otVtx(src1).z
@@ -113,21 +113,21 @@ continuenfa:
             
             dsti = dsti + 1 
             
-            if ( otVtx(src2).w <= env.zFar ) then
+            if ( otVtx(src2).w <= env.z_far ) then
                 goto continuenfb
             end if
         else
-            if ( otVtx(src2).w > env.zFar ) then
+            if ( otVtx(src2).w > env.z_far ) then
                 goto continuenfb
             end if
         end if
 
-        scl = ((env.zFar - otVtx(src1).w) / (otVtx(src2).w - otVtx(src1).w))
+        scl = ((env.z_far - otVtx(src1).w) / (otVtx(src2).w - otVtx(src1).w))
      
         inVtx(dsti).x = otVtx(src1).x + (otVtx(src2).x-otVtx(src1).x)*scl
         inVtx(dsti).y = otVtx(src1).y + (otVtx(src2).y-otVtx(src1).y)*scl
         inVtx(dsti).z = otVtx(src1).z
-        inVtx(dsti).w = env.zFar        
+        inVtx(dsti).w = env.z_far        
         inUV(dsti).u = otUV(src1).u + (otUV(src2).u-otUV(src1).u)*scl
         inUV(dsti).v = otUV(src1).v + (otUV(src2).v-otUV(src1).v)*scl
     
@@ -169,16 +169,16 @@ sub d_draw_faces ( hDstDC as long, mtxFin as u3dMtrx, _
    ''
    '' Draw nodes
    ''       
-    for mi = 0 to vis.ordCount-1
-        m = orderList(mi)
+    for mi = 0 to vis.ord_count-1
+        m = order_list(mi)
             
-        leafIndx = ndsBuffer(m).lfaceid
-        leafEnd = leafIndx + ndsBuffer(m).lfacenum-1
+        leafIndx = nds_buffer(m).lfaceid
+        leafEnd = leafIndx + nds_buffer(m).lfacenum-1
         
         for  ti = leafIndx to leafEnd            
             i = ti
                    
-            if ( polyFlag(i) = vis.frameStamp ) then
+            if ( poly_flag(i) = vis.frame_stamp ) then
                 
                 ''
                 '' Backface cull.
@@ -200,23 +200,23 @@ sub d_draw_faces ( hDstDC as long, mtxFin as u3dMtrx, _
                 '' "backface culling: enabled" was reporting a switch that
                 '' did nothing.
                 ''
-                pid = triBuffer(i).planeid
-                dp  = cam.pos.x*plnBuffer(pid).norm.x + _
-                      cam.pos.y*plnBuffer(pid).norm.z + _
-                      cam.pos.z*plnBuffer(pid).norm.y - _
-                      plnBuffer(pid).dist
+                pid = tri_buffer(i).planeid
+                dp  = cam.pos.x*pln_buffer(pid).norm.x + _
+                      cam.pos.y*pln_buffer(pid).norm.z + _
+                      cam.pos.z*pln_buffer(pid).norm.y - _
+                      pln_buffer(pid).dist
                       
-                if ( triBuffer(i).side ) then dp = -dp
+                if ( tri_buffer(i).side ) then dp = -dp
                 
                 if ( rdr.backface = 0 or dp > 0.01 ) then
                 	
         		''
         		'' Build polygon
         		''
-                    lid = triBuffer(i).ledgeid
-                    tex = triBuffer(i).texinfoid
-                    mipidx = texInfBuff(tex).miptex
-                    vcnt = triBuffer(i).ledgenum
+                    lid = tri_buffer(i).ledgeid
+                    tex = tri_buffer(i).texinfoid
+                    mipidx = tex_inf_buff(tex).miptex
+                    vcnt = tri_buffer(i).ledgenum
                     
                     ''
                     '' Texture axes, scaled by the texture size once per
@@ -229,24 +229,24 @@ sub d_draw_faces ( hDstDC as long, mtxFin as u3dMtrx, _
                     '' the same product in a different order -- and
                     '' nothing downstream wants the unscaled value.
                     ''
-                    tw = mipBuffInf(mipidx).wdth
-                    th = mipBuffInf(mipidx).hght
-                    su0 = texInfBuff(tex).vecs(0) * tw
-                    su1 = texInfBuff(tex).vecs(1) * tw
-                    su2 = texInfBuff(tex).vecs(2) * tw
-                    su3 = texInfBuff(tex).vecs(3) * tw
-                    sv0 = texInfBuff(tex).vect(0) * th
-                    sv1 = texInfBuff(tex).vect(1) * th
-                    sv2 = texInfBuff(tex).vect(2) * th
-                    sv3 = texInfBuff(tex).vect(3) * th
+                    tw = mip_buff_inf(mipidx).wdth
+                    th = mip_buff_inf(mipidx).hght
+                    su0 = tex_inf_buff(tex).vecs(0) * tw
+                    su1 = tex_inf_buff(tex).vecs(1) * tw
+                    su2 = tex_inf_buff(tex).vecs(2) * tw
+                    su3 = tex_inf_buff(tex).vecs(3) * tw
+                    sv0 = tex_inf_buff(tex).vect(0) * th
+                    sv1 = tex_inf_buff(tex).vect(1) * th
+                    sv2 = tex_inf_buff(tex).vect(2) * th
+                    sv3 = tex_inf_buff(tex).vect(3) * th
                     
                     for  j = 0 to vcnt-1
-                        EdgeIdx = ledgBuffer(lid+j)
+                        EdgeIdx = ledg_buffer(lid+j)
                         
                         if ( EdgeIdx >= 0 ) then
-                            v0 = edgBuffer(EdgeIdx).v0
+                            v0 = edg_buffer(EdgeIdx).v0
                         else                        
-                            v0 = edgBuffer(-EdgeIdx).v1
+                            v0 = edg_buffer(-EdgeIdx).v1
                         end if
 
                         ''
@@ -254,9 +254,9 @@ sub d_draw_faces ( hDstDC as long, mtxFin as u3dMtrx, _
                         '' nine times before: three for the position and
                         '' three for each texture axis.
                         ''
-                        vx = vtxBuffer(v0).x
-                        vy = vtxBuffer(v0).y
-                        vz = vtxBuffer(v0).z
+                        vx = vtx_buffer(v0).x
+                        vy = vtx_buffer(v0).y
+                        vz = vtx_buffer(v0).z
 
                         polyb(j).x = vx
                         polyb(j).y = vz
@@ -316,9 +316,9 @@ sub d_draw_faces ( hDstDC as long, mtxFin as u3dMtrx, _
                     '' the most expensive line in the loop.
                     ''
                     for  j = 0 to polycnt-1
-                        prjW(j) = 1.0 / polyb(j).w
-                        prjX(j) = xresh + polyb(j).x*prjW(j)*xresh
-                        prjY(j) = yresh - polyb(j).y*prjW(j)*yresh
+                        prj_w(j) = 1.0 / polyb(j).w
+                        prj_x(j) = xresh + polyb(j).x*prj_w(j)*xresh
+                        prj_y(j) = yresh - polyb(j).y*prj_w(j)*yresh
                     next j
 
                     ''
@@ -332,13 +332,13 @@ sub d_draw_faces ( hDstDC as long, mtxFin as u3dMtrx, _
                     ''
                     if ( rdr.rendmode = 0 ) then
                         for  j = 0 to polycnt-1
-                            prjU(j) = uvbuffb(j).u * prjW(j)
-                            prjV(j) = uvbuffb(j).v * prjW(j)
+                            prj_u(j) = uvbuffb(j).u * prj_w(j)
+                            prj_v(j) = uvbuffb(j).v * prj_w(j)
                         next j
                     elseif ( rdr.rendmode = 1 ) then
                         for  j = 0 to polycnt-1
-                            prjU(j) = uvbuffb(j).u
-                            prjV(j) = uvbuffb(j).v
+                            prj_u(j) = uvbuffb(j).u
+                            prj_v(j) = uvbuffb(j).v
                         next j
                     end if
 
@@ -384,15 +384,15 @@ sub d_draw_faces ( hDstDC as long, mtxFin as u3dMtrx, _
                             ''
                             '' Rasterize. Vertex 0 is the fan pivot.
                             ''
-                            vtx(j).v1.z = prjW(0)
-                            vtx(j).v2.z = prjW(p2)
-                            vtx(j).v3.z = prjW(p3)
-                            vtx(j).v1.x = prjX(0)
-                            vtx(j).v1.y = prjY(0)
-                            vtx(j).v2.x = prjX(p2)
-                            vtx(j).v2.y = prjY(p2)
-                            vtx(j).v3.x = prjX(p3)
-                            vtx(j).v3.y = prjY(p3)
+                            vtx(j).v1.z = prj_w(0)
+                            vtx(j).v2.z = prj_w(p2)
+                            vtx(j).v3.z = prj_w(p3)
+                            vtx(j).v1.x = prj_x(0)
+                            vtx(j).v1.y = prj_y(0)
+                            vtx(j).v2.x = prj_x(p2)
+                            vtx(j).v2.y = prj_y(p2)
+                            vtx(j).v3.x = prj_x(p3)
+                            vtx(j).v3.y = prj_y(p3)
 
                             if ( rdr.rendmode = 2 ) then
                                 uglTriF hDstDC, vtx(j), 200
@@ -400,17 +400,17 @@ sub d_draw_faces ( hDstDC as long, mtxFin as u3dMtrx, _
                                 uglLine hDstDC, vtx(j).v2.x, vtx(j).v2.y, vtx(j).v3.x, vtx(j).v3.y, 0
                                 uglLine hDstDC, vtx(j).v3.x, vtx(j).v3.y, vtx(j).v1.x, vtx(j).v1.y, 0
                             else
-                                vtx(j).v1.u = prjU(0)
-                                vtx(j).v1.v = prjV(0)
-                                vtx(j).v2.u = prjU(p2)
-                                vtx(j).v2.v = prjV(p2)
-                                vtx(j).v3.u = prjU(p3)
-                                vtx(j).v3.v = prjV(p3)
+                                vtx(j).v1.u = prj_u(0)
+                                vtx(j).v1.v = prj_v(0)
+                                vtx(j).v2.u = prj_u(p2)
+                                vtx(j).v2.v = prj_v(p2)
+                                vtx(j).v3.u = prj_u(p3)
+                                vtx(j).v3.v = prj_v(p3)
 
                                 if ( rdr.rendmode = 0 ) then
-                                    uglTriTP hDstDC, vtx(j), 0, hTextrDC(texIndx)
+                                    uglTriTP hDstDC, vtx(j), 0, h_textr_dc(texIndx)
                                 else
-                                    uglTriT hDstDC, vtx(j), 0, hTextrDC(texIndx)
+                                    uglTriT hDstDC, vtx(j), 0, h_textr_dc(texIndx)
                                 end if
                             end if
 

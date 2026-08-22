@@ -24,9 +24,9 @@ defint a-z
 '$include: 'quakedef.bi'
 
 '$dynamic
-dim shared culLeafs as integer
-dim shared drwLeafs as integer
-dim shared pvsLeaf as integer
+dim shared cul_leafs as integer
+dim shared drw_leafs as integer
+dim shared pvs_leaf as integer
 
 
 
@@ -38,11 +38,11 @@ defint a-z
 function r_classify_point% ( nodenr as integer )
     dim dp as single
   
-    dp! = cam.pos.x*plnBuffer(ndsBuffer(nodenr).planeid).norm.x + _
-          cam.pos.y*plnBuffer(ndsBuffer(nodenr).planeid).norm.z + _
-          cam.pos.z*plnBuffer(ndsBuffer(nodenr).planeid).norm.y
+    dp! = cam.pos.x*pln_buffer(nds_buffer(nodenr).planeid).norm.x + _
+          cam.pos.y*pln_buffer(nds_buffer(nodenr).planeid).norm.z + _
+          cam.pos.z*pln_buffer(nds_buffer(nodenr).planeid).norm.y
           
-    if ( (dp!-plnBuffer(ndsBuffer(nodenr).planeid).dist) > 0.0 ) then
+    if ( (dp!-pln_buffer(nds_buffer(nodenr).planeid).dist) > 0.0 ) then
         r_classify_point% = -1
     else
         r_classify_point% = 0
@@ -70,38 +70,38 @@ sub r_recursive_world_node ( byval nodenr as integer ) static
 	    ''
 	    '' Check pvs and bounding volume
 	    ''
-	    if ( pvsBufferB(not nodenr) and _
-	         r_cull_box( lefBuffer(not nodenr).bound, frustum() ) ) then
+	    if ( pvs_buffer_b(not nodenr) and _
+	         r_cull_box( lef_buffer(not nodenr).bound, frustum() ) ) then
 	    
-	        frst = lefBuffer(not nodenr).lfaceid
-	        last = frst+lefBuffer(not nodenr).lfacenum
+	        frst = lef_buffer(not nodenr).lfaceid
+	        last = frst+lef_buffer(not nodenr).lfacenum
 	        
 	        for  i = frst to last-1	            
-	            polyFlag(lfcBuffer(i)) = vis.frameStamp
+	            poly_flag(lfc_buffer(i)) = vis.frame_stamp
 	        next i
 	        
 	        
     	    ''
     	    '' Put leaf in ordering list
     	    ''
-    	    drwLeafs = drwLeafs + 1
+    	    drw_leafs = drw_leafs + 1
         else 
-            culLeafs = culLeafs + 1
+            cul_leafs = cul_leafs + 1
         end if
         
 	    exit sub
     end if    
     
-    if ( not r_cull_box( ndsBuffer(nodenr).bound, frustum() ) ) then
+    if ( not r_cull_box( nds_buffer(nodenr).bound, frustum() ) ) then
         exit sub
     end if
     
-    pid = ndsBuffer(nodenr).planeid
-    dp  = cam.pos.x*plnBuffer(pid).norm.x + _
-          cam.pos.y*plnBuffer(pid).norm.z + _
-          cam.pos.z*plnBuffer(pid).norm.y
+    pid = nds_buffer(nodenr).planeid
+    dp  = cam.pos.x*pln_buffer(pid).norm.x + _
+          cam.pos.y*pln_buffer(pid).norm.z + _
+          cam.pos.z*pln_buffer(pid).norm.y
           
-    if ( dp-plnBuffer(pid).dist >= 0.0 ) then
+    if ( dp-pln_buffer(pid).dist >= 0.0 ) then
         side = 1
     else
         side = 0
@@ -113,10 +113,10 @@ sub r_recursive_world_node ( byval nodenr as integer ) static
     	'' back nodes, then the front nodes.
     	''
     		
-        r_recursive_world_node ndsBuffer(nodenr).child1
-	    orderList(vis.ordCount) = nodenr
-	    vis.ordCount = vis.ordCount + 1
-        r_recursive_world_node ndsBuffer(nodenr).child0
+        r_recursive_world_node nds_buffer(nodenr).child1
+	    order_list(vis.ord_count) = nodenr
+	    vis.ord_count = vis.ord_count + 1
+        r_recursive_world_node nds_buffer(nodenr).child0
         
     else
         ''
@@ -124,10 +124,10 @@ sub r_recursive_world_node ( byval nodenr as integer ) static
 	    '' front nodes, then the back nodes.
 	    ''
     		
-        r_recursive_world_node ndsBuffer(nodenr).child0        
-	    orderList(vis.ordCount) = nodenr
-	    vis.ordCount = vis.ordCount + 1        
-        r_recursive_world_node ndsBuffer(nodenr).child1
+        r_recursive_world_node nds_buffer(nodenr).child0        
+	    order_list(vis.ord_count) = nodenr
+	    vis.ord_count = vis.ord_count + 1        
+        r_recursive_world_node nds_buffer(nodenr).child1
     end if
     
 
@@ -142,9 +142,9 @@ sub r_draw_world ( model as integer )
     ''
     '' Reset tree state
     ''
-    vis.ordCount = 0
-    culLeafs = 0
-    drwLeafs = 0
+    vis.ord_count = 0
+    cul_leafs = 0
+    drw_leafs = 0
     
     ''
     '' Advance the frame stamp instead of clearing every face flag.
@@ -156,23 +156,23 @@ sub r_draw_world ( model as integer )
     '' frames instead. The wrap is checked BEFORE the increment because
     '' QuickBASIC traps integer overflow at run time rather than wrapping.
     ''
-    if ( vis.frameStamp = 32767 ) then
-        for  i = 0 to wld.triCount-1
-            polyFlag(i) = 0
+    if ( vis.frame_stamp = 32767 ) then
+        for  i = 0 to wld.tri_count-1
+            poly_flag(i) = 0
         next i
-        vis.frameStamp = 0
+        vis.frame_stamp = 0
     end if
-    vis.frameStamp = vis.frameStamp + 1
+    vis.frame_stamp = vis.frame_stamp + 1
     
     ''
     '' Extract pvs
     ''
-    r_mark_leaves int(mdlBuffer(model).headnode0)
+    r_mark_leaves int(mdl_buffer(model).headnode0)
     
     ''
     '' Traverse tree
     ''
-    r_recursive_world_node int(mdlBuffer(model).headnode0)
+    r_recursive_world_node int(mdl_buffer(model).headnode0)
     
 end sub
 
@@ -340,9 +340,9 @@ sub r_mark_leaves ( byval nodenr as integer )
     ''
     while not ( nodenr and &h8000 )
         if ( r_classify_point( nodenr ) ) then
-            nodenr = ndsBuffer(nodenr).child0
+            nodenr = nds_buffer(nodenr).child0
         else
-            nodenr = ndsBuffer(nodenr).child1
+            nodenr = nds_buffer(nodenr).child1
         end if            
     wend
 
@@ -352,21 +352,21 @@ sub r_mark_leaves ( byval nodenr as integer )
     '' every frame -- and writing one entry per leaf in the map while doing
     '' it -- was the largest fixed cost in the walk.
     ''
-    if ( nodenr = pvsLeaf ) then exit sub
-    pvsLeaf = nodenr
+    if ( nodenr = pvs_leaf ) then exit sub
+    pvs_leaf = nodenr
     
     '' 
     '' Setup
     ''    
-    v = lefBuffer( not nodenr ).vislist
+    v = lef_buffer( not nodenr ).vislist
     if ( v = -2 ) then sys_error "Leaf has no pvs data."
         
-    v = v + varptr( pvsBufferA(0) )
-    def seg = varseg( pvsBufferA(0) )
+    v = v + varptr( pvs_buffer_a(0) )
+    def seg = varseg( pvs_buffer_a(0) )
     
-    if ( lefBuffer( not nodenr ).vislist = -1 ) then
-        for  i = 0 to wld.lefCount-1
-            pvsBufferB(i) = -1
+    if ( lef_buffer( not nodenr ).vislist = -1 ) then
+        for  i = 0 to wld.lef_count-1
+            pvs_buffer_b(i) = -1
         next i           
 
         exit sub
@@ -376,15 +376,15 @@ sub r_mark_leaves ( byval nodenr as integer )
     '' Extract the pvs data
     ''
     l = 1
-    while ( l < wld.lefCount )
+    while ( l < wld.lef_count )
         
         if ( peek( v ) = 0 ) then
             j = l
             l = l + 8& * peek( v+1 ) 
-            if ( l > wld.lefCount ) then l = wld.lefCount
+            if ( l > wld.lef_count ) then l = wld.lef_count
             
             for  j = j to l-1
-                pvsBufferB(j) = 0
+                pvs_buffer_b(j) = 0
             next j
             
             v = v + 1
@@ -396,13 +396,13 @@ sub r_mark_leaves ( byval nodenr as integer )
                 '' A run can carry past the last leaf; in real mode that
                 '' writes over whatever follows the array.
                 ''
-                if ( l >= wld.lefCount ) then exit for
+                if ( l >= wld.lef_count ) then exit for
                 
                         
                 if ( byte and bitarray(bit) ) then
-                    pvsBufferB(l) = 1
+                    pvs_buffer_b(l) = 1
                 else                 
-                    pvsBufferB(l) = 0
+                    pvs_buffer_b(l) = 0
                 end if
                 
                 l = l + 1
