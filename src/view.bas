@@ -135,3 +135,45 @@ sub v_update_camera ( pa as integer, crr_pnt as integer, cnt_pnts as integer, _
         cam.look_at.z = cam.look_at.z + cam.pos.z
     end if
 end sub
+
+
+''::::::::::
+'' name: v_open_script
+'' desc: Camera-script setup, for both script modes.
+''
+''       cammode 1 replays a recorded path: read the control points, then
+''       expand the first bezier segment. cammode 2 records one, so it only
+''       opens the file -- v_update_camera writes to it on each 'n' press.
+''
+''       This was forty lines inside host_main, which is the frame loop's
+''       routine and has no business parsing camera paths. The read loop
+''       also terminated on eof(1), a hardcoded handle, while the file was
+''       opened on one from freefile -- the same bug the ini parser had.
+''::::::::::
+sub v_open_script ( ppos() as PNT3D, plok() as PNT3D, _
+                    cbzp() as PNT3D, cbzl() as PNT3D, _
+                    cnt_pnts as integer, crr_pnt as integer )
+    dim i as integer
+
+    if ( env.cammode = 1 ) then
+        cam.script_file = freefile
+        open env.camscrpt for input as #cam.script_file
+        do
+            input #cam.script_file, cbzp(i).x, cbzp(i).y, cbzp(i).z
+            input #cam.script_file, cbzl(i).x, cbzl(i).y, cbzl(i).z
+            i = i + 1
+        loop until ( eof( cam.script_file ) )
+        close #cam.script_file
+        cam.script_file = 0
+        cnt_pnts = i-1
+
+        ugluCubicBez3D ppos(0), cbzp(crr_pnt), env.caminterp
+        ugluCubicBez3D plok(0), cbzl(crr_pnt), env.caminterp
+        crr_pnt = crr_pnt + 3
+
+    elseif ( env.cammode = 2 ) then
+        cam.script_file = freefile
+        open env.camscrpt for output as #cam.script_file
+    end if
+
+end sub
