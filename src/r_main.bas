@@ -20,7 +20,10 @@ defint a-z
 '$include: 'bspfile.bi'
 '$include: 'snd.bi'
 '$include: 'mod.bi'
-'$include: 'quakedef.bi'
+'$include: 'q_env.bi'
+'$include: 'q_draw.bi'
+'$include: 'q_scr.bi'
+'$include: 'q_cam.bi'
 
 
 

@@ -15,7 +15,7 @@ Hard-won things, mostly the kind that cost an hour before they cost a minute.
     src/screen.bas    overlay, font, screenshot         (Quake screen.c/sbar.c)
     src/vid.bas       video mode, back buffer, present  (Quake vid_*.c)
     src/bspfile.bi    on-disk structures + cross-module DECLAREs (Quake bspfile.h)
-    src/quakedef.bi   the COMMON SHARED block           (Quake quakedef.h)
+    src/q_*.bi        one COMMON block per subsystem    (Quake quakedef.h)
     attic/            superseded rewrite, out of the build
 
 Quake uses both conventions and so does this: prefixed families for subsystems
@@ -82,7 +82,7 @@ a real bug:
 3. **Every cross-module call has a `DECLARE` in `bspfile.bi`**, in both
    directions. Within one module BASIC auto-declares its own `SUB`s; across a
    boundary it does not. Caught `drwLoadingBar`.
-4. **Each module includes `quakedef.bi` and `bspfile.bi` exactly once.** Two
+4. **Each module includes `bspfile.bi` and each `q_*.bi` exactly once.** Two
    identical `COMMON` blocks is "Duplicate definition" on every line. Caught a
    copied include list.
 5. **Never name a variable after a BASIC intrinsic.** `rnd` for the render
@@ -90,15 +90,15 @@ a real bug:
    random-number function. `timer`, `screen`, `date`, `time`, `error` are the
    same trap.
 6. **Every `COMMON` variable's type is defined by an include that precedes
-   `quakedef.bi`, not one that follows it.** BC reads includes in file order,
-   so a type declared in a `.bi` included *after* `quakedef.bi` does not exist
+   `q_*.bi`, not one that follows it.** BC reads includes in file order,
+   so a type declared in a `.bi` included *after* `q_*.bi` does not exist
    yet when the `COMMON` line naming it is parsed — "TYPE not defined". Because
    the include order is identical in every module, this fails the same way in
    all of them at once, which is a useful tell that it's this and not a
-   per-module mistake. Caught `mymod as UGMMOD`, where `quakedef.bi` came
+   per-module mistake. Caught `mymod as UGMMOD`, where `q_*.bi` came
    before `mod.bi` (which defines `UGMMOD`) in the include list of all ten
    modules. Fixed by moving `mod.bi` earlier everywhere, not by moving the
-   `COMMON` line — `quakedef.bi` has to stay includable from anywhere.
+   `COMMON` line — `q_*.bi` has to stay includable from anywhere.
 
 Then split on **data ownership**, not on which routines feel related. Measure
 which variables each candidate group uses exclusively — the rasteriser touches
@@ -301,7 +301,7 @@ sites report "FUNCTION not defined".
 
 ## Shared state
 
-`quakedef.bi` groups the cross-module scalars into one struct per subsystem
+`q_*.bi` groups the cross-module scalars into one struct per subsystem
 rather than leaving them loose, so a use site says which subsystem it is
 reading:
 
@@ -318,13 +318,26 @@ Member offsets are compile-time constants, so this is free even in
 
 `pal` and `mymod` stay loose: a struct of one member is ceremony.
 
-**Named COMMON blocks were unnecessary here.** `COMMON SHARED /map_s/ ...`
-is real QuickBASIC -- the FORTRAN style, where each named block is shared
-independently -- and it earns its keep while modules share different
-subsets. Once every module includes `quakedef.bi`, blank `COMMON SHARED`
-gets its identical-order requirement for free, and the sixteen tags were
-noise. They were introduced during the module split and outlived the reason
-for them by several commits.
+**Named COMMON blocks, one per subsystem, in one header each.**
+`COMMON SHARED /map_s/ ...` is the FORTRAN style QuickBASIC inherited: each
+named block is shared independently, so a module declares only the blocks it
+uses. Blank `COMMON` cannot do that -- it requires every module to declare the
+same variables in the same order.
+
+That is only worth anything if the headers are split, which is the point:
+
+    q_env.bi    env                       8/10 modules
+    q_map.bi    wld ldr + the 12 arrays   6/10
+    q_vis.bi    vis bitarray frustum      5/10
+    q_draw.bi   rdr + texture handles     6/10
+    q_scr.bi    scr                       4/10
+    q_cam.bi    cam                       5/10
+    q_snd.bi    mymod pal                 4/10
+
+38 block declarations instead of the 70 a single shared header forces.
+`common.bas` parses stuff.ini and now sees `env` alone, where before it saw
+every map array and the frustum. Add a block to a module only when that module
+genuinely needs it.
 
 **Arrays cannot go in a TYPE**, so the twelve `COMMON` arrays stay loose. That
 is a language limit, not an oversight.

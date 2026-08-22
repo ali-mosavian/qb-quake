@@ -21,7 +21,9 @@ defint a-z
 '$include: 'bspfile.bi'
 '$include: 'snd.bi'
 '$include: 'mod.bi'
-'$include: 'quakedef.bi'
+'$include: 'q_map.bi'
+'$include: 'q_vis.bi'
+'$include: 'q_cam.bi'
 
 '$dynamic
 dim shared pvs_leaf as integer
