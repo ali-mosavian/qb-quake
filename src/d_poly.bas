@@ -169,7 +169,7 @@ sub bspDrawFaces ( hDstDC as long, mtxFin as u3dMtrx, _
    ''
    '' Draw nodes
    ''       
-    for mi = 0 to ordCount-1
+    for mi = 0 to vis.ordCount-1
         m = orderList(mi)
             
         leafIndx = ndsBuffer(m).lfaceid
@@ -178,7 +178,7 @@ sub bspDrawFaces ( hDstDC as long, mtxFin as u3dMtrx, _
         for  ti = leafIndx to leafEnd            
             i = ti
                    
-            if ( polyFlag(i) = frameStamp ) then
+            if ( polyFlag(i) = vis.frameStamp ) then
                 
                 ''
                 '' Backface cull.
@@ -201,14 +201,14 @@ sub bspDrawFaces ( hDstDC as long, mtxFin as u3dMtrx, _
                 '' did nothing.
                 ''
                 pid = triBuffer(i).planeid
-                dp  = camPos.x*plnBuffer(pid).norm.x + _
-                      camPos.y*plnBuffer(pid).norm.z + _
-                      camPos.z*plnBuffer(pid).norm.y - _
+                dp  = cam.pos.x*plnBuffer(pid).norm.x + _
+                      cam.pos.y*plnBuffer(pid).norm.z + _
+                      cam.pos.z*plnBuffer(pid).norm.y - _
                       plnBuffer(pid).dist
                       
                 if ( triBuffer(i).side ) then dp = -dp
                 
-                if ( backface = 0 or dp > 0.01 ) then
+                if ( rdr.backface = 0 or dp > 0.01 ) then
                 	
         		''
         		'' Build polygon
@@ -330,12 +330,12 @@ sub bspDrawFaces ( hDstDC as long, mtxFin as u3dMtrx, _
                     '' near-identical copies the mode branches used to
                     '' carry.
                     ''
-                    if ( rendmode = 0 ) then
+                    if ( rdr.rendmode = 0 ) then
                         for  j = 0 to polycnt-1
                             prjU(j) = uvbuffb(j).u * prjW(j)
                             prjV(j) = uvbuffb(j).v * prjW(j)
                         next j
-                    elseif ( rendmode = 1 ) then
+                    elseif ( rdr.rendmode = 1 ) then
                         for  j = 0 to polycnt-1
                             prjU(j) = uvbuffb(j).u
                             prjV(j) = uvbuffb(j).v
@@ -371,7 +371,7 @@ sub bspDrawFaces ( hDstDC as long, mtxFin as u3dMtrx, _
                         miplevel = 0
                     end if
 
-                    if ( usemips ) then
+                    if ( rdr.usemips ) then
                         texIndx = mipidx*4+miplevel
                     else
                         texIndx = mipidx*4
@@ -394,7 +394,7 @@ sub bspDrawFaces ( hDstDC as long, mtxFin as u3dMtrx, _
                             vtx(j).v3.x = prjX(p3)
                             vtx(j).v3.y = prjY(p3)
 
-                            if ( rendmode = 2 ) then
+                            if ( rdr.rendmode = 2 ) then
                                 uglTriF hDstDC, vtx(j), 200
                                 uglLine hDstDC, vtx(j).v1.x, vtx(j).v1.y, vtx(j).v2.x, vtx(j).v2.y, 0
                                 uglLine hDstDC, vtx(j).v2.x, vtx(j).v2.y, vtx(j).v3.x, vtx(j).v3.y, 0
@@ -407,20 +407,20 @@ sub bspDrawFaces ( hDstDC as long, mtxFin as u3dMtrx, _
                                 vtx(j).v3.u = prjU(p3)
                                 vtx(j).v3.v = prjV(p3)
 
-                                if ( rendmode = 0 ) then
+                                if ( rdr.rendmode = 0 ) then
                                     uglTriTP hDstDC, vtx(j), 0, hTextrDC(texIndx)
                                 else
                                     uglTriT hDstDC, vtx(j), 0, hTextrDC(texIndx)
                                 end if
                             end if
 
-                            tris = tris + 1                                
+                            rdr.tris = rdr.tris + 1                                
                         next j
                         
                     end if
                 end if
                 
-                polys = polys + 1
+                rdr.polys = rdr.polys + 1
             end if
             
         next ti

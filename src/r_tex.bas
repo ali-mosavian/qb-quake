@@ -55,17 +55,17 @@ sub texLoadOffsets
     bload "texinf.bld", varptr( texInfBuff(0) )
     def seg
 
-    loading = loading + (100.0/LOAD_STEPS)
+    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     drwLoadTick
     
-    seek #bspFile, bsphead.miptex.offs+1
-    get #bspFile,, numtex
+    seek #wld.file, wld.head.miptex.offs+1
+    get #wld.file,, wld.numtex
     
-    redim tmipinf( numtex-1 ) as miptex
-    redim mipBuffInf( numtex-1 ) as miptexb
+    redim tmipinf( wld.numtex-1 ) as miptex
+    redim mipBuffInf( wld.numtex-1 ) as miptexb
     
-    for  i = 0 to numtex-1
-        get #bspFile,, texoffs(i)
+    for  i = 0 to wld.numtex-1
+        get #wld.file,, texoffs(i)
     next i    
     
 
@@ -96,16 +96,16 @@ sub texLoadAll
     ''
     pal = uglPalLoad( "base.dat::color/palette.lmp", PALRGB )
 
-    fontPrintText loadDC, 0, 199-8, "Loading textures..."
+    fontPrintText ldr.dc, 0, 199-8, "Loading textures..."
 
-    for  i = 0 to numtex-1
+    for  i = 0 to wld.numtex-1
         ''
         '' Per-texture header only: the renderer scales texture axes by the
         '' reciprocal of the ORIGINAL texture size, so those dimensions are
         '' still needed even though the pixels come from the bmps.
         ''
-        seek #bspFile, bsphead.miptex.offs+texoffs(i)+1
-        get #bspFile,, tmipinf(i)
+        seek #wld.file, wld.head.miptex.offs+texoffs(i)+1
+        get #wld.file,, tmipinf(i)
 
         mipBuffInf(i).hght = 1.0 / tmipinf(i).hght
         mipBuffInf(i).wdth = 1.0 / tmipinf(i).wdth
@@ -138,7 +138,7 @@ sub texLoadAll
             if ( (i and 15) = 0 ) then drwMipTick (j+1)*25
         next j
 
-        loading = loading + (100.0/LOAD_STEPS)/numtex
+        ldr.pct = ldr.pct + (100.0/LOAD_STEPS)/wld.numtex
         if ( (i and 15) = 0 ) then drwLoadTick
     next i
 

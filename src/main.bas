@@ -277,21 +277,21 @@ sub doMain
     camUp.y = 1.0
     camUp.z = 0.0   
     
-    mousePos (env.xres-1) * startAngle/360.0, 110
+    mousePos (env.xres-1) * cam.startAngle/360.0, 110
     
     
 
     
     if ( env.cammode = 1 ) then
-        camFile = freefile
-        open env.camscrpt for input as #camFile    
+        cam.scriptFile = freefile
+        open env.camscrpt for input as #cam.scriptFile    
         do 
-            input #camFile, cbzp(i).x, cbzp(i).y, cbzp(i).z
-            input #camFile, cbzl(i).x, cbzl(i).y, cbzl(i).z
+            input #cam.scriptFile, cbzp(i).x, cbzp(i).y, cbzp(i).z
+            input #cam.scriptFile, cbzl(i).x, cbzl(i).y, cbzl(i).z
             i = i + 1
         loop until ( eof( 1 ) )    
-        close #camFile
-        camFile = 0
+        close #cam.scriptFile
+        cam.scriptFile = 0
         cntPnts = i-1
                 
         ugluCubicBez3D ppos(0), cbzp(crrPnt), env.caminterp
@@ -300,8 +300,8 @@ sub doMain
     end if        
     
     if ( env.cammode = 2 ) then
-        camFile = freefile
-        open env.camscrpt for output as #camFile
+        cam.scriptFile = freefile
+        open env.camscrpt for output as #cam.scriptFile
     end if
     
     
@@ -317,10 +317,10 @@ sub doMain
     
     u3dMtrxPersp mtxPrj, env.camfov, 320.0/240.0, env.zNear, env.zFar
     
-    usemips = -1
-    rendmode = 0
-    fpsview = -1
-    stats    = -1
+    rdr.usemips = -1
+    rdr.rendmode = 0
+    cam.fpsview = -1
+    scr.stats    = -1
     
     if ( env.sound = true ) then
         modPlay mymod
@@ -345,7 +345,7 @@ sub doMain
         ''
         '' Combine all transforms 
         ''
-        u3dMtrxLookAt mtxMdl, camPos, camLookAt, camUp        
+        u3dMtrxLookAt mtxMdl, cam.pos, cam.lookAt, camUp        
         u3dMtrxConc mtxFin, mtxMdl, mtxPrj
         ExtractFrustum frustum(), mtxFin
         
@@ -360,22 +360,22 @@ sub doMain
         '' watch what the PVS and the frustum actually throw away. Do not
         '' "fix" it by moving ExtractFrustum below this block.
         ''
-        if ( fpsview = false ) then 
+        if ( cam.fpsview = false ) then 
             camPosB.x = 351.0
             camPosB.y = 2119.0
             camPosB.z = -552.0            
                         
-            camLookAt.x = camPosB.x + 1.991367e-8
-            camLookAt.y = camPosB.y + -1.0
-            camLookAt.z = camPosB.z + 1.570986e-2
+            cam.lookAt.x = camPosB.x + 1.991367e-8
+            cam.lookAt.y = camPosB.y + -1.0
+            cam.lookAt.z = camPosB.z + 1.570986e-2
         else
-            camPosB.x = camPos.x
-            camPosB.y = camPos.y
-            camPosB.z = camPos.z
+            camPosB.x = cam.pos.x
+            camPosB.y = cam.pos.y
+            camPosB.z = cam.pos.z
         end if
         
         '        
-        u3dMtrxLookAt mtxMdl, camPosB, camLookAt, camUp        
+        u3dMtrxLookAt mtxMdl, camPosB, cam.lookAt, camUp        
         u3dMtrxConc mtxFin, mtxMdl, mtxPrj
         
         
@@ -405,10 +405,10 @@ sub doMain
             benchf = freefile
             open "bench.txt" for output as #benchf
             print #benchf, "frames " + ltrim$(str$( frameNo ))
-            print #benchf, "seconds " + ltrim$(str$( benchSecs ))
-            print #benchf, "lastfps " + ltrim$(str$( fps ))
-            print #benchf, "polys " + ltrim$(str$( polys ))
-            print #benchf, "tris " + ltrim$(str$( tris ))
+            print #benchf, "seconds " + ltrim$(str$( scr.benchSecs ))
+            print #benchf, "lastfps " + ltrim$(str$( scr.fps ))
+            print #benchf, "polys " + ltrim$(str$( rdr.polys ))
+            print #benchf, "tris " + ltrim$(str$( rdr.tris ))
             close #benchf
             exit do
         end if
@@ -418,7 +418,7 @@ sub doMain
     loop while ( env.keyboard.esc = FALSE )
     
     tmrDel env.secTimer
-    if ( camFile <> 0 ) then close #camFile
+    if ( cam.scriptFile <> 0 ) then close #cam.scriptFile
 
 end sub
 

@@ -38,9 +38,9 @@ defint a-z
 function bspClasifypoint% ( nodenr as integer )
     dim dp as single
   
-    dp! = camPos.x*plnBuffer(ndsBuffer(nodenr).planeid).norm.x + _
-          camPos.y*plnBuffer(ndsBuffer(nodenr).planeid).norm.z + _
-          camPos.z*plnBuffer(ndsBuffer(nodenr).planeid).norm.y
+    dp! = cam.pos.x*plnBuffer(ndsBuffer(nodenr).planeid).norm.x + _
+          cam.pos.y*plnBuffer(ndsBuffer(nodenr).planeid).norm.z + _
+          cam.pos.z*plnBuffer(ndsBuffer(nodenr).planeid).norm.y
           
     if ( (dp!-plnBuffer(ndsBuffer(nodenr).planeid).dist) > 0.0 ) then
         bspClasifypoint% = -1
@@ -77,7 +77,7 @@ sub bspWalkNodeB ( byval nodenr as integer ) static
 	        last = frst+lefBuffer(not nodenr).lfacenum
 	        
 	        for  i = frst to last-1	            
-	            polyFlag(lfcBuffer(i)) = frameStamp
+	            polyFlag(lfcBuffer(i)) = vis.frameStamp
 	        next i
 	        
 	        
@@ -97,9 +97,9 @@ sub bspWalkNodeB ( byval nodenr as integer ) static
     end if
     
     pid = ndsBuffer(nodenr).planeid
-    dp  = camPos.x*plnBuffer(pid).norm.x + _
-          camPos.y*plnBuffer(pid).norm.z + _
-          camPos.z*plnBuffer(pid).norm.y
+    dp  = cam.pos.x*plnBuffer(pid).norm.x + _
+          cam.pos.y*plnBuffer(pid).norm.z + _
+          cam.pos.z*plnBuffer(pid).norm.y
           
     if ( dp-plnBuffer(pid).dist >= 0.0 ) then
         side = 1
@@ -114,8 +114,8 @@ sub bspWalkNodeB ( byval nodenr as integer ) static
     	''
     		
         bspWalkNodeB ndsBuffer(nodenr).child1
-	    orderList(ordCount) = nodenr
-	    ordCount = ordCount + 1
+	    orderList(vis.ordCount) = nodenr
+	    vis.ordCount = vis.ordCount + 1
         bspWalkNodeB ndsBuffer(nodenr).child0
         
     else
@@ -125,8 +125,8 @@ sub bspWalkNodeB ( byval nodenr as integer ) static
 	    ''
     		
         bspWalkNodeB ndsBuffer(nodenr).child0        
-	    orderList(ordCount) = nodenr
-	    ordCount = ordCount + 1        
+	    orderList(vis.ordCount) = nodenr
+	    vis.ordCount = vis.ordCount + 1        
         bspWalkNodeB ndsBuffer(nodenr).child1
     end if
     
@@ -142,7 +142,7 @@ sub bspShowModel ( model as integer )
     ''
     '' Reset tree state
     ''
-    ordCount = 0
+    vis.ordCount = 0
     culLeafs = 0
     drwLeafs = 0
     
@@ -156,13 +156,13 @@ sub bspShowModel ( model as integer )
     '' frames instead. The wrap is checked BEFORE the increment because
     '' QuickBASIC traps integer overflow at run time rather than wrapping.
     ''
-    if ( frameStamp = 32767 ) then
-        for  i = 0 to triCount-1
+    if ( vis.frameStamp = 32767 ) then
+        for  i = 0 to wld.triCount-1
             polyFlag(i) = 0
         next i
-        frameStamp = 0
+        vis.frameStamp = 0
     end if
-    frameStamp = frameStamp + 1
+    vis.frameStamp = vis.frameStamp + 1
     
     ''
     '' Extract pvs
@@ -365,7 +365,7 @@ sub pvsInit ( byval nodenr as integer )
     def seg = varseg( pvsBufferA(0) )
     
     if ( lefBuffer( not nodenr ).vislist = -1 ) then
-        for  i = 0 to lefCount-1
+        for  i = 0 to wld.lefCount-1
             pvsBufferB(i) = -1
         next i           
 
@@ -376,12 +376,12 @@ sub pvsInit ( byval nodenr as integer )
     '' Extract the pvs data
     ''
     l = 1
-    while ( l < lefCount )
+    while ( l < wld.lefCount )
         
         if ( peek( v ) = 0 ) then
             j = l
             l = l + 8& * peek( v+1 ) 
-            if ( l > lefCount ) then l = lefCount
+            if ( l > wld.lefCount ) then l = wld.lefCount
             
             for  j = j to l-1
                 pvsBufferB(j) = 0
@@ -396,7 +396,7 @@ sub pvsInit ( byval nodenr as integer )
                 '' A run can carry past the last leaf; in real mode that
                 '' writes over whatever follows the array.
                 ''
-                if ( l >= lefCount ) then exit for
+                if ( l >= wld.lefCount ) then exit for
                 
                         
                 if ( byte and bitarray(bit) ) then

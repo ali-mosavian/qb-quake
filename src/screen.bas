@@ -59,7 +59,7 @@ dim shared hFontChar(255) as long
 ''       which is why the fourteen callers reduce to a bare call.
 '' :::::::::::::
 sub drwLoadTick
-    drwLoadingBar loadDC, LOADBAR_X, LOADBAR_Y, LOADBAR_W, LOADBAR_H, loading, -1
+    drwLoadingBar ldr.dc, LOADBAR_X, LOADBAR_Y, LOADBAR_W, LOADBAR_H, ldr.pct, -1
 end sub
 
 
@@ -69,7 +69,7 @@ end sub
 ''       the current texture's four mip levels.
 '' :::::::::::::
 sub drwMipTick ( percent as single )
-    drwLoadingBar loadDC, LOADBAR_X, MIPBAR_Y, LOADBAR_W, MIPBAR_H, percent, 51
+    drwLoadingBar ldr.dc, LOADBAR_X, MIPBAR_Y, LOADBAR_W, MIPBAR_H, percent, 51
 end sub
 
 
@@ -209,38 +209,38 @@ sub drawHud ( hDstDC as long )
     ''
     '' Print stuff
     ''
-    if ( stats ) then                    
-        fontPrintText hDstDC, 0, 8*0, "Fps: " + str$( fps )
-        fontPrintText hDstDC, 0, 8*1, "Renderd polys: " + str$( polys )
-        fontPrintText hDstDC, 0, 8*2, "Renderd triangles: " + str$( tris )
+    if ( scr.stats ) then                    
+        fontPrintText hDstDC, 0, 8*0, "Fps: " + str$( scr.fps )
+        fontPrintText hDstDC, 0, 8*1, "Renderd polys: " + str$( rdr.polys )
+        fontPrintText hDstDC, 0, 8*2, "Renderd triangles: " + str$( rdr.tris )
         
-        if ( usemips ) then 
+        if ( rdr.usemips ) then 
             fontPrintText hDstDC, 0, 8*3, "Mipmapping: enabled, press f1 to disable"
         else
             fontPrintText hDstDC, 0, 8*3, "Mipmapping: disabled, press f1 to enable"
         end if
         
-        if ( rendmode = 0 ) then 
+        if ( rdr.rendmode = 0 ) then 
             fontPrintText hDstDC, 0, 8*4, "Render mode: perspective correct, press f2 to change"
-        elseif ( rendmode = 1 ) then 
+        elseif ( rdr.rendmode = 1 ) then 
             fontPrintText hDstDC, 0, 8*4, "Render mode: affine, press f2 to change"
         else
             fontPrintText hDstDC, 0, 8*4, "Render mode: wireframe, press f2 to change"
         end if       
         
-        if ( backface ) then 
+        if ( rdr.backface ) then 
             fontPrintText hDstDC, 0, 8*5, "Backface culling: enabled, press 'b' to disable"
         else
             fontPrintText hDstDC, 0, 8*5, "Backface culling: disabled, press 'b' to enable"
         end if
         
         fontPrintText hDstDC, 0, env.yres-8*7-6, "Resolution: " + str$( env.xres ) + "x" + ltrim$(str$( env.yres ))
-        fontPrintText hDstDC, 0, env.yres-8*6-6, "Vertices:" + str$( vtxCount )
-        fontPrintText hDstDC, 0, env.yres-8*5-6, "Edges:" + str$( edgCount )
-        fontPrintText hDstDC, 0, env.yres-8*4-6, "Polygons:" + str$( triCount )
-        fontPrintText hDstDC, 0, env.yres-8*3-6, "Nodes:" + str$( ndsCount )
-        fontPrintText hDstDC, 0, env.yres-8*2-6, "Leaves:" + str$( lefCount )
-        fontPrintText hDstDC, 0, env.yres-8*1-6, "PVS entries:" + str$( lefCount^2 )
+        fontPrintText hDstDC, 0, env.yres-8*6-6, "Vertices:" + str$( wld.vtxCount )
+        fontPrintText hDstDC, 0, env.yres-8*5-6, "Edges:" + str$( wld.edgCount )
+        fontPrintText hDstDC, 0, env.yres-8*4-6, "Polygons:" + str$( wld.triCount )
+        fontPrintText hDstDC, 0, env.yres-8*3-6, "Nodes:" + str$( wld.ndsCount )
+        fontPrintText hDstDC, 0, env.yres-8*2-6, "Leaves:" + str$( wld.lefCount )
+        fontPrintText hDstDC, 0, env.yres-8*1-6, "PVS entries:" + str$( wld.lefCount^2 )
         fontPrintText hDstDC, 0, env.yres-8*0-6, "Stats: enabled, press f12 to disable"             
     else 
         fontPrintText hDstDC, 0, env.yres-8*0-6, "Stats: disabled, press f12 to enable"

@@ -117,13 +117,13 @@ sub presentFrame ( hDstDC as long, page as integer )
     fps1 = fps1 + 1
     
     if env.secTimer.counter > 0 then
-        fps = fps1
+        scr.fps = fps1
         fps1 = 0
         env.secTimer.counter = 0
-        benchSecs = benchSecs + 1
+        scr.benchSecs = scr.benchSecs + 1
     end if        
     
-    tris = 0
-    polys = 0
+    rdr.tris = 0
+    rdr.polys = 0
 
 end sub

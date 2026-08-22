@@ -41,23 +41,23 @@ dim shared mdlCount as long
 ''::::::::::
 defint a-z
 sub bspOpen
-    bspFile = freefile
-    open rtrim$( env.mapName ) for binary as #bspFile
+    wld.file = freefile
+    open rtrim$( env.mapName ) for binary as #wld.file
     
-    get #bspFile,, bsphead
+    get #wld.file,, wld.head
     
-    triCount = bsphead.faces.size \ len( fce )
-    vtxCount = bsphead.vertices.size \ len( vtxBuffer(0) )
-    edgCount = bsphead.edges.size \ len( edgBuffer(0) )
-    ledgCount = bsphead.ledges.size \ 4
-    lefCount = bsphead.leaves.size \ len( leaftmp )
-    lfcCount = bsphead.lface.size \ len( lfcBuffer(0) )
-    plnCount = bsphead.planes.size \ len( planetmp )
-    ndsCount = bsphead.nodes.size \ len( nodetmp )
-    mdlCount = bsphead.models.size \ len( mdlBuffer(0) )
-    texiCount = bsphead.texinfo.size \ len( texInfBuff(0) )
-    seek #bspFile, bsphead.miptex.offs+1
-    get #bspFile,, numtex    
+    wld.triCount = wld.head.faces.size \ len( fce )
+    wld.vtxCount = wld.head.vertices.size \ len( vtxBuffer(0) )
+    wld.edgCount = wld.head.edges.size \ len( edgBuffer(0) )
+    ledgCount = wld.head.ledges.size \ 4
+    wld.lefCount = wld.head.leaves.size \ len( leaftmp )
+    lfcCount = wld.head.lface.size \ len( lfcBuffer(0) )
+    plnCount = wld.head.planes.size \ len( planetmp )
+    wld.ndsCount = wld.head.nodes.size \ len( nodetmp )
+    mdlCount = wld.head.models.size \ len( mdlBuffer(0) )
+    wld.texiCount = wld.head.texinfo.size \ len( texInfBuff(0) )
+    seek #wld.file, wld.head.miptex.offs+1
+    get #wld.file,, wld.numtex    
 
 end sub
 
@@ -73,9 +73,9 @@ sub bspFindSpawn
     dim i as integer
     dim entity as string
 
-    entity$ = space$( bsphead.entities.size )
-    seek #bspFile, bsphead.entities.offs+1
-    get #bspFile,, entity$
+    entity$ = space$( wld.head.entities.size )
+    seek #wld.file, wld.head.entities.offs+1
+    get #wld.file,, entity$
     
     dim strm(50) as string
     dim strm_cnt as integer
@@ -99,13 +99,13 @@ sub bspFindSpawn
                     
                     for j = 0 to strm_cnt-1
                         if strm(j) = "origin" then
-                            camPos.x = val(strm(j+1))
-                            camPos.z = val(strm(j+2))
-                            camPos.y = val(strm(j+3))
+                            cam.pos.x = val(strm(j+1))
+                            cam.pos.z = val(strm(j+2))
+                            cam.pos.y = val(strm(j+3))
                         end if
                         
                         if strm(j) = "angle" then
-                            startAngle = val(strm(j+1))                            
+                            cam.startAngle = val(strm(j+1))                            
                         end if                        
                     next j
                 end if
@@ -113,7 +113,7 @@ sub bspFindSpawn
         end if    
     next i
     
-    loading = loading + 100.0/LOAD_STEPS
+    ldr.pct = ldr.pct + 100.0/LOAD_STEPS
     drwLoadTick    
 
 end sub
@@ -127,20 +127,20 @@ end sub
 ''::::::::::
 defint a-z
 sub bspAlloc
-    redim triBuffer(triCount-1) as face2
-    redim edgBuffer(edgCount-1) as edge    
+    redim triBuffer(wld.triCount-1) as face2
+    redim edgBuffer(wld.edgCount-1) as edge    
     redim ledgBuffer(ledgCount-1) as integer
-    redim vtxBuffer(vtxCount-1) as vertex
-    redim lefBuffer(lefCount-1) as leaf2
+    redim vtxBuffer(wld.vtxCount-1) as vertex
+    redim lefBuffer(wld.lefCount-1) as leaf2
     redim lfcBuffer(lfcCount-1) as integer
     redim plnBuffer(plnCount-1) as plane2
-    redim ndsBuffer(ndsCount-1) as nodeb
+    redim ndsBuffer(wld.ndsCount-1) as nodeb
     redim mdlBuffer(mdlCount-1) as model
-    redim orderList(ndsCount-1) as integer
-    redim pvsBufferA( (bsphead.vislist.size+1)\2 ) as integer
+    redim orderList(wld.ndsCount-1) as integer
+    redim pvsBufferA( (wld.head.vislist.size+1)\2 ) as integer
     redim pvsBufferB( 4096 ) as integer
     redim polyFlag( 4096 ) as integer
-    redim texInfBuff(texiCount-1) as texinfo
+    redim texInfBuff(wld.texiCount-1) as texinfo
 
 end sub
 
@@ -156,7 +156,7 @@ sub bspLoadVertices
     bload "verts.bld", varptr( vtxBuffer(0) )
     def seg
 
-    loading = loading + (100.0/LOAD_STEPS)
+    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     drwLoadTick
 end sub
 
@@ -172,7 +172,7 @@ sub bspLoadFaces
     bload "faces.bld", varptr( triBuffer(0) )
     def seg
 
-    loading = loading + (100.0/LOAD_STEPS)
+    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     drwLoadTick
 end sub
 
@@ -188,7 +188,7 @@ sub bspLoadEdges
     bload "edges.bld", varptr( edgBuffer(0) )
     def seg
 
-    loading = loading + (100.0/LOAD_STEPS)
+    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     drwLoadTick
 end sub
 
@@ -204,7 +204,7 @@ sub bspLoadEdgeIndex
     bload "ledges.bld", varptr( ledgBuffer(0) )
     def seg
 
-    loading = loading + (100.0/LOAD_STEPS)
+    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     drwLoadTick
 end sub
 
@@ -220,7 +220,7 @@ sub bspLoadLeaves
     bload "leaves.bld", varptr( lefBuffer(0) )
     def seg
 
-    loading = loading + (100.0/LOAD_STEPS)
+    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     drwLoadTick
 end sub
 
@@ -236,7 +236,7 @@ sub bspLoadFaceIndex
     bload "lface.bld", varptr( lfcBuffer(0) )
     def seg
 
-    loading = loading + (100.0/LOAD_STEPS)
+    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     drwLoadTick
 end sub
 
@@ -252,7 +252,7 @@ sub bspLoadNodes
     bload "nodes.bld", varptr( ndsBuffer(0) )
     def seg
 
-    loading = loading + (100.0/LOAD_STEPS)
+    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     drwLoadTick
 end sub
 
@@ -268,7 +268,7 @@ sub bspLoadPlanes
     bload "planes.bld", varptr( plnBuffer(0) )
     def seg
 
-    loading = loading + (100.0/LOAD_STEPS)
+    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     drwLoadTick
 end sub
 
@@ -284,7 +284,7 @@ sub bspLoadModels
     bload "models.bld", varptr( mdlBuffer(0) )
     def seg
 
-    loading = loading + (100.0/LOAD_STEPS)
+    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     drwLoadTick
 end sub
 
@@ -300,7 +300,7 @@ sub bspLoadPvs
     bload "pvs.bld", varptr( pvsBufferA(0) )
     def seg
 
-    loading = loading + (100.0/LOAD_STEPS)
+    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     drwLoadTick
 end sub
 
@@ -314,6 +314,6 @@ end sub
 ''::::::::::
 defint a-z
 sub bspClose
-    close #bspFile
-    bspFile = 0
+    close #wld.file
+    wld.file = 0
 end sub
