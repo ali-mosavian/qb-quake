@@ -14,8 +14,19 @@
 '' warps liquids with a sine per vertex; this scrolls the whole face, which
 '' costs two adds and reads as a current rather than a ripple.
 ''
-const LIQ_FLOW_U#    = 0.15
-const LIQ_FLOW_V#    = 0.10
+''
+'' Liquid perturbation, Quake's. Each coordinate is displaced by a sine of
+'' the OTHER one, which is what makes the surface roll rather than slide.
+''
+'' The constants are Quake's converted out of texels: it displaces by 8
+'' texels of 64, and our u and v are already divided by the texture size,
+'' so the amplitude is 8/64. Its table index is (other*0.125 + time)*256/2pi;
+'' ours takes a normalised coordinate, so the 0.125 absorbs the texture
+'' width and becomes 8*40.74.
+''
+const TURB_AMP#      = 0.125
+const TURB_FREQ#     = 326.0
+const TURB_RATE#     = 40.74
 
 type RenderState
     backface    as integer      '' cull toggle
