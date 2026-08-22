@@ -86,6 +86,10 @@ dim shared ndsCount as long
 dim shared mdlCount as long
 dim shared ordCount as long
 dim shared clpCount as long
+'' texiCount was the one lump count never declared shared. Inside the old
+'' monolithic doInit that did not matter; once bspOpen and bspAlloc were
+'' separate routines, bspAlloc read 0 and did redim texInfBuff(-1).
+dim shared texiCount as long
 dim shared camUp as u3dVector3f    
 dim shared CamPos as u3dVector3f    
 dim shared camLookAt as u3dVector3f
