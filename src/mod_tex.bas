@@ -13,7 +13,6 @@ option explicit
 '' to stay '$DYNAMIC. Getting this backwards is what killed the first
 '' attempt at this cut.
 ''
-defint a-z
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
 '$include: 'pal.bi'
@@ -44,7 +43,6 @@ dim shared tmipinf( 1 ) as miptex
 '' name: texLoadOffsets
 '' desc: Reads the miptex directory and sizes the texture tables.
 ''::::::::::
-defint a-z
 sub mod_load_texinfo
     ''
     '' hTextrDC is COMMON now, and COMMON can only declare it as hTextrDC()
@@ -87,7 +85,6 @@ end sub
 ''       matches each one back into the Quake palette. One loop over
 ''       numtex, so it is one routine.
 ''::::::::::
-defint a-z
 sub mod_load_textures
     dim i as integer, j as integer
     dim bmpfile as string

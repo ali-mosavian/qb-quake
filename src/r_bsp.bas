@@ -7,7 +7,6 @@ option explicit
 '' follows. Quake splits it the same way: r_bsp.c decides what is seen, the
 '' d_ side draws it.
 ''
-defint a-z
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
 '$include: 'pal.bi'
@@ -34,18 +33,17 @@ dim shared pvs_leaf as integer
 '' ==========================================================================
 ''  BSP WALK
 '' ==========================================================================
-defint a-z
-function r_classify_point% ( nodenr as integer )
+function r_classify_point ( nodenr as integer ) as integer
     dim dp as single
   
-    dp! = cam.pos.x*pln_buffer(nds_buffer(nodenr).planeid).norm.x + _
+    dp = cam.pos.x*pln_buffer(nds_buffer(nodenr).planeid).norm.x + _
           cam.pos.y*pln_buffer(nds_buffer(nodenr).planeid).norm.z + _
           cam.pos.z*pln_buffer(nds_buffer(nodenr).planeid).norm.y
           
-    if ( (dp!-pln_buffer(nds_buffer(nodenr).planeid).dist) > 0.0 ) then
-        r_classify_point% = -1
+    if ( (dp-pln_buffer(nds_buffer(nodenr).planeid).dist) > 0.0 ) then
+        r_classify_point = -1
     else
-        r_classify_point% = 0
+        r_classify_point = 0
     end if
     
 end function
@@ -53,7 +51,6 @@ end function
 
 
 
-defint a-z
 sub r_recursive_world_node ( byval nodenr as integer ) static
     dim dp as single
     dim frst as integer, last as integer, i as integer
@@ -136,7 +133,6 @@ end sub
 
 
 '':::::::::
-defint a-z
 sub r_draw_world ( model as integer )
     dim i as integer
     ''
@@ -181,7 +177,6 @@ end sub
 
 
 '':::::::::
-defint a-z
 sub r_set_frustum ( frustum() as plane, mtx as u3dMtrx )
     dim i as integer
     dim d as single
@@ -256,8 +251,7 @@ end sub
 
 
 '':::::::::
-defint a-z
-function r_cull_box% ( bbox as bboundbox, frustum() as plane )
+function r_cull_box ( bbox as bboundbox, frustum() as plane ) as integer
     dim dp as single
     dim near_point as vertex
     dim i as integer
@@ -314,19 +308,18 @@ function r_cull_box% ( bbox as bboundbox, frustum() as plane )
              frustum(i).norm.z*near_point.z
              
         if ( (dp+frustum(i).dist) > 0 ) then
-            r_cull_box% = 0
+            r_cull_box = 0
             exit function
         end if
     next i    
     
-    r_cull_box% = -1
+    r_cull_box = -1
 end function
 
 
 
 
 ''::::::::::
-defint a-z
 sub r_mark_leaves ( byval nodenr as integer )
     dim v as long
     dim l as long

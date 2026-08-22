@@ -9,7 +9,6 @@ option explicit
 '' hFontChar carries a real bound and stays module-local, so it keeps its
 '' allocation -- only COMMON arrays lose theirs.
 ''
-defint a-z
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
 '$include: 'pal.bi'
@@ -82,7 +81,6 @@ end sub
 '' desc: Draws a loading bar
 ''
 '' :::::::::::::
-defint a-z
 sub draw_bar ( h_dc as long, x as integer, y as integer, wdt as integer, _
                     hgt as integer, percent as single, col as long )
     dim drw_width as integer
@@ -100,8 +98,7 @@ end sub
 
 
 '':::::::::
-defint a-z
-function draw_load_font% ( flname as string, colb as long )
+function draw_load_font ( flname as string, colb as long ) as integer
     dim col as long
     dim trn as long
     dim f_hndl as integer
@@ -114,13 +111,13 @@ function draw_load_font% ( flname as string, colb as long )
     trn = uglColor8( 7, 0, 3 )    
     
     if ( not uglNewMult( h_font_char(), 256, UGL.EMS, env.c_fmt, 8, 8 ) ) then
-        draw_load_font% = 0
+        draw_load_font = 0
         exit function
     end if        
 
     
     if ( uarOpen( file, flname, F4READ ) = false ) then
-        draw_load_font% = 0
+        draw_load_font = 0
         exit function
     end if
 
@@ -129,7 +126,7 @@ function draw_load_font% ( flname as string, colb as long )
     '' Check id
     ''
     if ( uarReadEx( file, idstr, 4 ) <> 4 ) then
-        draw_load_font% = 0
+        draw_load_font = 0
         exit function
     end if    
     
@@ -143,7 +140,7 @@ function draw_load_font% ( flname as string, colb as long )
     
     for  i = 0 to 255
         if ( uarReadEx( file, char(0), 4*2 ) <> 4*2 ) then
-            draw_load_font% = 0
+            draw_load_font = 0
             exit function
         end if
         
@@ -165,13 +162,12 @@ function draw_load_font% ( flname as string, colb as long )
     next i
     
     uarClose file
-    draw_load_font% = -1
+    draw_load_font = -1
 end function
 
 
 
 '':::::::::
-defint a-z
 sub draw_string ( dc as long, x as integer, y as integer, _
                     text as string )
     dim posx as integer
@@ -198,7 +194,6 @@ end sub
 '' name: drawHud
 '' desc: Sound VU bars, the statistics overlay and the watermark.
 ''::::::::::
-defint a-z
 sub scr_draw_hud ( h_dst_dc as long )
     dim l as integer, r as integer
 
@@ -277,7 +272,6 @@ end sub
 ''       Entered once per keypress, so it is written for clarity: rows are
 ''       built as strings and PUT whole rather than a byte at a time.
 ''::::::::::
-defint a-z
 sub scr_screenshot ( flname as string, byval dc as long )
     dim f as integer
     dim x as integer

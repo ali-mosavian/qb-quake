@@ -6,7 +6,6 @@ option explicit
 '' this module consumes stay local; the buffers the renderer walks are in
 '' qshared.bi as COMMON SHARED.
 ''
-defint a-z
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
 '$include: 'pal.bi'
@@ -41,7 +40,6 @@ dim shared mdl_count as long
 '' name: bspOpen
 '' desc: Opens the map, reads the header and derives every lump count.
 ''::::::::::
-defint a-z
 sub mod_open
     wld.file = freefile
     open rtrim$( env.map_name ) for binary as #wld.file
@@ -70,7 +68,6 @@ end sub
 '' name: bspFindSpawn
 '' desc: Scans the entity lump for info_player_start.
 ''::::::::::
-defint a-z
 sub mod_find_spawn
     dim i as integer
     dim entity as string
@@ -127,7 +124,6 @@ end sub
 '' name: bspAlloc
 '' desc: Sizes every level buffer from the counts bspOpen derived.
 ''::::::::::
-defint a-z
 sub mod_alloc
     redim tri_buffer(wld.tri_count-1) as face2
     redim edg_buffer(wld.edg_count-1) as edge    
@@ -152,7 +148,6 @@ end sub
 ''::::::::::
 '' name: bspLoadVertices
 ''::::::::::
-defint a-z
 sub mod_load_vertexes
     def seg = varseg( vtx_buffer(0) )
     bload "verts.bld", varptr( vtx_buffer(0) )
@@ -168,7 +163,6 @@ end sub
 ''::::::::::
 '' name: bspLoadFaces
 ''::::::::::
-defint a-z
 sub mod_load_faces
     def seg = varseg( tri_buffer(0) )
     bload "faces.bld", varptr( tri_buffer(0) )
@@ -184,7 +178,6 @@ end sub
 ''::::::::::
 '' name: bspLoadEdges
 ''::::::::::
-defint a-z
 sub mod_load_edges
     def seg = varseg( edg_buffer(0) )
     bload "edges.bld", varptr( edg_buffer(0) )
@@ -200,7 +193,6 @@ end sub
 ''::::::::::
 '' name: bspLoadEdgeIndex
 ''::::::::::
-defint a-z
 sub mod_load_surfedges
     def seg = varseg( ledg_buffer(0) )
     bload "ledges.bld", varptr( ledg_buffer(0) )
@@ -216,7 +208,6 @@ end sub
 ''::::::::::
 '' name: bspLoadLeaves
 ''::::::::::
-defint a-z
 sub mod_load_leafs
     def seg = varseg( lef_buffer(0) )
     bload "leaves.bld", varptr( lef_buffer(0) )
@@ -232,7 +223,6 @@ end sub
 ''::::::::::
 '' name: bspLoadFaceIndex
 ''::::::::::
-defint a-z
 sub mod_load_marksurfaces
     def seg = varseg( lfc_buffer(0) )
     bload "lface.bld", varptr( lfc_buffer(0) )
@@ -248,7 +238,6 @@ end sub
 ''::::::::::
 '' name: bspLoadNodes
 ''::::::::::
-defint a-z
 sub mod_load_nodes
     def seg = varseg( nds_buffer(0) )
     bload "nodes.bld", varptr( nds_buffer(0) )
@@ -264,7 +253,6 @@ end sub
 ''::::::::::
 '' name: bspLoadPlanes
 ''::::::::::
-defint a-z
 sub mod_load_planes
     def seg = varseg( pln_buffer(0) )
     bload "planes.bld", varptr( pln_buffer(0) )
@@ -280,7 +268,6 @@ end sub
 ''::::::::::
 '' name: bspLoadModels
 ''::::::::::
-defint a-z
 sub mod_load_submodels
     def seg = varseg( mdl_buffer(0) )
     bload "models.bld", varptr( mdl_buffer(0) )
@@ -296,7 +283,6 @@ end sub
 ''::::::::::
 '' name: bspLoadPvs
 ''::::::::::
-defint a-z
 sub mod_load_visibility
     def seg = varseg( pvs_buffer_a(0) )
     bload "pvs.bld", varptr( pvs_buffer_a(0) )
@@ -314,7 +300,6 @@ end sub
 ''       that closed it, and the handle's lifetime spanned two modules
 ''       with nothing naming the contract.
 ''::::::::::
-defint a-z
 sub mod_close
     close #wld.file
     wld.file = 0

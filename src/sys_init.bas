@@ -7,7 +7,6 @@ option explicit
 ''                orchestrator here; every routine below is one of the steps
 ''                it calls exactly once.
 ''
-defint a-z
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
 '$include: 'pal.bi'
@@ -36,7 +35,6 @@ dim shared loadmod as UGMMOD
 '' desc: Parse the BLASTER enviroment variable
 ''
 '' :::::::::::
-defint a-z
 sub s_get_blaster  ( port as integer, irq as integer, ldma as integer, _    
                      hdma as integer )
     
@@ -100,7 +98,6 @@ end sub
 '' name: checkCommandLine
 '' desc: A map on the command line, and the ini beside it.
 ''::::::::::
-defint a-z
 sub sys_parse_args
     dim argv(16) as string
     dim argc as integer
@@ -148,7 +145,6 @@ end sub
 '' name: initTables
 '' desc: Reads stuff.ini and builds the bit mask table the PVS decoder indexes.
 ''::::::::::
-defint a-z
 sub sys_init_tables
     ''
     '' bitarray and frustum are COMMON now, and COMMON can only declare an
@@ -175,7 +171,6 @@ end sub
 '' name: soundOpen
 '' desc: Autodetects an SB16, falls back to the BLASTER variable.
 ''::::::::::
-defint a-z
 sub s_init
     dim port as integer
     dim irq as integer
@@ -224,7 +219,6 @@ end sub
 '' name: musicStart
 '' desc: Starts the module that plays over the loading screen.
 ''::::::::::
-defint a-z
 sub s_start_music
     if ( env.sound = true ) then
         if ( modInit = false ) then
@@ -257,7 +251,6 @@ end sub
 ''::::::::::
 '' name: fontOpen
 ''::::::::::
-defint a-z
 sub draw_init_font
     if ( not draw_load_font( "base.dat::font/4x6.fnt", 254 ) ) then
         sys_error "0x0000, Could not load font..."
@@ -272,7 +265,6 @@ end sub
 '' name: loadScreenOpen
 '' desc: Mode 13h for the duration of loading only.
 ''::::::::::
-defint a-z
 sub scr_begin_loading
     ldr.dc = uglSetVideoDC( UGL.8BIT, 320, 200, 1 )
     if ( ldr.dc = false ) then
@@ -290,7 +282,6 @@ end sub
 '' name: inputOpen
 '' desc: Mouse, keyboard and the one second timer.
 ''::::::::::
-defint a-z
 sub in_init
     if ( mouseInit( env.h_video_dc, env.mouse ) = FALSE ) then
         sys_error "0x0006, Could not init mouse..."
@@ -314,7 +305,6 @@ end sub
 ''::::::::::
 '' name: musicStopLoading
 ''::::::::::
-defint a-z
 sub s_stop_music
     if ( env.sound = true ) then
         modStop
