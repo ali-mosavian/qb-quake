@@ -23,7 +23,11 @@ defint a-z
 '$include: 'bspfile.bi'
 '$include: 'snd.bi'
 '$include: 'mod.bi'
-'$include: 'quakedef.bi'
+'$include: 'q_env.bi'
+'$include: 'q_map.bi'
+'$include: 'q_vis.bi'
+'$include: 'q_draw.bi'
+'$include: 'q_scr.bi'
 
 ''
 '' Loading screen geometry. Private to this module on purpose: the bar is
