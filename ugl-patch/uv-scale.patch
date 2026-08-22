@@ -1,0 +1,44 @@
+--- /tmp/ugl023b_orig/src/ugl/uglplxt.asm	2003-11-27 00:00:00
++++ /tmp/ugl023b/src/ugl/uglplxt.asm	2026-08-22 13:50:30
+@@ -159,8 +159,6 @@
+                 
+                 mov	ax, gs:[DC.xRes]
+ 		mov	dx, gs:[DC.yRes]
+-		dec	ax			;; ax= xRes-1
+-		dec	dx			;; dx= yRes-1
+ 		mov	uf, ax
+ 		mov	vf, dx
+ 		
+--- /tmp/ugl023b_orig/src/ugl/uglplxtp.asm	2003-11-27 00:00:00
++++ /tmp/ugl023b/src/ugl/uglplxtp.asm	2026-08-22 13:50:30
+@@ -125,8 +125,6 @@
+                 
+                 mov	ax, gs:[DC.xRes]
+ 		mov	dx, gs:[DC.yRes]
+-		dec	ax			;; ax= xRes-1
+-		dec	dx			;; dx= yRes-1
+ 		mov	uf, ax
+ 		mov	vf, dx
+ 		
+--- /tmp/ugl023b_orig/src/misc/mscshta.asm	2003-11-27 00:00:00
++++ /tmp/ugl023b/src/misc/mscshta.asm	2026-08-22 13:50:30
+@@ -107,8 +107,6 @@
+ 
+                 movzx	eax, gs:[DC.xRes]
+ 		movzx	edx, gs:[DC.yRes]
+-		dec	eax			;; eax= xRes-1
+-		dec	edx			;; edx= yRes-1
+ 		shl	eax, 16			;; 2 fx
+ 		shl	edx, 16			;; /
+ 		mov	uf, eax
+--- /tmp/ugl023b_orig/src/misc/mscshtp.asm	2003-11-27 00:00:00
++++ /tmp/ugl023b/src/misc/mscshtp.asm	2026-08-22 13:50:30
+@@ -106,8 +106,6 @@
+ 
+                 movzx	eax, gs:[DC.xRes]
+ 		movzx	edx, gs:[DC.yRes]
+-		dec	eax			;; eax= xRes-1
+-		dec	edx			;; edx= yRes-1
+ 		mov	uf, eax
+ 		mov	vf, edx
+ 		
