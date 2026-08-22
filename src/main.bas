@@ -283,27 +283,8 @@ sub host_main
     
 
     
-    if ( env.cammode = 1 ) then
-        cam.script_file = freefile
-        open env.camscrpt for input as #cam.script_file    
-        do 
-            input #cam.script_file, cbzp(i).x, cbzp(i).y, cbzp(i).z
-            input #cam.script_file, cbzl(i).x, cbzl(i).y, cbzl(i).z
-            i = i + 1
-        loop until ( eof( 1 ) )    
-        close #cam.script_file
-        cam.script_file = 0
-        cnt_pnts = i-1
-                
-        ugluCubicBez3D ppos(0), cbzp(crr_pnt), env.caminterp
-        ugluCubicBez3D plok(0), cbzl(crr_pnt), env.caminterp
-        crr_pnt = crr_pnt + 3
-    end if        
+    v_open_script ppos(), plok(), cbzp(), cbzl(), cnt_pnts, crr_pnt
     
-    if ( env.cammode = 2 ) then
-        cam.script_file = freefile
-        open env.camscrpt for output as #cam.script_file
-    end if
     
     
     
@@ -402,15 +383,7 @@ sub host_main
         ''
         frame_no = frame_no + 1
         if ( env.bench_frames > 0 and frame_no >= env.bench_frames ) then
-            scr_screenshot "bench.bmp", h_dst_dc
-            benchf = freefile
-            open "bench.txt" for output as #benchf
-            print #benchf, "frames " + ltrim$(str$( frame_no ))
-            print #benchf, "seconds " + ltrim$(str$( scr.bench_secs ))
-            print #benchf, "lastfps " + ltrim$(str$( scr.fps ))
-            print #benchf, "polys " + ltrim$(str$( rdr.polys ))
-            print #benchf, "tris " + ltrim$(str$( rdr.tris ))
-            close #benchf
+            host_bench_report frame_no, h_dst_dc
             exit do
         end if
 
@@ -438,5 +411,30 @@ sub host_shutdown
     screen 0
     width 80, 25
     end
+
+end sub
+
+
+''::::::::::
+'' name: host_bench_report
+'' desc: Writes bench.bmp and bench.txt at the end of a -bench run.
+''
+''       Called before vid_update, so the counters are still the frame's
+''       own -- scr_count_frame clears them -- and h_dst_dc still holds
+''       the finished image.
+''::::::::::
+sub host_bench_report ( frame_no as long, h_dst_dc as long )
+    dim benchf as integer
+
+    scr_screenshot "bench.bmp", h_dst_dc
+
+    benchf = freefile
+    open "bench.txt" for output as #benchf
+    print #benchf, "frames " + ltrim$(str$( frame_no ))
+    print #benchf, "seconds " + ltrim$(str$( scr.bench_secs ))
+    print #benchf, "lastfps " + ltrim$(str$( scr.fps ))
+    print #benchf, "polys " + ltrim$(str$( rdr.polys ))
+    print #benchf, "tris " + ltrim$(str$( rdr.tris ))
+    close #benchf
 
 end sub
