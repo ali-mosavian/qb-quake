@@ -275,8 +275,6 @@ end type
 declare sub strtok ( strm() as string, strm_cnt as integer, _
              tokenlist as string, stream as string )
 declare function initFont% ( flname as string, col as long )
-declare sub fontPrintChar ( dc as long, x as integer, y as integer, _
-                           char as integer )
 declare sub fontPrintText ( dc as long, x as integer, y as integer, _
                             text as string ) 
                             
