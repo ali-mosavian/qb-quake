@@ -6,7 +6,6 @@ option explicit
 '' finished frame. Quake keeps this in its own vid_*.c for the same
 '' reason: it is the only part that knows how pixels reach the screen.
 ''
-'' fps1 and screenie are scalars, so no '$STATIC/'$DYNAMIC concern.
 ''
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
@@ -27,8 +26,6 @@ option explicit
 '$include: 'q_snd.bi'
 
 '$static
-dim shared fps1 as integer
-dim shared screenie as integer
 
 
 
@@ -105,47 +102,6 @@ sub vid_update ( h_dst_dc as long, page as integer )
         uglSetVisPage page
         uglSetWrkPage (page+1) mod env.pages
         page = (page+1) mod env.pages
-    end if
-
-end sub
-
-
-
-
-''::::::::::
-'' name: scr_count_frame
-'' desc: One frame has been drawn. Rolls fps once a second, and clears the
-''       counters the next frame will accumulate into.
-''::::::::::
-sub scr_count_frame
-
-    fps1 = fps1 + 1
-
-    if env.sec_timer.counter > 0 then
-        scr.fps = fps1
-        fps1 = 0
-        env.sec_timer.counter = 0
-        scr.bench_secs = scr.bench_secs + 1
-    end if
-
-    rdr.tris = 0
-    rdr.polys = 0
-
-end sub
-
-
-
-
-''::::::::::
-'' name: in_screenshot_key
-'' desc: Writes scrnNN.bmp while the key is held. Lives with the other input
-''       handling rather than in the present path.
-''::::::::::
-sub in_screenshot_key ( h_dst_dc as long )
-
-    if ( env.keyboard.s ) then
-        scr_screenshot "scrn" + ltrim$(rtrim$(str$( screenie ))) + ".bmp", h_dst_dc
-        screenie = screenie + 1
     end if
 
 end sub

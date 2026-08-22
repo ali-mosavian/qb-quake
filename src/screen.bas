@@ -50,6 +50,10 @@ const MIPBAR_Y  = LOADBAR_Y-15
 '$static
 dim shared h_font_char(255) as long
 
+'' Frames within the current second; scr.fps is the last completed
+'' second's total, which is what the overlay shows.
+dim shared fps1 as integer
+
 
 
 '' ==========================================================================
@@ -334,5 +338,65 @@ sub scr_screenshot ( flname as string, byval dc as long )
     next y
 
     close #f
+
+end sub
+
+
+
+
+
+
+''::::::::::
+'' name: fontOpen
+''::::::::::
+sub draw_init_font
+    if ( not draw_load_font( "base.dat::font/4x6.fnt", 254 ) ) then
+        sys_error "0x0000, Could not load font..."
+    end if    
+
+end sub
+
+
+
+
+
+
+''::::::::::
+'' name: loadScreenOpen
+'' desc: Mode 13h for the duration of loading only.
+''::::::::::
+sub scr_begin_loading
+    ldr.dc = uglSetVideoDC( UGL.8BIT, 320, 200, 1 )
+    if ( ldr.dc = false ) then
+        sys_error "0x3001, Could not set loading video mode"
+    end if
+    
+    scr_load_tick    
+
+end sub
+
+
+
+
+
+
+''::::::::::
+'' name: scr_count_frame
+'' desc: One frame has been drawn. Rolls fps once a second, and clears the
+''       counters the next frame will accumulate into.
+''::::::::::
+sub scr_count_frame
+
+    fps1 = fps1 + 1
+
+    if env.sec_timer.counter > 0 then
+        scr.fps = fps1
+        fps1 = 0
+        env.sec_timer.counter = 0
+        scr.bench_secs = scr.bench_secs + 1
+    end if
+
+    rdr.tris = 0
+    rdr.polys = 0
 
 end sub

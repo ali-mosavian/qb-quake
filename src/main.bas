@@ -440,36 +440,3 @@ sub host_shutdown
     end
 
 end sub
-
-
-''::::
-sub sys_error ( msg as string )
-    ''
-    '' Record the message before touching the video mode.
-    ''
-    '' Everything below draws to the screen, and if uglRestore leaves a
-    '' graphics mode the message is rendered as pixels: not in the text
-    '' buffer, not on redirected stdout, and gone the moment the program
-    '' ends. A failed run then looks exactly like a slow one from outside.
-    ''
-    dim errf as integer
-    errf = freefile
-    open "error.log" for output as #errf
-    print #errf, msg
-    close #errf
-
-    ''
-    '' Restore video mode and end UGL
-    ''
-    uglRestore
-    uglEnd
-    
-    ''
-    '' Print msg and quit program
-    ''
-    screen 0
-    width 80, 25
-    print "Error: " + msg
-    sleep
-    end
-end sub
