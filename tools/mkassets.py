@@ -20,11 +20,24 @@ SIZES  = [64, 32, 16, 8]        # what the renderer wants, per mip level
 def read_lumps(d):
     return [struct.unpack_from('<ii', d, 4 + 8*i) for i in range(15)]
 
-def load_palette(path):
-    p = open(path, 'rb').read()
-    if len(p) < 768:
-        raise SystemExit(f"palette {path} is {len(p)} bytes, expected >= 768")
-    return [tuple(p[i*3:i*3+3]) for i in range(256)]
+def pack_read(path, want):
+    """Pull one file out of a Quake PACK archive (base.dat is one)."""
+    d = open(path, 'rb').read()
+    magic, dirofs, dirlen = struct.unpack_from('<4sii', d, 0)
+    if magic != b'PACK':
+        raise SystemExit(f"{path} is not a PACK archive")
+    for i in range(dirlen // 64):
+        e    = dirofs + 64*i
+        name = d[e:e+56].split(b'\0')[0].decode('latin-1')
+        off, ln = struct.unpack_from('<ii', d, e+56)
+        if name == want:
+            return d[off:off+ln]
+    raise SystemExit(f"{want} not found in {path}")
+
+def load_palette(raw):
+    if len(raw) < 768:
+        raise SystemExit(f"palette is {len(raw)} bytes, expected >= 768")
+    return [tuple(raw[i*3:i*3+3]) for i in range(256)]
 
 def inverse_palette(pal, bits=5):
     """RGB -> nearest index, as a (2^bits)^3 cube.
@@ -95,11 +108,21 @@ def write_bmp8(path, w, h, pixels, pal):
 
 def main():
     if len(sys.argv) < 4:
-        raise SystemExit("usage: mkassets.py <map.bsp> <palette.lmp> <outdir>")
-    bsp, palpath, outdir = sys.argv[1], sys.argv[2], sys.argv[3]
+        raise SystemExit("usage: mkassets.py <map.bsp> <base.dat> <outdir>")
+    bsp, packpath, outdir = sys.argv[1], sys.argv[2], sys.argv[3]
     os.makedirs(outdir, exist_ok=True)
     d   = open(bsp, 'rb').read()
-    pal = load_palette(palpath)
+    pal = load_palette(pack_read(packpath, 'color/palette.lmp'))
+
+    # texLoadAll read every miptex byte as colmap[byte], not as a palette index
+    # directly -- row 0 of the colormap, its brightest level. In this data set
+    # that row is nowhere near the identity (221 of 256 entries differ), so
+    # skipping it shifts almost every texel to the wrong colour. Apply it here
+    # exactly where the original applied it: on the way in.
+    cmap = pack_read(packpath, 'color/colormap.lmp')
+    if len(cmap) < 256:
+        raise SystemExit(f"colormap is {len(cmap)} bytes, expected >= 256")
+    shade0 = cmap[:256]
     print("building inverse palette cube ...", flush=True)
     cube, bits = inverse_palette(pal)
 
@@ -107,12 +130,16 @@ def main():
     ntex    = struct.unpack_from('<i', d, toff)[0]
     offs    = [struct.unpack_from('<i', d, toff + 4 + 4*k)[0] for k in range(ntex)]
 
-    cols = 8                                     # atlas grid width, in textures
-    rows = (ntex + cols - 1) // cols
+    # One BMP per texture per mip level, DOS 8.3: t<idx>m<level>.bmp.
+    #
+    # An atlas per mip level would mean fewer files, but pulling a cell out of
+    # one needs uglBlit, and uglBlit is declared in ugl.bi without being
+    # implemented in the VBD library -- LINK resolves the call to an int 3.
+    # uglNewBMPEx is present, and it builds a DC straight from a file, so a
+    # file per texture is both simpler and one call per texture on the target.
+    written = 0
     for lvl in range(MIPS):
         cell = SIZES[lvl]
-        aw, ah = cols*cell, rows*cell
-        atlas  = bytearray(aw*ah)
         for k, o in enumerate(offs):
             if o < 0:
                 continue
@@ -124,13 +151,12 @@ def main():
             if len(src) < mw*mh:
                 print(f"  ! texture {k} mip {lvl} truncated, skipped")
                 continue
+            src  = bytes(shade0[b] for b in src)        # as texLoadAll did
             tile = resample(src, mw, mh, cell, cell, pal, cube, bits)
-            cx, cy = (k % cols)*cell, (k // cols)*cell
-            for y in range(cell):
-                atlas[(cy+y)*aw + cx : (cy+y)*aw + cx + cell] = tile[y*cell:(y+1)*cell]
-        out = os.path.join(outdir, f"mip{lvl}.bmp")
-        write_bmp8(out, aw, ah, atlas, pal)
-        print(f"  {out}  {aw}x{ah}  {ntex} textures @ {cell}x{cell}")
-    print(f"done: {ntex} textures, {MIPS} atlases, grid {cols}x{rows}")
+            out  = os.path.join(outdir, f"t{k:03d}m{lvl}.bmp")
+            write_bmp8(out, cell, cell, tile, pal)
+            written += 1
+        print(f"  mip {lvl}: {ntex} textures @ {cell}x{cell}")
+    print(f"done: {written} bmps for {ntex} textures across {MIPS} mip levels")
 
 main()

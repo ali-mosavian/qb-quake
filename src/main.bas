@@ -179,7 +179,6 @@ sub doInit
 
     '' textures and palette
     texLoadOffsets
-    palLoadColormap
     texLoadAll
     bspClose
 

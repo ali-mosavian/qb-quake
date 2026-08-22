@@ -48,6 +48,9 @@ build)
     out="$ROOT/build/$tc"
     mkdir -p "$out"
     cp "$ROOT"/src/*.bas "$ROOT"/src/*.bi "$ROOT"/data/stuff.ini "$ROOT"/data/base.dat "$out/"
+    # preprocessed texture atlases (tools/mkassets.py); texLoadAll blits
+    # straight from these instead of resampling the miptex lump at runtime
+    cp "$ROOT"/data/assets/*.bmp "$out/" 2>/dev/null || true
     # every .bas except the superseded rewrite is a module of the program
     # main must come first: it carries the module-level main code
     MODS="main $(cd "$ROOT/src" && ls *.bas | sed 's/\.bas$//' | grep -vx main | tr '\n' ' ')"
@@ -90,6 +93,15 @@ build)
         -e "s|@BAT@|build.bat|" -e "s|@PRE@||" "$ROOT/dosbox/template.conf" > "$conf"
 
     launch "$conf" "${TIMEOUT:-300}"
+
+    # LINK emits an EXE even when a symbol is unresolved -- the call site is
+    # patched to an int 3 and the program dies the moment it reaches it. The
+    # batch file's "did an exe appear" test therefore reported PASS for a
+    # build that could not run, so the authoritative check happens here.
+    if grep -qiE "unresolved external|error L[0-9]" "$out/link.out" 2>/dev/null; then
+        echo "LINKERR" > "$out/result.txt"
+    fi
+
     echo "== $tc: $(cat "$out/result.txt" 2>/dev/null || echo NO-RESULT)"
     [[ -s "$out/bc.out"   ]] && sed -n '4,40p' "$out/bc.out"
     [[ -s "$out/link.out" ]] && grep -i error "$out/link.out" || true

@@ -18,6 +18,13 @@ common shared /qenv/ env as EnvType
 ''
 const LOAD_STEPS = 14
 
+''
+'' Texture atlas grid. tools/mkassets.py lays the textures out in a grid
+'' this many cells wide, so the two have to agree; the tool prints the
+'' grid it used.
+''
+const TEXATLAS_COLS = 8
+
 
 ''
 '' The map: written by qbsplod.bas, walked by the renderer. Already '$DYNAMIC
