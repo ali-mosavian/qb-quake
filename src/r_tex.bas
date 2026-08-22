@@ -1,3 +1,4 @@
+option explicit
 ''
 '' r_tex.bas -- reading textures, building mips and matching them back into
 ''              the Quake palette. One loop over numtex.
@@ -159,6 +160,11 @@ sub texLoadAll
     dim b as single
     dim s as single
     dim t as single
+    dim j as integer, k as integer, x as integer, y as integer, mipl as integer
+    dim col as integer, col1 as integer, col2 as integer, col3 as integer, col4 as integer
+    dim cofs1 as integer, cofs2 as integer, cofs3 as integer, cofs4 as integer
+    dim kofs as integer
+    dim r2 as single, g2 as single, b2 as single
     
     
     pal = uglPalLoad( "base.dat::color/palette.lmp", PALRGB )
