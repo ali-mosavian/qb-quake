@@ -11,6 +11,15 @@
 common shared /qenv/ env as EnvType
 
 ''
+'' The loading screen advances by one step per lump reader plus the two
+'' texture passes. Fourteen sites used to spell the divisor as a literal
+'' 14.0 and had to agree with each other by hand; adding a reader without
+'' touching all of them would have left the bar short of 100%.
+''
+const LOAD_STEPS = 14
+
+
+''
 '' The map: written by qbsplod.bas, walked by the renderer. Already '$DYNAMIC
 '' before the split, so COMMON costs them nothing.
 ''

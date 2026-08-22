@@ -188,7 +188,6 @@ type EnvType
     
     fpsTimer    as TMR                      '' expires every frame
     secTimer    as TMR                      '' /       every second
-    frames      as single    
     
     xRes        as integer
     yRes        as integer
@@ -211,6 +210,8 @@ const DEG2RAD# = 3.14159265359 / 180.0
 '' BASIC auto-declares, across modules it needs this.
 declare sub drwLoadingBar ( hDC as long, x as integer, y as integer, wdt as integer, _
                             hgt as integer, percent as single, col as long )
+declare sub drwLoadTick ( )
+declare sub drwMipTick  ( percent as single )
 declare sub doInit    ( )
 declare sub doMain    ( )
 declare sub doEnd     ( )
