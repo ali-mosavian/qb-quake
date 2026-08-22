@@ -57,6 +57,23 @@ need `COMMON SHARED`, declared identically in every module (keep it in
 explicit `redim` in the owning module. Arrays declared `( 1 )` are fine —
 they are placeholders and something already redims them.
 
+**A module-level `DIM` under `'$DYNAMIC` never executes outside the main
+module.** It is an *executable statement*, and module-level code only runs in
+the main module — anywhere else the array is simply never allocated, and the
+first write faults hard enough that the runtime never prints anything. The
+program just vanishes: exits in seconds, empty stdout, no `error.log`.
+
+Non-main modules must declare their arrays under `'$STATIC`, or guarantee
+something `REDIM`s them at runtime (a `REDIM` does allocate). This bit twice:
+`hFontChar(255)` in `screen.bas` and almost certainly `texoffs( 256 )` in the
+abandoned texture cut. `model.bas` survives the same shape only by accident —
+`txcBuffer` is `REDIM`med, and `clpBuffer` is read solely through
+`len( clpBuffer(0) )`, which the compiler folds for a fixed-size UDT.
+
+Together with the rule above it, that is the pair to watch when moving code
+between modules: **storage that silently stops existing.** Both link cleanly
+and fail at run time.
+
 **`COMMON` arrays are always descriptor-addressed.** Do not move the
 renderer's `'$STATIC` scratch there; it is in DGROUP for direct addressing on
 purpose. Split on *data ownership* — the render routines touch 47 shared

@@ -37,3 +37,9 @@ common shared /qvisA/ bitarray() as integer, frustum() as plane
 ''
 common shared /qdrwS/ backface as integer, polys as integer, rendmode as integer, tris as integer, usemips as integer
 common shared /qdrwA/ hTextrDC() as long, mipBuffInf() as miptexb
+
+''
+'' The overlay: the frame counter and the stats toggle, written by the
+'' frame loop and read by screen.bas.
+''
+common shared /qscrS/ fps as integer, stats as integer
