@@ -150,6 +150,21 @@ defint a-z
 ''::::::::::
 defint a-z
 sub doInit
+    ''
+    '' Load profiling. A 1 kHz AUTOINIT timer counts milliseconds, and the
+    '' phase boundaries below are recorded so load time can be attributed
+    '' rather than guessed -- twice now a bottleneck has been asserted from
+    '' the shape of the code and been wrong.
+    ''
+    dim tStart as single, tSub as single, tMap as single
+    dim tLump as single, tTex as single, tVid as single
+    dim pf as integer
+
+    '' TIMER, not a TMR: tmrInit does not run until inputOpen, the
+    '' second-to-last step below, so a TMR counter reads zero for almost
+    '' the whole load. TIMER is ~55ms granular, which is fine for phases
+    '' measured in seconds.
+    tStart = timer
 
     '' arguments and subsystems
     checkCommandLine
@@ -160,10 +175,14 @@ sub doInit
     fontOpen
 
     '' map file and the loading screen
+    tSub = timer
+
     bspOpen
     loadScreenOpen
     bspFindSpawn
     bspAlloc
+
+    tMap = timer
 
     '' level lumps
     bspLoadVertices
@@ -177,15 +196,33 @@ sub doInit
     bspLoadModels
     bspLoadPvs
 
+    tLump = timer
+
     '' textures and palette
     texLoadOffsets
     texLoadAll
     bspClose
 
+    tTex = timer
+
     '' hand over to the real video mode
     videoOpen
     inputOpen
     musicStopLoading
+
+    tVid = timer
+
+    if ( env.benchFrames > 0 ) then
+    pf = freefile
+    open "load.txt" for output as #pf
+    print #pf, "subsystems " + ltrim$(str$( tSub  - tStart ))
+    print #pf, "mapopen    " + ltrim$(str$( tMap  - tSub   ))
+    print #pf, "lumps      " + ltrim$(str$( tLump - tMap   ))
+    print #pf, "textures   " + ltrim$(str$( tTex  - tLump  ))
+    print #pf, "video      " + ltrim$(str$( tVid  - tTex   ))
+    print #pf, "total      " + ltrim$(str$( tVid  - tStart ))
+    close #pf
+    end if
 
 end sub
 

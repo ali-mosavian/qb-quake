@@ -217,13 +217,29 @@ Renders a fixed number of frames, writes `bench.bmp` and `bench.txt`
 
 Baseline, dm3ish, 320x200, stats on, mips on, perspective:
 
-| build              | wall | load | render      | fps |
-|--------------------|------|------|-------------|-----|
-| runtime resample   | 33s  | ~18s | 500f in 15s | 33  |
-| preprocessed (now) | 21s  | ~6s  | 500f in 15s | 33  |
+| build            | wall (500f) | doInit | per frame |
+|------------------|-------------|--------|-----------|
+| runtime resample | 33s         | ~18s   | 35ms      |
+| preprocessed     | 21s         | 0.11s  | 35ms      |
 
-Render is untouched -- the win is all load. `tools/mkassets.py` moves the
-resample and colour match off the target; see `## Assets`.
+`-bench` writes `load.txt` with a per-phase breakdown of `doInit`. On the
+preprocessed build every phase rounds to 0.05s or less; the whole of load is
+about a tenth of a second.
+
+**Do not read "wall minus render" as load.** Three runs separate the fixed
+cost from the per-frame cost:
+
+| bench | wall  |
+|-------|-------|
+| 20    | 4.0s  |
+| 200   | 10.3s |
+| 500   | 20.8s |
+
+That is 35ms a frame and **3.3s of fixed overhead**, only 0.11s of which is
+the program's own startup. The rest is DOSBox booting and `ugluBMPSave`
+writing 65,000 bytes one at a time at the end of the run. Attributing that
+residual to "load" is what made the bsp lumps look like the next bottleneck
+when they were already about 0.4s of a 0.5s load.
 
 **CPU sampling proves a process is busy, not that it renders.** Several runs
 were reported as verified on the strength of "92% CPU sustained" when the
