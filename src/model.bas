@@ -16,8 +16,8 @@ defint a-z
 '$include: 'uglu.bi'
 '$include: 'font.bi'
 '$include: 'mouse.bi'
-'$include: 'bsp_pvs.bi'
-'$include: 'qshared.bi'
+'$include: 'bspfile.bi'
+'$include: 'quakedef.bi'
 '$include: 'snd.bi'
 '$include: 'mod.bi'
 

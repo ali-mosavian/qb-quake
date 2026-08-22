@@ -18,7 +18,7 @@ tools/dosbox.sh run e1m1.bsp   # or another map
 point: they reproduce the evidence behind the top-level README's claim that
 VBDOS is required rather than merely preferred. QB 4.5 exhausts `BC.EXE`'s
 workspace before it parses the program body; PDS 7.1 rejects the underscore
-line continuations in `bsp_pvs.bi`.
+line continuations in `bspfile.bi`.
 
 Paths come from the environment, so nothing here is machine-specific:
 

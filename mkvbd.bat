@@ -30,9 +30,9 @@ echo VBD not set, assuming %VBD%
 set INCLUDE=%MGL%\INC;src
 
 rem one BC per module; bsp_pvs carries the module-level main code
-%VBD%\BIN\BC.EXE /O /FPi /R /G3 /E src\bsp_pvs.bas, bsp_pvs.obj; > bc.out
-if not exist bsp_pvs.obj goto bcfail
-%VBD%\BIN\BC.EXE /O /FPi /R /G3 /E src\qini.bas, qini.obj; >> bc.out
+%VBD%\BIN\BC.EXE /O /FPi /R /G3 /E src\main.bas, main.obj; > bc.out
+if not exist main.obj goto bcfail
+%VBD%\BIN\BC.EXE /O /FPi /R /G3 /E src\common.bas, qini.obj; >> bc.out
 if not exist qini.obj goto bcfail
 
 if [%DEBUG%]==[TRUE] goto deb
@@ -45,16 +45,16 @@ set UGLLIB=%MGL%\LIB\DEBUG\VBD\UGLVD.LIB
 :dolink
 rem LINK's command line would exceed the DOS 127-char limit once there are
 rem several modules, and truncation eats the ';' that suppresses its prompts.
-echo /NOE /SEG:800 bsp_pvs.obj+qini.obj+%MGL%\LIB\ADDONS\U3D.OBJ > link.rsp
-echo bsp_pvs.exe >> link.rsp
-echo bsp_pvs.map >> link.rsp
+echo /NOE /SEG:800 main.obj+qini.obj+%MGL%\LIB\ADDONS\U3D.OBJ > link.rsp
+echo qrender.exe >> link.rsp
+echo qrender.map >> link.rsp
 echo %VBD%\LIB\VBDCL10E.LIB+%UGLLIB% >> link.rsp
 echo ; >> link.rsp
 %VBD%\BIN\LINK.EXE @link.rsp > link.out
-if not exist bsp_pvs.exe goto linkfail
+if not exist qrender.exe goto linkfail
 
 del *.obj
-echo Built bsp_pvs.exe
+echo Built qrender.exe
 goto end
 
 :bcfail

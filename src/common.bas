@@ -1,7 +1,7 @@
 ''
 '' qini.bas -- stuff.ini parsing and the string tokeniser.
 ''
-'' Split out of bsp_pvs.bas: 257 lines that touch exactly one piece of
+'' Split out of main.bas: 257 lines that touch exactly one piece of
 '' shared state (env), so the module boundary costs nothing.
 ''
 defint a-z
@@ -15,8 +15,8 @@ defint a-z
 '$include: 'uglu.bi'
 '$include: 'font.bi'
 '$include: 'mouse.bi'
-'$include: 'bsp_pvs.bi'
-'$include: 'qshared.bi'
+'$include: 'bspfile.bi'
+'$include: 'quakedef.bi'
 '$include: 'snd.bi'
 '$include: 'mod.bi'
 
