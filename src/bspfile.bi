@@ -270,6 +270,8 @@ declare function r_cull_box ( bbox as bboundbox, frustum() as plane ) as integer
 declare sub r_set_frustum ( frustum() as plane, mtx as u3dMtrx )
 declare sub com_parse_config ( filename as string )
 declare function com_arg ( strm() as string, strm_cnt as integer, linenum as integer ) as string
+declare function com_yesno ( strm() as string, strm_cnt as integer, _
+                            linenum as integer ) as integer
 declare sub com_check_args ( strm() as string, strm_cnt as integer, _
                        byval want as integer, byval linenum as integer )
 declare sub com_tokenize ( strm() as string, strm_cnt as integer, _

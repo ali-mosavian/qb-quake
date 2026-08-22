@@ -172,26 +172,16 @@ sub com_parse_config ( filename as string )
                     
                     
                 case "display.clear"
-                    if ( com_arg( strm(), strm_cnt, linenum ) = "no" ) then
-                        env.disclear = false
-                        flags = flags or clear_flag
-                    elseif ( com_arg( strm(), strm_cnt, linenum ) = "yes" ) then
-                        env.disclear = true
-                        flags = flags or clear_flag
-                    end if
+                    env.disclear = com_yesno( strm(), strm_cnt, linenum )
+                    flags = flags or clear_flag
                                         
                 case "display.pages"
                     env.pages = val( com_arg( strm(), strm_cnt, linenum ) )
                     flags = flags or page_flag
                     
                 case "display.usepaging"
-                    if ( com_arg( strm(), strm_cnt, linenum ) = "no" ) then
-                        env.usepag = false
-                        flags = flags or usepg_flag
-                    elseif ( com_arg( strm(), strm_cnt, linenum ) = "yes" ) then
-                        env.usepag = true
-                        flags = flags or usepg_flag
-                    end if
+                    env.usepag = com_yesno( strm(), strm_cnt, linenum )
+                    flags = flags or usepg_flag
                                     
                 case "world.frustum.zn"                
                     env.z_near = val( com_arg( strm(), strm_cnt, linenum ) )
@@ -227,14 +217,8 @@ sub com_parse_config ( filename as string )
                     flags = flags or fov_flag
                     
                 case "sound.enabled"
-                    if ( com_arg( strm(), strm_cnt, linenum ) = "false" ) then
-                        env.sound = false
-                        flags = flags or sound_flag
-                    elseif ( com_arg( strm(), strm_cnt, linenum ) = "true" ) then
-                        env.sound = true
-                        flags = flags or sound_flag
-                    end if                    
-                
+                    env.sound = com_yesno( strm(), strm_cnt, linenum )
+                    flags = flags or sound_flag
                 case else
                     sys_error "Unknown command, " + rawline
                     
@@ -260,7 +244,37 @@ end sub
 
 
 ''::::::::::
-'' name: com_arg$
+'' name: com_yesno
+'' desc: A boolean setting. Accepts yes/no and true/false, because the
+''       file already used both -- display.clear took yes/no and
+''       sound.enabled took true/false.
+''
+''       Three keys each carried their own two-branch test, and each had
+''       the same hole: a value that was neither word left the setting at
+''       its default AND its flag unset, so the failure surfaced later as
+''       'Incorrect ini file' with no line number. This reports the line.
+''::::::::::
+function com_yesno ( strm() as string, strm_cnt as integer, _
+                     linenum as integer ) as integer
+    dim v as string
+
+    v = com_arg( strm(), strm_cnt, linenum )
+
+    if ( v = "yes" or v = "true" ) then
+        com_yesno = true
+    elseif ( v = "no" or v = "false" ) then
+        com_yesno = false
+    else
+        sys_error "Expected yes/no at line #" + str$(linenum)
+    end if
+
+end function
+
+
+
+
+''::::::::::
+'' name: com_arg
 '' desc: The value of a key = value line, validated on the way out.
 ''       Twelve cases each called com_check_args and then read strm(2)
 ''       themselves; coupling the two means a case cannot read an

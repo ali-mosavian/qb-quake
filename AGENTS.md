@@ -369,6 +369,19 @@ the sites behind and the build broken.
 the same binary spanned 9.4s to 11.7s; `frames`/`seconds`/`lastfps` were
 identical every time.
 
+## What was deliberately not done
+
+**The ini parser is not table-driven.** It was on the plan as the one place
+OCP is reachable in a language without function pointers, and on inspection it
+is not worth it. A key-to-index table still needs a `SELECT CASE idx` to
+perform the assignment, which is the same branch count split across two
+places -- worse, not better. The version that genuinely generalises (parse
+into a value array, apply in one block) is a rewrite of a 150-line cold-path
+routine for thirteen keys that change about once a decade.
+
+What was worth taking out of it was the duplication: three keys each spelled
+their own two-branch yes/no test, and each had the same hole.
+
 ## Method
 
 **Linking clean proves nothing** for a `COMMON SHARED` change — binding errors
