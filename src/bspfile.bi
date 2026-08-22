@@ -296,6 +296,15 @@ declare sub mod_load_planes ( )
 declare sub mod_load_submodels ( )
 declare sub mod_load_visibility ( )
 declare sub mod_load_clipnodes ( )
+
+''
+'' ent.bas -- entities
+''
+declare function ent_value ( strm() as string, byval strm_cnt as integer, kname as string ) as string
+declare sub ent_vec ( strm() as string, byval strm_cnt as integer, kname as string, v as vec3 )
+declare sub ent_load_teleports ( )
+declare sub ent_check_teleport ( )
+
 declare sub mod_load_texinfo ( )
 declare sub mod_load_textures ( )
 declare sub vid_init ( )

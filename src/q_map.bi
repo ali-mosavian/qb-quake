@@ -27,6 +27,8 @@ type MapState
     nds_count   as long
     texi_count  as long
     clp_count   as long         '' collision hull nodes
+    mdl_count   as long         '' submodels: the world is 0, brush entities
+                                '' such as doors and teleport triggers follow
 end type
 
 ''

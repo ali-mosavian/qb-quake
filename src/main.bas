@@ -53,6 +53,7 @@ option explicit
 '$include: 'q_scr.bi'
 '$include: 'q_cam.bi'
 '$include: 'q_pl.bi'
+'$include: 'q_ent.bi'
 
 ''
 '' Simulation time owed but not yet run. Frames deliver time in whatever
@@ -208,6 +209,7 @@ sub host_init
     mod_load_submodels
     mod_load_visibility
     mod_load_clipnodes
+    ent_load_teleports
 
     t_lump = timer
 
@@ -444,6 +446,9 @@ sub host_tick ( byval dt as single )
 
     '' and what the world does about it: camera, and the physics under it
     v_update_camera dt
+
+    '' and anything the world does to the player as a result of moving
+    ent_check_teleport
 
 end sub
 
