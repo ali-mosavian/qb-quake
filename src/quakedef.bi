@@ -23,3 +23,10 @@ common shared /qmapA/ vtxBuffer() as vertex, lefBuffer() as leaf2, lfcBuffer() a
 common shared /qmapA/ mdlBuffer() as model, plnBuffer() as plane2, ndsBuffer() as nodeb
 common shared /qmapA/ orderList() as integer, pvsBufferA() as integer, pvsBufferB() as integer
 common shared /qmapA/ texInfBuff() as texinfo, polyFlag() as integer
+
+''
+'' Visibility and traversal: r_bsp.bas walks the tree and marks what is
+'' visible; the frame loop and the rasteriser read the result.
+''
+common shared /qvisS/ frameStamp as integer, ordCount as long
+common shared /qvisA/ bitarray() as integer, frustum() as plane

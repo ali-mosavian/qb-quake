@@ -256,7 +256,6 @@ declare sub inputOpen ( )
 declare sub musicStopLoading ( )
 declare function BBoxInFrustum% ( bbox as bboundbox, frustum() as plane )
 declare sub ExtractFrustum ( frustum() as plane, mtx as u3dMtrx )
-declare function ClipBBoxToFrustum% ( bbox as bboundbox, frustum() as plane )
 declare sub parseIni ( filename as string )
 declare sub iniCheck ( strm() as string, strm_cnt as integer, _
                        byval want as integer, byval linenum as integer )
