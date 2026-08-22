@@ -31,7 +31,6 @@ dim shared planetmp as plane
 dim shared ledg_count as long
 dim shared lfc_count as long
 dim shared pln_count as long
-dim shared mdl_count as long
 
 
 
@@ -54,7 +53,7 @@ sub mod_open
     lfc_count = wld.head.lface.size \ len( lfc_buffer(0) )
     pln_count = wld.head.planes.size \ len( planetmp )
     wld.nds_count = wld.head.nodes.size \ len( nodetmp )
-    mdl_count = wld.head.models.size \ len( mdl_buffer(0) )
+    wld.mdl_count = wld.head.models.size \ len( mdl_buffer(0) )
     wld.texi_count = wld.head.texinfo.size \ len( tex_inf_buff(0) )
     wld.clp_count = wld.head.clipnode.size \ len( clp_buffer(0) )
     seek #wld.file, wld.head.miptex.offs+1
@@ -134,7 +133,7 @@ sub mod_alloc
     redim lfc_buffer(lfc_count-1) as integer
     redim pln_buffer(pln_count-1) as plane2
     redim nds_buffer(wld.nds_count-1) as nodeb
-    redim mdl_buffer(mdl_count-1) as model
+    redim mdl_buffer(wld.mdl_count-1) as model
     redim order_list(wld.nds_count-1) as integer
     redim pvs_buffer_a( (wld.head.vislist.size+1)\2 ) as integer
     redim pvs_buffer_b( 4096 ) as integer

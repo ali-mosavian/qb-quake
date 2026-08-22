@@ -371,6 +371,19 @@ unused, and it had to come back for this.
 `pl_water_level` samples three heights up the body -- feet, waist, eyes -- for
 0..3, which is what makes wading feel different from swimming.
 
+**Teleporters are entities, not geometry.** A `trigger_teleport` has no
+origin: it carries `"model" "*1"`, meaning submodel 1, whose bounding box is
+already in `mdl_buffer`. Its `"target"` names an `info_teleport_destination`,
+which has the origin and facing. `ent.bas` reads both and pairs them, in two
+passes, because a trigger can name a destination that appears later in the
+text.
+
+**An entity value arrives already split.** The block is tokenised with space
+among the separators, so `"origin" "448 416 176"` is four tokens and the
+"value" of origin is just `448`. `ent_vec` reads three consecutive tokens;
+`ent_value` reads one. Getting this wrong teleports the player to
+(448, 0, 0) -- x right, the rest zero, which is exactly what it looked like.
+
 **`-at X Y Z` starts the player somewhere specific**, which is how the water is
 tested at all: dm3ish's pool is at x 336..688, y -336..256, z -128..-16, a long
 walk from the spawn. Dropped in at (500, 0, -60) the player should report
