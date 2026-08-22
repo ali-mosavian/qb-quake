@@ -34,7 +34,13 @@ dim shared plnCount as long
 dim shared mdlCount as long
 dim shared clpCount as long
 dim shared txcBuffer( 1 ) as uv
+
+'' Read only through len( clpBuffer(0) ), which the compiler folds -- but a
+'' '$DYNAMIC module-level DIM never executes outside the main module, so the
+'' first real write would fault. '$STATIC allocates it at load.
+'$static
 dim shared clpBuffer( 1 ) as clipnode
+'$dynamic
 
 
 
