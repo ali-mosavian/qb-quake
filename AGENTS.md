@@ -139,11 +139,18 @@ conflate them.
 the same expression skews by up to half a unit — that was the duplicated
 column on the 32×32 sign textures.
 
-**`on errror goto HandleErr`** (three r's, line ~191) is *not* a syntax error:
-BASIC also has a computed `ON n GOTO`, so it parses as "branch to the zeroth
-label" and falls through. **Runtime error trapping has never worked.** Left
-as-is deliberately — fixing the spelling routes every error to a generic
-message, which is worse than the runtime's specific one.
+**`on errror goto HandleErr`** (three r's) was *not* a syntax error: BASIC also
+has a computed `ON n GOTO`, so it parsed as "branch to the zeroth label" and
+fell through. Runtime error trapping had never worked, and it was left that
+way deliberately — fixing the spelling would have routed every error to a
+generic message, worse than the runtime's specific one.
+
+**`OPTION EXPLICIT` changed the calculus and the typo is now fixed.** The same
+three-r typo that was a harmless no-op under implicit declaration became a
+*hard compile error* once every module required `errror` to be declared —
+`ON n GOTO` needs `n` to be a real variable. Rather than declare a dummy
+`errror` just to keep the bug alive, it is now `on error goto HandleErr`,
+which finally does what it always looked like it did.
 
 **MASM logical-line limit is 512 chars** including continuations. Expanding
 tabs to spaces in µGL's asm pushed a `local` block over it.

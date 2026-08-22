@@ -1,3 +1,4 @@
+option explicit
 ''
 '' r_main.bas -- the camera.
 ''
@@ -39,6 +40,8 @@ sub camUpdate ( pa as integer, crrPnt as integer, cntPnts as integer, _
                 ppos() as PNT3D, plok() as PNT3D, _
                 cbzp() as PNT3D, cbzl() as PNT3D, last_point as integer )
     dim camPosC as u3dVector3f
+    dim tmx as integer, tmy as integer
+    dim theta as single, phi as single
 
 	''
 	'' mode script_play run through the bezier curves

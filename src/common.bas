@@ -1,3 +1,4 @@
+option explicit
 ''
 '' qini.bas -- stuff.ini parsing and the string tokeniser.
 ''
@@ -146,6 +147,7 @@ sub parseIni ( filename as string )
     dim linenum as integer
     dim strm(50) as string
     dim strm_cnt as integer
+    dim file as integer
     
     flags = 0
     file = freefile

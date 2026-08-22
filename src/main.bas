@@ -1,3 +1,4 @@
+option explicit
 ''
 '' main -- a Quake 1 BSP walker and renderer for uGL.
 ''
@@ -120,9 +121,13 @@ dim shared lightmap as long
 '' doInit; splitting doInit apart left videoOpen reading an undeclared 0.
 
     ''
-    '' Grr, qb suxs
-    '' 
-    on errror goto HandleErr
+    '' This was `on errror goto HandleErr` for years -- three r's. BASIC
+    '' also has a computed ON n GOTO, so the typo parsed as "branch to the
+    '' zeroth label" and silently fell through: runtime error trapping had
+    '' never worked. OPTION EXPLICIT turns that same typo into a hard compile
+    '' error instead of a silent no-op, which is what actually surfaced it.
+    ''
+    on error goto HandleErr
     
         
     '':::::
@@ -220,6 +225,10 @@ sub doMain
     dim viewvec as vertex
     dim polyc(3) as u3dVector4f
     dim vtxb as quadtype    
+    dim i as integer
+    dim hz as long
+    dim last_point as integer
+    dim page as integer
     
     ''
     '' min/max/bmin/bmax/extn went with the lightmap extent computation in

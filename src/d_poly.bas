@@ -1,3 +1,4 @@
+option explicit
 ''
 '' d_poly.bas -- the polygon rasteriser.
 ''
@@ -157,6 +158,13 @@ sub bspDrawFaces ( hDstDC as long, mtxFin as u3dMtrx, _
                    xresh as single, yresh as single )
     dim dp as single
     dim polycnt as integer
+    dim mi as integer, m as integer
+    dim leafIndx as integer, leafEnd as integer, ti as integer, i as integer
+    dim pid as integer, lid as integer, tex as integer, j as integer
+    dim EdgeIdx as integer, v0 as integer
+    dim zl as single
+    dim miplevel as integer, texIndx as integer
+    dim p2 as integer, p3 as integer
 
    ''
    '' Draw nodes

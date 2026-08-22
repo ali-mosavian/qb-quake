@@ -1,3 +1,4 @@
+option explicit
 ''
 '' vid.bas -- video mode, back buffer and page flip.
 ''

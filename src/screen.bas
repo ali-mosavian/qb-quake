@@ -1,3 +1,4 @@
+option explicit
 ''
 '' screen.bas -- everything drawn on top of the world.
 ''
@@ -69,6 +70,7 @@ function initFont% ( flname as string, colb as long )
     
     dim file as UAR
     dim idstr as string * 4
+    dim i as integer, x as integer, y as integer, bit as integer
     
     trn = uglColor8( 7, 0, 3 )    
     
@@ -134,6 +136,7 @@ defint a-z
 sub fontPrintText ( dc as long, x as integer, y as integer, _
                     text as string )
     dim posx as integer
+    dim i as integer, char as integer
     
     posx = x
     

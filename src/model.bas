@@ -1,5 +1,6 @@
+option explicit
 ''
-'' qbsplod.bas -- reading the BSP lumps into the renderer's buffers.
+'' model.bas -- reading the BSP lumps into the renderer's buffers.
 ''
 '' The staging records (fce, nodetmp, leaftmp, planetmp) and the counts only
 '' this module consumes stay local; the buffers the renderer walks are in
@@ -97,6 +98,8 @@ sub bspFindSpawn
     
     dim strm(50) as string
     dim strm_cnt as integer
+    dim char as string, class as string
+    dim new as integer, fchar as integer, j as integer
 
     for  i = 1 to len( entity$ )    
         char$ = mid$( entity$, i, 1 )
@@ -233,6 +236,7 @@ end sub
 defint a-z
 sub bspLoadEdgeIndex
     dim i as integer
+    dim tmp as long
 
     seek #1, bsphead.ledges.offs+1
     for  i = 0 to ledgCount-1

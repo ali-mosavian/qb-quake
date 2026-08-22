@@ -1,3 +1,4 @@
+option explicit
 ''
 '' r_bsp.bas -- BSP traversal and visibility.
 ''
@@ -35,6 +36,7 @@ dim shared pvsLeaf as integer
 '' ==========================================================================
 defint a-z
 function bspClasifypoint% ( nodenr as integer )
+    dim dp as single
   
     dp! = camPos.x*plnBuffer(ndsBuffer(nodenr).planeid).norm.x + _
           camPos.y*plnBuffer(ndsBuffer(nodenr).planeid).norm.z + _
@@ -54,6 +56,8 @@ end function
 defint a-z
 sub bspWalkNodeB ( byval nodenr as integer ) static
     dim dp as single
+    dim frst as integer, last as integer, i as integer
+    dim pid as integer, side as integer
 
     
     ''
@@ -134,6 +138,7 @@ end sub
 '':::::::::
 defint a-z
 sub bspShowModel ( model as integer )
+    dim i as integer
     ''
     '' Reset tree state
     ''
@@ -255,6 +260,7 @@ defint a-z
 function BBoxInFrustum% ( bbox as bboundbox, frustum() as plane )
     dim dp as single
     dim nearPoint as vertex
+    dim i as integer
 
 
     for  i = 0 to 5
@@ -327,6 +333,7 @@ sub pvsInit ( byval nodenr as integer )
     dim j as long
     dim bit as long
     dim byte as integer
+    dim i as integer
     
     ''
     '' Find the node that the camera is in
