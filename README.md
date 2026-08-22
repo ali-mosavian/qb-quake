@@ -96,6 +96,20 @@ restructuring and are fixed here.
   `drawply = 1`, so nothing was ever rejected while the HUD reported the
   switch as enabled.
 
+### Runtime error trapping has never worked
+
+Line 191 reads `on errror goto HandleErr` — three r's. That is not a syntax
+error: BASIC also has a computed `ON n GOTO`, so it parses as "evaluate the
+variable `errror`, which under `defint a-z` is an undeclared integer zero, and
+branch to the zeroth label", which falls through every time. The handler at
+`HandleErr` has never been installed, and untrapped runtime errors print the
+runtime's own message instead.
+
+**This is left as-is deliberately.** Correcting the spelling would route every
+runtime error to `ExitError "0x1000, Unknown runtime error..."`, replacing a
+specific diagnostic with a generic one. The typo is worth knowing about, not
+worth fixing until the handler says something useful.
+
 ## Structure
 
 There is no optimiser in VBDOS. A `SUB` call costs a stack frame and a
@@ -109,7 +123,15 @@ split on exactly one criterion — **how often they are entered**:
 - **per node, face, vertex, triangle** — *not* split. `bspDrawFaces` is one
   250-line routine on purpose.
 
-That rule has a limit worth stating, because violating it broke this build
+Splitting `doInit` this way has a second cost that is easy to miss. It turned
+one procedure scope into 26, and under `defint a-z` an undeclared name is a
+fresh integer zero rather than an error — so any value that used to flow from
+one part of `doInit` to a later part reads as 0 once they are separate
+routines, with no diagnostic at all. `pal` was lost exactly this way. Before
+adding a step, check what the code around it *reads* as well as what it
+writes.
+
+The rule has a harder limit too, because violating it broke this build
 once already: a routine boundary cannot cut through a block. `texLoadAll` is
 one 200-line routine not because it does one thing, but because it is a single
 `for i = 0 to numtex-1` loop — splitting it into upload/mip/average phases put
