@@ -8,7 +8,14 @@
 '' renderer scratch stays module-local under '$STATIC where it is addressed
 '' directly.
 ''
-common shared /env/ env as EnvType
+'' These were named blocks -- COMMON SHARED /map_s/ and so on, the FORTRAN
+'' style QuickBASIC inherited. Named blocks earn their keep when modules
+'' share different subsets, which was true while the program was being cut
+'' into modules one at a time. Every module includes this file now, so the
+'' identical-order requirement of blank COMMON is met by construction and
+'' the sixteen tags were only noise.
+''
+common shared env as EnvType
 
 ''
 '' The loading screen advances by one step per lump reader plus the two
@@ -51,13 +58,13 @@ type LoadState
     dc          as long         '' the temporary 320x200 loading DC
 end type
 
-common shared /map_s/ wld as MapState
-common shared /map_s/ ldr as LoadState
-common shared /map_a/ tri_buffer() as face2, edg_buffer() as edge, ledg_buffer() as integer
-common shared /map_a/ vtx_buffer() as vertex, lef_buffer() as leaf2, lfc_buffer() as integer
-common shared /map_a/ mdl_buffer() as model, pln_buffer() as plane2, nds_buffer() as nodeb
-common shared /map_a/ order_list() as integer, pvs_buffer_a() as integer, pvs_buffer_b() as integer
-common shared /map_a/ tex_inf_buff() as texinfo, poly_flag() as integer
+common shared wld as MapState
+common shared ldr as LoadState
+common shared tri_buffer() as face2, edg_buffer() as edge, ledg_buffer() as integer
+common shared vtx_buffer() as vertex, lef_buffer() as leaf2, lfc_buffer() as integer
+common shared mdl_buffer() as model, pln_buffer() as plane2, nds_buffer() as nodeb
+common shared order_list() as integer, pvs_buffer_a() as integer, pvs_buffer_b() as integer
+common shared tex_inf_buff() as texinfo, poly_flag() as integer
 
 ''
 '' Visibility and traversal: r_bsp.bas walks the tree and marks what is
@@ -71,8 +78,8 @@ type VisState
                                 '' loop and, until now, read by nothing.
 end type
 
-common shared /vis_s/ vis as VisState
-common shared /vis_a/ bitarray() as integer, frustum() as plane
+common shared vis as VisState
+common shared bitarray() as integer, frustum() as plane
 
 ''
 '' Rasteriser state. These were five loose COMMON scalars; grouping them
@@ -89,8 +96,8 @@ type RenderState
     tris        as integer
 end type
 
-common shared /drw_s/ rdr as RenderState
-common shared /drw_a/ h_textr_dc() as long, mip_buff_inf() as miptexb
+common shared rdr as RenderState
+common shared h_textr_dc() as long, mip_buff_inf() as miptexb
 
 ''
 '' The overlay: what the HUD reports, written by the frame loop and read
@@ -102,13 +109,13 @@ type ScreenState
     bench_secs  as integer      '' seconds elapsed, for -bench
 end type
 
-common shared /scr_s/ scr as ScreenState
+common shared scr as ScreenState
 
 ''
 '' pal is loaded by r_tex.bas, which needs its segment and offset to colour
 '' match, and consumed by videoOpen, which installs it and frees it.
 ''
-common shared /pal_s/ pal as long
+common shared pal as long
 
 ''
 '' Camera and view: r_main.bas moves it, the frame loop and the rasteriser
@@ -123,10 +130,10 @@ type CamState
     script_file as integer      '' open handle in cammode 1 and 2, else 0
 end type
 
-common shared /cam_s/ cam as CamState
+common shared cam as CamState
 
 ''
 '' The loading-screen MOD track: started by sys_init.bas, played once
 '' the map is up by doMain.
 ''
-common shared /snd_s/ mymod as UGMMOD
+common shared mymod as UGMMOD

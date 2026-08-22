@@ -318,6 +318,14 @@ Member offsets are compile-time constants, so this is free even in
 
 `pal` and `mymod` stay loose: a struct of one member is ceremony.
 
+**Named COMMON blocks were unnecessary here.** `COMMON SHARED /map_s/ ...`
+is real QuickBASIC -- the FORTRAN style, where each named block is shared
+independently -- and it earns its keep while modules share different
+subsets. Once every module includes `quakedef.bi`, blank `COMMON SHARED`
+gets its identical-order requirement for free, and the sixteen tags were
+noise. They were introduced during the module split and outlived the reason
+for them by several commits.
+
 **Arrays cannot go in a TYPE**, so the twelve `COMMON` arrays stay loose. That
 is a language limit, not an oversight.
 
