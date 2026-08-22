@@ -208,6 +208,10 @@ type EnvType
     bench_walk  as integer      '' -walk: hold forward, to exercise the
                                 '' collision response without a keyboard
     bench_jump  as integer      '' -jump: hold jump, likewise
+    bench_ticks as integer      '' -ticks N: stop after N simulation steps
+                                '' rather than N frames, so two runs at
+                                '' different framerates simulate exactly the
+                                '' same thing and must agree
     
 end type
 
@@ -224,6 +228,7 @@ declare sub host_init    ( )
 declare sub host_main    ( )
 declare sub host_shutdown     ( )
 declare sub host_tick ( byval dt as single )
+declare sub host_advance ( byval real_dt as single )
 declare sub host_render ( byval h_dst_dc as long, mtx_prj as u3dMtrx, _
                          byval xresh as single, byval yresh as single )
 declare sub host_bench_report ( frame_no as long, h_dst_dc as long )

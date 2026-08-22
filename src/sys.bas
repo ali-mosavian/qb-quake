@@ -82,6 +82,9 @@ sub sys_parse_args
         if ( lcase$(argv(i)) = "-jump" ) then
             env.bench_jump = true
         end if
+        if ( lcase$(argv(i)) = "-ticks" and i+1 <= argc-1 ) then
+            env.bench_ticks = val( argv(i+1) )
+        end if
     next i
 
     if ( (dir$( rtrim$(env.map_name) ) = "") ) then
