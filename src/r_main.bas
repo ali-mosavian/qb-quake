@@ -36,7 +36,7 @@ defint a-z
 '' renderer state for why the draw loop is not carved up the same way.
 ''::::::::::
 defint a-z
-sub camUpdate ( pa as integer, crrPnt as integer, cntPnts as integer, _
+sub v_update_camera ( pa as integer, crrPnt as integer, cntPnts as integer, _
                 ppos() as PNT3D, plok() as PNT3D, _
                 cbzp() as PNT3D, cbzl() as PNT3D, last_point as integer )
     dim camPosC as u3dVector3f
@@ -144,7 +144,7 @@ end sub
 ''       up so one press is one toggle.
 ''::::::::::
 defint a-z
-sub inputToggles
+sub in_handle_toggles
 
 	''
 	'' Toggle mipmaps

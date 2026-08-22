@@ -126,13 +126,13 @@ dim shared lightmap as long
         
     '':::::
     
-    doInit 
-    doMain   
-    doEnd
+    host_init 
+    host_main   
+    host_shutdown
     
     
 HandleErr:    
-    ExitError "0x1000, Unknown runtime error..."
+    sys_error "0x1000, Unknown runtime error..."
 
 
 
@@ -149,7 +149,7 @@ defint a-z
 ''       frame. Contrast bspDrawFaces, which is one routine on purpose.
 ''::::::::::
 defint a-z
-sub doInit
+sub host_init
     ''
     '' Load profiling. A 1 kHz AUTOINIT timer counts milliseconds, and the
     '' phase boundaries below are recorded so load time can be attributed
@@ -167,48 +167,48 @@ sub doInit
     tStart = timer
 
     '' arguments and subsystems
-    checkCommandLine
-    initTables
-    initUgl
-    soundOpen
-    musicStart
-    fontOpen
+    sys_parse_args
+    sys_init_tables
+    vid_init_ugl
+    s_init
+    s_start_music
+    draw_init_font
 
     '' map file and the loading screen
     tSub = timer
 
-    bspOpen
-    loadScreenOpen
-    bspFindSpawn
-    bspAlloc
+    mod_open
+    scr_begin_loading
+    mod_find_spawn
+    mod_alloc
 
     tMap = timer
 
     '' level lumps
-    bspLoadVertices
-    bspLoadFaces
-    bspLoadEdges
-    bspLoadEdgeIndex
-    bspLoadLeaves
-    bspLoadFaceIndex
-    bspLoadNodes
-    bspLoadPlanes
-    bspLoadModels
-    bspLoadPvs
+    mod_load_vertexes
+    mod_load_faces
+    mod_load_edges
+    mod_load_surfedges
+    mod_load_leafs
+    mod_load_marksurfaces
+    mod_load_nodes
+    mod_load_planes
+    mod_load_submodels
+    mod_load_visibility
 
     tLump = timer
 
     '' textures and palette
-    texLoadOffsets
-    texLoadAll
-    bspClose
+    mod_load_texinfo
+    mod_load_textures
+    mod_close
 
     tTex = timer
 
     '' hand over to the real video mode
-    videoOpen
-    inputOpen
-    musicStopLoading
+    vid_init
+    in_init
+    s_stop_music
 
     tVid = timer
 
@@ -232,7 +232,7 @@ end sub
 
 ''::::
 defint a-z
-sub doMain
+sub host_main
     dim mtxMdl as u3dMtrx
     dim mtxPrj as u3dMtrx
     dim mtxFin as u3dMtrx
@@ -338,16 +338,16 @@ sub doMain
             uglClear hDstDC, 0
         end if 
         
-        camUpdate pa, crrPnt, cntPnts, ppos(), plok(), cbzp(), cbzl(), last_point
+        v_update_camera pa, crrPnt, cntPnts, ppos(), plok(), cbzp(), cbzl(), last_point
 
-        inputToggles
+        in_handle_toggles
 
         ''
         '' Combine all transforms 
         ''
         u3dMtrxLookAt mtxMdl, cam.pos, cam.lookAt, camUp        
         u3dMtrxConc mtxFin, mtxMdl, mtxPrj
-        ExtractFrustum frustum(), mtxFin
+        r_set_frustum frustum(), mtxFin
         
 
         ''
@@ -382,14 +382,14 @@ sub doMain
         ''
         '' Walk BSP tree
         ''
-        bspShowModel 0
+        r_draw_world 0
         
         
-        bspDrawFaces hDstDC, mtxFin, xresh, yresh
+        d_draw_faces hDstDC, mtxFin, xresh, yresh
 
 
         
-        drawHud hDstDC
+        scr_draw_hud hDstDC
             
         
         ''
@@ -401,7 +401,7 @@ sub doMain
         ''
         frameNo = frameNo + 1
         if ( env.benchFrames > 0 and frameNo >= env.benchFrames ) then
-            ugluBMPSave "bench.bmp", hDstDC
+            scr_screenshot "bench.bmp", hDstDC
             benchf = freefile
             open "bench.txt" for output as #benchf
             print #benchf, "frames " + ltrim$(str$( frameNo ))
@@ -413,7 +413,7 @@ sub doMain
             exit do
         end if
 
-        presentFrame hDstDC, page
+        vid_update hDstDC, page
 
     loop while ( env.keyboard.esc = FALSE )
     
@@ -425,7 +425,7 @@ end sub
 
 ''::::
 defint a-z
-sub doEnd
+sub host_shutdown
     
     ''
     '' Restore video mode and end UGL
@@ -442,7 +442,7 @@ end sub
 
 ''::::
 defint a-z
-sub ExitError ( msg as string )
+sub sys_error ( msg as string )
     ''
     '' Record the message before touching the video mode.
     ''

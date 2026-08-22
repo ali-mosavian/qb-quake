@@ -50,7 +50,7 @@ dim shared vx as single, vy as single, vz as single
 
 '':::::::
 defint a-z
-sub SHClipzNearFar ( otVtx() as u3dVector4f, otUV() as uv, otCnt as integer, _
+sub d_clip_z ( otVtx() as u3dVector4f, otUV() as uv, otCnt as integer, _
                      inVtx() as u3dVector4f, inUV() as uv, inCnt as integer )
 
     dim n as integer
@@ -154,7 +154,7 @@ end sub
 ''  RASTER
 '' ==========================================================================
 defint a-z
-sub bspDrawFaces ( hDstDC as long, mtxFin as u3dMtrx, _
+sub d_draw_faces ( hDstDC as long, mtxFin as u3dMtrx, _
                    xresh as single, yresh as single )
     dim dp as single
     dim polycnt as integer
@@ -284,7 +284,7 @@ sub bspDrawFaces ( hDstDC as long, mtxFin as u3dMtrx, _
                     ''
                     u3dMtrxByVec4 polyb(0), len( polyb(0) ), mtxFin, _
                                   polyb(0), len( polyb(0) ), vcnt
-                    SHClipzNearFar poly(), uvbuff(), polycnt, polyb(), uvbuffb(), vcnt
+                    d_clip_z poly(), uvbuff(), polycnt, polyb(), uvbuffb(), vcnt
 
         			''
         			'' If more then 2 vertices, rasterize
