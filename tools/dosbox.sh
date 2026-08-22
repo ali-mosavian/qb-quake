@@ -2,7 +2,8 @@
 # Build or run bsp_pvs under DOSBox-X on the host, no DOS machine needed.
 #
 #   tools/dosbox.sh build [qb45|pds|vbd]   compile + link  (default vbd)
-#   tools/dosbox.sh run   [map.bsp]        run the built exe (default dm3ish.bsp)
+#   tools/dosbox.sh run   [map.bsp]        headless run, screenshots via the 's' key
+#   tools/dosbox.sh viz   [map.bsp]        emit a windowed config to watch it live
 #
 # Env overrides:
 #   MGL          uGL tree            (default ~/work/badlogic/mgl)
@@ -46,10 +47,10 @@ build)
     esac
     out="$ROOT/build/$tc"
     mkdir -p "$out"
-    cp "$ROOT"/*.bas "$ROOT"/*.bi "$ROOT"/stuff.ini "$ROOT"/base.dat "$out/"
+    cp "$ROOT"/src/*.bas "$ROOT"/src/*.bi "$ROOT"/data/stuff.ini "$ROOT"/data/base.dat "$out/"
     # every .bas except the superseded rewrite is a module of the program
     # bsp_pvs must come first: it carries the module-level main code
-    MODS="bsp_pvs $(cd "$ROOT" && ls *.bas | sed 's/\.bas$//' | grep -vx bsp_pvs | grep -v bsp_pvs_refactored | tr '\n' ' ')"
+    MODS="bsp_pvs $(cd "$ROOT/src" && ls *.bas | sed 's/\.bas$//' | grep -vx bsp_pvs | grep -v bsp_pvs_refactored | tr '\n' ' ')"
     OBJS=""; for m in $MODS; do OBJS="$OBJS$m.obj+"; done
     OBJS="${OBJS}M:\\LIB\\ADDONS\\U3D.OBJ"
 
@@ -97,7 +98,7 @@ run)
     map="${arg:-dm3ish.bsp}"
     out="$ROOT/build/vbd"
     [[ -f "$out/bsp_pvs.exe" ]] || { echo "no exe; run: tools/dosbox.sh build" >&2; exit 1; }
-    cp "$ROOT/$map" "$out/"
+    cp "$ROOT/data/$map" "$out/"
     rm -f "$out"/*.bmp "$out"/*.BMP "$out"/ran.txt "$out"/RAN.TXT
 
     printf '%s\r\n' \
@@ -117,6 +118,32 @@ run)
     echo "== exited: $(cat "$out/ran.txt" 2>/dev/null || echo 'did not return to DOS')"
     cat "$out/run.out" 2>/dev/null
     ls -l "$out"/*.bmp "$out"/*.BMP 2>/dev/null || echo "(no screenshot captured)"
+    ;;
+viz)
+    # windowed run for watching it live. core=dynamic + high cycles is fast but
+    # starves the debug socket; use dosbox.sh debug for a controllable one.
+    map="${arg:-dm3ish.bsp}"
+    out="$ROOT/build/vbd"
+    [[ -f "$out/bsp_pvs.exe" ]] || { echo "no exe; run: tools/dosbox.sh build" >&2; exit 1; }
+    cp "$ROOT/data/$map" "$out/"
+    conf="$out/dosbox-viz.conf"
+    sed -e "s|@CDRIVE@|$out|" -e "s|@VDRIVE@|$out|" -e "s|@MDRIVE@|$out|" \
+        -e "s|@BAT@|bsp_pvs.exe $map|" -e "s|@PRE@||" "$ROOT/dosbox/template.conf" \
+      | sed -e 's/^core=dynamic$/core=dynamic/' \
+            -e 's/^cycles=max$/cycles=150000/' \
+            -e 's/^output=surface$/output=opengl/' \
+            -e '/^\[sdl\]/a\
+fullscreen=false\
+autolock=true' \
+            -e '/^\[dosbox\]/i\
+[render]\
+scaler=normal3x\
+aspect=true\
+\
+[debugger]\
+debuggerrun=normal\
+' > "$conf"
+    echo "$conf"
     ;;
 *) sed -n '2,16p' "$0"; exit 1 ;;
 esac

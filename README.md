@@ -16,13 +16,22 @@ bsp_pvs dm3ish.bsp
 
 | | |
 |---|---|
-| `bsp_pvs.bas` | the renderer |
-| `bsp_pvs.bi`  | BSP-on-disk structures, shared types, `declare`s |
-| `stuff.ini`   | video mode, camera, sound settings |
-| `base.dat`    | µAR archive: palette, colormap, 4x6 font, two MOD tracks |
-| `dm3ish.bsp`  | demo map |
-| `mkvbd.bat`   | build |
-| `dosbox/`     | headless DOSBox-X configs used to build and run on a host |
+| `src/bsp_pvs.bas` | main module: init, frame loop, BSP traversal and the rasteriser |
+| `src/qini.bas`    | `stuff.ini` parsing and the string tokeniser |
+| `src/bsp_pvs.bi`  | BSP-on-disk structures, shared types, `declare`s |
+| `src/qshared.bi`  | the `COMMON SHARED` block — state that crosses modules |
+| `data/stuff.ini`  | video mode, camera, sound settings |
+| `data/base.dat`   | µAR archive: palette, colormap, 4x6 font, two MOD tracks |
+| `data/dm3ish.bsp` | demo map |
+| `ugl-patch/`      | **patched µGL** — link against this, not the stock library |
+| `mkvbd.bat`       | build under DOS |
+| `dosbox/`, `tools/` | build and run on a host without a DOS machine |
+
+Sources are split into modules. `DIM SHARED` is module scope only, so state
+that crosses a module boundary lives in `src/qshared.bi` as `COMMON SHARED`;
+everything else stays local to its module, which matters because `COMMON`
+arrays are always descriptor-addressed and the renderer's scratch is
+deliberately `'$STATIC` for direct addressing.
 
 `bsp_pvs_refactored.bas` is a superseded rewrite kept for reference. It is not
 built by `mkvbd.bat`. It has not been compiled; it uses `uglPalLoad` without

@@ -5,6 +5,9 @@ placeholders — the three mount points and which `.bat` to run — and writes t
 result into `build/<target>/` alongside the generated batch file, so that
 directory is entirely disposable.
 
+Sources come from `src/`, runtime data from `data/`; both are staged into
+`build/<target>/` so the DOS side sees a flat directory.
+
 ```bash
 tools/dosbox.sh build          # VBDOS 1.0 -- the toolchain that works
 tools/dosbox.sh run            # run the built exe against dm3ish.bsp
