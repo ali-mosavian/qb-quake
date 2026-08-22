@@ -207,6 +207,42 @@ directly and prints to **stdout**, so always capture `> run.out` too.
 - The built exe's mtime comes from the DOS guest's clock. `make` stamps it
   afterwards or its bookkeeping goes wrong in whichever direction the skew runs.
 
+## Harness: benchmark mode
+
+    qrender.exe dm3ish.bsp -bench 500
+
+Renders a fixed number of frames, writes `bench.bmp` and `bench.txt`
+(frames/seconds/lastfps/polys/tris), and exits. Headless, no debugger socket,
+~33s end to end. Use it instead of CPU sampling.
+
+Baseline, dm3ish, 320x200, stats on, mips on, perspective:
+
+| frames | seconds | fps | polys | tris |
+|--------|---------|-----|-------|------|
+| 500    | 15      | 33  | 174   | 402  |
+
+Load is the other ~18s, nearly all of it `texLoadAll`.
+
+**CPU sampling proves a process is busy, not that it renders.** Several runs
+were reported as verified on the strength of "92% CPU sustained" when the
+program had never left the DOS prompt. Only a frame count or a picture is
+evidence.
+
+**Every screenshot of the first frame is byte-identical** -- fixed spawn, no
+animation, `mousePos` forced. Seven consecutive verification screenshots had
+the same md5. An identical picture cannot distinguish a working build from one
+that never rebuilt; the fps and frame count in `bench.txt` can.
+
+**`make build` copies `data/stuff.ini` over `build/vbd/stuff.ini`.** Editing
+the build copy does not survive a rebuild. This is how `sound.enabled = true`
+kept coming back and re-arming the init hang, after the setting had apparently
+been disabled -- and the symptom (title bar shows QRENDER, screen still at
+`C:\>`) was misread three times as a config or command-line fault. The source
+file now ships `false`.
+
+**`COMMAND$` uppercases the whole command line.** Flag comparisons must fold
+case; `-bench` arrives as `-BENCH`.
+
 ## Method
 
 **Linking clean proves nothing** for a `COMMON SHARED` change — binding errors
@@ -243,9 +279,8 @@ Two techniques that paid for themselves:
 
 ## Open
 
-- **`sound.enabled = true` hangs at init** — spins with interrupts off before
-  any video mode change, so the screen sits at `C:\>` while the title bar says
-  the program is running. Not root-caused. `data/stuff.ini` still ships `true`.
+- **`sound.enabled = true` hangs at init.** Root cause still unknown; the
+  setting now ships disabled so the hang cannot be armed by accident.
 - ~~`clpBuffer` in `model.bas`~~ hardened to `'$STATIC`.
 - ~~Remaining cuts~~ done — `main.bas` is 427 lines: `doInit`, `doMain`,
   `doEnd`, `ExitError`. All ten modules carry `OPTION EXPLICIT`.
