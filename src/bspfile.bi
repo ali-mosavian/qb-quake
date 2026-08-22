@@ -163,6 +163,9 @@ type miptexb
     wdth        as single
     hght        as single
     lnext       as integer
+    liquid      as integer      '' name began with *: scrolls
+    anim_base   as integer      '' name began with +N: first frame's index,
+    anim_count  as integer      '' and how many frames the chain has
 end type
 
 
@@ -307,6 +310,7 @@ declare sub ent_check_teleport ( )
 
 declare sub mod_load_texinfo ( )
 declare sub mod_load_textures ( )
+declare sub mod_link_anims ( )
 declare sub vid_init ( )
 declare sub in_init ( )
 declare sub s_stop_music ( )

@@ -371,6 +371,20 @@ unused, and it had to come back for this.
 `pl_water_level` samples three heights up the body -- feet, waist, eyes -- for
 0..3, which is what makes wading feel different from swimming.
 
+**Quake encodes what a texture does in its name.** A leading `*` is a liquid,
+a leading `+N` is one frame of an animation whose other frames share the name
+after the digit. `mod_load_textures` classifies them and `mod_link_anims`
+groups the chains; `d_draw_faces` applies both once per face, not per vertex.
+
+A liquid scrolls by adding to `su3`/`sv3`, the constant terms of the texture
+axes, which shifts every vertex of a face equally. **Those are normalised, not
+texel, units** -- `tw` and `th` are reciprocals of the texture size. A rate of
+8 there means eight whole textures a second, which looks like static rather
+than water, and is what the first version did.
+
+dm3ish has two liquids and no `+N` textures at all, so the frame chains are
+implemented and unexercised.
+
 **Teleporters are entities, not geometry.** A `trigger_teleport` has no
 origin: it carries `"model" "*1"`, meaning submodel 1, whose bounding box is
 already in `mdl_buffer`. Its `"target"` names an `info_teleport_destination`,
