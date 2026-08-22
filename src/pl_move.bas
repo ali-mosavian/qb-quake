@@ -415,7 +415,8 @@ end sub
 ''       fwd and strafe are -1, 0 or 1.
 ''::::::::::
 sub pl_move ( byval fwd as single, byval strafe as single, _
-              byval dir_x as single, byval dir_y as single, byval dt as single )
+              byval dir_x as single, byval dir_y as single, _
+              byval jump as integer, byval dt as single )
     dim speed as single, drop as single, newspeed as single
 
     ''
@@ -448,7 +449,22 @@ sub pl_move ( byval fwd as single, byval strafe as single, _
 
     pl_gravity dt
 
+    ''
+    '' Jump. Only from the ground, and after pl_gravity, which is what
+    '' decides whether there is any ground -- doing it before would read
+    '' last frame's answer and allow a second jump in mid-air.
+    ''
+    '' The velocity is set rather than added, so holding the key gives one
+    '' jump of a fixed height instead of accumulating thrust.
+    ''
+    if ( jump and pl.on_ground ) then
+        pl.vel.z     = PL_JUMP#
+        pl.on_ground = false
+    end if
+
     pl_step_move pl.pos, pl.vel, dt
+
+    if ( pl.pos.z > pl.peak_z ) then pl.peak_z = pl.pos.z
 
     ''
     '' Hand the eye back to the renderer, converting Z-up to Y-up. This is the
