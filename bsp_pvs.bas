@@ -184,6 +184,15 @@ dim shared fpsview as integer
 dim shared polys as integer
 dim shared tris as integer
 dim shared fps as integer
+'' screenie was undeclared, so it was a fresh integer 0 on every entry to
+'' presentFrame and every screenshot overwrote scrn0.bmp.
+dim shared screenie as integer
+
+'' pal is loaded by texLoadAll (which needs its segment and offset to
+'' colour match) and consumed by videoOpen, which sets it as the hardware
+'' palette and frees it. Those were one scope inside the old monolithic
+'' doInit; splitting doInit apart left videoOpen reading an undeclared 0.
+dim shared pal as long
 
     ''
     '' Grr, qb suxs
@@ -2496,7 +2505,6 @@ sub texLoadAll
         ExitError "0x0004, Could not create texture temp..."
     end if
     
-    dim pal as long
     dim palseg as integer
     dim palofs as integer
     dim cmpseg as integer
