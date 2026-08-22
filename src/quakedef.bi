@@ -30,11 +30,29 @@ const TEXATLAS_COLS = 8
 '' The map: written by qbsplod.bas, walked by the renderer. Already '$DYNAMIC
 '' before the split, so COMMON costs them nothing.
 ''
-common shared /qmapS/ bsphead as header, loading as single, loadDC as long
-common shared /qmapS/ bspFile as integer
-common shared /qmapS/ numtex as long, triCount as long, vtxCount as long
-common shared /qmapS/ edgCount as long, lefCount as long, ndsCount as long
-common shared /qmapS/ texiCount as long, CamPos as u3dVector3f, startAngle as single
+type MapState
+    head        as header       '' the on-disk lump directory
+    file        as integer      '' open handle, owned by model.bas
+    numtex      as long         '' counts, all derived from the header
+    triCount    as long
+    vtxCount    as long
+    edgCount    as long
+    lefCount    as long
+    ndsCount    as long
+    texiCount   as long
+end type
+
+''
+'' The loading screen is its own thing: it exists only between bspOpen and
+'' videoOpen, and the map does not own it.
+''
+type LoadState
+    pct         as single       '' 0..100, advanced LOAD_STEPS times
+    dc          as long         '' the temporary 320x200 loading DC
+end type
+
+common shared /qmapS/ wld as MapState
+common shared /qmapS/ ldr as LoadState
 common shared /qmapA/ triBuffer() as face2, edgBuffer() as edge, ledgBuffer() as integer
 common shared /qmapA/ vtxBuffer() as vertex, lefBuffer() as leaf2, lfcBuffer() as integer
 common shared /qmapA/ mdlBuffer() as model, plnBuffer() as plane2, ndsBuffer() as nodeb
@@ -45,22 +63,43 @@ common shared /qmapA/ texInfBuff() as texinfo, polyFlag() as integer
 '' Visibility and traversal: r_bsp.bas walks the tree and marks what is
 '' visible; the frame loop and the rasteriser read the result.
 ''
-common shared /qvisS/ frameStamp as integer, ordCount as long
+type VisState
+    frameStamp  as integer      '' stamped into polyFlag for visible faces
+    ordCount    as long         '' entries written to orderList
+end type
+
+common shared /qvisS/ vis as VisState
 common shared /qvisA/ bitarray() as integer, frustum() as plane
 
 ''
-'' Rasteriser state the frame loop also touches: the render-mode toggles,
-'' the per-frame counters, and the texture handles it samples.
+'' Rasteriser state. These were five loose COMMON scalars; grouping them
+'' names the subsystem that owns them, and makes it obvious at every use
+'' site which subsystem is being read. The member offsets are compile-time
+'' constants, so this costs nothing in the draw loop -- env.xRes has been
+'' addressed the same way all along.
 ''
-common shared /qdrwS/ backface as integer, polys as integer, rendmode as integer, tris as integer, usemips as integer
+type RenderState
+    backface    as integer      '' cull toggle
+    usemips     as integer      '' mip toggle
+    rendmode    as integer      '' 0 perspective, 1 affine, 2 wireframe
+    polys       as integer      '' per-frame counters, reset by presentFrame
+    tris        as integer
+end type
+
+common shared /qdrwS/ rdr as RenderState
 common shared /qdrwA/ hTextrDC() as long, mipBuffInf() as miptexb
 
 ''
-'' The overlay: the frame counter and the stats toggle, written by the
-'' frame loop and read by screen.bas.
+'' The overlay: what the HUD reports, written by the frame loop and read
+'' by screen.bas.
 ''
-common shared /qscrS/ fps as integer, stats as integer
-common shared /qscrS/ benchSecs as integer
+type ScreenState
+    fps         as integer      '' last completed second's frame count
+    stats       as integer      '' overlay toggle
+    benchSecs   as integer      '' seconds elapsed, for -bench
+end type
+
+common shared /qscrS/ scr as ScreenState
 
 ''
 '' pal is loaded by r_tex.bas, which needs its segment and offset to colour
@@ -69,11 +108,19 @@ common shared /qscrS/ benchSecs as integer
 common shared /qpalS/ pal as long
 
 ''
-'' Camera and view state: r_main.bas moves the camera, the frame loop and
-'' the rasteriser consume the result.
+'' Camera and view: r_main.bas moves it, the frame loop and the rasteriser
+'' consume the result. pos was /qmapS/ because the map's spawn point sets it,
+'' but it belongs to the camera and is read every frame by the backface test.
 ''
-common shared /qcamS/ camLookAt as u3dVector3f, fpsview as integer
-common shared /qcamS/ camFile as integer
+type CamState
+    pos         as u3dVector3f  '' eye, from the map's spawn then mouse-driven
+    lookAt      as u3dVector3f
+    startAngle  as single       '' spawn yaw, seeds the mouse position
+    fpsview     as integer      '' false = the fixed overhead view
+    scriptFile  as integer      '' open handle in cammode 1 and 2, else 0
+end type
+
+common shared /qcamS/ cam as CamState
 
 ''
 '' The loading-screen MOD track: started by sys_init.bas, played once

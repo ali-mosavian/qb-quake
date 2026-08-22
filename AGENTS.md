@@ -85,7 +85,11 @@ a real bug:
 4. **Each module includes `quakedef.bi` and `bspfile.bi` exactly once.** Two
    identical `COMMON` blocks is "Duplicate definition" on every line. Caught a
    copied include list.
-5. **Every `COMMON` variable's type is defined by an include that precedes
+5. **Never name a variable after a BASIC intrinsic.** `rnd` for the render
+   state failed with "Simple or array variable expected" -- `RND` is the
+   random-number function. `timer`, `screen`, `date`, `time`, `error` are the
+   same trap.
+6. **Every `COMMON` variable's type is defined by an include that precedes
    `quakedef.bi`, not one that follows it.** BC reads includes in file order,
    so a type declared in a `.bi` included *after* `quakedef.bi` does not exist
    yet when the `COMMON` line naming it is parsed — "TYPE not defined". Because
@@ -294,6 +298,39 @@ building on it -- `ugluBMPSave` was the same trap earlier in this project.
 **Names beginning with `FN` are reserved** for `DEF FN` user functions. `dim
 fname as string` fails with "Simple or array variable expected", and the use
 sites report "FUNCTION not defined".
+
+## Shared state
+
+`quakedef.bi` groups the cross-module scalars into one struct per subsystem
+rather than leaving them loose, so a use site says which subsystem it is
+reading:
+
+    env   EnvType      configuration, from stuff.ini and the command line
+    wld   MapState     the map: header, file handle, lump counts
+    ldr   LoadState    loading-screen percentage and DC
+    vis   VisState     frameStamp, ordCount
+    rdr   RenderState  cull/mip/mode toggles and the per-frame counters
+    cam   CamState     eye, lookAt, spawn yaw, view mode, script handle
+    scr   ScreenState  fps, stats toggle, benchmark seconds
+
+Member offsets are compile-time constants, so this is free even in
+`bspDrawFaces` -- measured, no change in frames/seconds/fps.
+
+`pal` and `mymod` stay loose: a struct of one member is ceremony.
+
+**Arrays cannot go in a TYPE**, so the twelve `COMMON` arrays stay loose. That
+is a language limit, not an oversight.
+
+**Renaming needs a lexer, not a regex.** A plain word-boundary substitution
+rewrote HUD text (`"Renderd rnd.polys:"`) and the `bench.txt` keys, because it
+matched inside string literals and comments. `/tmp/qbrename.py` splits each
+line into code and non-code first. It also folds case: BASIC does not
+distinguish `camLookAt` from `CamLookAt`, and a case-sensitive pass left half
+the sites behind and the build broken.
+
+**Regress against the in-program counters, not wall clock.** Repeated runs of
+the same binary spanned 9.4s to 11.7s; `frames`/`seconds`/`lastfps` were
+identical every time.
 
 ## Method
 

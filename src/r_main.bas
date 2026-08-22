@@ -72,12 +72,12 @@ sub camUpdate ( pa as integer, crrPnt as integer, cntPnts as integer, _
             end if                    
         end if                
         
-        camPos.x = ppos(pa).x
-        camPos.y = ppos(pa).y
-        camPos.z = ppos(pa).z        
-        camLookAt.x = camPos.x+plok(pa).x
-        camLookAt.y = camPos.y+plok(pa).y
-        camLookAt.z = camPos.z+plok(pa).z
+        cam.pos.x = ppos(pa).x
+        cam.pos.y = ppos(pa).y
+        cam.pos.z = ppos(pa).z        
+        cam.lookAt.x = cam.pos.x+plok(pa).x
+        cam.lookAt.y = cam.pos.y+plok(pa).y
+        cam.lookAt.z = cam.pos.z+plok(pa).z
     end if
     
     
@@ -97,42 +97,42 @@ sub camUpdate ( pa as integer, crrPnt as integer, cntPnts as integer, _
         theta! = 2 * 3.14159 * ((env.xRes-1)-tmx) / env.xRes
         phi! = 3.14159 * tmy / env.yRes
         
-        camLookAt.x = cos( theta! ) * sin( phi! )
-        camLookAt.y = cos( phi! )
-        camLookAt.z = sin( theta! ) * sin( phi! )
+        cam.lookAt.x = cos( theta! ) * sin( phi! )
+        cam.lookAt.y = cos( phi! )
+        cam.lookAt.z = sin( theta! ) * sin( phi! )
         
 
         if ( env.mouse.left  ) then 
-            camPosC.x = camPos.x + CamLookAt.x*3
-            camPosC.y = camPos.y + CamLookAt.y*3
-            camPosC.z = camPos.z + CamLookAt.z*3
+            camPosC.x = cam.pos.x + cam.lookAt.x*3
+            camPosC.y = cam.pos.y + cam.lookAt.y*3
+            camPosC.z = cam.pos.z + cam.lookAt.z*3
 
-    		camPos.x = camPosC.x
-    		camPos.y = camPosC.y
-    		camPos.z = camPosC.z
+    		cam.pos.x = camPosC.x
+    		cam.pos.y = camPosC.y
+    		cam.pos.z = camPosC.z
         end if
                     
         if ( env.mouse.right ) then
-            camPosC.x = camPos.x - CamLookAt.x*3
-            camPosC.y = camPos.y - CamLookAt.y*3
-            camPosC.z = camPos.z - CamLookAt.z*3                
+            camPosC.x = cam.pos.x - cam.lookAt.x*3
+            camPosC.y = cam.pos.y - cam.lookAt.y*3
+            camPosC.z = cam.pos.z - cam.lookAt.z*3                
             
-    		camPos.x = camPosC.x
-    		camPos.y = camPosC.y
-    		camPos.z = camPosC.z
+    		cam.pos.x = camPosC.x
+    		cam.pos.y = camPosC.y
+    		cam.pos.z = camPosC.z
         end if            
         
         if ( env.keyboard.n and env.cammode = 2 ) then
-            print #camFile, camPos.x, camPos.y, camPos.z
-            print #camFile, camLookAt.x, camLookAt.y, camLookAt.z
+            print #cam.scriptFile, cam.pos.x, cam.pos.y, cam.pos.z
+            print #cam.scriptFile, cam.lookAt.x, cam.lookAt.y, cam.lookAt.z
             
             while ( env.keyboard.n )
             wend
         end if
         
-        camLookAt.x = camLookAt.x + camPos.x 
-        camLookAt.y = camLookAt.y + camPos.y 
-        camLookAt.z = camLookAt.z + camPos.z
+        cam.lookAt.x = cam.lookAt.x + cam.pos.x 
+        cam.lookAt.y = cam.lookAt.y + cam.pos.y 
+        cam.lookAt.z = cam.lookAt.z + cam.pos.z
     end if
 end sub
 
@@ -150,7 +150,7 @@ sub inputToggles
 	'' Toggle mipmaps
 	''
     if ( env.keyboard.f1 ) then
-        usemips = not usemips
+        rdr.usemips = not rdr.usemips
         do 
         loop while ( env.keyboard.f1 )
     end if            
@@ -159,7 +159,7 @@ sub inputToggles
 	'' Toggle perspective/affine/wireframe
 	''        
     if ( env.keyboard.f2 ) then
-        rendmode = (rendmode + 1) mod 3
+        rdr.rendmode = (rdr.rendmode + 1) mod 3
         do 
         loop while ( env.keyboard.f2 )
     end if                    
@@ -168,7 +168,7 @@ sub inputToggles
 	'' Toggle cam/birdseye
 	''        
     if ( env.keyboard.f3 ) then
-        fpsview = not fpsview
+        cam.fpsview = not cam.fpsview
         do 
         loop while ( env.keyboard.f3 )
     end if            
@@ -177,7 +177,7 @@ sub inputToggles
 	'' Toggle stats
 	''        
     if ( env.keyboard.f12 ) then
-        stats = not stats
+        scr.stats = not scr.stats
         do 
         loop while ( env.keyboard.f12 )
     end if                    
@@ -186,7 +186,7 @@ sub inputToggles
 	'' Toggle backface culling
 	''        
     if ( env.keyboard.b ) then
-        backface = not backface
+        rdr.backface = not rdr.backface
         do 
         loop while ( env.keyboard.b )
     end if

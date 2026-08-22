@@ -271,8 +271,8 @@ end sub
 ''::::::::::
 defint a-z
 sub loadScreenOpen
-    loadDC = uglSetVideoDC( UGL.8BIT, 320, 200, 1 )
-    if ( loadDC = false ) then
+    ldr.dc = uglSetVideoDC( UGL.8BIT, 320, 200, 1 )
+    if ( ldr.dc = false ) then
         ExitError "0x3001, Could not set loading video mode"
     end if
     
