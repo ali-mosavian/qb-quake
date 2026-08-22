@@ -223,6 +223,9 @@ declare sub scr_mip_tick  ( percent as single )
 declare sub host_init    ( )
 declare sub host_main    ( )
 declare sub host_shutdown     ( )
+declare sub host_tick ( byval dt as single )
+declare sub host_render ( byval h_dst_dc as long, mtx_prj as u3dMtrx, _
+                         byval xresh as single, byval yresh as single )
 declare sub host_bench_report ( frame_no as long, h_dst_dc as long )
 declare sub sys_error ( msg as string )
 declare sub sys_time_init ( )
@@ -230,9 +233,7 @@ declare function sys_frame_time ( ) as single
 declare function sys_tick_hz ( ) as single
 declare sub r_mark_leaves ( byval nodenr as integer )
 declare sub r_draw_world ( model as integer )
-declare sub v_update_camera ( pa as integer, crr_pnt as integer, cnt_pnts as integer, _
-                        ppos() as PNT3D, plok() as PNT3D, _
-                        cbzp() as PNT3D, cbzl() as PNT3D, last_point as integer )
+declare sub v_update_camera ( byval dt as single )
 declare sub in_handle_toggles ( )
 ''
 '' pl_move.bas -- player physics
@@ -250,9 +251,7 @@ declare sub pl_move ( byval fwd as single, byval strafe as single, _
                      byval dir_x as single, byval dir_y as single, _
                      byval jump as integer, byval dt as single )
 
-declare sub v_open_script ( ppos() as PNT3D, plok() as PNT3D, _
-                           cbzp() as PNT3D, cbzl() as PNT3D, _
-                           cnt_pnts as integer, crr_pnt as integer )
+declare sub v_open_script ( )
 declare function in_keystroke ( key_down as integer ) as integer
 declare sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
                            xresh as single, yresh as single )

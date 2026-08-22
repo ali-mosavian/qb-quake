@@ -303,6 +303,12 @@ and `vz` zero. A run that ends with x and y unchanged means the trace is
 reporting solid everywhere; one that ends with a huge negative z means it fell
 through the world.
 
+**The frame is `host_tick` then `host_render`.** One changes the world and
+draws nothing; the other draws and changes nothing. `host_tick` takes dt as a
+parameter rather than reading `scr.frame_time`, so a caller can hand it a
+different step -- a fixed one, or a halved one for a sub-tick -- without the
+routine knowing.
+
 **Time, not frames.** Everything that moves multiplies by `scr.frame_time`,
 measured once at the top of the frame by `sys_frame_time`. Nothing may advance
 by a per-frame constant -- noclip flew at 3 units a frame for years, which
