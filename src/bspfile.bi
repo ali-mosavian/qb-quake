@@ -107,6 +107,7 @@ type leaf
 end type
 
 type leaf2    
+    cont        as long         '' CONTENTS_*: only hull 0 knows about water
     vislist     as long    
     bound       as bboundbox
     lfaceid     as integer
@@ -209,6 +210,10 @@ type EnvType
                                 '' collision response without a keyboard
     bench_jump  as integer      '' -jump: hold jump, likewise
     bench_strafe as integer     '' -strafe: hold strafe, to check its sign
+    start_x     as single       '' -at X Y Z: start here instead of the map's
+    start_y     as single       '' spawn point. For reaching a part of the
+    start_z     as single       '' level without walking to it first.
+    start_set   as integer
     bench_ticks as integer      '' -ticks N: stop after N simulation steps
                                 '' rather than N frames, so two runs at
                                 '' different framerates simulate exactly the
@@ -251,6 +256,8 @@ declare sub pl_trace ( start as vec3, fin as vec3 )
 declare sub pl_clip_velocity ( v as vec3, norm as vec3 )
 declare sub pl_slide_move ( org as vec3, vel as vec3, byval dt as single )
 declare sub pl_step_move ( org as vec3, vel as vec3, byval dt as single )
+declare function pl_point_contents ( p as vec3 ) as integer
+declare sub pl_water_level ( )
 declare sub pl_gravity ( byval dt as single )
 declare sub pl_init ( )
 declare sub pl_move ( byval fwd as single, byval strafe as single, _

@@ -164,10 +164,12 @@ def convert_lumps(d, lumps, outdir):
     raw = lump(10)
     buf = bytearray()
     for k in range(0, len(raw), 28):
-        _cont, vislist = struct.unpack_from('<ii', raw, k)
+        cont, vislist = struct.unpack_from('<ii', raw, k)
         bound = raw[k+8:k+20]                       # 6 int16, copied whole
         lfaceid, lfacenum = struct.unpack_from('<hh', raw, k+20)
-        buf += struct.pack('<i', vislist) + bound + struct.pack('<hh', lfaceid, lfacenum)
+        # contents is kept: the collision hulls hold only EMPTY and SOLID, so
+        # hull 0's leaves are the only place water and lava are recorded.
+        buf += struct.pack('<ii', cont, vislist) + bound + struct.pack('<hh', lfaceid, lfacenum)
     out['leaves.bld'] = bytes(buf)
 
     # planes: plane(20) -> plane2(18), ptype narrows to an integer

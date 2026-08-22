@@ -19,6 +19,9 @@
 const CONTENTS_EMPTY = -1
 const CONTENTS_SOLID = -2
 const CONTENTS_WATER = -3
+const CONTENTS_SLIME = -4
+const CONTENTS_LAVA  = -5
+const CONTENTS_SKY   = -6
 
 ''
 '' Hull 1 is the 32x32x56 player box. The hulls are pre-expanded by the
@@ -46,6 +49,17 @@ const PL_MAXSPEED#   = 320.0
 const PL_JUMP#       = 270.0
 '' noclip fly speed, units per second
 const PL_NOCLIP#     = 200.0
+'' downward drift in water: not gravity, just enough to sink slowly
+const PL_WATERSINK#  = 60.0
+'' how fast jump swims upward
+const PL_SWIM#       = 100.0
+'' water is thick: this much of your speed survives each second
+const PL_WATERFRIC#  = 4.0
+'' and it caps how fast you can move through it
+const PL_WATERSPEED# = 160.0
+'' the player box: origin sits this far above the feet, eyes this far above
+'' the origin. Quake's -24 and +22.
+const PL_FEET#       = 24.0
 
 ''
 '' The result of sweeping the player hull from one point to another.
@@ -65,6 +79,8 @@ type PlayerState
     on_ground   as integer
     noclip      as integer      '' true = the old free-fly camera, no physics
     peak_z      as single      '' highest z reached, so -jump is checkable
+    water_level as integer      '' 0 dry, 1 feet, 2 waist, 3 eyes under
+    water_type  as integer      '' CONTENTS_WATER, _SLIME or _LAVA
 end type
 
 common shared /pl_s/ pl as PlayerState

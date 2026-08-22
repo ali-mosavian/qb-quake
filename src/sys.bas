@@ -85,6 +85,12 @@ sub sys_parse_args
         if ( lcase$(argv(i)) = "-strafe" ) then
             env.bench_strafe = true
         end if
+        if ( lcase$(argv(i)) = "-at" and i+3 <= argc-1 ) then
+            env.start_x   = val( argv(i+1) )
+            env.start_y   = val( argv(i+2) )
+            env.start_z   = val( argv(i+3) )
+            env.start_set = true
+        end if
         if ( lcase$(argv(i)) = "-ticks" and i+1 <= argc-1 ) then
             env.bench_ticks = val( argv(i+1) )
         end if
