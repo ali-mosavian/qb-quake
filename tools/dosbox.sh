@@ -46,17 +46,23 @@ build)
     esac
     out="$ROOT/build/$tc"
     mkdir -p "$out"
-    cp "$ROOT"/bsp_pvs.bas "$ROOT"/bsp_pvs.bi "$ROOT"/stuff.ini "$ROOT"/base.dat "$out/"
+    cp "$ROOT"/*.bas "$ROOT"/*.bi "$ROOT"/stuff.ini "$ROOT"/base.dat "$out/"
+    # every .bas except the superseded rewrite is a module of the program
+    # bsp_pvs must come first: it carries the module-level main code
+    MODS="bsp_pvs $(cd "$ROOT" && ls *.bas | sed 's/\.bas$//' | grep -vx bsp_pvs | grep -v bsp_pvs_refactored | tr '\n' ' ')"
+    OBJS=""; for m in $MODS; do OBJS="$OBJS$m.obj+"; done
+    OBJS="${OBJS}M:\\LIB\\ADDONS\\U3D.OBJ"
 
+    # one BC line per module, then one LINK line naming every object.
     # u3d is a uGL addon and is not inside the uglX.lib -- link it explicitly.
+    {
+        printf '%s\r\n' '@echo off' 'if exist result.txt del result.txt' \
+                          'if exist *.obj del *.obj' 'if exist bsp_pvs.exe del bsp_pvs.exe'
+        for m in $MODS; do printf '%s\r\n' "$bc $m.bas, $m.obj; >> bc.out"; done
+    } > "$out/build.bat"
     printf '%s\r\n' \
-      '@echo off' \
-      'if exist result.txt del result.txt' \
-      'if exist bsp_pvs.obj del bsp_pvs.obj' \
-      'if exist bsp_pvs.exe del bsp_pvs.exe' \
-      "$bc bsp_pvs.bas, bsp_pvs.obj; > bc.out" \
       'if not exist bsp_pvs.obj goto bcfail' \
-      "$lnk /NOE /SEG:800 bsp_pvs.obj+M:\\LIB\\ADDONS\\U3D.OBJ, bsp_pvs.exe, bsp_pvs.map, $rt+$ugl; > link.out" \
+      "$lnk @link.rsp > link.out" \
       'if not exist bsp_pvs.exe goto linkfail' \
       'echo PASS > result.txt' \
       'goto end' \
@@ -65,7 +71,17 @@ build)
       'goto end' \
       ':linkfail' \
       'echo LINKFAIL > result.txt' \
-      ':end' > "$out/build.bat"
+      ':end' >> "$out/build.bat"
+
+    # LINK's command line would blow past the DOS 127-char limit once there
+    # are several modules -- and a truncated line loses the trailing ';' that
+    # suppresses its prompts, so it just sits there waiting. Response file.
+    printf '%s\r\n' \
+      "/NOE /SEG:800 $OBJS" \
+      'bsp_pvs.exe' \
+      'bsp_pvs.map' \
+      "$rt+$ugl" \
+      ';' > "$out/link.rsp"
 
     conf="$out/dosbox.conf"
     sed -e "s|@CDRIVE@|$out|" -e "s|@VDRIVE@|$TOOLCHAINS/$cdir|" -e "s|@MDRIVE@|$MGL|" \
