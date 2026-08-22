@@ -112,10 +112,16 @@ sub ent_load_teleports
     dim mdlnum as integer
 
     redim tele( ENT_MAXTELE ) as Teleporter
+    redim mdl_draw( 63 ) as integer
 
     tele_count = 0
     dest_count = 0
     trig_count = 0
+
+    '' every submodel draws unless something claims it as a trigger
+    for  i = 0 to 63
+        mdl_draw(i) = true
+    next i
 
     entity$ = space$( wld.head.entities.size )
     seek #wld.file, wld.head.entities.offs+1
@@ -163,6 +169,7 @@ sub ent_load_teleports
                 s$ = ent_value( strm(), strm_cnt, "model" )
                 if ( left$( s$, 1 ) = "*" ) then
                     trig_model( trig_count ) = val( mid$( s$, 2 ) )
+                    mdl_draw( trig_model( trig_count ) ) = false
                     trig_count = trig_count + 1
                 end if
             end if

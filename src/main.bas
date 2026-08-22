@@ -53,6 +53,7 @@ option explicit
 '$include: 'q_scr.bi'
 '$include: 'q_cam.bi'
 '$include: 'q_pl.bi'
+'$include: 'q_map.bi'
 '$include: 'q_ent.bi'
 
 ''
@@ -469,6 +470,7 @@ sub host_render ( byval h_dst_dc as long, mtx_prj as u3dMtrx, _
     dim mtx_mdl as u3dMtrx
     dim mtx_fin as u3dMtrx
     dim cam_pos_b as u3dVector3f
+    dim bm as integer
 
     u3dMtrxLookAt mtx_mdl, cam.pos, cam.look_at, cam_up        
     u3dMtrxConc mtx_fin, mtx_mdl, mtx_prj
@@ -508,6 +510,15 @@ sub host_render ( byval h_dst_dc as long, mtx_prj as u3dMtrx, _
     '' Walk BSP tree
     ''
     r_draw_world 0
+
+    ''
+    '' Brush entities: submodel 0 is the world, 1 upward are doors, lifts
+    '' and trigger volumes. They join the same draw order as the world,
+    '' after it, so they sort against it back to front.
+    ''
+    for  bm = 1 to wld.mdl_count-1
+        if ( mdl_draw(bm) ) then r_draw_brush_model bm
+    next bm
     
     
     d_draw_faces h_dst_dc, mtx_fin, xresh, yresh
