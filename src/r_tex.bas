@@ -42,7 +42,7 @@ dim shared tmipinf( 1 ) as miptex
 '' desc: Reads the miptex directory and sizes the texture tables.
 ''::::::::::
 defint a-z
-sub texLoadOffsets
+sub mod_load_texinfo
     ''
     '' hTextrDC is COMMON now, and COMMON can only declare it as hTextrDC()
     '' with no elements. It carried a real bound, so size it here.
@@ -56,7 +56,7 @@ sub texLoadOffsets
     def seg
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
-    drwLoadTick
+    scr_load_tick
     
     seek #wld.file, wld.head.miptex.offs+1
     get #wld.file,, wld.numtex
@@ -85,7 +85,7 @@ end sub
 ''       numtex, so it is one routine.
 ''::::::::::
 defint a-z
-sub texLoadAll
+sub mod_load_textures
     dim i as integer, j as integer
     dim bmpfile as string
     dim dc as long
@@ -96,7 +96,7 @@ sub texLoadAll
     ''
     pal = uglPalLoad( "base.dat::color/palette.lmp", PALRGB )
 
-    fontPrintText ldr.dc, 0, 199-8, "Loading textures..."
+    draw_string ldr.dc, 0, 199-8, "Loading textures..."
 
     for  i = 0 to wld.numtex-1
         ''
@@ -130,16 +130,16 @@ sub texLoadAll
 
             dc = uglNewBMPEx( UGL.EMS, UGL.8BIT, bmpfile, BMPOPT.NO332 )
             if ( dc = false ) then
-                ExitError "0x0004, missing " + bmpfile + " -- run tools/mkassets.py"
+                sys_error "0x0004, missing " + bmpfile + " -- run tools/mkassets.py"
             end if
 
             hTextrDC(i*4+j) = dc
 
-            if ( (i and 15) = 0 ) then drwMipTick (j+1)*25
+            if ( (i and 15) = 0 ) then scr_mip_tick (j+1)*25
         next j
 
         ldr.pct = ldr.pct + (100.0/LOAD_STEPS)/wld.numtex
-        if ( (i and 15) = 0 ) then drwLoadTick
+        if ( (i and 15) = 0 ) then scr_load_tick
     next i
 
     uglRestore

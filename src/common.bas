@@ -24,7 +24,7 @@ defint a-z
 
 
 defint a-z
-sub strtok ( strm() as string, strm_cnt as integer, _
+sub com_tokenize ( strm() as string, strm_cnt as integer, _
              tokenlist as string, stream as string )
              
     dim char as string * 1
@@ -123,7 +123,7 @@ end sub
 
 
 defint a-z
-sub parseIni ( filename as string )
+sub com_parse_config ( filename as string )
 
     const xres_flag = 1
     const yres_flag = 2
@@ -157,7 +157,7 @@ sub parseIni ( filename as string )
             
     do 
         line input #file, rawline        
-        strtok strm(), strm_cnt, "  ", rawline
+        com_tokenize strm(), strm_cnt, "  ", rawline
         
         
         if ( strm_cnt > 0 ) then
@@ -165,20 +165,20 @@ sub parseIni ( filename as string )
                 case "//"
                 
                 case "display.xres"                
-                    iniCheck strm(), strm_cnt, 3, linenum
+                    com_check_args strm(), strm_cnt, 3, linenum
                     
                     env.xRes = val( strm(2) )
                     flags = flags or xres_flag
                     
                 case "display.yres"
-                    iniCheck strm(), strm_cnt, 3, linenum
+                    com_check_args strm(), strm_cnt, 3, linenum
                     
                     env.yRes = val( strm(2) )
                     flags = flags or yres_flag
                     
                     
                 case "display.clear"
-                    iniCheck strm(), strm_cnt, 3, linenum
+                    com_check_args strm(), strm_cnt, 3, linenum
                     
                     if ( strm(2) = "no" ) then
                         env.disclear = false
@@ -189,13 +189,13 @@ sub parseIni ( filename as string )
                     end if
                                         
                 case "display.pages"
-                    iniCheck strm(), strm_cnt, 3, linenum
+                    com_check_args strm(), strm_cnt, 3, linenum
                     
                     env.pages = val( strm(2) )
                     flags = flags or page_flag
                     
                 case "display.usepaging"
-                    iniCheck strm(), strm_cnt, 3, linenum
+                    com_check_args strm(), strm_cnt, 3, linenum
                     
                     if ( strm(2) = "no" ) then
                         env.usepag = false
@@ -206,31 +206,31 @@ sub parseIni ( filename as string )
                     end if
                                     
                 case "world.frustum.zn"                
-                    iniCheck strm(), strm_cnt, 3, linenum
+                    com_check_args strm(), strm_cnt, 3, linenum
                     
                     env.zNear = val( strm(2) )
                     flags = flags or zn_flag
                                     
                 case "world.frustum.zf"                
-                    iniCheck strm(), strm_cnt, 3, linenum
+                    com_check_args strm(), strm_cnt, 3, linenum
                     
                     env.zFar = val( strm(2) )
                     flags = flags or zf_flag
                                     
                 case "world.camera.script"
-                    iniCheck strm(), strm_cnt, 3, linenum
+                    com_check_args strm(), strm_cnt, 3, linenum
                     
                     env.camscrpt = strm(2)
                     flags = flags or cmscr_flag
                     
                 case "world.camera.interp"
-                    iniCheck strm(), strm_cnt, 3, linenum
+                    com_check_args strm(), strm_cnt, 3, linenum
                     
                     env.caminterp = val( strm(2) )
                     flags = flags or cminp_flag
                     
                 case "world.camera.mode"
-                    iniCheck strm(), strm_cnt, 3, linenum
+                    com_check_args strm(), strm_cnt, 3, linenum
                     
                     if ( strm(2) = "freelook" ) then
                         env.cammode = 0
@@ -239,19 +239,19 @@ sub parseIni ( filename as string )
                     elseif ( strm(2) = "script_edit" ) then
                         env.cammode = 2
                     else
-                        ExitError "Uknown syntax at line # " + str$(linenum)                                                
+                        sys_error "Uknown syntax at line # " + str$(linenum)                                                
                     end if                    
                     
                     flags = flags or cmmde_flag
                     
                 case "world.camera.fov"
-                    iniCheck strm(), strm_cnt, 3, linenum
+                    com_check_args strm(), strm_cnt, 3, linenum
                     
                     env.camfov = val( strm(2) )
                     flags = flags or fov_flag
                     
                 case "sound.enabled"
-                    iniCheck strm(), strm_cnt, 3, linenum
+                    com_check_args strm(), strm_cnt, 3, linenum
                     
                     if ( strm(2) = "false" ) then
                         env.sound = false
@@ -262,7 +262,7 @@ sub parseIni ( filename as string )
                     end if                    
                 
                 case else
-                    ExitError "Unknown command, " + rawline
+                    sys_error "Unknown command, " + rawline
                     
             end select                                    
         end if
@@ -275,7 +275,7 @@ sub parseIni ( filename as string )
     close #file
     
     if ( flags <> all_flag% ) then
-        ExitError "Incorrect ini file..."
+        sys_error "Incorrect ini file..."
     end if    
 
 end sub
@@ -291,15 +291,15 @@ end sub
 '' Cold: one call per line of a small text file at startup.
 ''::::::::::
 defint a-z
-sub iniCheck ( strm() as string, strm_cnt as integer, _
+sub com_check_args ( strm() as string, strm_cnt as integer, _
                byval want as integer, byval linenum as integer )
 
     if ( (strm_cnt <> want) and (strm(3) <> "//") ) then
-        ExitError "Uknown syntax at line # " + str$(linenum)
+        sys_error "Uknown syntax at line # " + str$(linenum)
     end if
 
     if ( strm(1) <> "=" ) then
-        ExitError "Uknown syntax at line # " + str$(linenum)
+        sys_error "Uknown syntax at line # " + str$(linenum)
     end if
 
 end sub

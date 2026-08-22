@@ -35,7 +35,7 @@ dim shared pvsLeaf as integer
 ''  BSP WALK
 '' ==========================================================================
 defint a-z
-function bspClasifypoint% ( nodenr as integer )
+function r_classify_point% ( nodenr as integer )
     dim dp as single
   
     dp! = cam.pos.x*plnBuffer(ndsBuffer(nodenr).planeid).norm.x + _
@@ -43,9 +43,9 @@ function bspClasifypoint% ( nodenr as integer )
           cam.pos.z*plnBuffer(ndsBuffer(nodenr).planeid).norm.y
           
     if ( (dp!-plnBuffer(ndsBuffer(nodenr).planeid).dist) > 0.0 ) then
-        bspClasifypoint% = -1
+        r_classify_point% = -1
     else
-        bspClasifypoint% = 0
+        r_classify_point% = 0
     end if
     
 end function
@@ -54,7 +54,7 @@ end function
 
 
 defint a-z
-sub bspWalkNodeB ( byval nodenr as integer ) static
+sub r_recursive_world_node ( byval nodenr as integer ) static
     dim dp as single
     dim frst as integer, last as integer, i as integer
     dim pid as integer, side as integer
@@ -71,7 +71,7 @@ sub bspWalkNodeB ( byval nodenr as integer ) static
 	    '' Check pvs and bounding volume
 	    ''
 	    if ( pvsBufferB(not nodenr) and _
-	         BBoxInFrustum( lefBuffer(not nodenr).bound, frustum() ) ) then
+	         r_cull_box( lefBuffer(not nodenr).bound, frustum() ) ) then
 	    
 	        frst = lefBuffer(not nodenr).lfaceid
 	        last = frst+lefBuffer(not nodenr).lfacenum
@@ -92,7 +92,7 @@ sub bspWalkNodeB ( byval nodenr as integer ) static
 	    exit sub
     end if    
     
-    if ( not BBoxInFrustum( ndsBuffer(nodenr).bound, frustum() ) ) then
+    if ( not r_cull_box( ndsBuffer(nodenr).bound, frustum() ) ) then
         exit sub
     end if
     
@@ -113,10 +113,10 @@ sub bspWalkNodeB ( byval nodenr as integer ) static
     	'' back nodes, then the front nodes.
     	''
     		
-        bspWalkNodeB ndsBuffer(nodenr).child1
+        r_recursive_world_node ndsBuffer(nodenr).child1
 	    orderList(vis.ordCount) = nodenr
 	    vis.ordCount = vis.ordCount + 1
-        bspWalkNodeB ndsBuffer(nodenr).child0
+        r_recursive_world_node ndsBuffer(nodenr).child0
         
     else
         ''
@@ -124,10 +124,10 @@ sub bspWalkNodeB ( byval nodenr as integer ) static
 	    '' front nodes, then the back nodes.
 	    ''
     		
-        bspWalkNodeB ndsBuffer(nodenr).child0        
+        r_recursive_world_node ndsBuffer(nodenr).child0        
 	    orderList(vis.ordCount) = nodenr
 	    vis.ordCount = vis.ordCount + 1        
-        bspWalkNodeB ndsBuffer(nodenr).child1
+        r_recursive_world_node ndsBuffer(nodenr).child1
     end if
     
 
@@ -137,7 +137,7 @@ end sub
 
 '':::::::::
 defint a-z
-sub bspShowModel ( model as integer )
+sub r_draw_world ( model as integer )
     dim i as integer
     ''
     '' Reset tree state
@@ -167,12 +167,12 @@ sub bspShowModel ( model as integer )
     ''
     '' Extract pvs
     ''
-    pvsInit int(mdlBuffer(model).headnode0)
+    r_mark_leaves int(mdlBuffer(model).headnode0)
     
     ''
     '' Traverse tree
     ''
-    bspWalkNodeB int(mdlBuffer(model).headnode0)
+    r_recursive_world_node int(mdlBuffer(model).headnode0)
     
 end sub
 
@@ -182,7 +182,7 @@ end sub
 
 '':::::::::
 defint a-z
-sub ExtractFrustum ( frustum() as plane, mtx as u3dMtrx )
+sub r_set_frustum ( frustum() as plane, mtx as u3dMtrx )
     dim i as integer
     dim d as single
 
@@ -257,7 +257,7 @@ end sub
 
 '':::::::::
 defint a-z
-function BBoxInFrustum% ( bbox as bboundbox, frustum() as plane )
+function r_cull_box% ( bbox as bboundbox, frustum() as plane )
     dim dp as single
     dim nearPoint as vertex
     dim i as integer
@@ -314,12 +314,12 @@ function BBoxInFrustum% ( bbox as bboundbox, frustum() as plane )
              frustum(i).norm.z*NearPoint.z
              
         if ( (dp+frustum(i).dist) > 0 ) then
-            BBoxInFrustum% = 0
+            r_cull_box% = 0
             exit function
         end if
     next i    
     
-    BBoxInFrustum% = -1
+    r_cull_box% = -1
 end function
 
 
@@ -327,7 +327,7 @@ end function
 
 ''::::::::::
 defint a-z
-sub pvsInit ( byval nodenr as integer )
+sub r_mark_leaves ( byval nodenr as integer )
     dim v as long
     dim l as long
     dim j as long
@@ -339,7 +339,7 @@ sub pvsInit ( byval nodenr as integer )
     '' Find the node that the camera is in
     ''
     while not ( nodenr and &h8000 )
-        if ( bspClasifypoint( nodenr ) ) then
+        if ( r_classify_point( nodenr ) ) then
             nodenr = ndsBuffer(nodenr).child0
         else
             nodenr = ndsBuffer(nodenr).child1
@@ -359,7 +359,7 @@ sub pvsInit ( byval nodenr as integer )
     '' Setup
     ''    
     v = lefBuffer( not nodenr ).vislist
-    if ( v = -2 ) then ExitError "Leaf has no pvs data."
+    if ( v = -2 ) then sys_error "Leaf has no pvs data."
         
     v = v + varptr( pvsBufferA(0) )
     def seg = varseg( pvsBufferA(0) )

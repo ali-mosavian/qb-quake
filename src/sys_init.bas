@@ -34,7 +34,7 @@ dim shared loadmod as UGMMOD
 ''
 '' :::::::::::
 defint a-z
-sub getSBSettings  ( port as integer, irq as integer, ldma as integer, _    
+sub s_get_blaster  ( port as integer, irq as integer, ldma as integer, _    
                      hdma as integer )
     
     dim tmpstr as string
@@ -98,7 +98,7 @@ end sub
 '' desc: A map on the command line, and the ini beside it.
 ''::::::::::
 defint a-z
-sub checkCommandLine
+sub sys_parse_args
     dim argv(16) as string
     dim argc as integer
     dim cl as string
@@ -109,14 +109,14 @@ sub checkCommandLine
         print "Usage: qrender mapname.bsp [-bench N]"
         print "  -bench N   render N frames, write bench.bmp and bench.txt, exit"
         print "Copyleft Blitz, july/2003"
-        doEnd
+        host_shutdown
     end if
 
     ''
     '' The map used to be command$ itself, passed raw to OPEN. Splitting it
     '' off is what lets anything else share the command line.
     ''
-    strtok argv(), argc, " ", cl
+    com_tokenize argv(), argc, " ", cl
     env.mapName = argv(0)
     env.benchFrames = 0
 
@@ -128,12 +128,12 @@ sub checkCommandLine
 
     if ( (dir$( rtrim$(env.mapName) ) = "") ) then
         print "File " + lcase$(rtrim$(env.mapName)) + " could not be found"
-        doEnd
+        host_shutdown
     end if
     
     if ( (dir$( "stuff.ini" ) = "") ) then
         print "Ini file could not be found"
-        doEnd
+        host_shutdown
     end if    
 
 end sub
@@ -146,7 +146,7 @@ end sub
 '' desc: Reads stuff.ini and builds the bit mask table the PVS decoder indexes.
 ''::::::::::
 defint a-z
-sub initTables
+sub sys_init_tables
     ''
     '' bitarray and frustum are COMMON now, and COMMON can only declare an
     '' array as name() -- with no elements. Both carried a real bound in their
@@ -157,7 +157,7 @@ sub initTables
 
     dim i as integer
 
-    parseIni "stuff.ini"    
+    com_parse_config "stuff.ini"    
     
     for  i = 0 to 15
         bitarray(i) = clng(2^i)
@@ -173,7 +173,7 @@ end sub
 '' desc: Autodetects an SB16, falls back to the BLASTER variable.
 ''::::::::::
 defint a-z
-sub soundOpen
+sub s_init
     dim port as integer
     dim irq as integer
     dim ldma as integer
@@ -182,13 +182,13 @@ sub soundOpen
     if ( env.sound = true ) then
         if ( sndInit( false, false, false, false ) = false ) then
             
-            getSBSettings port, irq, ldma, hdma
+            s_get_blaster port, irq, ldma, hdma
             if ( (port = false) or (irq = false) or (ldma = false ) ) then
-                ExitError "0x0001, No sound blaster or compatible detected..."
+                sys_error "0x0001, No sound blaster or compatible detected..."
             end if
           
             if ( sndInit( port, irq, ldma, hdma ) = false ) then
-                ExitError "0x0002, Could not init sound module..."
+                sys_error "0x0002, Could not init sound module..."
             end if
             
         end if
@@ -206,7 +206,7 @@ sub soundOpen
         if ( sndOpenOutput( snd.s16.stereo, 44100, 50 ) = false ) then
             if ( sndOpenOutput( snd.s8.stereo, 22050, 50 ) = false ) then
                 if ( sndOpenOutput( snd.s8.mono, 22050, 50 ) = false ) then
-                    ExitError "0x1003, Could not open sound output..."
+                    sys_error "0x1003, Could not open sound output..."
                 end if
             end if        
         end if
@@ -222,21 +222,21 @@ end sub
 '' desc: Starts the module that plays over the loading screen.
 ''::::::::::
 defint a-z
-sub musicStart
+sub s_start_music
     if ( env.sound = true ) then
         if ( modInit = false ) then
-            ExitError "0x1004, Could not init mod module..."
+            sys_error "0x1004, Could not init mod module..."
         end if
         
         ''
         '' Load mod
         ''    
         if ( modNew( loadmod, mod.ems, "base.dat::mods/flim.mod" ) = false ) then
-            ExitError "0x1005, Could not load mod..."
+            sys_error "0x1005, Could not load mod..."
         end if
             
         if ( modNew( mymod, mod.ems, "base.dat::mods/mainfrm.mod" ) = false ) then
-            ExitError "0x1005, Could not load mod..."
+            sys_error "0x1005, Could not load mod..."
         end if
         
        
@@ -255,9 +255,9 @@ end sub
 '' name: fontOpen
 ''::::::::::
 defint a-z
-sub fontOpen
-    if ( not initFont( "base.dat::font/4x6.fnt", 254 ) ) then
-        ExitError "0x0000, Could not load font..."
+sub draw_init_font
+    if ( not draw_load_font( "base.dat::font/4x6.fnt", 254 ) ) then
+        sys_error "0x0000, Could not load font..."
     end if    
 
 end sub
@@ -270,13 +270,13 @@ end sub
 '' desc: Mode 13h for the duration of loading only.
 ''::::::::::
 defint a-z
-sub loadScreenOpen
+sub scr_begin_loading
     ldr.dc = uglSetVideoDC( UGL.8BIT, 320, 200, 1 )
     if ( ldr.dc = false ) then
-        ExitError "0x3001, Could not set loading video mode"
+        sys_error "0x3001, Could not set loading video mode"
     end if
     
-    drwLoadTick    
+    scr_load_tick    
 
 end sub
 
@@ -288,9 +288,9 @@ end sub
 '' desc: Mouse, keyboard and the one second timer.
 ''::::::::::
 defint a-z
-sub inputOpen
+sub in_init
     if ( mouseInit( env.hVideoDC, env.mouse ) = FALSE ) then
-        ExitError "0x0006, Could not init mouse..."
+        sys_error "0x0006, Could not init mouse..."
     end if  
     
     ''
@@ -312,7 +312,7 @@ end sub
 '' name: musicStopLoading
 ''::::::::::
 defint a-z
-sub musicStopLoading
+sub s_stop_music
     if ( env.sound = true ) then
         modStop
         modDel loadmod

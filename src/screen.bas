@@ -58,8 +58,8 @@ dim shared hFontChar(255) as long
 ''       Takes no arguments -- loadDC and loading are both /qmapS/ --
 ''       which is why the fourteen callers reduce to a bare call.
 '' :::::::::::::
-sub drwLoadTick
-    drwLoadingBar ldr.dc, LOADBAR_X, LOADBAR_Y, LOADBAR_W, LOADBAR_H, ldr.pct, -1
+sub scr_load_tick
+    draw_bar ldr.dc, LOADBAR_X, LOADBAR_Y, LOADBAR_W, LOADBAR_H, ldr.pct, -1
 end sub
 
 
@@ -68,8 +68,8 @@ end sub
 '' desc: The thinner sub-bar above the main one, showing progress through
 ''       the current texture's four mip levels.
 '' :::::::::::::
-sub drwMipTick ( percent as single )
-    drwLoadingBar ldr.dc, LOADBAR_X, MIPBAR_Y, LOADBAR_W, MIPBAR_H, percent, 51
+sub scr_mip_tick ( percent as single )
+    draw_bar ldr.dc, LOADBAR_X, MIPBAR_Y, LOADBAR_W, MIPBAR_H, percent, 51
 end sub
 
 
@@ -79,7 +79,7 @@ end sub
 ''
 '' :::::::::::::
 defint a-z
-sub drwLoadingBar ( hDC as long, x as integer, y as integer, wdt as integer, _
+sub draw_bar ( hDC as long, x as integer, y as integer, wdt as integer, _
                     hgt as integer, percent as single, col as long )
     dim drwWidth as integer
     
@@ -97,7 +97,7 @@ end sub
 
 '':::::::::
 defint a-z
-function initFont% ( flname as string, colb as long )
+function draw_load_font% ( flname as string, colb as long )
     dim col as long
     dim trn as long
     dim fHndl as integer
@@ -110,13 +110,13 @@ function initFont% ( flname as string, colb as long )
     trn = uglColor8( 7, 0, 3 )    
     
     if ( not uglNewMult( hFontChar(), 256, UGL.EMS, env.cfmt, 8, 8 ) ) then
-        initFont% = 0
+        draw_load_font% = 0
         exit function
     end if        
 
     
     if ( uarOpen( file, flname, F4READ ) = false ) then
-        initFont% = 0
+        draw_load_font% = 0
         exit function
     end if
 
@@ -125,7 +125,7 @@ function initFont% ( flname as string, colb as long )
     '' Check id
     ''
     if ( uarReadEx( file, idstr, 4 ) <> 4 ) then
-        initFont% = 0
+        draw_load_font% = 0
         exit function
     end if    
     
@@ -139,7 +139,7 @@ function initFont% ( flname as string, colb as long )
     
     for  i = 0 to 255
         if ( uarReadEx( file, char(0), 4*2 ) <> 4*2 ) then
-            initFont% = 0
+            draw_load_font% = 0
             exit function
         end if
         
@@ -161,14 +161,14 @@ function initFont% ( flname as string, colb as long )
     next i
     
     uarClose file
-    initFont% = -1
+    draw_load_font% = -1
 end function
 
 
 
 '':::::::::
 defint a-z
-sub fontPrintText ( dc as long, x as integer, y as integer, _
+sub draw_string ( dc as long, x as integer, y as integer, _
                     text as string )
     dim posx as integer
     dim i as integer, char as integer
@@ -195,58 +195,58 @@ end sub
 '' desc: Sound VU bars, the statistics overlay and the watermark.
 ''::::::::::
 defint a-z
-sub drawHud ( hDstDC as long )
+sub scr_draw_hud ( hDstDC as long )
     dim l as integer, r as integer
 
     ''
     '' Draw VUs
     ''
     sndMasterGetVU l, r
-    drwLoadingBar hDstDC, env.xres-80, env.yres-29, 70, 3, l*100/255, 254
-    drwLoadingBar hDstDC, env.xres-80, env.yres-20, 70, 3, r*100/255, 254
+    draw_bar hDstDC, env.xres-80, env.yres-29, 70, 3, l*100/255, 254
+    draw_bar hDstDC, env.xres-80, env.yres-20, 70, 3, r*100/255, 254
     
 
     ''
     '' Print stuff
     ''
     if ( scr.stats ) then                    
-        fontPrintText hDstDC, 0, 8*0, "Fps: " + str$( scr.fps )
-        fontPrintText hDstDC, 0, 8*1, "Renderd polys: " + str$( rdr.polys )
-        fontPrintText hDstDC, 0, 8*2, "Renderd triangles: " + str$( rdr.tris )
+        draw_string hDstDC, 0, 8*0, "Fps: " + str$( scr.fps )
+        draw_string hDstDC, 0, 8*1, "Renderd polys: " + str$( rdr.polys )
+        draw_string hDstDC, 0, 8*2, "Renderd triangles: " + str$( rdr.tris )
         
         if ( rdr.usemips ) then 
-            fontPrintText hDstDC, 0, 8*3, "Mipmapping: enabled, press f1 to disable"
+            draw_string hDstDC, 0, 8*3, "Mipmapping: enabled, press f1 to disable"
         else
-            fontPrintText hDstDC, 0, 8*3, "Mipmapping: disabled, press f1 to enable"
+            draw_string hDstDC, 0, 8*3, "Mipmapping: disabled, press f1 to enable"
         end if
         
         if ( rdr.rendmode = 0 ) then 
-            fontPrintText hDstDC, 0, 8*4, "Render mode: perspective correct, press f2 to change"
+            draw_string hDstDC, 0, 8*4, "Render mode: perspective correct, press f2 to change"
         elseif ( rdr.rendmode = 1 ) then 
-            fontPrintText hDstDC, 0, 8*4, "Render mode: affine, press f2 to change"
+            draw_string hDstDC, 0, 8*4, "Render mode: affine, press f2 to change"
         else
-            fontPrintText hDstDC, 0, 8*4, "Render mode: wireframe, press f2 to change"
+            draw_string hDstDC, 0, 8*4, "Render mode: wireframe, press f2 to change"
         end if       
         
         if ( rdr.backface ) then 
-            fontPrintText hDstDC, 0, 8*5, "Backface culling: enabled, press 'b' to disable"
+            draw_string hDstDC, 0, 8*5, "Backface culling: enabled, press 'b' to disable"
         else
-            fontPrintText hDstDC, 0, 8*5, "Backface culling: disabled, press 'b' to enable"
+            draw_string hDstDC, 0, 8*5, "Backface culling: disabled, press 'b' to enable"
         end if
         
-        fontPrintText hDstDC, 0, env.yres-8*7-6, "Resolution: " + str$( env.xres ) + "x" + ltrim$(str$( env.yres ))
-        fontPrintText hDstDC, 0, env.yres-8*6-6, "Vertices:" + str$( wld.vtxCount )
-        fontPrintText hDstDC, 0, env.yres-8*5-6, "Edges:" + str$( wld.edgCount )
-        fontPrintText hDstDC, 0, env.yres-8*4-6, "Polygons:" + str$( wld.triCount )
-        fontPrintText hDstDC, 0, env.yres-8*3-6, "Nodes:" + str$( wld.ndsCount )
-        fontPrintText hDstDC, 0, env.yres-8*2-6, "Leaves:" + str$( wld.lefCount )
-        fontPrintText hDstDC, 0, env.yres-8*1-6, "PVS entries:" + str$( wld.lefCount^2 )
-        fontPrintText hDstDC, 0, env.yres-8*0-6, "Stats: enabled, press f12 to disable"             
+        draw_string hDstDC, 0, env.yres-8*7-6, "Resolution: " + str$( env.xres ) + "x" + ltrim$(str$( env.yres ))
+        draw_string hDstDC, 0, env.yres-8*6-6, "Vertices:" + str$( wld.vtxCount )
+        draw_string hDstDC, 0, env.yres-8*5-6, "Edges:" + str$( wld.edgCount )
+        draw_string hDstDC, 0, env.yres-8*4-6, "Polygons:" + str$( wld.triCount )
+        draw_string hDstDC, 0, env.yres-8*3-6, "Nodes:" + str$( wld.ndsCount )
+        draw_string hDstDC, 0, env.yres-8*2-6, "Leaves:" + str$( wld.lefCount )
+        draw_string hDstDC, 0, env.yres-8*1-6, "PVS entries:" + str$( wld.lefCount^2 )
+        draw_string hDstDC, 0, env.yres-8*0-6, "Stats: enabled, press f12 to disable"             
     else 
-        fontPrintText hDstDC, 0, env.yres-8*0-6, "Stats: disabled, press f12 to enable"
+        draw_string hDstDC, 0, env.yres-8*0-6, "Stats: disabled, press f12 to enable"
     end if
     
-    fontPrintText hDstDC, env.xres-56, env.yres-6, "Powered by UGL"
+    draw_string hDstDC, env.xres-56, env.yres-6, "Powered by UGL"
 end sub
 
 
@@ -266,7 +266,7 @@ end sub
 ''       built as strings and PUT whole rather than a byte at a time.
 ''::::::::::
 defint a-z
-sub ugluBMPSave ( flname as string, byval dc as long )
+sub scr_screenshot ( flname as string, byval dc as long )
     dim f as integer
     dim x as integer
     dim y as integer

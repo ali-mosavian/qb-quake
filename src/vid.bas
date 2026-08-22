@@ -35,9 +35,9 @@ dim shared screenie as integer
 '' name: initUgl
 ''::::::::::
 defint a-z
-sub initUgl
+sub vid_init_ugl
     if ( uglInit() = FALSE ) then 
-        ExitError "0x0000, Could not init UGL..."
+        sys_error "0x0000, Could not init UGL..."
     end if
 
 end sub
@@ -50,7 +50,7 @@ end sub
 '' desc: Final video mode, backbuffer and the Quake palette.
 ''::::::::::
 defint a-z
-sub videoOpen
+sub vid_init
     dim pages as integer
 
     if ( env.usepag = true ) then
@@ -61,7 +61,7 @@ sub videoOpen
             
     env.hVideoDC = uglSetVideoDC( env.cFmt, env.xRes, env.yRes, pages )
     if ( env.hVideoDC = FALSE ) then 
-        ExitError "0x0001, Could not set video mode..."
+        sys_error "0x0001, Could not set video mode..."
     end if
     
     
@@ -71,7 +71,7 @@ sub videoOpen
     if ( env.usepag = false ) then
         env.hBackBDC = uglNew( ugl.mem, env.cFmt, env.xRes, env.yRes )
         if ( env.hBackBDC = FALSE ) then 
-            ExitError "0x0002, Could not create a backbuffer..."
+            sys_error "0x0002, Could not create a backbuffer..."
         end if
     end if     
     
@@ -93,13 +93,13 @@ end sub
 '' Once per frame, at the end of it.
 ''::::::::::
 defint a-z
-sub presentFrame ( hDstDC as long, page as integer )
+sub vid_update ( hDstDC as long, page as integer )
 
     ''
     '' Take screenshoot ?
     '' 
     if ( env.keyboard.s ) then            
-        ugluBMPSave "scrn" + ltrim$(rtrim$(str$( screenie ))) + ".bmp", hDstDC
+        scr_screenshot "scrn" + ltrim$(rtrim$(str$( screenie ))) + ".bmp", hDstDC
         screenie = screenie + 1
     end if
     

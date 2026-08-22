@@ -212,59 +212,59 @@ const DEG2RAD# = 3.14159265359 / 180.0
 
 '' defined in main.bas, called from model.bas -- within one module
 '' BASIC auto-declares, across modules it needs this.
-declare sub drwLoadingBar ( hDC as long, x as integer, y as integer, wdt as integer, _
+declare sub draw_bar ( hDC as long, x as integer, y as integer, wdt as integer, _
                             hgt as integer, percent as single, col as long )
-declare sub drwLoadTick ( )
-declare sub bspClose ( )
-declare sub drwMipTick  ( percent as single )
-declare sub doInit    ( )
-declare sub doMain    ( )
-declare sub doEnd     ( )
-declare sub ExitError ( msg as string )
-declare sub pvsInit ( byval nodenr as integer )
-declare sub bspShowModel ( model as integer )
-declare sub camUpdate ( pa as integer, crrPnt as integer, cntPnts as integer, _
+declare sub scr_load_tick ( )
+declare sub mod_close ( )
+declare sub scr_mip_tick  ( percent as single )
+declare sub host_init    ( )
+declare sub host_main    ( )
+declare sub host_shutdown     ( )
+declare sub sys_error ( msg as string )
+declare sub r_mark_leaves ( byval nodenr as integer )
+declare sub r_draw_world ( model as integer )
+declare sub v_update_camera ( pa as integer, crrPnt as integer, cntPnts as integer, _
                         ppos() as PNT3D, plok() as PNT3D, _
                         cbzp() as PNT3D, cbzl() as PNT3D, last_point as integer )
-declare sub inputToggles ( )
-declare sub bspDrawFaces ( hDstDC as long, mtxFin as u3dMtrx, _
+declare sub in_handle_toggles ( )
+declare sub d_draw_faces ( hDstDC as long, mtxFin as u3dMtrx, _
                            xresh as single, yresh as single )
-declare sub drawHud ( hDstDC as long )
-declare sub presentFrame ( hDstDC as long, page as integer )
+declare sub scr_draw_hud ( hDstDC as long )
+declare sub vid_update ( hDstDC as long, page as integer )
 
 '' Startup steps, in the order doInit runs them. Each is entered once,
 '' which is the whole reason they are separate routines.
-declare sub checkCommandLine ( )
-declare sub initTables ( )
-declare sub initUgl ( )
-declare sub soundOpen ( )
-declare sub musicStart ( )
-declare sub fontOpen ( )
-declare sub bspOpen ( )
-declare sub loadScreenOpen ( )
-declare sub bspFindSpawn ( )
-declare sub bspAlloc ( )
-declare sub bspLoadVertices ( )
-declare sub bspLoadFaces ( )
-declare sub bspLoadEdges ( )
-declare sub bspLoadEdgeIndex ( )
-declare sub bspLoadLeaves ( )
-declare sub bspLoadFaceIndex ( )
-declare sub bspLoadNodes ( )
-declare sub bspLoadPlanes ( )
-declare sub bspLoadModels ( )
-declare sub bspLoadPvs ( )
-declare sub texLoadOffsets ( )
-declare sub texLoadAll ( )
-declare sub videoOpen ( )
-declare sub inputOpen ( )
-declare sub musicStopLoading ( )
-declare function BBoxInFrustum% ( bbox as bboundbox, frustum() as plane )
-declare sub ExtractFrustum ( frustum() as plane, mtx as u3dMtrx )
-declare sub parseIni ( filename as string )
-declare sub iniCheck ( strm() as string, strm_cnt as integer, _
+declare sub sys_parse_args ( )
+declare sub sys_init_tables ( )
+declare sub vid_init_ugl ( )
+declare sub s_init ( )
+declare sub s_start_music ( )
+declare sub draw_init_font ( )
+declare sub mod_open ( )
+declare sub scr_begin_loading ( )
+declare sub mod_find_spawn ( )
+declare sub mod_alloc ( )
+declare sub mod_load_vertexes ( )
+declare sub mod_load_faces ( )
+declare sub mod_load_edges ( )
+declare sub mod_load_surfedges ( )
+declare sub mod_load_leafs ( )
+declare sub mod_load_marksurfaces ( )
+declare sub mod_load_nodes ( )
+declare sub mod_load_planes ( )
+declare sub mod_load_submodels ( )
+declare sub mod_load_visibility ( )
+declare sub mod_load_texinfo ( )
+declare sub mod_load_textures ( )
+declare sub vid_init ( )
+declare sub in_init ( )
+declare sub s_stop_music ( )
+declare function r_cull_box% ( bbox as bboundbox, frustum() as plane )
+declare sub r_set_frustum ( frustum() as plane, mtx as u3dMtrx )
+declare sub com_parse_config ( filename as string )
+declare sub com_check_args ( strm() as string, strm_cnt as integer, _
                        byval want as integer, byval linenum as integer )
-declare sub strtok ( strm() as string, strm_cnt as integer, _
+declare sub com_tokenize ( strm() as string, strm_cnt as integer, _
                      tokenlist as string, stream as string )
 declare function bspCheckCollision% ( byval nodenr as integer, _
                               strPnt as u3dVector3f, _ 
@@ -277,16 +277,16 @@ type uv
 end type
 
 
-declare sub strtok ( strm() as string, strm_cnt as integer, _
+declare sub com_tokenize ( strm() as string, strm_cnt as integer, _
              tokenlist as string, stream as string )
-declare function initFont% ( flname as string, col as long )
-declare sub fontPrintText ( dc as long, x as integer, y as integer, _
+declare function draw_load_font% ( flname as string, col as long )
+declare sub draw_string ( dc as long, x as integer, y as integer, _
                             text as string ) 
                             
 declare function bspIsInside% ( byval nodenr as integer, strPnt as u3dVector3f )                                                      
-declare sub ugluBMPSave ( flname as string, byval dc as long )
+declare sub scr_screenshot ( flname as string, byval dc as long )
 
                          
-declare sub SHClipzNearFar ( otVtx() as u3dVector4f, otUV() as uv, otCnt as integer, _
+declare sub d_clip_z ( otVtx() as u3dVector4f, otUV() as uv, otCnt as integer, _
                          inVtx() as u3dVector4f, inUV() as uv, inCnt as integer )
                                                     

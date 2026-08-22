@@ -40,7 +40,7 @@ dim shared mdlCount as long
 '' desc: Opens the map, reads the header and derives every lump count.
 ''::::::::::
 defint a-z
-sub bspOpen
+sub mod_open
     wld.file = freefile
     open rtrim$( env.mapName ) for binary as #wld.file
     
@@ -69,7 +69,7 @@ end sub
 '' desc: Scans the entity lump for info_player_start.
 ''::::::::::
 defint a-z
-sub bspFindSpawn
+sub mod_find_spawn
     dim i as integer
     dim entity as string
 
@@ -95,7 +95,7 @@ sub bspFindSpawn
                 class$ = mid$( entity$, fchar, i-fchar+1 )
                 
                 if instr( class$, "info_player_start" ) then
-                    strtok strm(), strm_cnt, " {}"+chr$(34)+chr$(10)+chr$(13), class$
+                    com_tokenize strm(), strm_cnt, " {}"+chr$(34)+chr$(10)+chr$(13), class$
                     
                     for j = 0 to strm_cnt-1
                         if strm(j) = "origin" then
@@ -114,7 +114,7 @@ sub bspFindSpawn
     next i
     
     ldr.pct = ldr.pct + 100.0/LOAD_STEPS
-    drwLoadTick    
+    scr_load_tick    
 
 end sub
 
@@ -126,7 +126,7 @@ end sub
 '' desc: Sizes every level buffer from the counts bspOpen derived.
 ''::::::::::
 defint a-z
-sub bspAlloc
+sub mod_alloc
     redim triBuffer(wld.triCount-1) as face2
     redim edgBuffer(wld.edgCount-1) as edge    
     redim ledgBuffer(ledgCount-1) as integer
@@ -151,13 +151,13 @@ end sub
 '' name: bspLoadVertices
 ''::::::::::
 defint a-z
-sub bspLoadVertices
+sub mod_load_vertexes
     def seg = varseg( vtxBuffer(0) )
     bload "verts.bld", varptr( vtxBuffer(0) )
     def seg
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
-    drwLoadTick
+    scr_load_tick
 end sub
 
 
@@ -167,13 +167,13 @@ end sub
 '' name: bspLoadFaces
 ''::::::::::
 defint a-z
-sub bspLoadFaces
+sub mod_load_faces
     def seg = varseg( triBuffer(0) )
     bload "faces.bld", varptr( triBuffer(0) )
     def seg
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
-    drwLoadTick
+    scr_load_tick
 end sub
 
 
@@ -183,13 +183,13 @@ end sub
 '' name: bspLoadEdges
 ''::::::::::
 defint a-z
-sub bspLoadEdges
+sub mod_load_edges
     def seg = varseg( edgBuffer(0) )
     bload "edges.bld", varptr( edgBuffer(0) )
     def seg
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
-    drwLoadTick
+    scr_load_tick
 end sub
 
 
@@ -199,13 +199,13 @@ end sub
 '' name: bspLoadEdgeIndex
 ''::::::::::
 defint a-z
-sub bspLoadEdgeIndex
+sub mod_load_surfedges
     def seg = varseg( ledgBuffer(0) )
     bload "ledges.bld", varptr( ledgBuffer(0) )
     def seg
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
-    drwLoadTick
+    scr_load_tick
 end sub
 
 
@@ -215,13 +215,13 @@ end sub
 '' name: bspLoadLeaves
 ''::::::::::
 defint a-z
-sub bspLoadLeaves
+sub mod_load_leafs
     def seg = varseg( lefBuffer(0) )
     bload "leaves.bld", varptr( lefBuffer(0) )
     def seg
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
-    drwLoadTick
+    scr_load_tick
 end sub
 
 
@@ -231,13 +231,13 @@ end sub
 '' name: bspLoadFaceIndex
 ''::::::::::
 defint a-z
-sub bspLoadFaceIndex
+sub mod_load_marksurfaces
     def seg = varseg( lfcBuffer(0) )
     bload "lface.bld", varptr( lfcBuffer(0) )
     def seg
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
-    drwLoadTick
+    scr_load_tick
 end sub
 
 
@@ -247,13 +247,13 @@ end sub
 '' name: bspLoadNodes
 ''::::::::::
 defint a-z
-sub bspLoadNodes
+sub mod_load_nodes
     def seg = varseg( ndsBuffer(0) )
     bload "nodes.bld", varptr( ndsBuffer(0) )
     def seg
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
-    drwLoadTick
+    scr_load_tick
 end sub
 
 
@@ -263,13 +263,13 @@ end sub
 '' name: bspLoadPlanes
 ''::::::::::
 defint a-z
-sub bspLoadPlanes
+sub mod_load_planes
     def seg = varseg( plnBuffer(0) )
     bload "planes.bld", varptr( plnBuffer(0) )
     def seg
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
-    drwLoadTick
+    scr_load_tick
 end sub
 
 
@@ -279,13 +279,13 @@ end sub
 '' name: bspLoadModels
 ''::::::::::
 defint a-z
-sub bspLoadModels
+sub mod_load_submodels
     def seg = varseg( mdlBuffer(0) )
     bload "models.bld", varptr( mdlBuffer(0) )
     def seg
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
-    drwLoadTick
+    scr_load_tick
 end sub
 
 
@@ -295,13 +295,13 @@ end sub
 '' name: bspLoadPvs
 ''::::::::::
 defint a-z
-sub bspLoadPvs
+sub mod_load_visibility
     def seg = varseg( pvsBufferA(0) )
     bload "pvs.bld", varptr( pvsBufferA(0) )
     def seg
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
-    drwLoadTick
+    scr_load_tick
 end sub
 
 
@@ -313,7 +313,7 @@ end sub
 ''       with nothing naming the contract.
 ''::::::::::
 defint a-z
-sub bspClose
+sub mod_close
     close #wld.file
     wld.file = 0
 end sub
