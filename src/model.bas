@@ -27,10 +27,10 @@ dim shared fce as face                  '' fields the renderer keeps, discard
 dim shared nodetmp as node              '' the rest. Also the len() source for
 dim shared leaftmp as leaf              '' the lump counts in bspOpen.
 dim shared planetmp as plane
-dim shared ledgCount as long
-dim shared lfcCount as long
-dim shared plnCount as long
-dim shared mdlCount as long
+dim shared ledg_count as long
+dim shared lfc_count as long
+dim shared pln_count as long
+dim shared mdl_count as long
 
 
 
@@ -42,20 +42,20 @@ dim shared mdlCount as long
 defint a-z
 sub mod_open
     wld.file = freefile
-    open rtrim$( env.mapName ) for binary as #wld.file
+    open rtrim$( env.map_name ) for binary as #wld.file
     
     get #wld.file,, wld.head
     
-    wld.triCount = wld.head.faces.size \ len( fce )
-    wld.vtxCount = wld.head.vertices.size \ len( vtxBuffer(0) )
-    wld.edgCount = wld.head.edges.size \ len( edgBuffer(0) )
-    ledgCount = wld.head.ledges.size \ 4
-    wld.lefCount = wld.head.leaves.size \ len( leaftmp )
-    lfcCount = wld.head.lface.size \ len( lfcBuffer(0) )
-    plnCount = wld.head.planes.size \ len( planetmp )
-    wld.ndsCount = wld.head.nodes.size \ len( nodetmp )
-    mdlCount = wld.head.models.size \ len( mdlBuffer(0) )
-    wld.texiCount = wld.head.texinfo.size \ len( texInfBuff(0) )
+    wld.tri_count = wld.head.faces.size \ len( fce )
+    wld.vtx_count = wld.head.vertices.size \ len( vtx_buffer(0) )
+    wld.edg_count = wld.head.edges.size \ len( edg_buffer(0) )
+    ledg_count = wld.head.ledges.size \ 4
+    wld.lef_count = wld.head.leaves.size \ len( leaftmp )
+    lfc_count = wld.head.lface.size \ len( lfc_buffer(0) )
+    pln_count = wld.head.planes.size \ len( planetmp )
+    wld.nds_count = wld.head.nodes.size \ len( nodetmp )
+    mdl_count = wld.head.models.size \ len( mdl_buffer(0) )
+    wld.texi_count = wld.head.texinfo.size \ len( tex_inf_buff(0) )
     seek #wld.file, wld.head.miptex.offs+1
     get #wld.file,, wld.numtex    
 
@@ -105,7 +105,7 @@ sub mod_find_spawn
                         end if
                         
                         if strm(j) = "angle" then
-                            cam.startAngle = val(strm(j+1))                            
+                            cam.start_angle = val(strm(j+1))                            
                         end if                        
                     next j
                 end if
@@ -127,20 +127,20 @@ end sub
 ''::::::::::
 defint a-z
 sub mod_alloc
-    redim triBuffer(wld.triCount-1) as face2
-    redim edgBuffer(wld.edgCount-1) as edge    
-    redim ledgBuffer(ledgCount-1) as integer
-    redim vtxBuffer(wld.vtxCount-1) as vertex
-    redim lefBuffer(wld.lefCount-1) as leaf2
-    redim lfcBuffer(lfcCount-1) as integer
-    redim plnBuffer(plnCount-1) as plane2
-    redim ndsBuffer(wld.ndsCount-1) as nodeb
-    redim mdlBuffer(mdlCount-1) as model
-    redim orderList(wld.ndsCount-1) as integer
-    redim pvsBufferA( (wld.head.vislist.size+1)\2 ) as integer
-    redim pvsBufferB( 4096 ) as integer
-    redim polyFlag( 4096 ) as integer
-    redim texInfBuff(wld.texiCount-1) as texinfo
+    redim tri_buffer(wld.tri_count-1) as face2
+    redim edg_buffer(wld.edg_count-1) as edge    
+    redim ledg_buffer(ledg_count-1) as integer
+    redim vtx_buffer(wld.vtx_count-1) as vertex
+    redim lef_buffer(wld.lef_count-1) as leaf2
+    redim lfc_buffer(lfc_count-1) as integer
+    redim pln_buffer(pln_count-1) as plane2
+    redim nds_buffer(wld.nds_count-1) as nodeb
+    redim mdl_buffer(mdl_count-1) as model
+    redim order_list(wld.nds_count-1) as integer
+    redim pvs_buffer_a( (wld.head.vislist.size+1)\2 ) as integer
+    redim pvs_buffer_b( 4096 ) as integer
+    redim poly_flag( 4096 ) as integer
+    redim tex_inf_buff(wld.texi_count-1) as texinfo
 
 end sub
 
@@ -152,8 +152,8 @@ end sub
 ''::::::::::
 defint a-z
 sub mod_load_vertexes
-    def seg = varseg( vtxBuffer(0) )
-    bload "verts.bld", varptr( vtxBuffer(0) )
+    def seg = varseg( vtx_buffer(0) )
+    bload "verts.bld", varptr( vtx_buffer(0) )
     def seg
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
@@ -168,8 +168,8 @@ end sub
 ''::::::::::
 defint a-z
 sub mod_load_faces
-    def seg = varseg( triBuffer(0) )
-    bload "faces.bld", varptr( triBuffer(0) )
+    def seg = varseg( tri_buffer(0) )
+    bload "faces.bld", varptr( tri_buffer(0) )
     def seg
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
@@ -184,8 +184,8 @@ end sub
 ''::::::::::
 defint a-z
 sub mod_load_edges
-    def seg = varseg( edgBuffer(0) )
-    bload "edges.bld", varptr( edgBuffer(0) )
+    def seg = varseg( edg_buffer(0) )
+    bload "edges.bld", varptr( edg_buffer(0) )
     def seg
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
@@ -200,8 +200,8 @@ end sub
 ''::::::::::
 defint a-z
 sub mod_load_surfedges
-    def seg = varseg( ledgBuffer(0) )
-    bload "ledges.bld", varptr( ledgBuffer(0) )
+    def seg = varseg( ledg_buffer(0) )
+    bload "ledges.bld", varptr( ledg_buffer(0) )
     def seg
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
@@ -216,8 +216,8 @@ end sub
 ''::::::::::
 defint a-z
 sub mod_load_leafs
-    def seg = varseg( lefBuffer(0) )
-    bload "leaves.bld", varptr( lefBuffer(0) )
+    def seg = varseg( lef_buffer(0) )
+    bload "leaves.bld", varptr( lef_buffer(0) )
     def seg
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
@@ -232,8 +232,8 @@ end sub
 ''::::::::::
 defint a-z
 sub mod_load_marksurfaces
-    def seg = varseg( lfcBuffer(0) )
-    bload "lface.bld", varptr( lfcBuffer(0) )
+    def seg = varseg( lfc_buffer(0) )
+    bload "lface.bld", varptr( lfc_buffer(0) )
     def seg
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
@@ -248,8 +248,8 @@ end sub
 ''::::::::::
 defint a-z
 sub mod_load_nodes
-    def seg = varseg( ndsBuffer(0) )
-    bload "nodes.bld", varptr( ndsBuffer(0) )
+    def seg = varseg( nds_buffer(0) )
+    bload "nodes.bld", varptr( nds_buffer(0) )
     def seg
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
@@ -264,8 +264,8 @@ end sub
 ''::::::::::
 defint a-z
 sub mod_load_planes
-    def seg = varseg( plnBuffer(0) )
-    bload "planes.bld", varptr( plnBuffer(0) )
+    def seg = varseg( pln_buffer(0) )
+    bload "planes.bld", varptr( pln_buffer(0) )
     def seg
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
@@ -280,8 +280,8 @@ end sub
 ''::::::::::
 defint a-z
 sub mod_load_submodels
-    def seg = varseg( mdlBuffer(0) )
-    bload "models.bld", varptr( mdlBuffer(0) )
+    def seg = varseg( mdl_buffer(0) )
+    bload "models.bld", varptr( mdl_buffer(0) )
     def seg
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
@@ -296,8 +296,8 @@ end sub
 ''::::::::::
 defint a-z
 sub mod_load_visibility
-    def seg = varseg( pvsBufferA(0) )
-    bload "pvs.bld", varptr( pvsBufferA(0) )
+    def seg = varseg( pvs_buffer_a(0) )
+    bload "pvs.bld", varptr( pvs_buffer_a(0) )
     def seg
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)

@@ -34,12 +34,12 @@ type MapState
     head        as header       '' the on-disk lump directory
     file        as integer      '' open handle, owned by model.bas
     numtex      as long         '' counts, all derived from the header
-    triCount    as long
-    vtxCount    as long
-    edgCount    as long
-    lefCount    as long
-    ndsCount    as long
-    texiCount   as long
+    tri_count   as long
+    vtx_count   as long
+    edg_count   as long
+    lef_count   as long
+    nds_count   as long
+    texi_count  as long
 end type
 
 ''
@@ -53,19 +53,19 @@ end type
 
 common shared /qmapS/ wld as MapState
 common shared /qmapS/ ldr as LoadState
-common shared /qmapA/ triBuffer() as face2, edgBuffer() as edge, ledgBuffer() as integer
-common shared /qmapA/ vtxBuffer() as vertex, lefBuffer() as leaf2, lfcBuffer() as integer
-common shared /qmapA/ mdlBuffer() as model, plnBuffer() as plane2, ndsBuffer() as nodeb
-common shared /qmapA/ orderList() as integer, pvsBufferA() as integer, pvsBufferB() as integer
-common shared /qmapA/ texInfBuff() as texinfo, polyFlag() as integer
+common shared /qmapA/ tri_buffer() as face2, edg_buffer() as edge, ledg_buffer() as integer
+common shared /qmapA/ vtx_buffer() as vertex, lef_buffer() as leaf2, lfc_buffer() as integer
+common shared /qmapA/ mdl_buffer() as model, pln_buffer() as plane2, nds_buffer() as nodeb
+common shared /qmapA/ order_list() as integer, pvs_buffer_a() as integer, pvs_buffer_b() as integer
+common shared /qmapA/ tex_inf_buff() as texinfo, poly_flag() as integer
 
 ''
 '' Visibility and traversal: r_bsp.bas walks the tree and marks what is
 '' visible; the frame loop and the rasteriser read the result.
 ''
 type VisState
-    frameStamp  as integer      '' stamped into polyFlag for visible faces
-    ordCount    as long         '' entries written to orderList
+    frame_stamp as integer      '' stamped into polyFlag for visible faces
+    ord_count   as long         '' entries written to orderList
 end type
 
 common shared /qvisS/ vis as VisState
@@ -87,7 +87,7 @@ type RenderState
 end type
 
 common shared /qdrwS/ rdr as RenderState
-common shared /qdrwA/ hTextrDC() as long, mipBuffInf() as miptexb
+common shared /qdrwA/ h_textr_dc() as long, mip_buff_inf() as miptexb
 
 ''
 '' The overlay: what the HUD reports, written by the frame loop and read
@@ -96,7 +96,7 @@ common shared /qdrwA/ hTextrDC() as long, mipBuffInf() as miptexb
 type ScreenState
     fps         as integer      '' last completed second's frame count
     stats       as integer      '' overlay toggle
-    benchSecs   as integer      '' seconds elapsed, for -bench
+    bench_secs  as integer      '' seconds elapsed, for -bench
 end type
 
 common shared /qscrS/ scr as ScreenState
@@ -114,10 +114,10 @@ common shared /qpalS/ pal as long
 ''
 type CamState
     pos         as u3dVector3f  '' eye, from the map's spawn then mouse-driven
-    lookAt      as u3dVector3f
-    startAngle  as single       '' spawn yaw, seeds the mouse position
+    look_at     as u3dVector3f
+    start_angle as single       '' spawn yaw, seeds the mouse position
     fpsview     as integer      '' false = the fixed overhead view
-    scriptFile  as integer      '' open handle in cammode 1 and 2, else 0
+    script_file as integer      '' open handle in cammode 1 and 2, else 0
 end type
 
 common shared /qcamS/ cam as CamState

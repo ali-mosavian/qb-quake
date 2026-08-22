@@ -153,7 +153,7 @@ sub com_parse_config ( filename as string )
     
     open filename for input as #file
     
-    env.cFmt = UGL.8BIT    
+    env.c_fmt = UGL.8BIT    
             
     do 
         line input #file, rawline        
@@ -167,13 +167,13 @@ sub com_parse_config ( filename as string )
                 case "display.xres"                
                     com_check_args strm(), strm_cnt, 3, linenum
                     
-                    env.xRes = val( strm(2) )
+                    env.x_res = val( strm(2) )
                     flags = flags or xres_flag
                     
                 case "display.yres"
                     com_check_args strm(), strm_cnt, 3, linenum
                     
-                    env.yRes = val( strm(2) )
+                    env.y_res = val( strm(2) )
                     flags = flags or yres_flag
                     
                     
@@ -208,13 +208,13 @@ sub com_parse_config ( filename as string )
                 case "world.frustum.zn"                
                     com_check_args strm(), strm_cnt, 3, linenum
                     
-                    env.zNear = val( strm(2) )
+                    env.z_near = val( strm(2) )
                     flags = flags or zn_flag
                                     
                 case "world.frustum.zf"                
                     com_check_args strm(), strm_cnt, 3, linenum
                     
-                    env.zFar = val( strm(2) )
+                    env.z_far = val( strm(2) )
                     flags = flags or zf_flag
                                     
                 case "world.camera.script"

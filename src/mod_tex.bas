@@ -1,7 +1,8 @@
 option explicit
 ''
-'' r_tex.bas -- reading textures, building mips and matching them back into
-''              the Quake palette. One loop over numtex.
+'' mod_tex.bas -- reading texture headers and handing the preprocessed bitmaps to uGL,
+''              in the game palette. The resampling and colour matching this
+''              used to do at load now happen offline in tools/mkassets.py.
 ''
 '' The region split below is load-bearing, not style. A module-level DIM
 '' under '$DYNAMIC is an executable statement and module-level code only
@@ -47,12 +48,12 @@ sub mod_load_texinfo
     '' hTextrDC is COMMON now, and COMMON can only declare it as hTextrDC()
     '' with no elements. It carried a real bound, so size it here.
     ''
-    redim hTextrDC( 256*4 ) as long
+    redim h_textr_dc( 256*4 ) as long
 
     dim i as integer
 
-    def seg = varseg( texInfBuff(0) )
-    bload "texinf.bld", varptr( texInfBuff(0) )
+    def seg = varseg( tex_inf_buff(0) )
+    bload "texinf.bld", varptr( tex_inf_buff(0) )
     def seg
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
@@ -62,7 +63,7 @@ sub mod_load_texinfo
     get #wld.file,, wld.numtex
     
     redim tmipinf( wld.numtex-1 ) as miptex
-    redim mipBuffInf( wld.numtex-1 ) as miptexb
+    redim mip_buff_inf( wld.numtex-1 ) as miptexb
     
     for  i = 0 to wld.numtex-1
         get #wld.file,, texoffs(i)
@@ -107,8 +108,8 @@ sub mod_load_textures
         seek #wld.file, wld.head.miptex.offs+texoffs(i)+1
         get #wld.file,, tmipinf(i)
 
-        mipBuffInf(i).hght = 1.0 / tmipinf(i).hght
-        mipBuffInf(i).wdth = 1.0 / tmipinf(i).wdth
+        mip_buff_inf(i).hght = 1.0 / tmipinf(i).hght
+        mip_buff_inf(i).wdth = 1.0 / tmipinf(i).wdth
 
         ''
         '' One DC per texture per mip, built straight from a preprocessed bmp
@@ -133,7 +134,7 @@ sub mod_load_textures
                 sys_error "0x0004, missing " + bmpfile + " -- run tools/mkassets.py"
             end if
 
-            hTextrDC(i*4+j) = dc
+            h_textr_dc(i*4+j) = dc
 
             if ( (i and 15) = 0 ) then scr_mip_tick (j+1)*25
         next j

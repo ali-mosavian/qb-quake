@@ -117,17 +117,17 @@ sub sys_parse_args
     '' off is what lets anything else share the command line.
     ''
     com_tokenize argv(), argc, " ", cl
-    env.mapName = argv(0)
-    env.benchFrames = 0
+    env.map_name = argv(0)
+    env.bench_frames = 0
 
     for  i = 1 to argc-1
         if ( lcase$(argv(i)) = "-bench" and i+1 <= argc-1 ) then
-            env.benchFrames = val( argv(i+1) )
+            env.bench_frames = val( argv(i+1) )
         end if
     next i
 
-    if ( (dir$( rtrim$(env.mapName) ) = "") ) then
-        print "File " + lcase$(rtrim$(env.mapName)) + " could not be found"
+    if ( (dir$( rtrim$(env.map_name) ) = "") ) then
+        print "File " + lcase$(rtrim$(env.map_name)) + " could not be found"
         host_shutdown
     end if
     
@@ -289,7 +289,7 @@ end sub
 ''::::::::::
 defint a-z
 sub in_init
-    if ( mouseInit( env.hVideoDC, env.mouse ) = FALSE ) then
+    if ( mouseInit( env.h_video_dc, env.mouse ) = FALSE ) then
         sys_error "0x0006, Could not init mouse..."
     end if  
     

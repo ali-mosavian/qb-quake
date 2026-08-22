@@ -58,7 +58,7 @@ defint a-z
 '' texiCount was the one lump count never declared shared. Inside the old
 '' monolithic doInit that did not matter; once bspOpen and bspAlloc were
 '' separate routines, bspAlloc read 0 and did redim texInfBuff(-1).
-dim shared camUp as u3dVector3f    
+dim shared cam_up as u3dVector3f    
 
 '$dynamic
 dim shared lightmap as long
@@ -212,7 +212,7 @@ sub host_init
 
     tVid = timer
 
-    if ( env.benchFrames > 0 ) then
+    if ( env.bench_frames > 0 ) then
     pf = freefile
     open "load.txt" for output as #pf
     print #pf, "subsystems " + ltrim$(str$( tSub  - tStart ))
@@ -267,31 +267,31 @@ sub host_main
     dim camPosB as u3dVector3f
     
     
-    xresh = env.xRes/2.0
-    yresh = env.yRes/2.0
+    xresh = env.x_res/2.0
+    yresh = env.y_res/2.0
 
     mousePos 0, 0
 
 
-    camUp.x = 0.0
-    camUp.y = 1.0
-    camUp.z = 0.0   
+    cam_up.x = 0.0
+    cam_up.y = 1.0
+    cam_up.z = 0.0   
     
-    mousePos (env.xres-1) * cam.startAngle/360.0, 110
+    mousePos (env.x_res-1) * cam.start_angle/360.0, 110
     
     
 
     
     if ( env.cammode = 1 ) then
-        cam.scriptFile = freefile
-        open env.camscrpt for input as #cam.scriptFile    
+        cam.script_file = freefile
+        open env.camscrpt for input as #cam.script_file    
         do 
-            input #cam.scriptFile, cbzp(i).x, cbzp(i).y, cbzp(i).z
-            input #cam.scriptFile, cbzl(i).x, cbzl(i).y, cbzl(i).z
+            input #cam.script_file, cbzp(i).x, cbzp(i).y, cbzp(i).z
+            input #cam.script_file, cbzl(i).x, cbzl(i).y, cbzl(i).z
             i = i + 1
         loop until ( eof( 1 ) )    
-        close #cam.scriptFile
-        cam.scriptFile = 0
+        close #cam.script_file
+        cam.script_file = 0
         cntPnts = i-1
                 
         ugluCubicBez3D ppos(0), cbzp(crrPnt), env.caminterp
@@ -300,22 +300,22 @@ sub host_main
     end if        
     
     if ( env.cammode = 2 ) then
-        cam.scriptFile = freefile
-        open env.camscrpt for output as #cam.scriptFile
+        cam.script_file = freefile
+        open env.camscrpt for output as #cam.script_file
     end if
     
     
     
     hz& = tmrMs2Freq&( 1000 )
-    tmrNew env.secTimer, TMR.AUTOINIT, hz&    
+    tmrNew env.sec_timer, TMR.AUTOINIT, hz&    
     
     if ( env.usepag = false ) then
-        hDstDC = env.hBackBDC
+        hDstDC = env.h_back_bdc
     else        
-        hDstDC = env.hVideoDC
+        hDstDC = env.h_video_dc
     end if        
     
-    u3dMtrxPersp mtxPrj, env.camfov, 320.0/240.0, env.zNear, env.zFar
+    u3dMtrxPersp mtxPrj, env.camfov, 320.0/240.0, env.z_near, env.z_far
     
     rdr.usemips = -1
     rdr.rendmode = 0
@@ -345,7 +345,7 @@ sub host_main
         ''
         '' Combine all transforms 
         ''
-        u3dMtrxLookAt mtxMdl, cam.pos, cam.lookAt, camUp        
+        u3dMtrxLookAt mtxMdl, cam.pos, cam.look_at, cam_up        
         u3dMtrxConc mtxFin, mtxMdl, mtxPrj
         r_set_frustum frustum(), mtxFin
         
@@ -365,9 +365,9 @@ sub host_main
             camPosB.y = 2119.0
             camPosB.z = -552.0            
                         
-            cam.lookAt.x = camPosB.x + 1.991367e-8
-            cam.lookAt.y = camPosB.y + -1.0
-            cam.lookAt.z = camPosB.z + 1.570986e-2
+            cam.look_at.x = camPosB.x + 1.991367e-8
+            cam.look_at.y = camPosB.y + -1.0
+            cam.look_at.z = camPosB.z + 1.570986e-2
         else
             camPosB.x = cam.pos.x
             camPosB.y = cam.pos.y
@@ -375,7 +375,7 @@ sub host_main
         end if
         
         '        
-        u3dMtrxLookAt mtxMdl, camPosB, cam.lookAt, camUp        
+        u3dMtrxLookAt mtxMdl, camPosB, cam.look_at, cam_up        
         u3dMtrxConc mtxFin, mtxMdl, mtxPrj
         
         
@@ -400,12 +400,12 @@ sub host_main
         '' can.
         ''
         frameNo = frameNo + 1
-        if ( env.benchFrames > 0 and frameNo >= env.benchFrames ) then
+        if ( env.bench_frames > 0 and frameNo >= env.bench_frames ) then
             scr_screenshot "bench.bmp", hDstDC
             benchf = freefile
             open "bench.txt" for output as #benchf
             print #benchf, "frames " + ltrim$(str$( frameNo ))
-            print #benchf, "seconds " + ltrim$(str$( scr.benchSecs ))
+            print #benchf, "seconds " + ltrim$(str$( scr.bench_secs ))
             print #benchf, "lastfps " + ltrim$(str$( scr.fps ))
             print #benchf, "polys " + ltrim$(str$( rdr.polys ))
             print #benchf, "tris " + ltrim$(str$( rdr.tris ))
@@ -417,8 +417,8 @@ sub host_main
 
     loop while ( env.keyboard.esc = FALSE )
     
-    tmrDel env.secTimer
-    if ( cam.scriptFile <> 0 ) then close #cam.scriptFile
+    tmrDel env.sec_timer
+    if ( cam.script_file <> 0 ) then close #cam.script_file
 
 end sub
 
