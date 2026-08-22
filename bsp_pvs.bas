@@ -188,6 +188,11 @@ dim shared fpsview as integer
 dim shared polys as integer
 dim shared tris as integer
 dim shared fps as integer
+'' fps1 counts frames within the current second. It used to live in
+'' doMain's frame loop, where one invocation kept it across frames;
+'' presentFrame is entered per frame, so as a local it reset to 0 every
+'' time and the counter read 1 forever.
+dim shared fps1 as integer
 '' screenie was undeclared, so it was a fresh integer 0 on every entry to
 '' presentFrame and every screenshot overwrote scrn0.bmp.
 dim shared screenie as integer
@@ -2498,6 +2503,8 @@ sub texLoadAll
     dim byte as string * 1 
     
     dim tmpdc as long
+    dim ix as integer
+    dim iy as integer
     dim dx as single, dy as single
     dim cx as single, cy as single
     
@@ -2581,21 +2588,35 @@ sub texLoadAll
                 cx = 0.0            
                 
                 for  x = 0 to ((64\(2^j))-1)
+                    ''
+                    '' Take the sample indices with int(), not by letting MOD
+                    '' do the conversion. QB's MOD ROUNDS its operands to
+                    '' integers while int() TRUNCATES, so with a non-integer
+                    '' step the four samples came from one texel while s and t
+                    '' weighted them as if they came from another -- up to half
+                    '' a texel of skew. dx and dy are only non-integer when the
+                    '' texture is smaller than 64 on that axis, so this hit the
+                    '' 32x32 signs and the 64x16 trim and left them looking
+                    '' shifted, with the wrap column repeated.
+                    ''
+                    ix = int( cx )
+                    iy = int( cy )
+
                     col1 = uglPGet( tmpdc&, _
-                                    (cx+0) mod (tmipinf(i).wdth\mipl), _
-                                    (cy+0) mod (tmipinf(i).hght\mipl) )
+                                    (ix+0) mod (tmipinf(i).wdth\mipl), _
+                                    (iy+0) mod (tmipinf(i).hght\mipl) )
                     col2 = uglPGet( tmpdc&, _
-                                    (cx+0) mod (tmipinf(i).wdth\mipl), _
-                                    (cy+1) mod (tmipinf(i).hght\mipl) )
+                                    (ix+0) mod (tmipinf(i).wdth\mipl), _
+                                    (iy+1) mod (tmipinf(i).hght\mipl) )
                     col3 = uglPGet( tmpdc&, _
-                                    (cx+1) mod (tmipinf(i).wdth\mipl), _
-                                    (cy+0) mod (tmipinf(i).hght\mipl) )
+                                    (ix+1) mod (tmipinf(i).wdth\mipl), _
+                                    (iy+0) mod (tmipinf(i).hght\mipl) )
                     col4 = uglPGet( tmpdc&, _
-                                    (cx+1) mod (tmipinf(i).wdth\mipl), _
-                                    (cy+1) mod (tmipinf(i).hght\mipl) )
-                                    
-                    s = cx - int( cx )
-                    t = cy - int( cy )
+                                    (ix+1) mod (tmipinf(i).wdth\mipl), _
+                                    (iy+1) mod (tmipinf(i).hght\mipl) )
+
+                    s = cx - ix
+                    t = cy - iy
 
                     cofs1 = palofs+col1*3
                     cofs2 = palofs+col2*3
