@@ -217,11 +217,13 @@ Renders a fixed number of frames, writes `bench.bmp` and `bench.txt`
 
 Baseline, dm3ish, 320x200, stats on, mips on, perspective:
 
-| frames | seconds | fps | polys | tris |
-|--------|---------|-----|-------|------|
-| 500    | 15      | 33  | 174   | 402  |
+| build              | wall | load | render      | fps |
+|--------------------|------|------|-------------|-----|
+| runtime resample   | 33s  | ~18s | 500f in 15s | 33  |
+| preprocessed (now) | 21s  | ~6s  | 500f in 15s | 33  |
 
-Load is the other ~18s, nearly all of it `texLoadAll`.
+Render is untouched -- the win is all load. `tools/mkassets.py` moves the
+resample and colour match off the target; see `## Assets`.
 
 **CPU sampling proves a process is busy, not that it renders.** Several runs
 were reported as verified on the strength of "92% CPU sustained" when the
@@ -242,6 +244,40 @@ file now ships `false`.
 
 **`COMMAND$` uppercases the whole command line.** Flag comparisons must fold
 case; `-bench` arrives as `-BENCH`.
+
+## Assets
+
+    make assets          # or: python3 tools/mkassets.py <map.bsp> <base.dat> data/assets
+
+Emits one 8-bit BMP per texture per mip level, `t<idx>m<lvl>.bmp`, already
+resampled to the fixed size the renderer wants and already in the game
+palette. `texLoadAll` hands each straight to `uglNewBMPEx`; the Makefile
+regenerates them when the map, `base.dat`, or the tool changes.
+
+Three things this has to get right, all found the hard way:
+
+**Apply colormap row 0 on the way in.** The original read every miptex byte as
+`colmap[byte]`, not as a palette index. In this data set row 0 is nowhere near
+the identity -- 221 of 256 entries differ -- so skipping it shifts nearly every
+texel. Frame comparison against the old path caught it: 0% identical before,
+99.2% after.
+
+**`BMPOPT.NO332` on the load.** Without it uGL remaps the image into its own
+3-3-2 palette and destroys indices that are already correct.
+
+**`uglBlit` does not exist in the VBD library.** It is declared in `ugl.bi`,
+which is why an atlas-per-mip design compiled; LINK resolved the call to an
+`int 3` and the program died on the first blit. `uglNewBMPEx`, `uglPutBMP`,
+`uglPut` are all present. Check a symbol is really in `uglv.lib` before
+building on it -- `ugluBMPSave` was the same trap earlier in this project.
+
+**LINK emits an EXE even with an unresolved external**, so the harness's
+"did an exe appear" test reported PASS for a build that could not run.
+`tools/dosbox.sh` now greps `link.out` and reports LINKERR.
+
+**Names beginning with `FN` are reserved** for `DEF FN` user functions. `dim
+fname as string` fails with "Simple or array variable expected", and the use
+sites report "FUNCTION not defined".
 
 ## Method
 

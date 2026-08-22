@@ -17,17 +17,25 @@ TIMEOUT    ?= 600
 SRCS := $(wildcard src/*.bas)
 HDRS := $(wildcard src/*.bi)
 DATA := data/stuff.ini data/base.dat
+## Preprocessed textures. texLoadAll blits these instead of resampling and
+## colour-matching the miptex lump at every launch; one bmp stands in for the
+## whole set as far as make is concerned.
+ASSETS := data/assets/t000m0.bmp
 HARNESS := tools/dosbox.sh dosbox/template.conf
 EXE  := build/vbd/qrender.exe
 
 export MGL TOOLCHAINS DOSBOX_BIN TIMEOUT
 
-.PHONY: all build run viz qb45 pds evidence clean help
+.PHONY: all build run viz qb45 pds evidence assets clean help
 
 all: build                      ## build the renderer (default)
 build: $(EXE)
+assets: $(ASSETS)         ## regenerate the preprocessed textures
 
-$(EXE): $(SRCS) $(HDRS) $(DATA) $(HARNESS)
+$(ASSETS): data/$(MAP) data/base.dat tools/mkassets.py
+	@python3 tools/mkassets.py data/$(MAP) data/base.dat data/assets
+
+$(EXE): $(SRCS) $(HDRS) $(DATA) $(ASSETS) $(HARNESS)
 	@tools/dosbox.sh build
 	@# the exe's mtime comes from the DOS guest's clock, which need not agree
 	@# with the host's -- stamp it so make's bookkeeping is sound
