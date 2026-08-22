@@ -106,6 +106,93 @@ def write_bmp8(path, w, h, pixels, pal):
     info = struct.pack('<IiiHHIIiiII', 40, w, h, 1, 8, 0, len(px), 2835, 2835, 256, 256)
     open(path, 'wb').write(hdr + info + palb + px)
 
+def write_bload(path, payload):
+    """BSAVE-format file: 0xFD, segment, offset, length, then the bytes.
+
+    BLOAD ignores the stored segment and offset when the caller supplies one,
+    so those are zero here; only the length matters. The format caps at 65535
+    bytes, which every converted lump in this map is comfortably under."""
+    if len(payload) > 65535:
+        raise SystemExit(f"{path}: {len(payload)} bytes, over BLOAD's 64K limit")
+    hdr = struct.pack('<BHHH', 0xFD, 0, 0, len(payload))
+    open(path, 'wb').write(hdr + payload)
+    return len(payload)
+
+
+def convert_lumps(d, lumps, outdir):
+    """Convert each lump from its on-disk layout to the renderer's own.
+
+    model.bas did this per element, in BASIC, copying field by field -- and
+    for three lumps the two layouts genuinely differ, which is why the loop
+    existed rather than a bulk read. Doing it here means the target can BLOAD
+    each array in one go."""
+    out = {}
+
+    def lump(i):
+        o, n = lumps[i]
+        return d[o:o+n]
+
+    # vertices, edges, marksurfaces, texinfo, models: identical either side
+    out['verts.bld'] = lump(3)
+    out['edges.bld'] = lump(12)
+    out['lface.bld'] = lump(11)
+    out['texinf.bld'] = lump(6)
+    out['models.bld'] = lump(14)
+    out['pvs.bld'] = lump(4)
+
+    # ledges: long on disk, integer in memory. bspLoadEdgeIndex read a long
+    # into a temporary and assigned it down, so the truncation is deliberate.
+    raw = lump(13)
+    out['ledges.bld'] = b''.join(
+        struct.pack('<h', struct.unpack_from('<i', raw, k)[0])
+        for k in range(0, len(raw), 4))
+
+    # faces: face(20) -> face2(16), dropping the two flag words
+    raw = lump(7)
+    buf = bytearray()
+    for k in range(0, len(raw), 20):
+        planeid, side, ledgeid, ledgenum, texinfoid, _f1, _f2, lightmap = \
+            struct.unpack_from('<hhihhhhi', raw, k)
+        buf += struct.pack('<hhihhi', planeid, side, ledgeid,
+                           ledgenum, texinfoid, lightmap)
+    out['faces.bld'] = bytes(buf)
+
+    # leaves: leaf(28) -> leaf2(20), dropping cont and the trailing 4 bytes
+    raw = lump(10)
+    buf = bytearray()
+    for k in range(0, len(raw), 28):
+        _cont, vislist = struct.unpack_from('<ii', raw, k)
+        bound = raw[k+8:k+20]                       # 6 int16, copied whole
+        lfaceid, lfacenum = struct.unpack_from('<hh', raw, k+20)
+        buf += struct.pack('<i', vislist) + bound + struct.pack('<hh', lfaceid, lfacenum)
+    out['leaves.bld'] = bytes(buf)
+
+    # planes: plane(20) -> plane2(18), ptype narrows to an integer
+    raw = lump(1)
+    buf = bytearray()
+    for k in range(0, len(raw), 20):
+        nx, ny, nz, dist, ptype = struct.unpack_from('<ffffi', raw, k)
+        buf += struct.pack('<ffffh', nx, ny, nz, dist, ptype)
+    out['planes.bld'] = bytes(buf)
+
+    # nodes: node(24) -> nodeb(22). planeid narrows, and the bounding box
+    # moves to the end -- the two structures are not in the same order.
+    raw = lump(5)
+    buf = bytearray()
+    for k in range(0, len(raw), 24):
+        planeid, child0, child1 = struct.unpack_from('<ihh', raw, k)
+        bound = raw[k+8:k+20]
+        lfaceid, lfacenum = struct.unpack_from('<hh', raw, k+20)
+        buf += struct.pack('<hhhhh', planeid, child0, child1, lfaceid, lfacenum) + bound
+    out['nodes.bld'] = bytes(buf)
+
+    total = 0
+    for name, payload in out.items():
+        total += write_bload(os.path.join(outdir, name), payload)
+        print(f"  {name:12} {len(payload):7,} bytes")
+    print(f"  lumps total  {total:7,} bytes")
+
+
 def main():
     if len(sys.argv) < 4:
         raise SystemExit("usage: mkassets.py <map.bsp> <base.dat> <outdir>")
@@ -126,7 +213,11 @@ def main():
     print("building inverse palette cube ...", flush=True)
     cube, bits = inverse_palette(pal)
 
-    toff, _ = read_lumps(d)[2]
+    lumps   = read_lumps(d)
+    print("converting lumps ...", flush=True)
+    convert_lumps(d, lumps, outdir)
+
+    toff, _ = lumps[2]
     ntex    = struct.unpack_from('<i', d, toff)[0]
     offs    = [struct.unpack_from('<i', d, toff + 4 + 4*k)[0] for k in range(ntex)]
 

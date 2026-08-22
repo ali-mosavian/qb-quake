@@ -48,9 +48,12 @@ build)
     out="$ROOT/build/$tc"
     mkdir -p "$out"
     cp "$ROOT"/src/*.bas "$ROOT"/src/*.bi "$ROOT"/data/stuff.ini "$ROOT"/data/base.dat "$out/"
-    # preprocessed texture atlases (tools/mkassets.py); texLoadAll blits
-    # straight from these instead of resampling the miptex lump at runtime
-    cp "$ROOT"/data/assets/*.bmp "$out/" 2>/dev/null || true
+    # Preprocessed assets (tools/mkassets.py): the .bmp textures texLoadAll
+    # hands to uglNewBMPEx, and the .bld lumps model.bas BLOADs straight into
+    # its arrays. Copy the whole directory -- naming the extensions here is
+    # how the .bld files silently failed to stage the first time.
+    cp "$ROOT"/data/assets/. "$out/" -R 2>/dev/null || \
+        cp -R "$ROOT"/data/assets/* "$out/" 2>/dev/null || true
     # every .bas except the superseded rewrite is a module of the program
     # main must come first: it carries the module-level main code
     MODS="main $(cd "$ROOT/src" && ls *.bas | sed 's/\.bas$//' | grep -vx main | tr '\n' ' ')"
