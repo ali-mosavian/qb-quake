@@ -36,6 +36,7 @@ $(ASSETS): data/$(MAP) data/base.dat tools/mkassets.py
 	@python3 tools/mkassets.py data/$(MAP) data/base.dat data/assets
 
 $(EXE): $(SRCS) $(HDRS) $(DATA) $(ASSETS) $(HARNESS)
+	@python3 tools/qblint.py
 	@tools/dosbox.sh build
 	@# the exe's mtime comes from the DOS guest's clock, which need not agree
 	@# with the host's -- stamp it so make's bookkeeping is sound

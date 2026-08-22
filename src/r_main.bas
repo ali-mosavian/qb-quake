@@ -144,51 +144,40 @@ end sub
 ''       up so one press is one toggle.
 ''::::::::::
 defint a-z
+function in_keystroke% ( key_down as integer )
+    ''
+    '' True once per press, not once per frame. The key is passed by
+    '' reference, so the loop below re-reads the live flag the keyboard
+    '' handler writes -- which is what makes waiting for the release work.
+    ''
+    '' Five toggles each carried their own copy of this test-and-spin.
+    ''
+    if ( key_down = false ) then
+        in_keystroke% = false
+        exit function
+    end if
+
+    do
+    loop while ( key_down )
+
+    in_keystroke% = true
+
+end function
+
+
+
+
+''::::::::::
+'' name: in_handle_toggles
+'' desc: The render-mode keys. One line each now.
+''::::::::::
+defint a-z
 sub in_handle_toggles
 
-	''
-	'' Toggle mipmaps
-	''
-    if ( env.keyboard.f1 ) then
-        rdr.usemips = not rdr.usemips
-        do 
-        loop while ( env.keyboard.f1 )
-    end if            
+    if ( in_keystroke( env.keyboard.f1  ) ) then rdr.usemips  = not rdr.usemips
+    if ( in_keystroke( env.keyboard.f2  ) ) then rdr.rendmode = (rdr.rendmode + 1) mod 3
+    if ( in_keystroke( env.keyboard.f3  ) ) then cam.fpsview  = not cam.fpsview
+    if ( in_keystroke( env.keyboard.f12 ) ) then scr.stats    = not scr.stats
+    if ( in_keystroke( env.keyboard.b   ) ) then rdr.backface = not rdr.backface
 
-	''
-	'' Toggle perspective/affine/wireframe
-	''        
-    if ( env.keyboard.f2 ) then
-        rdr.rendmode = (rdr.rendmode + 1) mod 3
-        do 
-        loop while ( env.keyboard.f2 )
-    end if                    
-
-	''
-	'' Toggle cam/birdseye
-	''        
-    if ( env.keyboard.f3 ) then
-        cam.fpsview = not cam.fpsview
-        do 
-        loop while ( env.keyboard.f3 )
-    end if            
-    
-	''
-	'' Toggle stats
-	''        
-    if ( env.keyboard.f12 ) then
-        scr.stats = not scr.stats
-        do 
-        loop while ( env.keyboard.f12 )
-    end if                    
-    
-	''
-	'' Toggle backface culling
-	''        
-    if ( env.keyboard.b ) then
-        rdr.backface = not rdr.backface
-        do 
-        loop while ( env.keyboard.b )
-    end if
-    
 end sub

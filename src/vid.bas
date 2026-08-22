@@ -94,36 +94,61 @@ end sub
 ''::::::::::
 defint a-z
 sub vid_update ( h_dst_dc as long, page as integer )
-
     ''
-    '' Take screenshoot ?
-    '' 
-    if ( env.keyboard.s ) then            
-        scr_screenshot "scrn" + ltrim$(rtrim$(str$( screenie ))) + ".bmp", h_dst_dc
-        screenie = screenie + 1
-    end if
-    
-    ''
-    '' Paging/backbuffer
+    '' Present only. This used to also poll the screenshot key, tally frames
+    '' per second, and zero the per-frame counters -- four unrelated jobs, and
+    '' three of them nothing to do with video. Input polling in the present
+    '' path is the odd one: pressing a key had to wait for a blit.
     ''
     if ( env.usepag = false ) then
         uglPut env.h_video_dc, 0, 0, env.h_back_bdc
-    else        
+    else
         uglSetVisPage page
         uglSetWrkPage (page+1) mod env.pages
         page = (page+1) mod env.pages
     end if
-    
+
+end sub
+
+
+
+
+''::::::::::
+'' name: scr_count_frame
+'' desc: One frame has been drawn. Rolls fps once a second, and clears the
+''       counters the next frame will accumulate into.
+''::::::::::
+defint a-z
+sub scr_count_frame
+
     fps1 = fps1 + 1
-    
+
     if env.sec_timer.counter > 0 then
         scr.fps = fps1
         fps1 = 0
         env.sec_timer.counter = 0
         scr.bench_secs = scr.bench_secs + 1
-    end if        
-    
+    end if
+
     rdr.tris = 0
     rdr.polys = 0
+
+end sub
+
+
+
+
+''::::::::::
+'' name: in_screenshot_key
+'' desc: Writes scrnNN.bmp while the key is held. Lives with the other input
+''       handling rather than in the present path.
+''::::::::::
+defint a-z
+sub in_screenshot_key ( h_dst_dc as long )
+
+    if ( env.keyboard.s ) then
+        scr_screenshot "scrn" + ltrim$(rtrim$(str$( screenie ))) + ".bmp", h_dst_dc
+        screenie = screenie + 1
+    end if
 
 end sub

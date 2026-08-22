@@ -413,7 +413,9 @@ sub host_main
             exit do
         end if
 
+        in_screenshot_key h_dst_dc
         vid_update h_dst_dc, page
+        scr_count_frame
 
     loop while ( env.keyboard.esc = FALSE )
     

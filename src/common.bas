@@ -156,7 +156,8 @@ sub com_parse_config ( filename as string )
     env.c_fmt = UGL.8BIT    
             
     do 
-        line input #file, rawline        
+        line input #file, rawline
+        linenum = linenum + 1
         com_tokenize strm(), strm_cnt, "  ", rawline
         
         
@@ -165,98 +166,74 @@ sub com_parse_config ( filename as string )
                 case "//"
                 
                 case "display.xres"                
-                    com_check_args strm(), strm_cnt, 3, linenum
-                    
-                    env.x_res = val( strm(2) )
+                    env.x_res = val( com_arg$( strm(), strm_cnt, linenum ) )
                     flags = flags or xres_flag
                     
                 case "display.yres"
-                    com_check_args strm(), strm_cnt, 3, linenum
-                    
-                    env.y_res = val( strm(2) )
+                    env.y_res = val( com_arg$( strm(), strm_cnt, linenum ) )
                     flags = flags or yres_flag
                     
                     
                 case "display.clear"
-                    com_check_args strm(), strm_cnt, 3, linenum
-                    
-                    if ( strm(2) = "no" ) then
+                    if ( com_arg$( strm(), strm_cnt, linenum ) = "no" ) then
                         env.disclear = false
                         flags = flags or clear_flag
-                    elseif ( strm(2) = "yes" ) then
+                    elseif ( com_arg$( strm(), strm_cnt, linenum ) = "yes" ) then
                         env.disclear = true
                         flags = flags or clear_flag
                     end if
                                         
                 case "display.pages"
-                    com_check_args strm(), strm_cnt, 3, linenum
-                    
-                    env.pages = val( strm(2) )
+                    env.pages = val( com_arg$( strm(), strm_cnt, linenum ) )
                     flags = flags or page_flag
                     
                 case "display.usepaging"
-                    com_check_args strm(), strm_cnt, 3, linenum
-                    
-                    if ( strm(2) = "no" ) then
+                    if ( com_arg$( strm(), strm_cnt, linenum ) = "no" ) then
                         env.usepag = false
                         flags = flags or usepg_flag
-                    elseif ( strm(2) = "yes" ) then
+                    elseif ( com_arg$( strm(), strm_cnt, linenum ) = "yes" ) then
                         env.usepag = true
                         flags = flags or usepg_flag
                     end if
                                     
                 case "world.frustum.zn"                
-                    com_check_args strm(), strm_cnt, 3, linenum
-                    
-                    env.z_near = val( strm(2) )
+                    env.z_near = val( com_arg$( strm(), strm_cnt, linenum ) )
                     flags = flags or zn_flag
                                     
                 case "world.frustum.zf"                
-                    com_check_args strm(), strm_cnt, 3, linenum
-                    
-                    env.z_far = val( strm(2) )
+                    env.z_far = val( com_arg$( strm(), strm_cnt, linenum ) )
                     flags = flags or zf_flag
                                     
                 case "world.camera.script"
-                    com_check_args strm(), strm_cnt, 3, linenum
-                    
-                    env.camscrpt = strm(2)
+                    env.camscrpt = com_arg$( strm(), strm_cnt, linenum )
                     flags = flags or cmscr_flag
                     
                 case "world.camera.interp"
-                    com_check_args strm(), strm_cnt, 3, linenum
-                    
-                    env.caminterp = val( strm(2) )
+                    env.caminterp = val( com_arg$( strm(), strm_cnt, linenum ) )
                     flags = flags or cminp_flag
                     
                 case "world.camera.mode"
-                    com_check_args strm(), strm_cnt, 3, linenum
-                    
-                    if ( strm(2) = "freelook" ) then
+                    if ( com_arg$( strm(), strm_cnt, linenum ) = "freelook" ) then
                         env.cammode = 0
-                    elseif ( strm(2) = "script_play" ) then
+                    elseif ( com_arg$( strm(), strm_cnt, linenum ) = "script_play" ) then
                         env.cammode = 1
-                    elseif ( strm(2) = "script_edit" ) then
+                    elseif ( com_arg$( strm(), strm_cnt, linenum ) = "script_edit" ) then
                         env.cammode = 2
                     else
-                        sys_error "Uknown syntax at line # " + str$(linenum)                                                
+                        sys_error "Unknown syntax at line #" + str$(linenum)                                                
                     end if                    
                     
                     flags = flags or cmmde_flag
                     
                 case "world.camera.fov"
-                    com_check_args strm(), strm_cnt, 3, linenum
-                    
-                    env.camfov = val( strm(2) )
+                    env.camfov = val( com_arg$( strm(), strm_cnt, linenum ) )
                     flags = flags or fov_flag
                     
                 case "sound.enabled"
-                    com_check_args strm(), strm_cnt, 3, linenum
-                    
-                    if ( strm(2) = "false" ) then
+                    if ( com_arg$( strm(), strm_cnt, linenum ) = "false" ) then
                         env.sound = false
                         flags = flags or sound_flag
-                    elseif ( strm(2) = "true" ) then
+                    elseif ( com_arg$( strm(), strm_cnt, linenum ) = "true" ) then
                         env.sound = true
                         flags = flags or sound_flag
                     end if                    
@@ -267,11 +244,14 @@ sub com_parse_config ( filename as string )
             end select                                    
         end if
         
-        if ( flags = all_flag% ) then
-            exit do
-        end if
-    
-    loop until ( eof( 1 ) )
+    ''
+    '' Read the whole file. This used to stop the moment every required
+    '' key had been seen, so anything after the last one -- a typo, an
+    '' override, a malformed line -- was silently skipped rather than
+    '' reported. And the terminator tested eof(1), a hardcoded handle,
+    '' while the file was opened on one from freefile.
+    ''
+    loop until ( eof( file ) )
     close #file
     
     if ( flags <> all_flag% ) then
@@ -283,10 +263,28 @@ end sub
 
 
 ''::::::::::
-'' name: iniCheck
+'' name: com_arg$
+'' desc: The value of a key = value line, validated on the way out.
+''       Twelve cases each called com_check_args and then read strm(2)
+''       themselves; coupling the two means a case cannot read an
+''       argument without checking it. Hoisting the check above the
+''       SELECT instead would have applied it to comment lines and to
+''       unknown keys, which report a different error on purpose.
+''::::::::::
+defint a-z
+function com_arg$ ( strm() as string, strm_cnt as integer, linenum as integer )
+    com_check_args strm(), strm_cnt, 3, linenum
+    com_arg$ = strm(2)
+end function
+
+
+
+
+''::::::::::
+'' name: com_check_args
 '' desc: Every key in stuff.ini has the same shape: name = value, with an
 ''       optional // comment after it. This check was written out once per
-''       case in parseIni -- thirteen copies, and the bulk of the routine.
+''       case in com_parse_config -- thirteen copies, and the bulk of the routine.
 ''
 '' Cold: one call per line of a small text file at startup.
 ''::::::::::
@@ -294,12 +292,24 @@ defint a-z
 sub com_check_args ( strm() as string, strm_cnt as integer, _
                byval want as integer, byval linenum as integer )
 
-    if ( (strm_cnt <> want) and (strm(3) <> "//") ) then
-        sys_error "Uknown syntax at line # " + str$(linenum)
+    ''
+    '' A trailing // comment makes the count larger than want, with the
+    '' marker at index 3. Testing strm(3) without first checking that the
+    '' line HAS an index 3 read whatever the previous line left there --
+    '' com_tokenize only writes the tokens it finds and never clears the
+    '' rest of the array. A short malformed line following a commented one
+    '' therefore skipped this check entirely.
+    ''
+    if ( strm_cnt <> want ) then
+        if ( strm_cnt < 4 ) then
+            sys_error "Unknown syntax at line #" + str$(linenum)
+        elseif ( strm(3) <> "//" ) then
+            sys_error "Unknown syntax at line #" + str$(linenum)
+        end if
     end if
 
     if ( strm(1) <> "=" ) then
-        sys_error "Uknown syntax at line # " + str$(linenum)
+        sys_error "Unknown syntax at line #" + str$(linenum)
     end if
 
 end sub
