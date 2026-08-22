@@ -50,93 +50,93 @@ dim shared vx as single, vy as single, vz as single
 
 '':::::::
 defint a-z
-sub d_clip_z ( otVtx() as u3dVector4f, otUV() as uv, otCnt as integer, _
-                     inVtx() as u3dVector4f, inUV() as uv, inCnt as integer )
+sub d_clip_z ( ot_vtx() as u3dVector4f, ot_uv() as uv, ot_cnt as integer, _
+                     in_vtx() as u3dVector4f, in_uv() as uv, in_cnt as integer )
 
     dim n as integer
     dim scl as single
-    dim dsti as integer, tmCnt as integer
+    dim dsti as integer, tm_cnt as integer
     dim src1 as integer, src2 as integer
 
-    for  n = 0 to inCnt-1
+    for  n = 0 to in_cnt-1
         src1 = n
-        src2 = (n + 1) mod inCnt
+        src2 = (n + 1) mod in_cnt
         
-        if ( inVtx(src1).w >= env.z_near ) then
-            otVtx(dsti).x = inVtx(src1).x
-            otVtx(dsti).y = inVtx(src1).y
-            otVtx(dsti).z = inVtx(src1).z
-            otVtx(dsti).w = inVtx(src1).w
-            otUV(dsti).u = inUV(src1).u
-            otUV(dsti).v = inUV(src1).v
+        if ( in_vtx(src1).w >= env.z_near ) then
+            ot_vtx(dsti).x = in_vtx(src1).x
+            ot_vtx(dsti).y = in_vtx(src1).y
+            ot_vtx(dsti).z = in_vtx(src1).z
+            ot_vtx(dsti).w = in_vtx(src1).w
+            ot_uv(dsti).u = in_uv(src1).u
+            ot_uv(dsti).v = in_uv(src1).v
             
             dsti = dsti + 1 
             
-            if ( inVtx(src2).w >= env.z_near ) then
+            if ( in_vtx(src2).w >= env.z_near ) then
                 goto continuenfa
             end if
         else
-            if ( inVtx(src2).w < env.z_near ) then
+            if ( in_vtx(src2).w < env.z_near ) then
                 goto continuenfa
             end if
         end if
 
-        scl = ((env.z_near - inVtx(src1).w) / (inVtx(src2).w - inVtx(src1).w))
+        scl = ((env.z_near - in_vtx(src1).w) / (in_vtx(src2).w - in_vtx(src1).w))
      
-        otVtx(dsti).x = inVtx(src1).x + (inVtx(src2).x-inVtx(src1).x)*scl
-        otVtx(dsti).y = inVtx(src1).y + (inVtx(src2).y-inVtx(src1).y)*scl
-        otVtx(dsti).z = inVtx(src1).z
-        otVtx(dsti).w = env.z_near        
-        otUV(dsti).u = inUV(src1).u + (inUV(src2).u-inUV(src1).u)*scl
-        otUV(dsti).v = inUV(src1).v + (inUV(src2).v-inUV(src1).v)*scl
+        ot_vtx(dsti).x = in_vtx(src1).x + (in_vtx(src2).x-in_vtx(src1).x)*scl
+        ot_vtx(dsti).y = in_vtx(src1).y + (in_vtx(src2).y-in_vtx(src1).y)*scl
+        ot_vtx(dsti).z = in_vtx(src1).z
+        ot_vtx(dsti).w = env.z_near        
+        ot_uv(dsti).u = in_uv(src1).u + (in_uv(src2).u-in_uv(src1).u)*scl
+        ot_uv(dsti).v = in_uv(src1).v + (in_uv(src2).v-in_uv(src1).v)*scl
     
         dsti = dsti + 1
         
 continuenfa:        
     next n
     
-    otCnt = dsti
-    if ( otCnt < 3 ) then exit sub
+    ot_cnt = dsti
+    if ( ot_cnt < 3 ) then exit sub
     dsti = 0
     
-    for  n = 0 to otCnt-1
+    for  n = 0 to ot_cnt-1
         src1 = n
-        src2 = (n + 1) mod otCnt
+        src2 = (n + 1) mod ot_cnt
         
-        if ( otVtx(src1).w <= env.z_far ) then
-            inVtx(dsti).x = otVtx(src1).x
-            inVtx(dsti).y = otVtx(src1).y
-            inVtx(dsti).z = otVtx(src1).z
-            inVtx(dsti).w = otVtx(src1).w
-            inUV(dsti).u = otUV(src1).u
-            inUV(dsti).v = otUV(src1).v
+        if ( ot_vtx(src1).w <= env.z_far ) then
+            in_vtx(dsti).x = ot_vtx(src1).x
+            in_vtx(dsti).y = ot_vtx(src1).y
+            in_vtx(dsti).z = ot_vtx(src1).z
+            in_vtx(dsti).w = ot_vtx(src1).w
+            in_uv(dsti).u = ot_uv(src1).u
+            in_uv(dsti).v = ot_uv(src1).v
             
             dsti = dsti + 1 
             
-            if ( otVtx(src2).w <= env.z_far ) then
+            if ( ot_vtx(src2).w <= env.z_far ) then
                 goto continuenfb
             end if
         else
-            if ( otVtx(src2).w > env.z_far ) then
+            if ( ot_vtx(src2).w > env.z_far ) then
                 goto continuenfb
             end if
         end if
 
-        scl = ((env.z_far - otVtx(src1).w) / (otVtx(src2).w - otVtx(src1).w))
+        scl = ((env.z_far - ot_vtx(src1).w) / (ot_vtx(src2).w - ot_vtx(src1).w))
      
-        inVtx(dsti).x = otVtx(src1).x + (otVtx(src2).x-otVtx(src1).x)*scl
-        inVtx(dsti).y = otVtx(src1).y + (otVtx(src2).y-otVtx(src1).y)*scl
-        inVtx(dsti).z = otVtx(src1).z
-        inVtx(dsti).w = env.z_far        
-        inUV(dsti).u = otUV(src1).u + (otUV(src2).u-otUV(src1).u)*scl
-        inUV(dsti).v = otUV(src1).v + (otUV(src2).v-otUV(src1).v)*scl
+        in_vtx(dsti).x = ot_vtx(src1).x + (ot_vtx(src2).x-ot_vtx(src1).x)*scl
+        in_vtx(dsti).y = ot_vtx(src1).y + (ot_vtx(src2).y-ot_vtx(src1).y)*scl
+        in_vtx(dsti).z = ot_vtx(src1).z
+        in_vtx(dsti).w = env.z_far        
+        in_uv(dsti).u = ot_uv(src1).u + (ot_uv(src2).u-ot_uv(src1).u)*scl
+        in_uv(dsti).v = ot_uv(src1).v + (ot_uv(src2).v-ot_uv(src1).v)*scl
     
         dsti = dsti + 1
         
 continuenfb:
     next n
     
-    otCnt = dsti    
+    ot_cnt = dsti    
     
 end sub
 
@@ -154,16 +154,16 @@ end sub
 ''  RASTER
 '' ==========================================================================
 defint a-z
-sub d_draw_faces ( hDstDC as long, mtxFin as u3dMtrx, _
+sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
                    xresh as single, yresh as single )
     dim dp as single
     dim polycnt as integer
     dim mi as integer, m as integer
-    dim leafIndx as integer, leafEnd as integer, ti as integer, i as integer
+    dim leaf_indx as integer, leaf_end as integer, ti as integer, i as integer
     dim pid as integer, lid as integer, tex as integer, j as integer
-    dim EdgeIdx as integer, v0 as integer
+    dim edge_idx as integer, v0 as integer
     dim zl as single
-    dim miplevel as integer, texIndx as integer
+    dim miplevel as integer, tex_indx as integer
     dim p2 as integer, p3 as integer
 
    ''
@@ -172,10 +172,10 @@ sub d_draw_faces ( hDstDC as long, mtxFin as u3dMtrx, _
     for mi = 0 to vis.ord_count-1
         m = order_list(mi)
             
-        leafIndx = nds_buffer(m).lfaceid
-        leafEnd = leafIndx + nds_buffer(m).lfacenum-1
+        leaf_indx = nds_buffer(m).lfaceid
+        leaf_end = leaf_indx + nds_buffer(m).lfacenum-1
         
-        for  ti = leafIndx to leafEnd            
+        for  ti = leaf_indx to leaf_end            
             i = ti
                    
             if ( poly_flag(i) = vis.frame_stamp ) then
@@ -241,12 +241,12 @@ sub d_draw_faces ( hDstDC as long, mtxFin as u3dMtrx, _
                     sv3 = tex_inf_buff(tex).vect(3) * th
                     
                     for  j = 0 to vcnt-1
-                        EdgeIdx = ledg_buffer(lid+j)
+                        edge_idx = ledg_buffer(lid+j)
                         
-                        if ( EdgeIdx >= 0 ) then
-                            v0 = edg_buffer(EdgeIdx).v0
+                        if ( edge_idx >= 0 ) then
+                            v0 = edg_buffer(edge_idx).v0
                         else                        
-                            v0 = edg_buffer(-EdgeIdx).v1
+                            v0 = edg_buffer(-edge_idx).v1
                         end if
 
                         ''
@@ -282,7 +282,7 @@ sub d_draw_faces ( hDstDC as long, mtxFin as u3dMtrx, _
                     ''
                     '' Transform and clip to near and far
                     ''
-                    u3dMtrxByVec4 polyb(0), len( polyb(0) ), mtxFin, _
+                    u3dMtrxByVec4 polyb(0), len( polyb(0) ), mtx_fin, _
                                   polyb(0), len( polyb(0) ), vcnt
                     d_clip_z poly(), uvbuff(), polycnt, polyb(), uvbuffb(), vcnt
 
@@ -372,9 +372,9 @@ sub d_draw_faces ( hDstDC as long, mtxFin as u3dMtrx, _
                     end if
 
                     if ( rdr.usemips ) then
-                        texIndx = mipidx*4+miplevel
+                        tex_indx = mipidx*4+miplevel
                     else
-                        texIndx = mipidx*4
+                        tex_indx = mipidx*4
                     end if
                         for j = 0 to polycnt-3
                             p2 = j+1
@@ -395,10 +395,10 @@ sub d_draw_faces ( hDstDC as long, mtxFin as u3dMtrx, _
                             vtx(j).v3.y = prj_y(p3)
 
                             if ( rdr.rendmode = 2 ) then
-                                uglTriF hDstDC, vtx(j), 200
-                                uglLine hDstDC, vtx(j).v1.x, vtx(j).v1.y, vtx(j).v2.x, vtx(j).v2.y, 0
-                                uglLine hDstDC, vtx(j).v2.x, vtx(j).v2.y, vtx(j).v3.x, vtx(j).v3.y, 0
-                                uglLine hDstDC, vtx(j).v3.x, vtx(j).v3.y, vtx(j).v1.x, vtx(j).v1.y, 0
+                                uglTriF h_dst_dc, vtx(j), 200
+                                uglLine h_dst_dc, vtx(j).v1.x, vtx(j).v1.y, vtx(j).v2.x, vtx(j).v2.y, 0
+                                uglLine h_dst_dc, vtx(j).v2.x, vtx(j).v2.y, vtx(j).v3.x, vtx(j).v3.y, 0
+                                uglLine h_dst_dc, vtx(j).v3.x, vtx(j).v3.y, vtx(j).v1.x, vtx(j).v1.y, 0
                             else
                                 vtx(j).v1.u = prj_u(0)
                                 vtx(j).v1.v = prj_v(0)
@@ -408,9 +408,9 @@ sub d_draw_faces ( hDstDC as long, mtxFin as u3dMtrx, _
                                 vtx(j).v3.v = prj_v(p3)
 
                                 if ( rdr.rendmode = 0 ) then
-                                    uglTriTP hDstDC, vtx(j), 0, h_textr_dc(texIndx)
+                                    uglTriTP h_dst_dc, vtx(j), 0, h_textr_dc(tex_indx)
                                 else
-                                    uglTriT hDstDC, vtx(j), 0, h_textr_dc(texIndx)
+                                    uglTriT h_dst_dc, vtx(j), 0, h_textr_dc(tex_indx)
                                 end if
                             end if
 

@@ -36,10 +36,10 @@ defint a-z
 '' renderer state for why the draw loop is not carved up the same way.
 ''::::::::::
 defint a-z
-sub v_update_camera ( pa as integer, crrPnt as integer, cntPnts as integer, _
+sub v_update_camera ( pa as integer, crr_pnt as integer, cnt_pnts as integer, _
                 ppos() as PNT3D, plok() as PNT3D, _
                 cbzp() as PNT3D, cbzl() as PNT3D, last_point as integer )
-    dim camPosC as u3dVector3f
+    dim cam_pos_c as u3dVector3f
     dim tmx as integer, tmy as integer
     dim theta as single, phi as single
 
@@ -48,25 +48,25 @@ sub v_update_camera ( pa as integer, crrPnt as integer, cntPnts as integer, _
 	''                
     if ( env.cammode = 1 ) then
         pa = pa + 1
-        if ( crrPnt+3 <= cntPnts and last_point=false ) then
+        if ( crr_pnt+3 <= cnt_pnts and last_point=false ) then
             if ( pa > env.caminterp ) then
                 
                         
-                ugluCubicBez3D ppos(0), cbzp(crrPnt), env.caminterp
-                ugluCubicBez3D plok(0), cbzl(crrPnt), env.caminterp
+                ugluCubicBez3D ppos(0), cbzp(crr_pnt), env.caminterp
+                ugluCubicBez3D plok(0), cbzl(crr_pnt), env.caminterp
                 
                 pa = 0
-                crrPnt = crrPnt+3
+                crr_pnt = crr_pnt+3
             end if                
         else
-            if ( crrPnt <> cntPnts and (not last_point) ) then
+            if ( crr_pnt <> cnt_pnts and (not last_point) ) then
                 pa = 0
                 last_point = true
-                ugluCubicBez3D ppos(0), cbzp(cntPnts-4), env.caminterp
-                ugluCubicBez3D plok(0), cbzl(cntPnts-4), env.caminterp
+                ugluCubicBez3D ppos(0), cbzp(cnt_pnts-4), env.caminterp
+                ugluCubicBez3D plok(0), cbzl(cnt_pnts-4), env.caminterp
                 
             elseif ( pa > env.caminterp ) then
-                crrPnt = 0
+                crr_pnt = 0
                 last_point = false
                 env.keyboard.esc = true
             end if                    
@@ -103,23 +103,23 @@ sub v_update_camera ( pa as integer, crrPnt as integer, cntPnts as integer, _
         
 
         if ( env.mouse.left  ) then 
-            camPosC.x = cam.pos.x + cam.look_at.x*3
-            camPosC.y = cam.pos.y + cam.look_at.y*3
-            camPosC.z = cam.pos.z + cam.look_at.z*3
+            cam_pos_c.x = cam.pos.x + cam.look_at.x*3
+            cam_pos_c.y = cam.pos.y + cam.look_at.y*3
+            cam_pos_c.z = cam.pos.z + cam.look_at.z*3
 
-    		cam.pos.x = camPosC.x
-    		cam.pos.y = camPosC.y
-    		cam.pos.z = camPosC.z
+    		cam.pos.x = cam_pos_c.x
+    		cam.pos.y = cam_pos_c.y
+    		cam.pos.z = cam_pos_c.z
         end if
                     
         if ( env.mouse.right ) then
-            camPosC.x = cam.pos.x - cam.look_at.x*3
-            camPosC.y = cam.pos.y - cam.look_at.y*3
-            camPosC.z = cam.pos.z - cam.look_at.z*3                
+            cam_pos_c.x = cam.pos.x - cam.look_at.x*3
+            cam_pos_c.y = cam.pos.y - cam.look_at.y*3
+            cam_pos_c.z = cam.pos.z - cam.look_at.z*3                
             
-    		cam.pos.x = camPosC.x
-    		cam.pos.y = camPosC.y
-    		cam.pos.z = camPosC.z
+    		cam.pos.x = cam_pos_c.x
+    		cam.pos.y = cam_pos_c.y
+    		cam.pos.z = cam_pos_c.z
         end if            
         
         if ( env.keyboard.n and env.cammode = 2 ) then

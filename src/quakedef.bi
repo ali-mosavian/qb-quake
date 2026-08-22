@@ -8,7 +8,7 @@
 '' renderer scratch stays module-local under '$STATIC where it is addressed
 '' directly.
 ''
-common shared /qenv/ env as EnvType
+common shared /env/ env as EnvType
 
 ''
 '' The loading screen advances by one step per lump reader plus the two
@@ -51,13 +51,13 @@ type LoadState
     dc          as long         '' the temporary 320x200 loading DC
 end type
 
-common shared /qmapS/ wld as MapState
-common shared /qmapS/ ldr as LoadState
-common shared /qmapA/ tri_buffer() as face2, edg_buffer() as edge, ledg_buffer() as integer
-common shared /qmapA/ vtx_buffer() as vertex, lef_buffer() as leaf2, lfc_buffer() as integer
-common shared /qmapA/ mdl_buffer() as model, pln_buffer() as plane2, nds_buffer() as nodeb
-common shared /qmapA/ order_list() as integer, pvs_buffer_a() as integer, pvs_buffer_b() as integer
-common shared /qmapA/ tex_inf_buff() as texinfo, poly_flag() as integer
+common shared /map_s/ wld as MapState
+common shared /map_s/ ldr as LoadState
+common shared /map_a/ tri_buffer() as face2, edg_buffer() as edge, ledg_buffer() as integer
+common shared /map_a/ vtx_buffer() as vertex, lef_buffer() as leaf2, lfc_buffer() as integer
+common shared /map_a/ mdl_buffer() as model, pln_buffer() as plane2, nds_buffer() as nodeb
+common shared /map_a/ order_list() as integer, pvs_buffer_a() as integer, pvs_buffer_b() as integer
+common shared /map_a/ tex_inf_buff() as texinfo, poly_flag() as integer
 
 ''
 '' Visibility and traversal: r_bsp.bas walks the tree and marks what is
@@ -68,8 +68,8 @@ type VisState
     ord_count   as long         '' entries written to orderList
 end type
 
-common shared /qvisS/ vis as VisState
-common shared /qvisA/ bitarray() as integer, frustum() as plane
+common shared /vis_s/ vis as VisState
+common shared /vis_a/ bitarray() as integer, frustum() as plane
 
 ''
 '' Rasteriser state. These were five loose COMMON scalars; grouping them
@@ -86,8 +86,8 @@ type RenderState
     tris        as integer
 end type
 
-common shared /qdrwS/ rdr as RenderState
-common shared /qdrwA/ h_textr_dc() as long, mip_buff_inf() as miptexb
+common shared /drw_s/ rdr as RenderState
+common shared /drw_a/ h_textr_dc() as long, mip_buff_inf() as miptexb
 
 ''
 '' The overlay: what the HUD reports, written by the frame loop and read
@@ -99,17 +99,17 @@ type ScreenState
     bench_secs  as integer      '' seconds elapsed, for -bench
 end type
 
-common shared /qscrS/ scr as ScreenState
+common shared /scr_s/ scr as ScreenState
 
 ''
 '' pal is loaded by r_tex.bas, which needs its segment and offset to colour
 '' match, and consumed by videoOpen, which installs it and frees it.
 ''
-common shared /qpalS/ pal as long
+common shared /pal_s/ pal as long
 
 ''
 '' Camera and view: r_main.bas moves it, the frame loop and the rasteriser
-'' consume the result. pos was /qmapS/ because the map's spawn point sets it,
+'' consume the result. pos was /map_s/ because the map's spawn point sets it,
 '' but it belongs to the camera and is read every frame by the backface test.
 ''
 type CamState
@@ -120,10 +120,10 @@ type CamState
     script_file as integer      '' open handle in cammode 1 and 2, else 0
 end type
 
-common shared /qcamS/ cam as CamState
+common shared /cam_s/ cam as CamState
 
 ''
 '' The loading-screen MOD track: started by sys_init.bas, played once
 '' the map is up by doMain.
 ''
-common shared /qsndS/ mymod as UGMMOD
+common shared /snd_s/ mymod as UGMMOD

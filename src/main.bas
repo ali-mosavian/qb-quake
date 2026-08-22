@@ -156,15 +156,15 @@ sub host_init
     '' rather than guessed -- twice now a bottleneck has been asserted from
     '' the shape of the code and been wrong.
     ''
-    dim tStart as single, tSub as single, tMap as single
-    dim tLump as single, tTex as single, tVid as single
+    dim t_start as single, t_sub as single, t_map as single
+    dim t_lump as single, t_tex as single, t_vid as single
     dim pf as integer
 
     '' TIMER, not a TMR: tmrInit does not run until inputOpen, the
     '' second-to-last step below, so a TMR counter reads zero for almost
     '' the whole load. TIMER is ~55ms granular, which is fine for phases
     '' measured in seconds.
-    tStart = timer
+    t_start = timer
 
     '' arguments and subsystems
     sys_parse_args
@@ -175,14 +175,14 @@ sub host_init
     draw_init_font
 
     '' map file and the loading screen
-    tSub = timer
+    t_sub = timer
 
     mod_open
     scr_begin_loading
     mod_find_spawn
     mod_alloc
 
-    tMap = timer
+    t_map = timer
 
     '' level lumps
     mod_load_vertexes
@@ -196,31 +196,31 @@ sub host_init
     mod_load_submodels
     mod_load_visibility
 
-    tLump = timer
+    t_lump = timer
 
     '' textures and palette
     mod_load_texinfo
     mod_load_textures
     mod_close
 
-    tTex = timer
+    t_tex = timer
 
     '' hand over to the real video mode
     vid_init
     in_init
     s_stop_music
 
-    tVid = timer
+    t_vid = timer
 
     if ( env.bench_frames > 0 ) then
     pf = freefile
     open "load.txt" for output as #pf
-    print #pf, "subsystems " + ltrim$(str$( tSub  - tStart ))
-    print #pf, "mapopen    " + ltrim$(str$( tMap  - tSub   ))
-    print #pf, "lumps      " + ltrim$(str$( tLump - tMap   ))
-    print #pf, "textures   " + ltrim$(str$( tTex  - tLump  ))
-    print #pf, "video      " + ltrim$(str$( tVid  - tTex   ))
-    print #pf, "total      " + ltrim$(str$( tVid  - tStart ))
+    print #pf, "subsystems " + ltrim$(str$( t_sub  - t_start ))
+    print #pf, "mapopen    " + ltrim$(str$( t_map  - t_sub   ))
+    print #pf, "lumps      " + ltrim$(str$( t_lump - t_map   ))
+    print #pf, "textures   " + ltrim$(str$( t_tex  - t_lump  ))
+    print #pf, "video      " + ltrim$(str$( t_vid  - t_tex   ))
+    print #pf, "total      " + ltrim$(str$( t_vid  - t_start ))
     close #pf
     end if
 
@@ -233,26 +233,26 @@ end sub
 ''::::
 defint a-z
 sub host_main
-    dim mtxMdl as u3dMtrx
-    dim mtxPrj as u3dMtrx
-    dim mtxFin as u3dMtrx
+    dim mtx_mdl as u3dMtrx
+    dim mtx_prj as u3dMtrx
+    dim mtx_fin as u3dMtrx
     
     dim ppos(env.caminterp) as PNT3D
     dim plok(env.caminterp) as PNT3D
     dim cbzp(10) as PNT3D
     dim cbzl(10) as PNT3D
     
-    dim hDstDC as long
+    dim h_dst_dc as long
     dim pa as integer
-    dim crrPnt as integer
-    dim cntPnts as integer
+    dim crr_pnt as integer
+    dim cnt_pnts as integer
     dim xresh as single, yresh as single
     
     dim i as integer
     dim hz as long
     dim last_point as integer
     dim page as integer
-    dim frameNo as long
+    dim frame_no as long
     dim benchf as integer
     
     ''
@@ -264,7 +264,7 @@ sub host_main
     '' Per-face texture axes with the texture size folded in, and the
     '' per-vertex projection the triangle fan shares. See the draw loop.
     ''
-    dim camPosB as u3dVector3f
+    dim cam_pos_b as u3dVector3f
     
     
     xresh = env.x_res/2.0
@@ -292,11 +292,11 @@ sub host_main
         loop until ( eof( 1 ) )    
         close #cam.script_file
         cam.script_file = 0
-        cntPnts = i-1
+        cnt_pnts = i-1
                 
-        ugluCubicBez3D ppos(0), cbzp(crrPnt), env.caminterp
-        ugluCubicBez3D plok(0), cbzl(crrPnt), env.caminterp
-        crrPnt = crrPnt + 3
+        ugluCubicBez3D ppos(0), cbzp(crr_pnt), env.caminterp
+        ugluCubicBez3D plok(0), cbzl(crr_pnt), env.caminterp
+        crr_pnt = crr_pnt + 3
     end if        
     
     if ( env.cammode = 2 ) then
@@ -310,12 +310,12 @@ sub host_main
     tmrNew env.sec_timer, TMR.AUTOINIT, hz&    
     
     if ( env.usepag = false ) then
-        hDstDC = env.h_back_bdc
+        h_dst_dc = env.h_back_bdc
     else        
-        hDstDC = env.h_video_dc
+        h_dst_dc = env.h_video_dc
     end if        
     
-    u3dMtrxPersp mtxPrj, env.camfov, 320.0/240.0, env.z_near, env.z_far
+    u3dMtrxPersp mtx_prj, env.camfov, 320.0/240.0, env.z_near, env.z_far
     
     rdr.usemips = -1
     rdr.rendmode = 0
@@ -335,19 +335,19 @@ sub host_main
     	'' Clear DC
     	''      
         if ( env.disclear = true ) then
-            uglClear hDstDC, 0
+            uglClear h_dst_dc, 0
         end if 
         
-        v_update_camera pa, crrPnt, cntPnts, ppos(), plok(), cbzp(), cbzl(), last_point
+        v_update_camera pa, crr_pnt, cnt_pnts, ppos(), plok(), cbzp(), cbzl(), last_point
 
         in_handle_toggles
 
         ''
         '' Combine all transforms 
         ''
-        u3dMtrxLookAt mtxMdl, cam.pos, cam.look_at, cam_up        
-        u3dMtrxConc mtxFin, mtxMdl, mtxPrj
-        r_set_frustum frustum(), mtxFin
+        u3dMtrxLookAt mtx_mdl, cam.pos, cam.look_at, cam_up        
+        u3dMtrxConc mtx_fin, mtx_mdl, mtx_prj
+        r_set_frustum frustum(), mtx_fin
         
 
         ''
@@ -361,22 +361,22 @@ sub host_main
         '' "fix" it by moving ExtractFrustum below this block.
         ''
         if ( cam.fpsview = false ) then 
-            camPosB.x = 351.0
-            camPosB.y = 2119.0
-            camPosB.z = -552.0            
+            cam_pos_b.x = 351.0
+            cam_pos_b.y = 2119.0
+            cam_pos_b.z = -552.0            
                         
-            cam.look_at.x = camPosB.x + 1.991367e-8
-            cam.look_at.y = camPosB.y + -1.0
-            cam.look_at.z = camPosB.z + 1.570986e-2
+            cam.look_at.x = cam_pos_b.x + 1.991367e-8
+            cam.look_at.y = cam_pos_b.y + -1.0
+            cam.look_at.z = cam_pos_b.z + 1.570986e-2
         else
-            camPosB.x = cam.pos.x
-            camPosB.y = cam.pos.y
-            camPosB.z = cam.pos.z
+            cam_pos_b.x = cam.pos.x
+            cam_pos_b.y = cam.pos.y
+            cam_pos_b.z = cam.pos.z
         end if
         
         '        
-        u3dMtrxLookAt mtxMdl, camPosB, cam.look_at, cam_up        
-        u3dMtrxConc mtxFin, mtxMdl, mtxPrj
+        u3dMtrxLookAt mtx_mdl, cam_pos_b, cam.look_at, cam_up        
+        u3dMtrxConc mtx_fin, mtx_mdl, mtx_prj
         
         
         ''
@@ -385,11 +385,11 @@ sub host_main
         r_draw_world 0
         
         
-        d_draw_faces hDstDC, mtxFin, xresh, yresh
+        d_draw_faces h_dst_dc, mtx_fin, xresh, yresh
 
 
         
-        scr_draw_hud hDstDC
+        scr_draw_hud h_dst_dc
             
         
         ''
@@ -399,12 +399,12 @@ sub host_main
         '' build from one that never rebuilt -- the frame count and fps here
         '' can.
         ''
-        frameNo = frameNo + 1
-        if ( env.bench_frames > 0 and frameNo >= env.bench_frames ) then
-            scr_screenshot "bench.bmp", hDstDC
+        frame_no = frame_no + 1
+        if ( env.bench_frames > 0 and frame_no >= env.bench_frames ) then
+            scr_screenshot "bench.bmp", h_dst_dc
             benchf = freefile
             open "bench.txt" for output as #benchf
-            print #benchf, "frames " + ltrim$(str$( frameNo ))
+            print #benchf, "frames " + ltrim$(str$( frame_no ))
             print #benchf, "seconds " + ltrim$(str$( scr.bench_secs ))
             print #benchf, "lastfps " + ltrim$(str$( scr.fps ))
             print #benchf, "polys " + ltrim$(str$( rdr.polys ))
@@ -413,7 +413,7 @@ sub host_main
             exit do
         end if
 
-        vid_update hDstDC, page
+        vid_update h_dst_dc, page
 
     loop while ( env.keyboard.esc = FALSE )
     
