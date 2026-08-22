@@ -58,6 +58,7 @@ build)
     # u3d is a uGL addon and is not inside the uglX.lib -- link it explicitly.
     {
         printf '%s\r\n' '@echo off' 'if exist result.txt del result.txt' \
+                          'if exist bc.out del bc.out' \
                           'if exist *.obj del *.obj' 'if exist bsp_pvs.exe del bsp_pvs.exe'
         for m in $MODS; do printf '%s\r\n' "$bc $m.bas, $m.obj; >> bc.out"; done
     } > "$out/build.bat"
