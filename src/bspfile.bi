@@ -247,6 +247,7 @@ declare function sys_frame_time ( ) as single
 declare function sys_tick_hz ( ) as single
 declare sub r_mark_leaves ( byval nodenr as integer )
 declare sub r_draw_world ( model as integer )
+declare sub r_draw_brush_model ( byval m as integer )
 declare sub v_update_camera ( byval dt as single )
 declare sub in_handle_toggles ( )
 ''

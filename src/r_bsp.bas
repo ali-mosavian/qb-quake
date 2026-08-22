@@ -24,6 +24,14 @@ option explicit
 '$include: 'q_vis.bi'
 '$include: 'q_cam.bi'
 
+'$static
+''
+'' Set while a brush entity is being walked. Its leaves are not in the
+'' world's visibility set -- the PVS answers questions about where the
+'' camera can see from, and a door or a lift is not part of that -- so
+'' the test is skipped and the frustum decides alone.
+''
+dim shared r_ignore_pvs as integer
 '$dynamic
 dim shared pvs_leaf as integer
 
@@ -67,7 +75,7 @@ sub r_recursive_world_node ( byval nodenr as integer ) static
 	    ''
 	    '' Check pvs and bounding volume
 	    ''
-	    if ( pvs_buffer_b(not nodenr) and _
+	    if ( (r_ignore_pvs or pvs_buffer_b(not nodenr)) and _
 	         r_cull_box( lef_buffer(not nodenr).bound, frustum() ) ) then
 	    
 	        frst = lef_buffer(not nodenr).lfaceid
@@ -407,3 +415,19 @@ sub r_mark_leaves ( byval nodenr as integer )
 
 
 end sub 
+
+
+
+''::::::::::
+'' name: r_draw_brush_model
+'' desc: Adds a brush entity's faces to the frame, after r_draw_world has
+''       done the world. Deliberately does not reset ord_count or the frame
+''       stamp: it is adding to the draw order, not starting a new one.
+''::::::::::
+sub r_draw_brush_model ( byval m as integer )
+
+    r_ignore_pvs = true
+    r_recursive_world_node int( mdl_buffer(m).headnode0 )
+    r_ignore_pvs = false
+
+end sub

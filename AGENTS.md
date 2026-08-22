@@ -395,6 +395,22 @@ change.
 dm3ish has two liquids and no `+N` textures at all, so the frame chains are
 implemented and unexercised.
 
+**Brush entities are submodels 1 upward.** `r_draw_world 0` draws the world;
+`r_draw_brush_model` adds each other submodel to the same draw order without
+resetting it, so entities sort against the world back to front rather than
+being drawn over it.
+
+Their leaves are not in the world's PVS -- that answers where the camera can
+see from, and a lift is not part of it -- so `r_ignore_pvs` skips the
+visibility test for them and lets the frustum decide alone.
+
+A trigger volume is a submodel too, and must not be drawn: `mdl_draw` is false
+for any submodel some `trigger_*` entity claims, or dm3ish hangs two slabs of
+teleport texture in mid air.
+
+Verified by A/B rather than by eye: looking at the func_plat, 176 polys with
+brush entities against 170 without, and 10% of the frame's pixels different.
+
 **Teleporters are entities, not geometry.** A `trigger_teleport` has no
 origin: it carries `"model" "*1"`, meaning submodel 1, whose bounding box is
 already in `mdl_buffer`. Its `"target"` names an `info_teleport_destination`,

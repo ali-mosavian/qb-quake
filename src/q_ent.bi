@@ -27,3 +27,10 @@ end type
 ''
 common shared /ent_s/ tele() as Teleporter
 common shared /ent_s/ tele_count as integer
+
+''
+'' Whether each submodel is drawn. A func_plat is; a trigger volume is not --
+'' its brush exists to be walked into, not looked at, and drawing it would
+'' hang a slab of teleport texture in mid air.
+''
+common shared /ent_s/ mdl_draw() as integer
