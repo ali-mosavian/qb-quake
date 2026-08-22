@@ -248,6 +248,31 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
             sv1 = tex_inf_buff(tex).vect(1) * th
             sv2 = tex_inf_buff(tex).vect(2) * th
             sv3 = tex_inf_buff(tex).vect(3) * th
+
+            ''
+            '' Animation, once per face rather than per vertex.
+            ''
+            '' A liquid flows: su3 and sv3 are the constant terms of the
+            '' texture axes, so adding to them shifts every vertex of the
+            '' face by the same amount, which is a scroll. Two adds and a
+            '' test, against the alternative of warping each vertex with a
+            '' sine -- Quake's real warp, and far too expensive here.
+            ''
+            '' The rate is in texture widths per second, not texels: tw and
+            '' th are reciprocals of the texture size, so su3 and sv3 are
+            '' already normalised. A rate of 8 here scrolled eight whole
+            '' textures a second, which looked like static.
+            ''
+            '' An animated texture swaps which image is sampled, so it costs
+            '' nothing but the index arithmetic.
+            ''
+            if ( mip_buff_inf(mipidx).liquid ) then
+                su3 = su3 + rdr.anim_time * LIQ_FLOW_U#
+                sv3 = sv3 + rdr.anim_time * LIQ_FLOW_V#
+            elseif ( mip_buff_inf(mipidx).anim_count > 1 ) then
+                mipidx = mip_buff_inf(mipidx).anim_base + _
+                         (int( rdr.anim_time * 5.0 ) mod mip_buff_inf(mipidx).anim_count)
+            end if
                     
             for  j = 0 to vcnt-1
                 edge_idx = ledg_buffer(lid+j)

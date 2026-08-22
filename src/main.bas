@@ -450,6 +450,9 @@ sub host_tick ( byval dt as single )
     '' and anything the world does to the player as a result of moving
     ent_check_teleport
 
+    '' map time, which drives every texture animation
+    rdr.anim_time = rdr.anim_time + dt
+
 end sub
 
 
@@ -548,6 +551,7 @@ sub host_bench_report ( frame_no as long, h_dst_dc as long )
     print #benchf, "ticks " + ltrim$(str$( host_ticks ))
     print #benchf, "waterlevel " + ltrim$(str$( pl.water_level ))
     print #benchf, "watertype " + ltrim$(str$( pl.water_type ))
+    print #benchf, "animtime " + ltrim$(str$( rdr.anim_time ))
     close #benchf
 
 end sub

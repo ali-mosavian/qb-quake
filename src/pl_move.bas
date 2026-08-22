@@ -379,8 +379,14 @@ sub pl_step_move ( org as vec3, vel as vec3, byval dt as single )
     flat_vel = vel
     pl_slide_move flat_pos, flat_vel, dt
 
-    '' only walk up stairs while standing on something
-    if ( pl.on_ground = false ) then
+    ''
+    '' Ground, or water. Standing on something is the usual reason to be
+    '' able to climb a step, but swimming sets on_ground false, and refusing
+    '' to step then means every stair and ledge in a pool stops the player
+    '' dead -- they can neither walk up it nor swim over it, because the
+    '' slide has already been clipped flat against the riser.
+    ''
+    if ( pl.on_ground = false and pl.water_level < 2 ) then
         org = flat_pos
         vel = flat_vel
         exit sub
@@ -522,7 +528,9 @@ sub pl_move ( byval fwd as single, byval strafe as single, _
     pl.vel.y = pl.vel.y + (dir_y*fwd + dir_x*strafe) * PL_ACCEL# * dt
 
     '' water drags in all three axes, ground friction only horizontally
-    if ( pl.water_level >= 2 ) then
+    if ( pl.water_level >= 3 ) then
+        '' full drag only when fully under. At the surface the vertical
+        '' component is left alone so a jump out is not damped away.
         speed = sqr( pl.vel.x*pl.vel.x + pl.vel.y*pl.vel.y + pl.vel.z*pl.vel.z )
         if ( speed > 0.0 ) then
             newspeed = speed - speed*PL_WATERFRIC#*dt
@@ -569,10 +577,22 @@ sub pl_move ( byval fwd as single, byval strafe as single, _
     '' The velocity is set rather than added, so holding the key gives one
     '' jump of a fixed height instead of accumulating thrust.
     ''
-    if ( pl.water_level >= 2 ) then
-        '' underwater the jump key swims, and it works every tick rather
-        '' than only from a surface
+    if ( pl.water_level >= 3 ) then
+        ''
+        '' Fully under: the jump key swims, every tick rather than only
+        '' from a surface.
+        ''
         if ( jump ) then pl.vel.z = PL_SWIM#
+
+    elseif ( pl.water_level = 2 ) then
+        ''
+        '' Head out, body in -- at the surface. Swim speed is not enough to
+        '' leave the water here: the moment the waist clears it gravity
+        '' comes back, and 100 up against 800 down is a six unit hop, which
+        '' clears nothing. A jump from the surface is a real jump.
+        ''
+        if ( jump ) then pl.vel.z = PL_JUMP#
+
     elseif ( jump and pl.on_ground ) then
         pl.vel.z     = PL_JUMP#
         pl.on_ground = false

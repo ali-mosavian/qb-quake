@@ -111,6 +111,19 @@ sub mod_load_textures
         mip_buff_inf(i).wdth = 1.0 / tmipinf(i).wdth
 
         ''
+        '' Quake encodes what a texture does in its name. A leading * is a
+        '' liquid, which flows; a leading +N is one frame of an animation,
+        '' the rest of whose frames share the name after the digit.
+        ''
+        mip_buff_inf(i).liquid     = false
+        mip_buff_inf(i).anim_base  = i
+        mip_buff_inf(i).anim_count = 1
+
+        if ( left$( tmipinf(i).name, 1 ) = "*" ) then
+            mip_buff_inf(i).liquid = true
+        end if
+
+        ''
         '' One DC per texture per mip, built straight from a preprocessed bmp
         '' by uGL's own loader.
         ''
@@ -142,8 +155,61 @@ sub mod_load_textures
         if ( (i and 15) = 0 ) then scr_load_tick
     next i
 
+    mod_link_anims
+
+
     uglRestore
     screen 0
     width 80, 25
+
+end sub
+
+
+
+''::::::::::
+'' name: mod_link_anims
+'' desc: Groups +0name, +1name ... into chains.
+''
+''       A frame's name is + then a digit then the shared suffix, and the
+''       digits give the order. This records, for every frame, where its
+''       chain starts and how long it is -- which is all d_draw_faces needs
+''       to pick a frame, given the chain is stored contiguously.
+''
+''       Only correct when a map lists an animation's frames in order, which
+''       is how qbsp writes them. dm3ish has no animated textures at all, so
+''       this is exercised only by maps that do.
+''::::::::::
+sub mod_link_anims
+    dim i as integer, j as integer
+    dim chain0 as integer, n as integer
+    dim suffix as string
+
+    for  i = 0 to wld.numtex-1
+        if ( left$( tmipinf(i).name, 1 ) = "+" ) then
+
+            '' already claimed by an earlier frame's chain
+            if ( mip_buff_inf(i).anim_count > 1 ) then goto next_tex
+
+            suffix$ = mid$( rtrim$(tmipinf(i).name), 3 )
+            chain0 = i
+            n    = 0
+
+            for  j = i to wld.numtex-1
+                if ( left$( tmipinf(j).name, 1 ) = "+" ) then
+                    if ( mid$( rtrim$(tmipinf(j).name), 3 ) = suffix$ ) then
+                        n = n + 1
+                    end if
+                end if
+            next j
+
+            if ( n > 1 ) then
+                for  j = chain0 to chain0+n-1
+                    mip_buff_inf(j).anim_base  = chain0
+                    mip_buff_inf(j).anim_count = n
+                next j
+            end if
+        end if
+next_tex:
+    next i
 
 end sub
