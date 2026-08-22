@@ -30,3 +30,10 @@ common shared /qmapA/ texInfBuff() as texinfo, polyFlag() as integer
 ''
 common shared /qvisS/ frameStamp as integer, ordCount as long
 common shared /qvisA/ bitarray() as integer, frustum() as plane
+
+''
+'' Rasteriser state the frame loop also touches: the render-mode toggles,
+'' the per-frame counters, and the texture handles it samples.
+''
+common shared /qdrwS/ backface as integer, polys as integer, rendmode as integer, tris as integer, usemips as integer
+common shared /qdrwA/ hTextrDC() as long, mipBuffInf() as miptexb
