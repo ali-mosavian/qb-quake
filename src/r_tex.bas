@@ -51,13 +51,12 @@ sub texLoadOffsets
 
     dim i as integer
 
-    seek #bspFile, bsphead.texinfo.offs+1
-    for  i = 0 to texiCount-1
-        get #bspFile ,, texInfBuff(i)
-        
-        loading = loading + (100.0/LOAD_STEPS)/texiCount
-        if ( (i and 127) = 0 ) then drwLoadTick
-    next i
+    def seg = varseg( texInfBuff(0) )
+    bload "texinf.bld", varptr( texInfBuff(0) )
+    def seg
+
+    loading = loading + (100.0/LOAD_STEPS)
+    drwLoadTick
     
     seek #bspFile, bsphead.miptex.offs+1
     get #bspFile,, numtex

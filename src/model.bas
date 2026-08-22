@@ -152,15 +152,12 @@ end sub
 ''::::::::::
 defint a-z
 sub bspLoadVertices
-    dim i as integer
+    def seg = varseg( vtxBuffer(0) )
+    bload "verts.bld", varptr( vtxBuffer(0) )
+    def seg
 
-    seek #bspFile, bsphead.vertices.offs+1
-    for  i = 0 to vtxCount-1
-        get #bspFile,, vtxBuffer(i)
-        loading = loading + ((100.0/LOAD_STEPS)/vtxCount)
-        if ( (i and 127) = 0 ) then drwLoadTick
-    next i
-
+    loading = loading + (100.0/LOAD_STEPS)
+    drwLoadTick
 end sub
 
 
@@ -171,21 +168,12 @@ end sub
 ''::::::::::
 defint a-z
 sub bspLoadFaces
-    dim i as integer
+    def seg = varseg( triBuffer(0) )
+    bload "faces.bld", varptr( triBuffer(0) )
+    def seg
 
-    seek #bspFile, bsphead.faces.offs+1
-    for  i = 0 to triCount-1
-        get #bspFile,, fce
-        triBuffer(i).planeid = fce.planeid
-        triBuffer(i).side = fce.side
-        triBuffer(i).ledgeid = fce.ledgeid
-        triBuffer(i).ledgenum = fce.ledgenum
-        triBuffer(i).texinfoid = fce.texinfoid
-        triBuffer(i).lightmap = fce.lightmap
-        loading = loading + ((100.0/LOAD_STEPS)/triCount)
-        if ( (i and 127) = 0 ) then drwLoadTick
-    next i    
-
+    loading = loading + (100.0/LOAD_STEPS)
+    drwLoadTick
 end sub
 
 
@@ -196,15 +184,12 @@ end sub
 ''::::::::::
 defint a-z
 sub bspLoadEdges
-    dim i as integer
+    def seg = varseg( edgBuffer(0) )
+    bload "edges.bld", varptr( edgBuffer(0) )
+    def seg
 
-    seek #bspFile, bsphead.edges.offs+1
-    for  i = 0 to edgCount-1
-        get #bspFile,, edgBuffer(i)
-        loading = loading + ((100.0/LOAD_STEPS)/edgCount)
-        if ( (i and 127) = 0 ) then drwLoadTick
-    next i        
-
+    loading = loading + (100.0/LOAD_STEPS)
+    drwLoadTick
 end sub
 
 
@@ -215,17 +200,12 @@ end sub
 ''::::::::::
 defint a-z
 sub bspLoadEdgeIndex
-    dim i as integer
-    dim tmp as long
+    def seg = varseg( ledgBuffer(0) )
+    bload "ledges.bld", varptr( ledgBuffer(0) )
+    def seg
 
-    seek #bspFile, bsphead.ledges.offs+1
-    for  i = 0 to ledgCount-1
-        get #bspFile,, tmp&
-        ledgBuffer(i) = tmp&
-        loading = loading + ((100.0/LOAD_STEPS)/ledgCount)
-        if ( (i and 127) = 0 ) then drwLoadTick
-    next i    
-
+    loading = loading + (100.0/LOAD_STEPS)
+    drwLoadTick
 end sub
 
 
@@ -236,19 +216,12 @@ end sub
 ''::::::::::
 defint a-z
 sub bspLoadLeaves
-    dim i as integer
+    def seg = varseg( lefBuffer(0) )
+    bload "leaves.bld", varptr( lefBuffer(0) )
+    def seg
 
-    seek #bspFile, bsphead.leaves.offs+1
-    for  i = 0 to lefCount-1        
-        get #bspFile,, leaftmp
-        lefBuffer(i).vislist = leaftmp.vislist
-        swap lefBuffer(i).bound, leaftmp.bound
-        lefBuffer(i).lfaceid = leaftmp.lfaceid
-        lefBuffer(i).lfacenum = leaftmp.lfacenum
-        loading = loading + ((100.0/LOAD_STEPS)/lefCount)
-        if ( (i and 127) = 0 ) then drwLoadTick
-    next i        
-
+    loading = loading + (100.0/LOAD_STEPS)
+    drwLoadTick
 end sub
 
 
@@ -259,15 +232,12 @@ end sub
 ''::::::::::
 defint a-z
 sub bspLoadFaceIndex
-    dim i as integer
+    def seg = varseg( lfcBuffer(0) )
+    bload "lface.bld", varptr( lfcBuffer(0) )
+    def seg
 
-    seek #bspFile, bsphead.lface.offs+1
-    for  i = 0 to lfcCount-1
-        get #bspFile,, lfcBuffer(i)
-        loading = loading + ((100.0/LOAD_STEPS)/lfcCount)
-        if ( (i and 127) = 0 ) then drwLoadTick
-    next i                
-
+    loading = loading + (100.0/LOAD_STEPS)
+    drwLoadTick
 end sub
 
 
@@ -278,28 +248,12 @@ end sub
 ''::::::::::
 defint a-z
 sub bspLoadNodes
-    dim i as integer
+    def seg = varseg( ndsBuffer(0) )
+    bload "nodes.bld", varptr( ndsBuffer(0) )
+    def seg
 
-    seek #bspFile, bsphead.nodes.offs+1
-    for  i = 0 to ndsCount-1
-        get #bspFile,, nodetmp
-        ndsBuffer(i).planeid = nodetmp.planeid
-        ndsBuffer(i).child0  = nodetmp.child0
-        ndsBuffer(i).child1  = nodetmp.child1
-        ndsBuffer(i).lfaceid = nodetmp.lfaceid
-        ndsBuffer(i).lfacenum = nodetmp.lfacenum
-        
-        ndsBuffer(i).bound.min.x = nodetmp.bound.min.x
-        ndsBuffer(i).bound.min.y = nodetmp.bound.min.y
-        ndsBuffer(i).bound.min.z = nodetmp.bound.min.z
-        ndsBuffer(i).bound.max.x = nodetmp.bound.max.x
-        ndsBuffer(i).bound.max.y = nodetmp.bound.max.y
-        ndsBuffer(i).bound.max.z = nodetmp.bound.max.z
-        
-        loading = loading + ((100.0/LOAD_STEPS)/ndsCount)
-        if ( (i and 127) = 0 ) then drwLoadTick
-    next i
-
+    loading = loading + (100.0/LOAD_STEPS)
+    drwLoadTick
 end sub
 
 
@@ -310,20 +264,12 @@ end sub
 ''::::::::::
 defint a-z
 sub bspLoadPlanes
-    dim i as integer
+    def seg = varseg( plnBuffer(0) )
+    bload "planes.bld", varptr( plnBuffer(0) )
+    def seg
 
-    seek #bspFile, bsphead.planes.offs+1
-    for  i = 0 to plnCount-1
-        get #bspFile,, planetmp
-        plnBuffer(i).norm.x = planetmp.norm.x
-        plnBuffer(i).norm.y = planetmp.norm.y
-        plnBuffer(i).norm.z = planetmp.norm.z
-        plnBuffer(i).dist = planetmp.dist
-        
-        loading = loading + ((100.0/LOAD_STEPS)/plnCount)
-        if ( (i and 127) = 0 ) then drwLoadTick
-    next i    
-
+    loading = loading + (100.0/LOAD_STEPS)
+    drwLoadTick
 end sub
 
 
@@ -334,16 +280,12 @@ end sub
 ''::::::::::
 defint a-z
 sub bspLoadModels
-    dim i as integer
+    def seg = varseg( mdlBuffer(0) )
+    bload "models.bld", varptr( mdlBuffer(0) )
+    def seg
 
-    seek #bspFile, bsphead.models.offs+1
-    for  i = 0 to mdlCount-1
-        get #bspFile,, mdlBuffer(i)
-        
-        loading = loading + ((100.0/LOAD_STEPS)/mdlCount)
-        if ( (i and 127) = 0 ) then drwLoadTick
-    next i
-
+    loading = loading + (100.0/LOAD_STEPS)
+    drwLoadTick
 end sub
 
 
@@ -354,19 +296,12 @@ end sub
 ''::::::::::
 defint a-z
 sub bspLoadPvs
-    dim i as integer
+    def seg = varseg( pvsBufferA(0) )
+    bload "pvs.bld", varptr( pvsBufferA(0) )
+    def seg
 
-    seek #bspFile, bsphead.vislist.offs+1
-    for  i = 0 to (bsphead.vislist.size\2)-1
-        get #bspFile,, pvsBufferA(i)
-    next i
-    
-    if ( bsphead.vislist.size mod 2 ) then
-        get #bspFile,, pvsBufferA(i)
-    end if
     loading = loading + (100.0/LOAD_STEPS)
-    drwLoadTick 
-
+    drwLoadTick
 end sub
 
 
