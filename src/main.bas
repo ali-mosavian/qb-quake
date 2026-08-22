@@ -64,7 +64,6 @@ dim shared loadmod as UGMMOD
 '' monolithic doInit that did not matter; once bspOpen and bspAlloc were
 '' separate routines, bspAlloc read 0 and did redim texInfBuff(-1).
 dim shared camUp as u3dVector3f    
-dim shared camLookAt as u3dVector3f
 
 '$dynamic
 dim shared lightmap as long
@@ -108,15 +107,12 @@ dim shared lightmap as long
 
 
 '' Toggles and per-frame counters, formerly locals of doMain.
-dim shared fpsview as integer
 '' fps1 counts frames within the current second. It used to live in
 '' doMain's frame loop, where one invocation kept it across frames;
 '' presentFrame is entered per frame, so as a local it reset to 0 every
 '' time and the counter read 1 forever.
-dim shared fps1 as integer
 '' screenie was undeclared, so it was a fresh integer 0 on every entry to
 '' presentFrame and every screenshot overwrote scrn0.bmp.
-dim shared screenie as integer
 
 '' pal is loaded by texLoadAll (which needs its segment and offset to
 '' colour match) and consumed by videoOpen, which sets it as the hardware
@@ -423,34 +419,6 @@ sub ExitError ( msg as string )
 end sub
 
 
-'':::::::::
-defint a-z
-function NodesToLeaf% ( p as u3dVector3f, nodenr as integer )
-
-    count = 0
-
-    '' Find the node that the camera is in
-    ''
-    while not ( nodenr and &h8000 )
-        dp! = p.x*plnBuffer(ndsBuffer(nodenr).planeid).norm.x + _
-              p.y*plnBuffer(ndsBuffer(nodenr).planeid).norm.z + _
-              p.z*plnBuffer(ndsBuffer(nodenr).planeid).norm.y - _
-              plnBuffer(ndsBuffer(nodenr).planeid).dist             
-    
-        if ( dp! > 0.0 ) then
-            nodenr = ndsBuffer(nodenr).child0
-        else
-            nodenr = ndsBuffer(nodenr).child1
-        end if
-        
-        count = count + 1        
-    wend
-    
-    NodesToLeaf% = count
-    
-end function
-
-
 '' :::::::::::
 '' name: getSBSettings
 '' desc: Parse the BLASTER enviroment variable
@@ -514,173 +482,6 @@ sub getSBSettings  ( port as integer, irq as integer, ldma as integer, _
 end sub
 
 
-'' ==========================================================================
-''  FRAME
-'' ==========================================================================
-''::::::::::
-'' name: camUpdate
-'' desc: Advances the camera for one frame -- scripted bezier playback
-''       in mode 1, mouse freelook in modes 0 and 2.
-''
-'' Once per frame, so the call is free. See the note by the shared
-'' renderer state for why the draw loop is not carved up the same way.
-''::::::::::
-defint a-z
-sub camUpdate ( pa as integer, crrPnt as integer, cntPnts as integer, _
-                ppos() as PNT3D, plok() as PNT3D, _
-                cbzp() as PNT3D, cbzl() as PNT3D, last_point as integer )
-    dim camPosC as u3dVector3f
-
-	''
-	'' mode script_play run through the bezier curves
-	''                
-    if ( env.cammode = 1 ) then
-        pa = pa + 1
-        if ( crrPnt+3 <= cntPnts and last_point=false ) then
-            if ( pa > env.caminterp ) then
-                
-                        
-                ugluCubicBez3D ppos(0), cbzp(crrPnt), env.caminterp
-                ugluCubicBez3D plok(0), cbzl(crrPnt), env.caminterp
-                
-                pa = 0
-                crrPnt = crrPnt+3
-            end if                
-        else
-            if ( crrPnt <> cntPnts and (not last_point) ) then
-                pa = 0
-                last_point = true
-                ugluCubicBez3D ppos(0), cbzp(cntPnts-4), env.caminterp
-                ugluCubicBez3D plok(0), cbzl(cntPnts-4), env.caminterp
-                
-            elseif ( pa > env.caminterp ) then
-                crrPnt = 0
-                last_point = false
-                env.keyboard.esc = true
-            end if                    
-        end if                
-        
-        camPos.x = ppos(pa).x
-        camPos.y = ppos(pa).y
-        camPos.z = ppos(pa).z        
-        camLookAt.x = camPos.x+plok(pa).x
-        camLookAt.y = camPos.y+plok(pa).y
-        camLookAt.z = camPos.z+plok(pa).z
-    end if
-    
-    
-    ''
-    '' Mode: freelook or script_edit
-    ''
-    if ( env.cammode = 0 or env.cammode = 2 ) then            
-        if env.mouse.x < 1 then  mousepos env.xres-4, env.mouse.y
-        if env.mouse.x > env.xres-3 then  mousepos 1, env.mouse.y
-        
-        if env.mouse.y < 0        then  mousepos env.mouse.x, 0
-        if env.mouse.y > env.yres then  mousepos env.mouse.x, env.yres-1
-        
-        tmx = env.mouse.x + 1
-        tmy = env.mouse.y + 2
-
-        theta! = 2 * 3.14159 * ((env.xRes-1)-tmx) / env.xRes
-        phi! = 3.14159 * tmy / env.yRes
-        
-        camLookAt.x = cos( theta! ) * sin( phi! )
-        camLookAt.y = cos( phi! )
-        camLookAt.z = sin( theta! ) * sin( phi! )
-        
-
-        if ( env.mouse.left  ) then 
-            camPosC.x = camPos.x + CamLookAt.x*3
-            camPosC.y = camPos.y + CamLookAt.y*3
-            camPosC.z = camPos.z + CamLookAt.z*3
-
-    		camPos.x = camPosC.x
-    		camPos.y = camPosC.y
-    		camPos.z = camPosC.z
-        end if
-                    
-        if ( env.mouse.right ) then
-            camPosC.x = camPos.x - CamLookAt.x*3
-            camPosC.y = camPos.y - CamLookAt.y*3
-            camPosC.z = camPos.z - CamLookAt.z*3                
-            
-    		camPos.x = camPosC.x
-    		camPos.y = camPosC.y
-    		camPos.z = camPosC.z
-        end if            
-        
-        if ( env.keyboard.n and env.cammode = 2 ) then
-            print #1, camPos.x, camPos.y, camPos.z
-            print #1, camLookAt.x, camLookAt.y, camLookAt.z
-            
-            while ( env.keyboard.n )
-            wend
-        end if
-        
-        camLookAt.x = camLookAt.x + camPos.x 
-        camLookAt.y = camLookAt.y + camPos.y 
-        camLookAt.z = camLookAt.z + camPos.z
-    end if
-end sub
-
-
-''::::::::::
-'' name: inputToggles
-'' desc: The function-key toggles. Each waits for the key to come back
-''       up so one press is one toggle.
-''::::::::::
-defint a-z
-sub inputToggles
-
-	''
-	'' Toggle mipmaps
-	''
-    if ( env.keyboard.f1 ) then
-        usemips = not usemips
-        do 
-        loop while ( env.keyboard.f1 )
-    end if            
-
-	''
-	'' Toggle perspective/affine/wireframe
-	''        
-    if ( env.keyboard.f2 ) then
-        rendmode = (rendmode + 1) mod 3
-        do 
-        loop while ( env.keyboard.f2 )
-    end if                    
-
-	''
-	'' Toggle cam/birdseye
-	''        
-    if ( env.keyboard.f3 ) then
-        fpsview = not fpsview
-        do 
-        loop while ( env.keyboard.f3 )
-    end if            
-    
-	''
-	'' Toggle stats
-	''        
-    if ( env.keyboard.f12 ) then
-        stats = not stats
-        do 
-        loop while ( env.keyboard.f12 )
-    end if                    
-    
-	''
-	'' Toggle backface culling
-	''        
-    if ( env.keyboard.b ) then
-        backface = not backface
-        do 
-        loop while ( env.keyboard.b )
-    end if
-    
-end sub
-
-
 
 ''::::::::::
 '' name: checkCommandLine
@@ -729,19 +530,6 @@ sub initTables
     for  i = 0 to 15
         bitarray(i) = clng(2^i)
     next i    
-
-end sub
-
-
-
-''::::::::::
-'' name: initUgl
-''::::::::::
-defint a-z
-sub initUgl
-    if ( uglInit() = FALSE ) then 
-        ExitError "0x0000, Could not init UGL..."
-    end if
 
 end sub
 
@@ -859,47 +647,6 @@ end sub
 
 
 ''::::::::::
-'' name: videoOpen
-'' desc: Final video mode, backbuffer and the Quake palette.
-''::::::::::
-defint a-z
-sub videoOpen
-    dim pages as integer
-
-    if ( env.usepag = true ) then
-        pages = env.pages
-    else
-        pages = 1
-    end if
-            
-    env.hVideoDC = uglSetVideoDC( env.cFmt, env.xRes, env.yRes, pages )
-    if ( env.hVideoDC = FALSE ) then 
-        ExitError "0x0001, Could not set video mode..."
-    end if
-    
-    
-    ''
-    '' Create a backbuffer
-    '' 
-    if ( env.usepag = false ) then
-        env.hBackBDC = uglNew( ugl.mem, env.cFmt, env.xRes, env.yRes )
-        if ( env.hBackBDC = FALSE ) then 
-            ExitError "0x0002, Could not create a backbuffer..."
-        end if
-    end if     
-    
-
-    ''
-    '' Load quake palette
-    ''    
-    uglPalSet 0, 256, pal
-    memFree pal
-
-end sub
-
-
-
-''::::::::::
 '' name: inputOpen
 '' desc: Mouse, keyboard and the one second timer.
 ''::::::::::
@@ -932,48 +679,5 @@ sub musicStopLoading
         modStop
         modDel loadmod
     end if
-
-end sub
-
-
-''::::::::::
-'' name: presentFrame
-'' desc: Screenshot key, page flip or backbuffer blit, and the frame counter.
-''
-'' Once per frame, at the end of it.
-''::::::::::
-defint a-z
-sub presentFrame ( hDstDC as long, page as integer )
-
-    ''
-    '' Take screenshoot ?
-    '' 
-    if ( env.keyboard.s ) then            
-        ugluBMPSave "scrn" + ltrim$(rtrim$(str$( screenie ))) + ".bmp", hDstDC
-        screenie = screenie + 1
-    end if
-    
-    ''
-    '' Paging/backbuffer
-    ''
-    if ( env.usepag = false ) then
-        uglPut env.hVideoDC, 0, 0, env.hBackBDC
-    else        
-        uglSetVisPage page
-        uglSetWrkPage (page+1) mod env.pages
-        page = (page+1) mod env.pages
-    end if
-    
-    fps1 = fps1 + 1
-    env.frames = env.frames + 1.0
-    
-    if env.secTimer.counter > 0 then
-        fps = fps1
-        fps1 = 0
-        env.secTimer.counter = 0
-    end if        
-    
-    tris = 0
-    polys = 0
 
 end sub

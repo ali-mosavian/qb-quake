@@ -49,3 +49,9 @@ common shared /qscrS/ fps as integer, stats as integer
 '' match, and consumed by videoOpen, which installs it and frees it.
 ''
 common shared /qpalS/ pal as long
+
+''
+'' Camera and view state: r_main.bas moves the camera, the frame loop and
+'' the rasteriser consume the result.
+''
+common shared /qcamS/ camLookAt as u3dVector3f, fpsview as integer
