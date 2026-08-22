@@ -4,15 +4,18 @@ Hard-won things, mostly the kind that cost an hour before they cost a minute.
 
 ## Layout
 
-    src/main.bas      entry, frame loop, init
-    src/d_poly.bas    the rasteriser            (Quake d_*.c)
-    src/r_bsp.bas     traversal + visibility    (Quake r_bsp.c)
-    src/model.bas     Mod_Load* lump readers    (Quake model.c)
+    src/main.bas      doInit/doMain/doEnd/ExitError  (Quake host.c, Host_Init)
+    src/sys_init.bas  one-shot startup steps         (called once from doInit)
+    src/d_poly.bas    the rasteriser                 (Quake d_*.c)
+    src/r_bsp.bas     traversal + visibility         (Quake r_bsp.c)
+    src/r_main.bas    the camera                      (Quake r_main.c)
+    src/model.bas     Mod_Load* lump readers          (Quake model.c)
     src/r_tex.bas     textures, mips, palette
-    src/common.bas    COM_Parse + config        (Quake common.c)
-    src/screen.bas    overlay, font, screenshot (Quake screen.c/sbar.c)
-    src/bspfile.bi    on-disk structures        (Quake bspfile.h)
-    src/quakedef.bi   the COMMON SHARED block   (Quake quakedef.h)
+    src/common.bas    COM_Parse + config               (Quake common.c)
+    src/screen.bas    overlay, font, screenshot         (Quake screen.c/sbar.c)
+    src/vid.bas       video mode, back buffer, present  (Quake vid_*.c)
+    src/bspfile.bi    on-disk structures + cross-module DECLAREs (Quake bspfile.h)
+    src/quakedef.bi   the COMMON SHARED block           (Quake quakedef.h)
     attic/            superseded rewrite, out of the build
 
 Quake uses both conventions and so does this: prefixed families for subsystems
@@ -82,6 +85,16 @@ a real bug:
 4. **Each module includes `quakedef.bi` and `bspfile.bi` exactly once.** Two
    identical `COMMON` blocks is "Duplicate definition" on every line. Caught a
    copied include list.
+5. **Every `COMMON` variable's type is defined by an include that precedes
+   `quakedef.bi`, not one that follows it.** BC reads includes in file order,
+   so a type declared in a `.bi` included *after* `quakedef.bi` does not exist
+   yet when the `COMMON` line naming it is parsed — "TYPE not defined". Because
+   the include order is identical in every module, this fails the same way in
+   all of them at once, which is a useful tell that it's this and not a
+   per-module mistake. Caught `mymod as UGMMOD`, where `quakedef.bi` came
+   before `mod.bi` (which defines `UGMMOD`) in the include list of all ten
+   modules. Fixed by moving `mod.bi` earlier everywhere, not by moving the
+   `COMMON` line — `quakedef.bi` has to stay includable from anywhere.
 
 Then split on **data ownership**, not on which routines feel related. Measure
 which variables each candidate group uses exclusively — the rasteriser touches
@@ -233,9 +246,6 @@ Two techniques that paid for themselves:
 - **`sound.enabled = true` hangs at init** — spins with interrupts off before
   any video mode change, so the screen sits at `C:\>` while the title bar says
   the program is running. Not root-caused. `data/stuff.ini` still ships `true`.
-- **`clpBuffer` in `model.bas` is a latent instance of the `'$DYNAMIC` rule.**
-  Module-level, no `REDIM`, so it is unallocated — safe today only because it
-  is read solely through `len( clpBuffer(0) )`, which the compiler folds. The
-  first write to it will fail silently. Move it to `'$STATIC`.
-- **`r_main.bas` and `vid.bas` are the obvious remaining cuts** — `camUpdate`
-  and `inputToggles`, then `videoOpen` and `presentFrame`.
+- ~~`clpBuffer` in `model.bas`~~ hardened to `'$STATIC`.
+- ~~Remaining cuts~~ done — `main.bas` is 427 lines: `doInit`, `doMain`,
+  `doEnd`, `ExitError`. All ten modules carry `OPTION EXPLICIT`.
