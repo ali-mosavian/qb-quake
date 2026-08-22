@@ -246,9 +246,7 @@ declare sub bspLoadModels ( )
 declare sub bspLoadPvs ( )
 declare sub texLoadOffsets ( )
 declare sub palLoadColormap ( )
-declare sub texUploadBase ( )
-declare sub texBuildMips ( )
-declare sub texAverageMips ( )
+declare sub texLoadAll ( )
 declare sub videoOpen ( )
 declare sub inputOpen ( )
 declare sub musicStopLoading ( )
@@ -283,7 +281,7 @@ declare sub fontPrintText ( dc as long, x as integer, y as integer, _
                             text as string ) 
                             
 declare function bspIsInside% ( byval nodenr as integer, strPnt as u3dVector3f )                                                      
-declare sub ugluBMPSave ( file as string, byval dc as long )
+declare sub ugluBMPSave ( flname as string, byval dc as long )
 
                          
 declare sub SHClipzNearFar ( otVtx() as u3dVector4f, otUV() as uv, otCnt as integer, _

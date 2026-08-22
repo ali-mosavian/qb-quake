@@ -36,6 +36,7 @@
 defint a-z
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
+'$include: 'pal.bi'
 '$include: 'kbd.bi'
 '$include: 'tmr.bi'
 '$include: 'dos.bi'
@@ -269,9 +270,7 @@ sub doInit
     '' textures and palette
     texLoadOffsets
     palLoadColormap
-    texUploadBase
-    texBuildMips
-    texAverageMips
+    texLoadAll
 
     '' hand over to the real video mode
     videoOpen
@@ -1622,8 +1621,6 @@ sub bspDrawFaces ( hDstDC as long, mtxFin as u3dMtrx, _
                 '' "backface culling: enabled" was reporting a switch that
                 '' did nothing.
                 ''
-                dim dp as single
-                
                 pid = triBuffer(i).planeid
                 dp  = camPos.x*plnBuffer(pid).norm.x + _
                       camPos.y*plnBuffer(pid).norm.z + _
@@ -2004,6 +2001,7 @@ sub soundOpen
             end if        
         end if
 
+    end if
 end sub
 
 
@@ -2014,6 +2012,7 @@ end sub
 ''::::::::::
 defint a-z
 sub musicStart
+    if ( env.sound = true ) then
         if ( modInit = false ) then
             ExitError "0x1004, Could not init mod module..."
         end if
@@ -2465,14 +2464,14 @@ end sub
 
 
 ''::::::::::
-'' name: texUploadBase
-'' desc: Uploads every level 0 texture into its own DC.
+'' name: texLoadAll
+'' desc: Reads every texture, builds its four mip levels and colour
+''       matches each one back into the Quake palette. One loop over
+''       numtex, so it is one routine.
 ''::::::::::
 defint a-z
-sub texUploadBase
+sub texLoadAll
     dim i as integer
-    dim dy as single
-    dim cy as single
 
     dim byte as string * 1 
     
@@ -2532,23 +2531,6 @@ sub texUploadBase
         dx = tmipinf(i).wdth / 64.0
         dy = tmipinf(i).hght / 64.0
 
-end sub
-
-
-
-''::::::::::
-'' name: texBuildMips
-'' desc: Scales each texture down three times.
-''::::::::::
-defint a-z
-sub texBuildMips
-    dim i as integer
-    dim dx as single
-    dim dy as single
-    dim cx as single
-    dim cy as single
-    dim tmpdc as long
-
         for  j = 0 to 3
         
             mipl = 2^j            
@@ -2593,30 +2575,6 @@ sub texBuildMips
                                     
                     s = cx - int( cx )
                     t = cy - int( cy )
-
-end sub
-
-
-
-''::::::::::
-'' name: texAverageMips
-'' desc: Box filter over each mip level, in colormap space.
-''::::::::::
-defint a-z
-sub texAverageMips
-    dim i as integer
-    dim r as single
-    dim g as single
-    dim b as single
-    dim dist as single
-    dim dista as single
-    dim s as single
-    dim t as single
-    dim pal as long
-    dim palseg as integer
-    dim palofs as integer
-    dim cmpseg as integer
-    dim cmpofs as integer
 
                     cofs1 = palofs+col1*3
                     cofs2 = palofs+col2*3
@@ -2833,5 +2791,86 @@ sub presentFrame ( hDstDC as long, page as integer )
     
     tris = 0
     polys = 0
+
+end sub
+
+
+
+''::::::::::
+'' name: ugluBMPSave
+'' desc: Writes a DC out as an 8 bit Windows BMP.
+''
+''       uGL declares a screenshot routine in uglu.bi (ugluSaveTGA) but never
+''       shipped an implementation, and bsp_pvs.bi declares a ugluBMPSave that
+''       exists in no library either. The screenshot key has been calling an
+''       unresolved symbol, so the program has never linked. This is that
+''       routine, in BASIC.
+''
+''       Entered once per keypress, so it is written for clarity: rows are
+''       built as strings and PUT whole rather than a byte at a time.
+''::::::::::
+defint a-z
+sub ugluBMPSave ( flname as string, byval dc as long )
+    dim f as integer
+    dim x as integer
+    dim y as integer
+    dim w as integer
+    dim h as integer
+    dim pad as integer
+    dim rowlen as integer
+    dim imgsz as long
+    dim offbits as long
+    dim palbuf(255) as tRGB
+    dim row as string
+    dim buf as string
+
+    w   = env.xRes
+    h   = env.yRes
+    pad = (4 - (w mod 4)) mod 4
+
+    rowlen  = w + pad
+    imgsz   = clng(rowlen) * clng(h)
+    offbits = 14 + 40 + 1024
+
+    uglPalGetBuff 0, 256, palbuf(0)
+
+    f = freefile
+    open flname for binary as #f
+
+    ''
+    '' BITMAPFILEHEADER
+    ''
+    buf = "BM" + mkl$( offbits + imgsz ) + mki$(0) + mki$(0) + mkl$( offbits )
+    put #f, , buf
+
+    ''
+    '' BITMAPINFOHEADER
+    ''
+    buf = mkl$(40) + mkl$(clng(w)) + mkl$(clng(h)) + mki$(1) + mki$(8) + _
+          mkl$(0) + mkl$(imgsz) + mkl$(2835) + mkl$(2835) + _
+          mkl$(256) + mkl$(0)
+    put #f, , buf
+
+    ''
+    '' Palette, written BGRA
+    ''
+    buf = ""
+    for x = 0 to 255
+        buf = buf + palbuf(x).blue + palbuf(x).green + palbuf(x).red + chr$(0)
+    next x
+    put #f, , buf
+
+    ''
+    '' Pixels, bottom row first. Pad bytes stay zero.
+    ''
+    for y = h-1 to 0 step -1
+        row = string$( rowlen, 0 )
+        for x = 0 to w-1
+            mid$( row, x+1, 1 ) = chr$( uglPGet( dc, x, y ) and 255 )
+        next x
+        put #f, , row
+    next y
+
+    close #f
 
 end sub

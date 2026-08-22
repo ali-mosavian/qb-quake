@@ -2,3 +2,6 @@
 *.exe
 *.map
 *.bak
+build/
+bc.out
+link.out
