@@ -302,6 +302,12 @@ sub host_main
     rdr.usemips = -1
     rdr.rendmode = 0
     cam.fpsview = -1
+    ''
+    '' On by default. The cull is a single sign test against the face's own
+    '' plane, and a sealed level cannot show a back face, so enabling it must
+    '' leave the image untouched while the polygon count falls.
+    ''
+    rdr.backface = -1
     scr.stats    = -1
     
     if ( env.sound = true ) then
