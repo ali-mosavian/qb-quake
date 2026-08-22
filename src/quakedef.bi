@@ -55,3 +55,9 @@ common shared /qpalS/ pal as long
 '' the rasteriser consume the result.
 ''
 common shared /qcamS/ camLookAt as u3dVector3f, fpsview as integer
+
+''
+'' The loading-screen MOD track: started by sys_init.bas, played once
+'' the map is up by doMain.
+''
+common shared /qsndS/ mymod as UGMMOD

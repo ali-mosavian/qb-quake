@@ -21,9 +21,9 @@ defint a-z
 '$include: 'font.bi'
 '$include: 'mouse.bi'
 '$include: 'bspfile.bi'
-'$include: 'quakedef.bi'
 '$include: 'snd.bi'
 '$include: 'mod.bi'
+'$include: 'quakedef.bi'
 
 '' Module-level DIMs under '$DYNAMIC are executable statements, and
 '' module-level code only runs in the MAIN module -- in any other module
