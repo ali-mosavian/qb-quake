@@ -20,9 +20,9 @@ defint a-z
 '$include: 'font.bi'
 '$include: 'mouse.bi'
 '$include: 'bspfile.bi'
-'$include: 'quakedef.bi'
 '$include: 'snd.bi'
 '$include: 'mod.bi'
+'$include: 'quakedef.bi'
 
 '$static
 dim shared fps1 as integer
