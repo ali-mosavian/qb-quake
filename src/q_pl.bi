@@ -42,6 +42,10 @@ const PL_GROUND_NRM# = 0.7
 const PL_ACCEL#      = 500.0
 const PL_FRICTION#   = 4.0
 const PL_MAXSPEED#   = 320.0
+'' upward speed of a jump. Quake's, so the arc feels the same
+const PL_JUMP#       = 270.0
+'' noclip fly speed, units per second
+const PL_NOCLIP#     = 200.0
 
 ''
 '' The result of sweeping the player hull from one point to another.
@@ -60,6 +64,7 @@ type PlayerState
     vel         as vec3
     on_ground   as integer
     noclip      as integer      '' true = the old free-fly camera, no physics
+    peak_z      as single      '' highest z reached, so -jump is checkable
 end type
 
 common shared /pl_s/ pl as PlayerState

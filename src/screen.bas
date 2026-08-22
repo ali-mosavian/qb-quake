@@ -391,7 +391,6 @@ sub scr_count_frame
 
     if env.sec_timer.counter > 0 then
         scr.fps = fps1
-        if ( fps1 > 0 ) then scr.frame_time = 1.0 / fps1
         fps1 = 0
         env.sec_timer.counter = 0
         scr.bench_secs = scr.bench_secs + 1

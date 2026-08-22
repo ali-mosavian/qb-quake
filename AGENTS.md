@@ -303,6 +303,28 @@ and `vz` zero. A run that ends with x and y unchanged means the trace is
 reporting solid everywhere; one that ends with a huge negative z means it fell
 through the world.
 
+**Time, not frames.** Everything that moves multiplies by `scr.frame_time`,
+measured once at the top of the frame by `sys_frame_time`. Nothing may advance
+by a per-frame constant -- noclip flew at 3 units a frame for years, which
+means it flew at whatever speed the framerate happened to give it.
+
+**The frame clock calibrates itself, and has to.** Asking uGL for a 1 kHz
+timer and dividing the counter by 1000 gave a dt seven times too small: the
+physics was frame-rate independent but ran in slow motion, every speed in the
+game being units per seven seconds. What the timer actually delivers is about
+144 Hz, and that is a property of uGL and the emulator underneath it, not
+something to hardcode. `sys_time_init` measures it against DOS's own TIMER.
+
+That measurement aligns both ends of its window to a TIMER edge, because
+TIMER only ticks every 55ms: without the alignment the same binary measured
+142.9 Hz on one run and 148.1 on the next, and the game ran 4% faster on one
+of them. Aligned, three runs give 144.0, 145.5, 144.0.
+
+**`-jump` holds jump, `-walk` holds forward**, and `peakz` records the highest
+point reached, so a jump is provable from a headless run: from the dm3ish
+spawn it should peak about 46 units above the resting height, which is
+`v^2/2g` for Quake's 270 up and 800 down.
+
 **A resting z always ends in .03125.** That is `PL_CLIP_EPS`, the distance the
 trace stops short of a surface. Seeing it is how you know a landing is a real
 trace stop rather than a coincidence.

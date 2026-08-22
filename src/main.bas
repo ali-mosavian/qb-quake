@@ -321,6 +321,8 @@ sub host_main
     ''
     ''
     ''
+    sys_time_init
+
     do  
     	''
     	'' Clear DC
@@ -329,6 +331,13 @@ sub host_main
             uglClear h_dst_dc, 0
         end if 
         
+        ''
+        '' Measured once, at the top of the frame, and used by everything that
+        '' moves. Every such update multiplies by it, so the game plays the
+        '' same whether it runs at 15 fps or 60.
+        ''
+        scr.frame_time = sys_frame_time
+
         v_update_camera pa, crr_pnt, cnt_pnts, ppos(), plok(), cbzp(), cbzl(), last_point
 
         in_handle_toggles
@@ -449,6 +458,9 @@ sub host_bench_report ( frame_no as long, h_dst_dc as long )
     print #benchf, "pz " + ltrim$(str$( pl.pos.z ))
     print #benchf, "onground " + ltrim$(str$( pl.on_ground ))
     print #benchf, "vz " + ltrim$(str$( pl.vel.z ))
+    print #benchf, "dt " + ltrim$(str$( scr.frame_time ))
+    print #benchf, "tickhz " + ltrim$(str$( sys_tick_hz ))
+    print #benchf, "peakz " + ltrim$(str$( pl.peak_z ))
     close #benchf
 
 end sub

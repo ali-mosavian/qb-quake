@@ -45,6 +45,7 @@ sub v_update_camera ( pa as integer, crr_pnt as integer, cnt_pnts as integer, _
     dim theta as single, phi as single
     dim fwd as single
     dim dir_x as single, dir_y as single, dir_l as single
+    dim jump as integer
 
 	''
 	'' mode script_play run through the bezier curves
@@ -117,9 +118,26 @@ sub v_update_camera ( pa as integer, crr_pnt as integer, cnt_pnts as integer, _
         if ( env.bench_walk  ) then fwd =  1.0
 
         if ( pl.noclip ) then
-            cam.pos.x = cam.pos.x + cam.look_at.x*3.0*fwd
-            cam.pos.y = cam.pos.y + cam.look_at.y*3.0*fwd
-            cam.pos.z = cam.pos.z + cam.look_at.z*3.0*fwd
+            ''
+            '' Also per second, not per frame. This used to advance a flat 3
+            '' units every frame, so the camera flew at whatever speed the
+            '' framerate happened to give it.
+            ''
+            cam.pos.x = cam.pos.x + cam.look_at.x*PL_NOCLIP#*fwd*scr.frame_time
+            cam.pos.y = cam.pos.y + cam.look_at.y*PL_NOCLIP#*fwd*scr.frame_time
+            cam.pos.z = cam.pos.z + cam.look_at.z*PL_NOCLIP#*fwd*scr.frame_time
+
+            ''
+            '' Keep the player in step with the free camera, so switching
+            '' back to walking carries on from here rather than snapping to
+            '' wherever physics was last left.
+            ''
+            pl.pos.x = cam.pos.x
+            pl.pos.y = cam.pos.z
+            pl.pos.z = cam.pos.y - PL_EYE#
+            pl.vel.x = 0.0
+            pl.vel.y = 0.0
+            pl.vel.z = 0.0
         else
             ''
             '' cam.look_at is still a direction here; it does not become an
@@ -138,7 +156,11 @@ sub v_update_camera ( pa as integer, crr_pnt as integer, cnt_pnts as integer, _
                 dir_y = 0.0
             end if
 
-            pl_move fwd, 0.0, dir_x, dir_y, scr.frame_time
+            jump = 0
+            if ( env.keyboard.spcbar ) then jump = -1
+            if ( env.bench_jump       ) then jump = -1
+
+            pl_move fwd, 0.0, dir_x, dir_y, jump, scr.frame_time
         end if
         
         if ( env.keyboard.n and env.cammode = 2 ) then

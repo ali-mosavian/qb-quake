@@ -207,6 +207,7 @@ type EnvType
     bench_frames as integer      '' 0 = run until ESC
     bench_walk  as integer      '' -walk: hold forward, to exercise the
                                 '' collision response without a keyboard
+    bench_jump  as integer      '' -jump: hold jump, likewise
     
 end type
 
@@ -224,6 +225,9 @@ declare sub host_main    ( )
 declare sub host_shutdown     ( )
 declare sub host_bench_report ( frame_no as long, h_dst_dc as long )
 declare sub sys_error ( msg as string )
+declare sub sys_time_init ( )
+declare function sys_frame_time ( ) as single
+declare function sys_tick_hz ( ) as single
 declare sub r_mark_leaves ( byval nodenr as integer )
 declare sub r_draw_world ( model as integer )
 declare sub v_update_camera ( pa as integer, crr_pnt as integer, cnt_pnts as integer, _
@@ -243,7 +247,8 @@ declare sub pl_step_move ( org as vec3, vel as vec3, byval dt as single )
 declare sub pl_gravity ( byval dt as single )
 declare sub pl_init ( )
 declare sub pl_move ( byval fwd as single, byval strafe as single, _
-                     byval dir_x as single, byval dir_y as single, byval dt as single )
+                     byval dir_x as single, byval dir_y as single, _
+                     byval jump as integer, byval dt as single )
 
 declare sub v_open_script ( ppos() as PNT3D, plok() as PNT3D, _
                            cbzp() as PNT3D, cbzl() as PNT3D, _
