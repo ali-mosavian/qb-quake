@@ -24,8 +24,6 @@ defint a-z
 '$include: 'quakedef.bi'
 
 '$dynamic
-dim shared cul_leafs as integer
-dim shared drw_leafs as integer
 dim shared pvs_leaf as integer
 
 
@@ -84,9 +82,9 @@ sub r_recursive_world_node ( byval nodenr as integer ) static
     	    ''
     	    '' Put leaf in ordering list
     	    ''
-    	    drw_leafs = drw_leafs + 1
+    	    vis.drw_leafs = vis.drw_leafs + 1
         else 
-            cul_leafs = cul_leafs + 1
+            vis.cul_leafs = vis.cul_leafs + 1
         end if
         
 	    exit sub
@@ -143,8 +141,8 @@ sub r_draw_world ( model as integer )
     '' Reset tree state
     ''
     vis.ord_count = 0
-    cul_leafs = 0
-    drw_leafs = 0
+    vis.cul_leafs = 0
+    vis.drw_leafs = 0
     
     ''
     '' Advance the frame stamp instead of clearing every face flag.
