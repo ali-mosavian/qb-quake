@@ -61,8 +61,8 @@ sub texLoadOffsets
     for  i = 0 to texiCount-1
         get #1 ,, texInfBuff(i)
         
-        loading = loading + (100.0/14.0)/texiCount
-        if ( (i and 127) = 0 ) then drwLoadingBar loadDC, (320-150)\2, (200-20)\2, 150, 20, loading, -1
+        loading = loading + (100.0/LOAD_STEPS)/texiCount
+        if ( (i and 127) = 0 ) then drwLoadTick
     next i
     
     seek #1, bsphead.miptex.offs+1
@@ -103,8 +103,8 @@ sub palLoadColormap
         ExitError "Could not open ( 2 ) base.dat::color/colormap.lmp..."
     end if
     
-    loading = loading + (100.0/14.0)
-    drwLoadingBar loadDC, (320-150)\2, (200-20)\2, 150, 20, loading, -1    
+    loading = loading + (100.0/LOAD_STEPS)
+    drwLoadTick    
     
     
     uarClose file
@@ -298,12 +298,12 @@ sub texLoadAll
                 cy = cy + dy
             next y
             
-            if ( (i and 127) = 0 ) then drwLoadingBar loadDC, (320-150)\2, (200-20)\2-15, 150, 7, (i*4+j)*25\numtex, 51
+            if ( (i and 127) = 0 ) then drwMipTick (i*4+j)*25\numtex
         next j
         
-        loading = loading + (100.0/14.0)/numtex
-        if ( (i and 127) = 0 ) then drwLoadingBar loadDC, (320-150)\2, (200-20)\2, 150, 20, loading, -1
-        if ( (i and 127) = 0 ) then drwLoadingBar loadDC, (320-150)\2, (200-20)\2-15, 150, 7, (i*4+j)*25\numtex, 51
+        loading = loading + (100.0/LOAD_STEPS)/numtex
+        if ( (i and 127) = 0 ) then drwLoadTick
+        if ( (i and 127) = 0 ) then drwMipTick (i*4+j)*25\numtex
     next i
     
     uglDel tmpdc&

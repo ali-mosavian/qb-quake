@@ -255,7 +255,7 @@ sub loadScreenOpen
         ExitError "0x3001, Could not set loading video mode"
     end if
     
-    drwLoadingBar loadDC, (320-150)\2, (200-20)\2, 150, 20, loading, -1    
+    drwLoadTick    
 
 end sub
 

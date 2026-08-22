@@ -25,6 +25,20 @@ defint a-z
 '$include: 'mod.bi'
 '$include: 'quakedef.bi'
 
+''
+'' Loading screen geometry. Private to this module on purpose: the bar is
+'' drawn through drwLoadTick/drwMipTick below, so no caller needs to know
+'' where it sits. Sixteen call sites used to carry the arithmetic inline.
+'' The 320x200 here is the loading DC's own mode, not the render mode --
+'' loadScreenOpen sets it explicitly and videoOpen replaces it later.
+''
+const LOADBAR_W = 150
+const LOADBAR_H = 20
+const LOADBAR_X = (320-LOADBAR_W)\2
+const LOADBAR_Y = (200-LOADBAR_H)\2
+const MIPBAR_H  = 7
+const MIPBAR_Y  = LOADBAR_Y-15
+
 '' Module-level DIMs under '$DYNAMIC are executable statements, and
 '' module-level code only runs in the MAIN module -- in any other module
 '' they never execute and the array is never allocated. '$STATIC arrays
@@ -38,6 +52,27 @@ dim shared hFontChar(255) as long
 '' ==========================================================================
 ''  SUPPORT
 '' ==========================================================================
+'' :::::::::::::
+'' name: drwLoadTick
+'' desc: Redraws the main loading bar at the current 'loading' percent.
+''       Takes no arguments -- loadDC and loading are both /qmapS/ --
+''       which is why the fourteen callers reduce to a bare call.
+'' :::::::::::::
+sub drwLoadTick
+    drwLoadingBar loadDC, LOADBAR_X, LOADBAR_Y, LOADBAR_W, LOADBAR_H, loading, -1
+end sub
+
+
+'' :::::::::::::
+'' name: drwMipTick
+'' desc: The thinner sub-bar above the main one, showing progress through
+''       the current texture's four mip levels.
+'' :::::::::::::
+sub drwMipTick ( percent as single )
+    drwLoadingBar loadDC, LOADBAR_X, MIPBAR_Y, LOADBAR_W, MIPBAR_H, percent, 51
+end sub
+
+
 '' :::::::::::::
 '' name: drwLoadingBar
 '' desc: Draws a loading bar
