@@ -14,7 +14,7 @@
 '' texture passes. Fourteen sites used to spell the divisor as a literal 14.0
 '' and had to agree with each other by hand.
 ''
-const LOAD_STEPS = 14
+const LOAD_STEPS = 15
 
 type MapState
     head        as header       '' the on-disk lump directory
@@ -26,6 +26,7 @@ type MapState
     lef_count   as long
     nds_count   as long
     texi_count  as long
+    clp_count   as long         '' collision hull nodes
 end type
 
 ''
@@ -49,3 +50,10 @@ common shared /map_a/ vtx_buffer() as vertex, lef_buffer() as leaf2, lfc_buffer(
 common shared /map_a/ mdl_buffer() as model, pln_buffer() as plane2, nds_buffer() as nodeb
 common shared /map_a/ order_list() as integer, pvs_buffer_a() as integer, pvs_buffer_b() as integer
 common shared /map_a/ tex_inf_buff() as texinfo, poly_flag() as integer
+
+''
+'' The collision hulls. Separate trees from the render nodes: same planes,
+'' different topology, expanded by the player's bounding box so a point trace
+'' through them is equivalent to a box trace through the world.
+''
+common shared /map_a/ clp_buffer() as clipnode

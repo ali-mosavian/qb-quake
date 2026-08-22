@@ -37,7 +37,7 @@ dim shared mdl_count as long
 
 
 ''::::::::::
-'' name: bspOpen
+'' name: mod_open
 '' desc: Opens the map, reads the header and derives every lump count.
 ''::::::::::
 sub mod_open
@@ -56,6 +56,7 @@ sub mod_open
     wld.nds_count = wld.head.nodes.size \ len( nodetmp )
     mdl_count = wld.head.models.size \ len( mdl_buffer(0) )
     wld.texi_count = wld.head.texinfo.size \ len( tex_inf_buff(0) )
+    wld.clp_count = wld.head.clipnode.size \ len( clp_buffer(0) )
     seek #wld.file, wld.head.miptex.offs+1
     get #wld.file,, wld.numtex    
 
@@ -65,7 +66,7 @@ end sub
 
 
 ''::::::::::
-'' name: bspFindSpawn
+'' name: mod_find_spawn
 '' desc: Scans the entity lump for info_player_start.
 ''::::::::::
 sub mod_find_spawn
@@ -121,7 +122,7 @@ end sub
 
 
 ''::::::::::
-'' name: bspAlloc
+'' name: mod_alloc
 '' desc: Sizes every level buffer from the counts bspOpen derived.
 ''::::::::::
 sub mod_alloc
@@ -139,6 +140,7 @@ sub mod_alloc
     redim pvs_buffer_b( 4096 ) as integer
     redim poly_flag( 4096 ) as integer
     redim tex_inf_buff(wld.texi_count-1) as texinfo
+    redim clp_buffer(wld.clp_count-1) as clipnode
 
 end sub
 
@@ -146,7 +148,7 @@ end sub
 
 
 ''::::::::::
-'' name: bspLoadVertices
+'' name: mod_load_vertexes
 ''::::::::::
 sub mod_load_vertexes
     def seg = varseg( vtx_buffer(0) )
@@ -161,7 +163,7 @@ end sub
 
 
 ''::::::::::
-'' name: bspLoadFaces
+'' name: mod_load_faces
 ''::::::::::
 sub mod_load_faces
     def seg = varseg( tri_buffer(0) )
@@ -176,7 +178,7 @@ end sub
 
 
 ''::::::::::
-'' name: bspLoadEdges
+'' name: mod_load_edges
 ''::::::::::
 sub mod_load_edges
     def seg = varseg( edg_buffer(0) )
@@ -191,7 +193,7 @@ end sub
 
 
 ''::::::::::
-'' name: bspLoadEdgeIndex
+'' name: mod_load_surfedges
 ''::::::::::
 sub mod_load_surfedges
     def seg = varseg( ledg_buffer(0) )
@@ -206,7 +208,7 @@ end sub
 
 
 ''::::::::::
-'' name: bspLoadLeaves
+'' name: mod_load_leafs
 ''::::::::::
 sub mod_load_leafs
     def seg = varseg( lef_buffer(0) )
@@ -221,7 +223,7 @@ end sub
 
 
 ''::::::::::
-'' name: bspLoadFaceIndex
+'' name: mod_load_marksurfaces
 ''::::::::::
 sub mod_load_marksurfaces
     def seg = varseg( lfc_buffer(0) )
@@ -236,7 +238,7 @@ end sub
 
 
 ''::::::::::
-'' name: bspLoadNodes
+'' name: mod_load_nodes
 ''::::::::::
 sub mod_load_nodes
     def seg = varseg( nds_buffer(0) )
@@ -251,7 +253,7 @@ end sub
 
 
 ''::::::::::
-'' name: bspLoadPlanes
+'' name: mod_load_planes
 ''::::::::::
 sub mod_load_planes
     def seg = varseg( pln_buffer(0) )
@@ -266,7 +268,7 @@ end sub
 
 
 ''::::::::::
-'' name: bspLoadModels
+'' name: mod_load_submodels
 ''::::::::::
 sub mod_load_submodels
     def seg = varseg( mdl_buffer(0) )
@@ -281,7 +283,30 @@ end sub
 
 
 ''::::::::::
-'' name: bspLoadPvs
+'' name: mod_load_clipnodes
+'' desc: The collision hulls: a second set of bsp trees over the same
+''       planes, each expanded by a bounding box so that tracing a POINT
+''       through hull n is equivalent to sweeping that box through the
+''       world. Hull 1 is the 32x32x56 player.
+''
+''       The lump was loaded by nothing until now -- pl_move is its first
+''       consumer, and the dead declaration for it was deleted in the
+''       first cleanup commit of this refactor.
+''::::::::::
+sub mod_load_clipnodes
+    def seg = varseg( clp_buffer(0) )
+    bload "clip.bld", varptr( clp_buffer(0) )
+    def seg
+
+    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
+    scr_load_tick
+end sub
+
+
+
+
+''::::::::::
+'' name: mod_load_visibility
 ''::::::::::
 sub mod_load_visibility
     def seg = varseg( pvs_buffer_a(0) )
@@ -294,7 +319,7 @@ end sub
 
 
 ''::::::::::
-'' name: bspClose
+'' name: mod_close
 '' desc: Releases the map file. r_tex.bas used to do this at the end of
 ''       texLoadAll -- the module that opened the file was not the module
 ''       that closed it, and the handle's lifetime spanned two modules

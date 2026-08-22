@@ -52,6 +52,7 @@ option explicit
 '$include: 'q_draw.bi'
 '$include: 'q_scr.bi'
 '$include: 'q_cam.bi'
+'$include: 'q_pl.bi'
 '$include: 'q_snd.bi'
 
 
@@ -145,7 +146,7 @@ HandleErr:
 ''  STARTUP
 '' ==========================================================================
 ''::::::::::
-'' name: doInit
+'' name: host_init
 '' desc: Startup, in order. Every step below runs exactly once, so each is
 ''       its own routine -- the call costs nothing here and the sequence
 ''       reads as the list of things that have to be true before the first
@@ -182,6 +183,7 @@ sub host_init
     mod_open
     scr_begin_loading
     mod_find_spawn
+    pl_init
     mod_alloc
 
     t_map = timer
@@ -197,6 +199,7 @@ sub host_init
     mod_load_planes
     mod_load_submodels
     mod_load_visibility
+    mod_load_clipnodes
 
     t_lump = timer
 
@@ -441,6 +444,11 @@ sub host_bench_report ( frame_no as long, h_dst_dc as long )
     print #benchf, "lastfps " + ltrim$(str$( scr.fps ))
     print #benchf, "polys " + ltrim$(str$( rdr.polys ))
     print #benchf, "tris " + ltrim$(str$( rdr.tris ))
+    print #benchf, "px " + ltrim$(str$( pl.pos.x ))
+    print #benchf, "py " + ltrim$(str$( pl.pos.y ))
+    print #benchf, "pz " + ltrim$(str$( pl.pos.z ))
+    print #benchf, "onground " + ltrim$(str$( pl.on_ground ))
+    print #benchf, "vz " + ltrim$(str$( pl.vel.z ))
     close #benchf
 
 end sub

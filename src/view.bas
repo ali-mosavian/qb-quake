@@ -22,6 +22,7 @@ option explicit
 '$include: 'q_draw.bi'
 '$include: 'q_scr.bi'
 '$include: 'q_cam.bi'
+'$include: 'q_pl.bi'
 
 
 
@@ -29,7 +30,7 @@ option explicit
 ''  FRAME
 '' ==========================================================================
 ''::::::::::
-'' name: camUpdate
+'' name: v_update_camera
 '' desc: Advances the camera for one frame -- scripted bezier playback
 ''       in mode 1, mouse freelook in modes 0 and 2.
 ''
@@ -42,6 +43,8 @@ sub v_update_camera ( pa as integer, crr_pnt as integer, cnt_pnts as integer, _
     dim cam_pos_c as u3dVector3f
     dim tmx as integer, tmy as integer
     dim theta as single, phi as single
+    dim fwd as single
+    dim dir_x as single, dir_y as single, dir_l as single
 
 	''
 	'' mode script_play run through the bezier curves
@@ -102,25 +105,41 @@ sub v_update_camera ( pa as integer, crr_pnt as integer, cnt_pnts as integer, _
         cam.look_at.z = sin( theta ) * sin( phi )
         
 
-        if ( env.mouse.left  ) then 
-            cam_pos_c.x = cam.pos.x + cam.look_at.x*3
-            cam_pos_c.y = cam.pos.y + cam.look_at.y*3
-            cam_pos_c.z = cam.pos.z + cam.look_at.z*3
+        ''
+        '' Forward and back on the mouse buttons, as before. What changed is
+        '' what they drive: in walk mode the player accelerates and the world
+        '' decides where the move actually ends, in noclip they still move the
+        '' eye straight along the look vector.
+        ''
+        fwd = 0.0
+        if ( env.mouse.left  ) then fwd =  1.0
+        if ( env.mouse.right ) then fwd = -1.0
+        if ( env.bench_walk  ) then fwd =  1.0
 
-    		cam.pos.x = cam_pos_c.x
-    		cam.pos.y = cam_pos_c.y
-    		cam.pos.z = cam_pos_c.z
+        if ( pl.noclip ) then
+            cam.pos.x = cam.pos.x + cam.look_at.x*3.0*fwd
+            cam.pos.y = cam.pos.y + cam.look_at.y*3.0*fwd
+            cam.pos.z = cam.pos.z + cam.look_at.z*3.0*fwd
+        else
+            ''
+            '' cam.look_at is still a direction here; it does not become an
+            '' absolute point until the bottom of this routine. Only its
+            '' horizontal part steers walking, renormalised so that looking at
+            '' the floor does not slow the player down.
+            ''
+            dir_x = cam.look_at.x
+            dir_y = cam.look_at.z                    '' renderer z is bsp y
+            dir_l = sqr( dir_x*dir_x + dir_y*dir_y )
+            if ( dir_l > 0.001 ) then
+                dir_x = dir_x / dir_l
+                dir_y = dir_y / dir_l
+            else
+                dir_x = 1.0
+                dir_y = 0.0
+            end if
+
+            pl_move fwd, 0.0, dir_x, dir_y, scr.frame_time
         end if
-                    
-        if ( env.mouse.right ) then
-            cam_pos_c.x = cam.pos.x - cam.look_at.x*3
-            cam_pos_c.y = cam.pos.y - cam.look_at.y*3
-            cam_pos_c.z = cam.pos.z - cam.look_at.z*3                
-            
-    		cam.pos.x = cam_pos_c.x
-    		cam.pos.y = cam_pos_c.y
-    		cam.pos.z = cam_pos_c.z
-        end if            
         
         if ( env.keyboard.n and env.cammode = 2 ) then
             print #cam.script_file, cam.pos.x, cam.pos.y, cam.pos.z

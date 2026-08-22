@@ -145,7 +145,7 @@ end sub
 
 
 ''::::::::::
-'' name: bspDrawFaces
+'' name: d_draw_faces
 '' desc: Draws the faces the BSP walk marked, in the walk's back to
 ''       front order.
 ''

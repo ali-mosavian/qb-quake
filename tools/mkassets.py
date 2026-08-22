@@ -139,6 +139,9 @@ def convert_lumps(d, lumps, outdir):
     out['texinf.bld'] = lump(6)
     out['models.bld'] = lump(14)
     out['pvs.bld'] = lump(4)
+    # clipnodes: the collision hulls. planenum/front/back is 8 bytes on disk
+    # and 8 in memory, so this one needs no conversion either.
+    out['clip.bld'] = lump(9)
 
     # ledges: long on disk, integer in memory. bspLoadEdgeIndex read a long
     # into a temporary and assigned it down, so the truncation is deliberate.

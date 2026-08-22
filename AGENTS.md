@@ -281,6 +281,32 @@ used them.
 **`COMMAND$` uppercases the whole command line.** Flag comparisons must fold
 case; `-bench` arrives as `-BENCH`.
 
+## Player physics
+
+`pl_move.bas`, ported from softquake's `bsp_trace.c` and `pl_move.c`, which
+are Quake's `SV_RecursiveHullCheck` and `SV_FlyMove`.
+
+**The hulls are pre-expanded.** The clipnodes lump is a second set of bsp trees
+over the same planes, each grown by a bounding box, so the player is traced as
+a *point* through hull 1 rather than as a box through the world. That is why
+collision needs no box maths at all.
+
+**Two coordinate spaces meet here, and only here.** The renderer is Y-up; the
+bsp is Z-up. `mod_find_spawn` already swaps when it reads the spawn origin.
+`pl.pos` is Z-up and authoritative, and the last three lines of `pl_move`
+convert it back for `cam.pos`. Do not do the swap anywhere else.
+
+**`-walk` holds forward** so the collision response can be tested headlessly.
+From the dm3ish spawn, 200 frames of it should travel ~400 units, drift
+sideways where it meets a wall, and descend to a floor with `onground` true
+and `vz` zero. A run that ends with x and y unchanged means the trace is
+reporting solid everywhere; one that ends with a huge negative z means it fell
+through the world.
+
+**A resting z always ends in .03125.** That is `PL_CLIP_EPS`, the distance the
+trace stops short of a surface. Seeing it is how you know a landing is a real
+trace stop rather than a coincidence.
+
 ## Assets
 
     make assets          # or: python3 tools/mkassets.py <map.bsp> <base.dat> data/assets

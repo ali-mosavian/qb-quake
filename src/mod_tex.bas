@@ -40,7 +40,7 @@ dim shared tmipinf( 1 ) as miptex
 
 
 ''::::::::::
-'' name: texLoadOffsets
+'' name: mod_load_texinfo
 '' desc: Reads the miptex directory and sizes the texture tables.
 ''::::::::::
 sub mod_load_texinfo
@@ -80,7 +80,7 @@ end sub
 
 
 ''::::::::::
-'' name: texLoadAll
+'' name: mod_load_textures
 '' desc: Reads every texture, builds its four mip levels and colour
 ''       matches each one back into the Quake palette. One loop over
 ''       numtex, so it is one routine.

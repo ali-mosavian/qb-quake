@@ -22,6 +22,7 @@ option explicit
 '$include: 'q_draw.bi'
 '$include: 'q_scr.bi'
 '$include: 'q_cam.bi'
+'$include: 'q_pl.bi'
 
 
 '' Screenshot counter: without it every shot overwrote scrn0.bmp.
@@ -33,7 +34,7 @@ dim shared screenie as integer
 
 
 ''::::::::::
-'' name: inputOpen
+'' name: in_init
 '' desc: Mouse, keyboard and the one second timer.
 ''::::::::::
 sub in_init
@@ -58,7 +59,7 @@ end sub
 
 
 ''::::::::::
-'' name: inputToggles
+'' name: in_keystroke
 '' desc: The function-key toggles. Each waits for the key to come back
 ''       up so one press is one toggle.
 ''::::::::::
@@ -98,6 +99,7 @@ sub in_handle_toggles
     if ( in_keystroke( env.keyboard.f3  ) ) then cam.fpsview  = not cam.fpsview
     if ( in_keystroke( env.keyboard.f12 ) ) then scr.stats    = not scr.stats
     if ( in_keystroke( env.keyboard.b   ) ) then rdr.backface = not rdr.backface
+    if ( in_keystroke( env.keyboard.f4  ) ) then pl.noclip    = not pl.noclip
 
 end sub
 
