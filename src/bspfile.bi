@@ -264,9 +264,6 @@ declare sub strtok ( strm() as string, strm_cnt as integer, _
 declare function bspCheckCollision% ( byval nodenr as integer, _
                               strPnt as u3dVector3f, _ 
                               endPnt as u3dVector3f )                     
-declare function ClipToPlane% ( inPoly() as u3dVector4f, inVert as integer, _
-                        otPoly() as u3dVector4f, otVert as integer, _
-                        plan as plane )  
                         
                         
 type uv
