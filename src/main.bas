@@ -53,6 +53,14 @@ option explicit
 '$include: 'q_scr.bi'
 '$include: 'q_cam.bi'
 '$include: 'q_pl.bi'
+
+''
+'' Simulation time owed but not yet run. Frames deliver time in whatever
+'' irregular amounts the renderer manages; the simulation spends it in equal
+'' HOST_DT pieces, and whatever is left over waits here for the next frame.
+''
+dim shared host_accum as single
+dim shared host_ticks as long          '' steps run, for the benchmark
 '$include: 'q_snd.bi'
 
 
@@ -327,7 +335,7 @@ sub host_main
         ''
         scr.frame_time = sys_frame_time
 
-        host_tick scr.frame_time
+        host_advance scr.frame_time
 
         ''
         '' Combine all transforms 
@@ -343,6 +351,10 @@ sub host_main
         '' can.
         ''
         frame_no = frame_no + 1
+        if ( env.bench_ticks > 0 and host_ticks >= env.bench_ticks ) then
+            host_bench_report frame_no, h_dst_dc
+            exit do
+        end if
         if ( env.bench_frames > 0 and frame_no >= env.bench_frames ) then
             host_bench_report frame_no, h_dst_dc
             exit do
@@ -374,6 +386,44 @@ sub host_shutdown
     end
 
 end sub
+
+
+''::::::::::
+'' name: host_advance
+'' desc: Spends a frame's worth of real time on whole simulation steps.
+''
+''       The renderer's frame time varies with what is on screen. Feeding
+''       it straight to the physics made every result depend on the
+''       framerate: the same walk integrated in a few long steps at 12 fps
+''       and many short ones at 45, and the two drifted apart because a
+''       long step overshoots a wall that a short one stops against.
+''
+''       Now every step is HOST_DT regardless, and the remainder is
+''       carried. Physics sees a constant rate; only how many steps a
+''       frame runs varies.
+''::::::::::
+sub host_advance ( byval real_dt as single )
+    dim steps as integer
+
+    host_accum = host_accum + real_dt
+
+    steps = 0
+    do while ( host_accum >= HOST_DT# and steps < HOST_MAXSTEPS )
+        host_tick HOST_DT#
+        host_accum = host_accum - HOST_DT#
+        host_ticks = host_ticks + 1
+        steps = steps + 1
+    loop
+
+    ''
+    '' Still behind after the cap: give up on the backlog rather than
+    '' carry it into the next frame, where it would only grow.
+    ''
+    if ( host_accum > HOST_DT# ) then host_accum = 0.0
+
+end sub
+
+
 
 
 ''::::::::::
@@ -490,6 +540,7 @@ sub host_bench_report ( frame_no as long, h_dst_dc as long )
     print #benchf, "dt " + ltrim$(str$( scr.frame_time ))
     print #benchf, "tickhz " + ltrim$(str$( sys_tick_hz ))
     print #benchf, "peakz " + ltrim$(str$( pl.peak_z ))
+    print #benchf, "ticks " + ltrim$(str$( host_ticks ))
     close #benchf
 
 end sub

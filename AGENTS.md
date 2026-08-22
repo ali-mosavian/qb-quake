@@ -303,6 +303,29 @@ and `vz` zero. A run that ends with x and y unchanged means the trace is
 reporting solid everywhere; one that ends with a huge negative z means it fell
 through the world.
 
+**The simulation runs at a fixed 60 Hz, whatever the renderer manages.**
+`host_advance` takes the frame's real elapsed time, adds it to an accumulator,
+and spends it in whole `HOST_DT` steps, carrying the remainder. So a frame runs
+one step, or two, or none -- but every step is the same length.
+
+That is what makes it deterministic rather than merely framerate-independent.
+Time-based updates alone still integrate a walk in a few long steps at 12 fps
+and many short ones at 45, and the two drift apart, because a long step
+overshoots a wall a short one stops against. `-ticks N` stops after N
+simulation steps rather than N frames, which is the test:
+
+    44 fps  220 frames  301 ticks   209.348   -287.9687  184.0313
+    12 fps   64 frames  300 ticks   209.4243  -287.9687  184.0313
+     4 fps   61 frames  300 ticks   209.4243  -287.9687  184.0313
+
+The 12 and 4 fps runs agree to every digit across an 11x spread. The 44 fps
+run differs in x alone because it ran one extra tick, worth about 0.08 units.
+
+**`HOST_MAXSTEPS` caps the steps one frame may run**, or a frame slower than
+`HOST_DT` asks for more steps, which make the next frame slower still, and the
+accumulator runs away. At the cap the game runs in slow motion, which is
+survivable; without it, it stops.
+
 **The frame is `host_tick` then `host_render`.** One changes the world and
 draws nothing; the other draws and changes nothing. `host_tick` takes dt as a
 parameter rather than reading `scr.frame_time`, so a caller can hand it a
