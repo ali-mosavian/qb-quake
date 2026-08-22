@@ -207,6 +207,10 @@ end type
 
 const DEG2RAD# = 3.14159265359 / 180.0
 
+'' defined in bsp_pvs.bas, called from qbsplod.bas -- within one module
+'' BASIC auto-declares, across modules it needs this.
+declare sub drwLoadingBar ( hDC as long, x as integer, y as integer, wdt as integer, _
+                            hgt as integer, percent as single, col as long )
 declare sub doInit    ( )
 declare sub doMain    ( )
 declare sub doEnd     ( )

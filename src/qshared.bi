@@ -9,3 +9,17 @@
 '' directly.
 ''
 common shared /qenv/ env as EnvType
+
+''
+'' The map: written by qbsplod.bas, walked by the renderer. Already '$DYNAMIC
+'' before the split, so COMMON costs them nothing.
+''
+common shared /qmapS/ bsphead as header, loading as single, loadDC as long
+common shared /qmapS/ numtex as long, triCount as long, vtxCount as long
+common shared /qmapS/ edgCount as long, lefCount as long, ndsCount as long
+common shared /qmapS/ texiCount as long, CamPos as u3dVector3f, startAngle as single
+common shared /qmapA/ triBuffer() as face2, edgBuffer() as edge, ledgBuffer() as integer
+common shared /qmapA/ vtxBuffer() as vertex, lefBuffer() as leaf2, lfcBuffer() as integer
+common shared /qmapA/ mdlBuffer() as model, plnBuffer() as plane2, ndsBuffer() as nodeb
+common shared /qmapA/ orderList() as integer, pvsBufferA() as integer, pvsBufferB() as integer
+common shared /qmapA/ texInfBuff() as texinfo, polyFlag() as integer
