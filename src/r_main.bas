@@ -6,7 +6,6 @@ option explicit
 '' r_main.c is the same layer: it decides where the eye is before r_bsp
 '' decides what it can see.
 ''
-defint a-z
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
 '$include: 'pal.bi'
@@ -38,7 +37,6 @@ defint a-z
 '' Once per frame, so the call is free. See the note by the shared
 '' renderer state for why the draw loop is not carved up the same way.
 ''::::::::::
-defint a-z
 sub v_update_camera ( pa as integer, crr_pnt as integer, cnt_pnts as integer, _
                 ppos() as PNT3D, plok() as PNT3D, _
                 cbzp() as PNT3D, cbzl() as PNT3D, last_point as integer )
@@ -97,12 +95,12 @@ sub v_update_camera ( pa as integer, crr_pnt as integer, cnt_pnts as integer, _
         tmx = env.mouse.x + 1
         tmy = env.mouse.y + 2
 
-        theta! = 2 * 3.14159 * ((env.x_res-1)-tmx) / env.x_res
-        phi! = 3.14159 * tmy / env.y_res
+        theta = 2 * 3.14159 * ((env.x_res-1)-tmx) / env.x_res
+        phi = 3.14159 * tmy / env.y_res
         
-        cam.look_at.x = cos( theta! ) * sin( phi! )
-        cam.look_at.y = cos( phi! )
-        cam.look_at.z = sin( theta! ) * sin( phi! )
+        cam.look_at.x = cos( theta ) * sin( phi )
+        cam.look_at.y = cos( phi )
+        cam.look_at.z = sin( theta ) * sin( phi )
         
 
         if ( env.mouse.left  ) then 
@@ -146,8 +144,7 @@ end sub
 '' desc: The function-key toggles. Each waits for the key to come back
 ''       up so one press is one toggle.
 ''::::::::::
-defint a-z
-function in_keystroke% ( key_down as integer )
+function in_keystroke ( key_down as integer ) as integer
     ''
     '' True once per press, not once per frame. The key is passed by
     '' reference, so the loop below re-reads the live flag the keyboard
@@ -156,14 +153,14 @@ function in_keystroke% ( key_down as integer )
     '' Five toggles each carried their own copy of this test-and-spin.
     ''
     if ( key_down = false ) then
-        in_keystroke% = false
+        in_keystroke = false
         exit function
     end if
 
     do
     loop while ( key_down )
 
-    in_keystroke% = true
+    in_keystroke = true
 
 end function
 
@@ -174,7 +171,6 @@ end function
 '' name: in_handle_toggles
 '' desc: The render-mode keys. One line each now.
 ''::::::::::
-defint a-z
 sub in_handle_toggles
 
     if ( in_keystroke( env.keyboard.f1  ) ) then rdr.usemips  = not rdr.usemips

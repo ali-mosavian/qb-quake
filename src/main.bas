@@ -34,7 +34,6 @@ option explicit
 ''
 '' Copyleft Blitz, july/2003.
 ''
-defint a-z
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
 '$include: 'pal.bi'
@@ -142,7 +141,6 @@ HandleErr:
 
 
 ''::::
-defint a-z
 '' ==========================================================================
 ''  STARTUP
 '' ==========================================================================
@@ -153,7 +151,6 @@ defint a-z
 ''       reads as the list of things that have to be true before the first
 ''       frame. Contrast bspDrawFaces, which is one routine on purpose.
 ''::::::::::
-defint a-z
 sub host_init
     ''
     '' Load profiling. A 1 kHz AUTOINIT timer counts milliseconds, and the
@@ -236,7 +233,6 @@ end sub
 
 
 ''::::
-defint a-z
 sub host_main
     dim mtx_mdl as u3dMtrx
     dim mtx_prj as u3dMtrx
@@ -311,8 +307,8 @@ sub host_main
     
     
     
-    hz& = tmrMs2Freq&( 1000 )
-    tmrNew env.sec_timer, TMR.AUTOINIT, hz&    
+    hz = tmrMs2Freq&( 1000 )
+    tmrNew env.sec_timer, TMR.AUTOINIT, hz    
     
     if ( env.usepag = false ) then
         h_dst_dc = env.h_back_bdc
@@ -431,7 +427,6 @@ end sub
 
 
 ''::::
-defint a-z
 sub host_shutdown
     
     ''
@@ -448,7 +443,6 @@ end sub
 
 
 ''::::
-defint a-z
 sub sys_error ( msg as string )
     ''
     '' Record the message before touching the video mode.

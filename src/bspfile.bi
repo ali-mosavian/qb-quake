@@ -227,7 +227,7 @@ declare sub v_update_camera ( pa as integer, crr_pnt as integer, cnt_pnts as int
                         ppos() as PNT3D, plok() as PNT3D, _
                         cbzp() as PNT3D, cbzl() as PNT3D, last_point as integer )
 declare sub in_handle_toggles ( )
-declare function in_keystroke% ( key_down as integer )
+declare function in_keystroke ( key_down as integer ) as integer
 declare sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
                            xresh as single, yresh as single )
 declare sub scr_draw_hud ( h_dst_dc as long )
@@ -262,10 +262,10 @@ declare sub mod_load_textures ( )
 declare sub vid_init ( )
 declare sub in_init ( )
 declare sub s_stop_music ( )
-declare function r_cull_box% ( bbox as bboundbox, frustum() as plane )
+declare function r_cull_box ( bbox as bboundbox, frustum() as plane ) as integer
 declare sub r_set_frustum ( frustum() as plane, mtx as u3dMtrx )
 declare sub com_parse_config ( filename as string )
-declare function com_arg$ ( strm() as string, strm_cnt as integer, linenum as integer )
+declare function com_arg ( strm() as string, strm_cnt as integer, linenum as integer ) as string
 declare sub com_check_args ( strm() as string, strm_cnt as integer, _
                        byval want as integer, byval linenum as integer )
 declare sub com_tokenize ( strm() as string, strm_cnt as integer, _
@@ -280,7 +280,7 @@ end type
 
 declare sub com_tokenize ( strm() as string, strm_cnt as integer, _
              tokenlist as string, stream as string )
-declare function draw_load_font% ( flname as string, col as long )
+declare function draw_load_font ( flname as string, col as long ) as integer
 declare sub draw_string ( dc as long, x as integer, y as integer, _
                             text as string ) 
                             

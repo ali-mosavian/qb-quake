@@ -262,6 +262,15 @@ been disabled -- and the symptom (title bar shows QRENDER, screen still at
 `C:\>`) was misread three times as a config or command-line fault. The source
 file now ships `false`.
 
+**`defint a-z` is inert once every declaration is explicit**, and 65 of them
+were. Proof rather than argument: removing all 65 produced a byte-identical
+EXE. It only ever typed undeclared names, which `OPTION EXPLICIT` forbids,
+and sigil-less function returns, of which there were none.
+
+**VBDOS accepts `FUNCTION name (args) AS type`**, so the classic `%`/`$`
+return sigils are not required. QB 4.5 does not, which is why the original
+used them.
+
 **`COMMAND$` uppercases the whole command line.** Flag comparisons must fold
 case; `-bench` arrives as `-BENCH`.
 

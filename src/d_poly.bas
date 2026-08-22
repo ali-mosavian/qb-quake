@@ -12,7 +12,6 @@ option explicit
 '' are touched per vertex per frame. It is also why none of them are
 '' COMMON: COMMON arrays are always descriptor addressed.
 ''
-defint a-z
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
 '$include: 'pal.bi'
@@ -53,7 +52,6 @@ dim shared vx as single, vy as single, vz as single
 
 
 '':::::::
-defint a-z
 sub d_clip_z ( ot_vtx() as u3dVector4f, ot_uv() as uv, ot_cnt as integer, _
                      in_vtx() as u3dVector4f, in_uv() as uv, in_cnt as integer )
 
@@ -157,7 +155,6 @@ end sub
 '' ==========================================================================
 ''  RASTER
 '' ==========================================================================
-defint a-z
 sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
                    xresh as single, yresh as single )
     dim dp as single
@@ -355,17 +352,17 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
             '' couple of pixels along the fan diagonal. Quake picks a
             '' mip per surface, and so does this now.
             ''
-            zl! = 0.0
+            zl = 0.0
             for  j = 0 to polycnt-1
-                zl! = zl! + polyb(j).w
+                zl = zl + polyb(j).w
             next j
-            zl! = zl! / polycnt
+            zl = zl / polycnt
 
-            if  ( zl! >= 1400.0 ) then
+            if  ( zl >= 1400.0 ) then
                 miplevel = 3
-            elseif  ( zl! >= 560.0 ) then
+            elseif  ( zl >= 560.0 ) then
                 miplevel = 2
-            elseif  ( zl! >= 280.0 ) then
+            elseif  ( zl >= 280.0 ) then
                 miplevel = 1
             else
                 miplevel = 0

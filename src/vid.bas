@@ -8,7 +8,6 @@ option explicit
 ''
 '' fps1 and screenie are scalars, so no '$STATIC/'$DYNAMIC concern.
 ''
-defint a-z
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
 '$include: 'pal.bi'
@@ -37,7 +36,6 @@ dim shared screenie as integer
 ''::::::::::
 '' name: initUgl
 ''::::::::::
-defint a-z
 sub vid_init_ugl
     if ( uglInit() = FALSE ) then 
         sys_error "0x0000, Could not init UGL..."
@@ -52,7 +50,6 @@ end sub
 '' name: videoOpen
 '' desc: Final video mode, backbuffer and the Quake palette.
 ''::::::::::
-defint a-z
 sub vid_init
     dim pages as integer
 
@@ -95,7 +92,6 @@ end sub
 ''
 '' Once per frame, at the end of it.
 ''::::::::::
-defint a-z
 sub vid_update ( h_dst_dc as long, page as integer )
     ''
     '' Present only. This used to also poll the screenshot key, tally frames
@@ -121,7 +117,6 @@ end sub
 '' desc: One frame has been drawn. Rolls fps once a second, and clears the
 ''       counters the next frame will accumulate into.
 ''::::::::::
-defint a-z
 sub scr_count_frame
 
     fps1 = fps1 + 1
@@ -146,7 +141,6 @@ end sub
 '' desc: Writes scrnNN.bmp while the key is held. Lives with the other input
 ''       handling rather than in the present path.
 ''::::::::::
-defint a-z
 sub in_screenshot_key ( h_dst_dc as long )
 
     if ( env.keyboard.s ) then

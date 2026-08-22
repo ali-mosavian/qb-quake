@@ -5,7 +5,6 @@ option explicit
 '' Split out of main.bas: 257 lines that touch exactly one piece of
 '' shared state (env), so the module boundary costs nothing.
 ''
-defint a-z
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
 '$include: 'pal.bi'
@@ -23,7 +22,6 @@ defint a-z
 
 
 
-defint a-z
 sub com_tokenize ( strm() as string, strm_cnt as integer, _
              tokenlist as string, stream as string )
              
@@ -122,7 +120,6 @@ end sub
 
 
 
-defint a-z
 sub com_parse_config ( filename as string )
 
     const xres_flag = 1
@@ -137,7 +134,7 @@ sub com_parse_config ( filename as string )
     const cmmde_flag= 1024
     const fov_flag  = 2048
     const sound_flag= 4096
-    const all_flag% = xres_flag or yres_flag or zn_flag or zf_flag or cmscr_flag or _
+    const all_flag = xres_flag or yres_flag or zn_flag or zf_flag or cmscr_flag or _
                       page_flag or usepg_flag or clear_flag or cminp_flag or cmmde_flag or _
                       fov_flag or sound_flag
     
@@ -166,58 +163,58 @@ sub com_parse_config ( filename as string )
                 case "//"
                 
                 case "display.xres"                
-                    env.x_res = val( com_arg$( strm(), strm_cnt, linenum ) )
+                    env.x_res = val( com_arg( strm(), strm_cnt, linenum ) )
                     flags = flags or xres_flag
                     
                 case "display.yres"
-                    env.y_res = val( com_arg$( strm(), strm_cnt, linenum ) )
+                    env.y_res = val( com_arg( strm(), strm_cnt, linenum ) )
                     flags = flags or yres_flag
                     
                     
                 case "display.clear"
-                    if ( com_arg$( strm(), strm_cnt, linenum ) = "no" ) then
+                    if ( com_arg( strm(), strm_cnt, linenum ) = "no" ) then
                         env.disclear = false
                         flags = flags or clear_flag
-                    elseif ( com_arg$( strm(), strm_cnt, linenum ) = "yes" ) then
+                    elseif ( com_arg( strm(), strm_cnt, linenum ) = "yes" ) then
                         env.disclear = true
                         flags = flags or clear_flag
                     end if
                                         
                 case "display.pages"
-                    env.pages = val( com_arg$( strm(), strm_cnt, linenum ) )
+                    env.pages = val( com_arg( strm(), strm_cnt, linenum ) )
                     flags = flags or page_flag
                     
                 case "display.usepaging"
-                    if ( com_arg$( strm(), strm_cnt, linenum ) = "no" ) then
+                    if ( com_arg( strm(), strm_cnt, linenum ) = "no" ) then
                         env.usepag = false
                         flags = flags or usepg_flag
-                    elseif ( com_arg$( strm(), strm_cnt, linenum ) = "yes" ) then
+                    elseif ( com_arg( strm(), strm_cnt, linenum ) = "yes" ) then
                         env.usepag = true
                         flags = flags or usepg_flag
                     end if
                                     
                 case "world.frustum.zn"                
-                    env.z_near = val( com_arg$( strm(), strm_cnt, linenum ) )
+                    env.z_near = val( com_arg( strm(), strm_cnt, linenum ) )
                     flags = flags or zn_flag
                                     
                 case "world.frustum.zf"                
-                    env.z_far = val( com_arg$( strm(), strm_cnt, linenum ) )
+                    env.z_far = val( com_arg( strm(), strm_cnt, linenum ) )
                     flags = flags or zf_flag
                                     
                 case "world.camera.script"
-                    env.camscrpt = com_arg$( strm(), strm_cnt, linenum )
+                    env.camscrpt = com_arg( strm(), strm_cnt, linenum )
                     flags = flags or cmscr_flag
                     
                 case "world.camera.interp"
-                    env.caminterp = val( com_arg$( strm(), strm_cnt, linenum ) )
+                    env.caminterp = val( com_arg( strm(), strm_cnt, linenum ) )
                     flags = flags or cminp_flag
                     
                 case "world.camera.mode"
-                    if ( com_arg$( strm(), strm_cnt, linenum ) = "freelook" ) then
+                    if ( com_arg( strm(), strm_cnt, linenum ) = "freelook" ) then
                         env.cammode = 0
-                    elseif ( com_arg$( strm(), strm_cnt, linenum ) = "script_play" ) then
+                    elseif ( com_arg( strm(), strm_cnt, linenum ) = "script_play" ) then
                         env.cammode = 1
-                    elseif ( com_arg$( strm(), strm_cnt, linenum ) = "script_edit" ) then
+                    elseif ( com_arg( strm(), strm_cnt, linenum ) = "script_edit" ) then
                         env.cammode = 2
                     else
                         sys_error "Unknown syntax at line #" + str$(linenum)                                                
@@ -226,14 +223,14 @@ sub com_parse_config ( filename as string )
                     flags = flags or cmmde_flag
                     
                 case "world.camera.fov"
-                    env.camfov = val( com_arg$( strm(), strm_cnt, linenum ) )
+                    env.camfov = val( com_arg( strm(), strm_cnt, linenum ) )
                     flags = flags or fov_flag
                     
                 case "sound.enabled"
-                    if ( com_arg$( strm(), strm_cnt, linenum ) = "false" ) then
+                    if ( com_arg( strm(), strm_cnt, linenum ) = "false" ) then
                         env.sound = false
                         flags = flags or sound_flag
-                    elseif ( com_arg$( strm(), strm_cnt, linenum ) = "true" ) then
+                    elseif ( com_arg( strm(), strm_cnt, linenum ) = "true" ) then
                         env.sound = true
                         flags = flags or sound_flag
                     end if                    
@@ -254,7 +251,7 @@ sub com_parse_config ( filename as string )
     loop until ( eof( file ) )
     close #file
     
-    if ( flags <> all_flag% ) then
+    if ( flags <> all_flag ) then
         sys_error "Incorrect ini file..."
     end if    
 
@@ -271,10 +268,9 @@ end sub
 ''       SELECT instead would have applied it to comment lines and to
 ''       unknown keys, which report a different error on purpose.
 ''::::::::::
-defint a-z
-function com_arg$ ( strm() as string, strm_cnt as integer, linenum as integer )
+function com_arg ( strm() as string, strm_cnt as integer, linenum as integer ) as string
     com_check_args strm(), strm_cnt, 3, linenum
-    com_arg$ = strm(2)
+    com_arg = strm(2)
 end function
 
 
@@ -288,7 +284,6 @@ end function
 ''
 '' Cold: one call per line of a small text file at startup.
 ''::::::::::
-defint a-z
 sub com_check_args ( strm() as string, strm_cnt as integer, _
                byval want as integer, byval linenum as integer )
 
