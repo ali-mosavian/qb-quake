@@ -43,3 +43,9 @@ common shared /qdrwA/ hTextrDC() as long, mipBuffInf() as miptexb
 '' frame loop and read by screen.bas.
 ''
 common shared /qscrS/ fps as integer, stats as integer
+
+''
+'' pal is loaded by r_tex.bas, which needs its segment and offset to colour
+'' match, and consumed by videoOpen, which installs it and frees it.
+''
+common shared /qpalS/ pal as long
