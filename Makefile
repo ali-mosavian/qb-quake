@@ -18,7 +18,7 @@ SRCS := $(wildcard src/*.bas)
 HDRS := $(wildcard src/*.bi)
 DATA := data/stuff.ini data/base.dat
 HARNESS := tools/dosbox.sh dosbox/template.conf
-EXE  := build/vbd/bsp_pvs.exe
+EXE  := build/vbd/qrender.exe
 
 export MGL TOOLCHAINS DOSBOX_BIN TIMEOUT
 

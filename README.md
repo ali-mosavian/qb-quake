@@ -16,10 +16,10 @@ bsp_pvs dm3ish.bsp
 
 | | |
 |---|---|
-| `src/bsp_pvs.bas` | main module: init, frame loop, BSP traversal and the rasteriser |
-| `src/qini.bas`    | `stuff.ini` parsing and the string tokeniser |
-| `src/bsp_pvs.bi`  | BSP-on-disk structures, shared types, `declare`s |
-| `src/qshared.bi`  | the `COMMON SHARED` block — state that crosses modules |
+| `src/main.bas` | main module: init, frame loop, BSP traversal and the rasteriser |
+| `src/common.bas`    | `stuff.ini` parsing and the string tokeniser |
+| `src/bspfile.bi`  | BSP-on-disk structures, shared types, `declare`s |
+| `src/quakedef.bi`  | the `COMMON SHARED` block — state that crosses modules |
 | `data/stuff.ini`  | video mode, camera, sound settings |
 | `data/base.dat`   | µAR archive: palette, colormap, 4x6 font, two MOD tracks |
 | `data/dm3ish.bsp` | demo map |
@@ -28,7 +28,7 @@ bsp_pvs dm3ish.bsp
 | `dosbox/`, `tools/` | build and run on a host without a DOS machine |
 
 Sources are split into modules. `DIM SHARED` is module scope only, so state
-that crosses a module boundary lives in `src/qshared.bi` as `COMMON SHARED`;
+that crosses a module boundary lives in `src/quakedef.bi` as `COMMON SHARED`;
 everything else stays local to its module, which matters because `COMMON`
 arrays are always descriptor-addressed and the renderer's scratch is
 deliberately `'$STATIC` for direct addressing.
@@ -49,7 +49,7 @@ gotchas behind them, and what is still open.
   of the program body. Free conventional memory is not the constraint — it
   fails identically with 608K free.
 - **PDS 7.1** parses the file but rejects every `_` line continuation in
-  `bsp_pvs.bi` with `Formal parameter specification illegal`, and cascades to
+  `bspfile.bi` with `Formal parameter specification illegal`, and cascades to
   113 errors. Underscore continuation is a VBDOS extension.
 
 µGL is a separate tree and is **not** vendored here. Point `MGL` at it and
@@ -98,11 +98,11 @@ restructuring and are fixed here.
   `uglPalLoad` was an undeclared array reference and `uglPalSet` could not
   parse as a sub call at all. Three of the compiler's errors were this one
   missing line.
-- **`ugluBMPSave` did not exist.** `bsp_pvs.bi` declares it, the screenshot
+- **`ugluBMPSave` did not exist.** `bspfile.bi` declares it, the screenshot
   key calls it, and it is in no µGL library. Neither is `ugluSaveTGA`, which
   `uglu.bi` declares — µGL's BMP routines only *load*. The link failed on
   `UGLUBMPSAVE`, which means the screenshot key had never worked. It is now
-  implemented in `bsp_pvs.bas` as an 8-bit BMP writer.
+  implemented in `main.bas` as an 8-bit BMP writer.
 - **Backface culling was inert.** The plane distance was computed with the
   opposite sign to the rest of the file, and all three branches assigned
   `drawply = 1`, so nothing was ever rejected while the HUD reported the

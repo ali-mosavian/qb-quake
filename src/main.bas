@@ -1,5 +1,5 @@
 ''
-'' bsp_pvs -- a Quake 1 BSP walker and renderer for uGL.
+'' main -- a Quake 1 BSP walker and renderer for uGL.
 ''
 '' Reads a .bsp, walks the tree back to front with PVS and frustum culling,
 '' and rasterises it perspective correct, affine or wireframe with mipmaps.
@@ -44,8 +44,8 @@ defint a-z
 '$include: 'uglu.bi'
 '$include: 'font.bi'
 '$include: 'mouse.bi'
-'$include: 'bsp_pvs.bi'
-'$include: 'qshared.bi'
+'$include: 'bspfile.bi'
+'$include: 'quakedef.bi'
 '$include: 'snd.bi'
 '$include: 'mod.bi'
 
@@ -1652,7 +1652,7 @@ end sub
 defint a-z
 sub checkCommandLine
     if ( rtrim$(ltrim$( command$ )) = "" ) then
-        print "Usage: bsp_pvs mapname.bsp"
+        print "Usage: qrender mapname.bsp"
         print "Copyleft Blitz, july/2003"
         doEnd
     end if
@@ -2207,7 +2207,7 @@ end sub
 '' desc: Writes a DC out as an 8 bit Windows BMP.
 ''
 ''       uGL declares a screenshot routine in uglu.bi (ugluSaveTGA) but never
-''       shipped an implementation, and bsp_pvs.bi declares a ugluBMPSave that
+''       shipped an implementation, and bspfile.bi declares a ugluBMPSave that
 ''       exists in no library either. The screenshot key has been calling an
 ''       unresolved symbol, so the program has never linked. This is that
 ''       routine, in BASIC.

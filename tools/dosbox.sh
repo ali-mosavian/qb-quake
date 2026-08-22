@@ -49,8 +49,8 @@ build)
     mkdir -p "$out"
     cp "$ROOT"/src/*.bas "$ROOT"/src/*.bi "$ROOT"/data/stuff.ini "$ROOT"/data/base.dat "$out/"
     # every .bas except the superseded rewrite is a module of the program
-    # bsp_pvs must come first: it carries the module-level main code
-    MODS="bsp_pvs $(cd "$ROOT/src" && ls *.bas | sed 's/\.bas$//' | grep -vx bsp_pvs | grep -v bsp_pvs_refactored | tr '\n' ' ')"
+    # main must come first: it carries the module-level main code
+    MODS="main $(cd "$ROOT/src" && ls *.bas | sed 's/\.bas$//' | grep -vx main | tr '\n' ' ')"
     OBJS=""; for m in $MODS; do OBJS="$OBJS$m.obj+"; done
     OBJS="${OBJS}M:\\LIB\\ADDONS\\U3D.OBJ"
 
@@ -59,13 +59,13 @@ build)
     {
         printf '%s\r\n' '@echo off' 'if exist result.txt del result.txt' \
                           'if exist bc.out del bc.out' \
-                          'if exist *.obj del *.obj' 'if exist bsp_pvs.exe del bsp_pvs.exe'
+                          'if exist *.obj del *.obj' 'if exist qrender.exe del qrender.exe'
         for m in $MODS; do printf '%s\r\n' "$bc $m.bas, $m.obj; >> bc.out"; done
     } > "$out/build.bat"
     printf '%s\r\n' \
-      'if not exist bsp_pvs.obj goto bcfail' \
+      'if not exist main.obj goto bcfail' \
       "$lnk @link.rsp > link.out" \
-      'if not exist bsp_pvs.exe goto linkfail' \
+      'if not exist qrender.exe goto linkfail' \
       'echo PASS > result.txt' \
       'goto end' \
       ':bcfail' \
@@ -80,8 +80,8 @@ build)
     # suppresses its prompts, so it just sits there waiting. Response file.
     printf '%s\r\n' \
       "/NOE /SEG:800 $OBJS" \
-      'bsp_pvs.exe' \
-      'bsp_pvs.map' \
+      'qrender.exe' \
+      'qrender.map' \
       "$rt+$ugl" \
       ';' > "$out/link.rsp"
 
@@ -93,19 +93,19 @@ build)
     echo "== $tc: $(cat "$out/result.txt" 2>/dev/null || echo NO-RESULT)"
     [[ -s "$out/bc.out"   ]] && sed -n '4,40p' "$out/bc.out"
     [[ -s "$out/link.out" ]] && grep -i error "$out/link.out" || true
-    [[ -f "$out/bsp_pvs.exe" ]] && ls -l "$out/bsp_pvs.exe"
+    [[ -f "$out/qrender.exe" ]] && ls -l "$out/qrender.exe"
     ;;
 run)
     map="${arg:-dm3ish.bsp}"
     out="$ROOT/build/vbd"
-    [[ -f "$out/bsp_pvs.exe" ]] || { echo "no exe; run: tools/dosbox.sh build" >&2; exit 1; }
+    [[ -f "$out/qrender.exe" ]] || { echo "no exe; run: tools/dosbox.sh build" >&2; exit 1; }
     cp "$ROOT/data/$map" "$out/"
     rm -f "$out"/*.bmp "$out"/*.BMP "$out"/ran.txt "$out"/RAN.TXT
 
     printf '%s\r\n' \
       '@echo off' \
       'if exist ran.txt del ran.txt' \
-      "bsp_pvs.exe $map > run.out" \
+      "qrender.exe $map > run.out" \
       'echo DONE > ran.txt' > "$out/run.bat"
 
     conf="$out/dosbox-run.conf"
@@ -125,11 +125,11 @@ viz)
     # starves the debug socket; use dosbox.sh debug for a controllable one.
     map="${arg:-dm3ish.bsp}"
     out="$ROOT/build/vbd"
-    [[ -f "$out/bsp_pvs.exe" ]] || { echo "no exe; run: tools/dosbox.sh build" >&2; exit 1; }
+    [[ -f "$out/qrender.exe" ]] || { echo "no exe; run: tools/dosbox.sh build" >&2; exit 1; }
     cp "$ROOT/data/$map" "$out/"
     conf="$out/dosbox-viz.conf"
     sed -e "s|@CDRIVE@|$out|" -e "s|@VDRIVE@|$out|" -e "s|@MDRIVE@|$out|" \
-        -e "s|@BAT@|bsp_pvs.exe $map|" -e "s|@PRE@||" "$ROOT/dosbox/template.conf" \
+        -e "s|@BAT@|qrender.exe $map|" -e "s|@PRE@||" "$ROOT/dosbox/template.conf" \
       | sed -e 's/^core=dynamic$/core=dynamic/' \
             -e 's/^cycles=max$/cycles=150000/' \
             -e 's/^output=surface$/output=opengl/' \
