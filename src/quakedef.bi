@@ -24,6 +24,7 @@ const LOAD_STEPS = 14
 '' before the split, so COMMON costs them nothing.
 ''
 common shared /qmapS/ bsphead as header, loading as single, loadDC as long
+common shared /qmapS/ bspFile as integer
 common shared /qmapS/ numtex as long, triCount as long, vtxCount as long
 common shared /qmapS/ edgCount as long, lefCount as long, ndsCount as long
 common shared /qmapS/ texiCount as long, CamPos as u3dVector3f, startAngle as single
@@ -52,6 +53,7 @@ common shared /qdrwA/ hTextrDC() as long, mipBuffInf() as miptexb
 '' frame loop and read by screen.bas.
 ''
 common shared /qscrS/ fps as integer, stats as integer
+common shared /qscrS/ benchSecs as integer
 
 ''
 '' pal is loaded by r_tex.bas, which needs its segment and offset to colour
@@ -64,6 +66,7 @@ common shared /qpalS/ pal as long
 '' the rasteriser consume the result.
 ''
 common shared /qcamS/ camLookAt as u3dVector3f, fpsview as integer
+common shared /qcamS/ camFile as integer
 
 ''
 '' The loading-screen MOD track: started by sys_init.bas, played once

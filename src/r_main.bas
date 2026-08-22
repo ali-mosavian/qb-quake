@@ -123,8 +123,8 @@ sub camUpdate ( pa as integer, crrPnt as integer, cntPnts as integer, _
         end if            
         
         if ( env.keyboard.n and env.cammode = 2 ) then
-            print #1, camPos.x, camPos.y, camPos.z
-            print #1, camLookAt.x, camLookAt.y, camLookAt.z
+            print #camFile, camPos.x, camPos.y, camPos.z
+            print #camFile, camLookAt.x, camLookAt.y, camLookAt.z
             
             while ( env.keyboard.n )
             wend

@@ -181,6 +181,7 @@ sub doInit
     texLoadOffsets
     palLoadColormap
     texLoadAll
+    bspClose
 
     '' hand over to the real video mode
     videoOpen
@@ -215,6 +216,8 @@ sub doMain
     dim hz as long
     dim last_point as integer
     dim page as integer
+    dim frameNo as long
+    dim benchf as integer
     
     ''
     '' min/max/bmin/bmax/extn went with the lightmap extent computation in
@@ -244,13 +247,15 @@ sub doMain
 
     
     if ( env.cammode = 1 ) then
-        open env.camscrpt for input as #1    
+        camFile = freefile
+        open env.camscrpt for input as #camFile    
         do 
-            input #1, cbzp(i).x, cbzp(i).y, cbzp(i).z
-            input #1, cbzl(i).x, cbzl(i).y, cbzl(i).z
+            input #camFile, cbzp(i).x, cbzp(i).y, cbzp(i).z
+            input #camFile, cbzl(i).x, cbzl(i).y, cbzl(i).z
             i = i + 1
         loop until ( eof( 1 ) )    
-        close #1    
+        close #camFile
+        camFile = 0
         cntPnts = i-1
                 
         ugluCubicBez3D ppos(0), cbzp(crrPnt), env.caminterp
@@ -259,7 +264,8 @@ sub doMain
     end if        
     
     if ( env.cammode = 2 ) then
-        open env.camscrpt for output as #1
+        camFile = freefile
+        open env.camscrpt for output as #camFile
     end if
     
     
@@ -278,6 +284,7 @@ sub doMain
     usemips = -1
     rendmode = 0
     fpsview = -1
+    stats    = -1
     
     if ( env.sound = true ) then
         modPlay mymod
@@ -349,13 +356,33 @@ sub doMain
         drawHud hDstDC
             
         
+        ''
+        '' Benchmark mode: a fixed frame budget makes a run repeatable and
+        '' headless. Without it verification needs a live debugger socket to
+        '' drive a screenshot, and an identical picture cannot tell a working
+        '' build from one that never rebuilt -- the frame count and fps here
+        '' can.
+        ''
+        frameNo = frameNo + 1
+        if ( env.benchFrames > 0 and frameNo >= env.benchFrames ) then
+            ugluBMPSave "bench.bmp", hDstDC
+            benchf = freefile
+            open "bench.txt" for output as #benchf
+            print #benchf, "frames " + ltrim$(str$( frameNo ))
+            print #benchf, "seconds " + ltrim$(str$( benchSecs ))
+            print #benchf, "lastfps " + ltrim$(str$( fps ))
+            print #benchf, "polys " + ltrim$(str$( polys ))
+            print #benchf, "tris " + ltrim$(str$( tris ))
+            close #benchf
+            exit do
+        end if
+
         presentFrame hDstDC, page
-        
-        
+
     loop while ( env.keyboard.esc = FALSE )
     
     tmrDel env.secTimer
-    close #1
+    if ( camFile <> 0 ) then close #camFile
 
 end sub
 

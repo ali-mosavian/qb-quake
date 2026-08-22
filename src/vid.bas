@@ -120,6 +120,7 @@ sub presentFrame ( hDstDC as long, page as integer )
         fps = fps1
         fps1 = 0
         env.secTimer.counter = 0
+        benchSecs = benchSecs + 1
     end if        
     
     tris = 0

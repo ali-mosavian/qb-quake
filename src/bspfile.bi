@@ -201,6 +201,10 @@ type EnvType
     cammode     as integer
     caminterp   as integer   
     camscrpt    as string * 40
+
+    '' Set from the command line, not from stuff.ini.
+    mapName     as string * 64
+    benchFrames as integer      '' 0 = run until ESC
     
 end type
 
@@ -211,6 +215,7 @@ const DEG2RAD# = 3.14159265359 / 180.0
 declare sub drwLoadingBar ( hDC as long, x as integer, y as integer, wdt as integer, _
                             hgt as integer, percent as single, col as long )
 declare sub drwLoadTick ( )
+declare sub bspClose ( )
 declare sub drwMipTick  ( percent as single )
 declare sub doInit    ( )
 declare sub doMain    ( )
