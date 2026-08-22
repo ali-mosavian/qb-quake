@@ -541,6 +541,8 @@ sub host_bench_report ( frame_no as long, h_dst_dc as long )
     print #benchf, "tickhz " + ltrim$(str$( sys_tick_hz ))
     print #benchf, "peakz " + ltrim$(str$( pl.peak_z ))
     print #benchf, "ticks " + ltrim$(str$( host_ticks ))
+    print #benchf, "waterlevel " + ltrim$(str$( pl.water_level ))
+    print #benchf, "watertype " + ltrim$(str$( pl.water_type ))
     close #benchf
 
 end sub

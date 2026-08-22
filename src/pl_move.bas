@@ -72,6 +72,82 @@ end function
 
 
 ''::::::::::
+'' name: pl_point_contents
+'' desc: What is at a point, from hull 0 -- the render tree.
+''
+''       Not the collision hulls: those are built for a box to move through and
+''       carry only EMPTY and SOLID. Checked, on dm3ish: 579 EMPTY and 1077
+''       SOLID clipnode children, and not one WATER. Water and lava exist only
+''       as leaf contents in hull 0, so that is where this looks.
+''
+''       A child with the high bit set is a leaf rather than a node, and NOT
+''       turns it into the leaf index -- the same convention
+''       r_recursive_world_node walks.
+''::::::::::
+function pl_point_contents ( p as vec3 ) as integer
+    dim nodenr as integer
+    dim pid as integer
+    dim d as single
+
+    nodenr = 0
+
+    do while ( (nodenr and &h8000) = 0 )
+        pid = nds_buffer(nodenr).planeid
+
+        d = p.x*pln_buffer(pid).norm.x + _
+            p.y*pln_buffer(pid).norm.y + _
+            p.z*pln_buffer(pid).norm.z - pln_buffer(pid).dist
+
+        if ( d >= 0.0 ) then
+            nodenr = nds_buffer(nodenr).child0
+        else
+            nodenr = nds_buffer(nodenr).child1
+        end if
+    loop
+
+    pl_point_contents = lef_buffer( not nodenr ).cont
+
+end function
+
+
+
+
+''::::::::::
+'' name: pl_water_level
+'' desc: How deep the player is: 0 dry, 1 feet wet, 2 waist, 3 eyes under.
+''       Three samples up the body, which is what Quake does and what lets
+''       wading feel different from swimming.
+''::::::::::
+sub pl_water_level
+    dim p as vec3
+    dim c as integer
+
+    pl.water_level = 0
+    pl.water_type  = CONTENTS_EMPTY
+
+    p = pl.pos
+    p.z = pl.pos.z - PL_FEET# + 1.0
+    c = pl_point_contents( p )
+
+    if ( c > CONTENTS_WATER ) then exit sub          '' EMPTY or SOLID: dry
+
+    pl.water_type  = c
+    pl.water_level = 1
+
+    p.z = pl.pos.z
+    if ( pl_point_contents( p ) <= CONTENTS_WATER ) then
+        pl.water_level = 2
+
+        p.z = pl.pos.z + PL_EYE#
+        if ( pl_point_contents( p ) <= CONTENTS_WATER ) then pl.water_level = 3
+    end if
+
+end sub
+
+
+
+
+''::::::::::
 '' name: pl_hull_check
 '' desc: Sweeps the point p1->p2 through the hull, recording in tr the first
 ''       solid plane it meets. p1f/p2f are the fractions of the whole sweep
@@ -363,6 +439,17 @@ sub pl_gravity ( byval dt as single )
 
     pl_trace pl.pos, below
 
+    ''
+    '' Swimming: no ground, and a slow sink instead of a fall. Checked before
+    '' the ground test because a floor underwater should not stop you
+    '' floating -- otherwise the player walks along the bottom of a pool.
+    ''
+    if ( pl.water_level >= 2 ) then
+        pl.on_ground = false
+        pl.vel.z = pl.vel.z - PL_WATERSINK#*dt
+        exit sub
+    end if
+
     if ( tr.frac < 1.0 and tr.norm.z > PL_GROUND_NRM# ) then
         pl.on_ground = true
         if ( pl.vel.z < 0.0 ) then pl.vel.z = 0.0
@@ -391,9 +478,15 @@ end sub
 ''::::::::::
 sub pl_init
 
-    pl.pos.x = cam.pos.x
-    pl.pos.y = cam.pos.z
-    pl.pos.z = cam.pos.y - PL_EYE#
+    if ( env.start_set ) then
+        pl.pos.x = env.start_x
+        pl.pos.y = env.start_y
+        pl.pos.z = env.start_z
+    else
+        pl.pos.x = cam.pos.x
+        pl.pos.y = cam.pos.z
+        pl.pos.z = cam.pos.y - PL_EYE#
+    end if
 
     pl.vel.x = 0.0
     pl.vel.y = 0.0
@@ -428,6 +521,18 @@ sub pl_move ( byval fwd as single, byval strafe as single, _
     pl.vel.x = pl.vel.x + (dir_x*fwd - dir_y*strafe) * PL_ACCEL# * dt
     pl.vel.y = pl.vel.y + (dir_y*fwd + dir_x*strafe) * PL_ACCEL# * dt
 
+    '' water drags in all three axes, ground friction only horizontally
+    if ( pl.water_level >= 2 ) then
+        speed = sqr( pl.vel.x*pl.vel.x + pl.vel.y*pl.vel.y + pl.vel.z*pl.vel.z )
+        if ( speed > 0.0 ) then
+            newspeed = speed - speed*PL_WATERFRIC#*dt
+            if ( newspeed < 0.0 ) then newspeed = 0.0
+            pl.vel.x = pl.vel.x * (newspeed/speed)
+            pl.vel.y = pl.vel.y * (newspeed/speed)
+            pl.vel.z = pl.vel.z * (newspeed/speed)
+        end if
+    end if
+
     '' ground friction, horizontal only
     if ( pl.on_ground ) then
         speed = sqr( pl.vel.x*pl.vel.x + pl.vel.y*pl.vel.y )
@@ -442,10 +547,17 @@ sub pl_move ( byval fwd as single, byval strafe as single, _
 
     '' and a ceiling on how fast walking can get
     speed = sqr( pl.vel.x*pl.vel.x + pl.vel.y*pl.vel.y )
-    if ( speed > PL_MAXSPEED# ) then
+    if ( pl.water_level >= 2 ) then
+        if ( speed > PL_WATERSPEED# ) then
+            pl.vel.x = pl.vel.x * (PL_WATERSPEED#/speed)
+            pl.vel.y = pl.vel.y * (PL_WATERSPEED#/speed)
+        end if
+    elseif ( speed > PL_MAXSPEED# ) then
         pl.vel.x = pl.vel.x * (PL_MAXSPEED#/speed)
         pl.vel.y = pl.vel.y * (PL_MAXSPEED#/speed)
     end if
+
+    pl_water_level
 
     pl_gravity dt
 
@@ -457,7 +569,11 @@ sub pl_move ( byval fwd as single, byval strafe as single, _
     '' The velocity is set rather than added, so holding the key gives one
     '' jump of a fixed height instead of accumulating thrust.
     ''
-    if ( jump and pl.on_ground ) then
+    if ( pl.water_level >= 2 ) then
+        '' underwater the jump key swims, and it works every tick rather
+        '' than only from a surface
+        if ( jump ) then pl.vel.z = PL_SWIM#
+    elseif ( jump and pl.on_ground ) then
         pl.vel.z     = PL_JUMP#
         pl.on_ground = false
     end if

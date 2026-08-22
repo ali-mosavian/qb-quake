@@ -361,6 +361,22 @@ point reached, so a jump is provable from a headless run: from the dm3ish
 spawn it should peak about 46 units above the resting height, which is
 `v^2/2g` for Quake's 270 up and 800 down.
 
+**Water and lava live in hull 0, not the collision hulls.** The clipnodes are
+built for a box to move through and carry only EMPTY and SOLID -- on dm3ish,
+579 EMPTY and 1077 SOLID children and not one WATER. `pl_point_contents` walks
+the render tree instead and reads the leaf's contents, which is why `leaf2`
+keeps its `cont` field: an earlier version of the lump conversion dropped it as
+unused, and it had to come back for this.
+
+`pl_water_level` samples three heights up the body -- feet, waist, eyes -- for
+0..3, which is what makes wading feel different from swimming.
+
+**`-at X Y Z` starts the player somewhere specific**, which is how the water is
+tested at all: dm3ish's pool is at x 336..688, y -336..256, z -128..-16, a long
+walk from the spawn. Dropped in at (500, 0, -60) the player should report
+water_level 3, water_type -3, on_ground 0, and sink to about -104 with vz back
+at 0.
+
 **A resting z always ends in .03125.** That is `PL_CLIP_EPS`, the distance the
 trace stops short of a surface. Seeing it is how you know a landing is a real
 trace stop rather than a coincidence.
