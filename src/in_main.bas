@@ -115,7 +115,10 @@ end sub
 ''::::::::::
 sub in_screenshot_key ( h_dst_dc as long )
 
-    if ( env.keyboard.s ) then
+    ''
+    '' F5, not S: S walks backwards now.
+    ''
+    if ( env.keyboard.f5 ) then
         scr_screenshot "scrn" + ltrim$(rtrim$(str$( screenie ))) + ".bmp", h_dst_dc
         screenie = screenie + 1
     end if

@@ -63,7 +63,7 @@ sub v_update_camera ( byval dt as single )
     dim cam_pos_c as u3dVector3f
     dim tmx as integer, tmy as integer
     dim theta as single, phi as single
-    dim fwd as single
+    dim fwd as single, strafe as single
     dim dir_x as single, dir_y as single, dir_l as single
     dim jump as integer
 
@@ -132,10 +132,29 @@ sub v_update_camera ( byval dt as single )
         '' decides where the move actually ends, in noclip they still move the
         '' eye straight along the look vector.
         ''
-        fwd = 0.0
-        if ( env.mouse.left  ) then fwd =  1.0
-        if ( env.mouse.right ) then fwd = -1.0
-        if ( env.bench_walk  ) then fwd =  1.0
+        ''
+        '' WASD, with the mouse buttons kept for forward and back because
+        '' that is how this program has always moved.
+        ''
+        fwd    = 0.0
+        strafe = 0.0
+
+        if ( env.keyboard.w  ) then fwd    = fwd    + 1.0
+        if ( env.keyboard.s  ) then fwd    = fwd    - 1.0
+        if ( env.keyboard.a  ) then strafe = strafe + 1.0
+        if ( env.keyboard.d  ) then strafe = strafe - 1.0
+
+        if ( env.mouse.left  ) then fwd    = fwd    + 1.0
+        if ( env.mouse.right ) then fwd    = fwd    - 1.0
+
+        if ( env.bench_walk   ) then fwd    = 1.0
+        if ( env.bench_strafe ) then strafe = 1.0
+
+        ''
+        '' Pressing both of an opposing pair cancels, which falls out of the
+        '' sum above, and holding W with the left button does not double the
+        '' speed because pl_move clamps to PL_MAXSPEED.
+        ''
 
         if ( pl.noclip ) then
             ''
@@ -180,7 +199,7 @@ sub v_update_camera ( byval dt as single )
             if ( env.keyboard.spcbar ) then jump = -1
             if ( env.bench_jump       ) then jump = -1
 
-            pl_move fwd, 0.0, dir_x, dir_y, jump, dt
+            pl_move fwd, strafe, dir_x, dir_y, jump, dt
         end if
         
         if ( env.keyboard.n and env.cammode = 2 ) then

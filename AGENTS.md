@@ -349,7 +349,14 @@ TIMER only ticks every 55ms: without the alignment the same binary measured
 142.9 Hz on one run and 148.1 on the next, and the game ran 4% faster on one
 of them. Aligned, three runs give 144.0, 145.5, 144.0.
 
-**`-jump` holds jump, `-walk` holds forward**, and `peakz` records the highest
+**Controls.** W/S forward and back, A/D strafe left and right, mouse looks,
+mouse buttons also walk. Space jumps. F1 mips, F2 render mode, F3 birdseye,
+F4 noclip, F5 screenshot, F12 stats, B backface culling.
+
+Screenshot is F5 because S walks backwards. That is the only binding WASD
+displaced.
+
+**`-jump` holds jump, `-walk` holds forward, `-strafe` holds strafe**, and `peakz` records the highest
 point reached, so a jump is provable from a headless run: from the dm3ish
 spawn it should peak about 46 units above the resting height, which is
 `v^2/2g` for Quake's 270 up and 800 down.

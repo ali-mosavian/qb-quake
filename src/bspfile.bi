@@ -208,6 +208,7 @@ type EnvType
     bench_walk  as integer      '' -walk: hold forward, to exercise the
                                 '' collision response without a keyboard
     bench_jump  as integer      '' -jump: hold jump, likewise
+    bench_strafe as integer     '' -strafe: hold strafe, to check its sign
     bench_ticks as integer      '' -ticks N: stop after N simulation steps
                                 '' rather than N frames, so two runs at
                                 '' different framerates simulate exactly the
