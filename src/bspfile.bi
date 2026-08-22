@@ -205,6 +205,8 @@ type EnvType
     '' Set from the command line, not from stuff.ini.
     map_name    as string * 64
     bench_frames as integer      '' 0 = run until ESC
+    bench_walk  as integer      '' -walk: hold forward, to exercise the
+                                '' collision response without a keyboard
     
 end type
 
@@ -228,6 +230,21 @@ declare sub v_update_camera ( pa as integer, crr_pnt as integer, cnt_pnts as int
                         ppos() as PNT3D, plok() as PNT3D, _
                         cbzp() as PNT3D, cbzl() as PNT3D, last_point as integer )
 declare sub in_handle_toggles ( )
+''
+'' pl_move.bas -- player physics
+''
+declare function pl_hull_contents ( byval node as integer, p as vec3 ) as integer
+declare function pl_hull_check ( byval node as integer, byval p1f as single, _
+                                 byval p2f as single, p1 as vec3, p2 as vec3 ) as integer
+declare sub pl_trace ( start as vec3, fin as vec3 )
+declare sub pl_clip_velocity ( v as vec3, norm as vec3 )
+declare sub pl_slide_move ( org as vec3, vel as vec3, byval dt as single )
+declare sub pl_step_move ( org as vec3, vel as vec3, byval dt as single )
+declare sub pl_gravity ( byval dt as single )
+declare sub pl_init ( )
+declare sub pl_move ( byval fwd as single, byval strafe as single, _
+                     byval dir_x as single, byval dir_y as single, byval dt as single )
+
 declare sub v_open_script ( ppos() as PNT3D, plok() as PNT3D, _
                            cbzp() as PNT3D, cbzl() as PNT3D, _
                            cnt_pnts as integer, crr_pnt as integer )
@@ -261,6 +278,7 @@ declare sub mod_load_nodes ( )
 declare sub mod_load_planes ( )
 declare sub mod_load_submodels ( )
 declare sub mod_load_visibility ( )
+declare sub mod_load_clipnodes ( )
 declare sub mod_load_texinfo ( )
 declare sub mod_load_textures ( )
 declare sub vid_init ( )

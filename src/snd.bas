@@ -30,7 +30,7 @@ dim shared loadmod as UGMMOD
 
 
 '' :::::::::::
-'' name: getSBSettings
+'' name: s_get_blaster
 '' desc: Parse the BLASTER enviroment variable
 ''
 '' :::::::::::
@@ -96,7 +96,7 @@ end sub
 
 
 ''::::::::::
-'' name: soundOpen
+'' name: s_init
 '' desc: Autodetects an SB16, falls back to the BLASTER variable.
 ''::::::::::
 sub s_init
@@ -146,7 +146,7 @@ end sub
 
 
 ''::::::::::
-'' name: musicStart
+'' name: s_start_music
 '' desc: Starts the module that plays over the loading screen.
 ''::::::::::
 sub s_start_music
@@ -181,7 +181,7 @@ end sub
 
 
 ''::::::::::
-'' name: musicStopLoading
+'' name: s_stop_music
 ''::::::::::
 sub s_stop_music
     if ( env.sound = true ) then

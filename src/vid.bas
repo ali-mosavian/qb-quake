@@ -31,7 +31,7 @@ option explicit
 
 
 ''::::::::::
-'' name: initUgl
+'' name: vid_init_ugl
 ''::::::::::
 sub vid_init_ugl
     if ( uglInit() = FALSE ) then 
@@ -44,7 +44,7 @@ end sub
 
 
 ''::::::::::
-'' name: videoOpen
+'' name: vid_init
 '' desc: Final video mode, backbuffer and the Quake palette.
 ''::::::::::
 sub vid_init
@@ -84,7 +84,7 @@ end sub
 
 
 ''::::::::::
-'' name: presentFrame
+'' name: vid_update
 '' desc: Screenshot key, page flip or backbuffer blit, and the frame counter.
 ''
 '' Once per frame, at the end of it.

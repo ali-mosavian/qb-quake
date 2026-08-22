@@ -60,7 +60,7 @@ dim shared fps1 as integer
 ''  SUPPORT
 '' ==========================================================================
 '' :::::::::::::
-'' name: drwLoadTick
+'' name: scr_load_tick
 '' desc: Redraws the main loading bar at the current 'loading' percent.
 ''       Takes no arguments -- loadDC and loading are both /qmapS/ --
 ''       which is why the fourteen callers reduce to a bare call.
@@ -71,7 +71,7 @@ end sub
 
 
 '' :::::::::::::
-'' name: drwMipTick
+'' name: scr_mip_tick
 '' desc: The thinner sub-bar above the main one, showing progress through
 ''       the current texture's four mip levels.
 '' :::::::::::::
@@ -81,7 +81,7 @@ end sub
 
 
 '' :::::::::::::
-'' name: drwLoadingBar
+'' name: draw_bar
 '' desc: Draws a loading bar
 ''
 '' :::::::::::::
@@ -195,7 +195,7 @@ end sub
 
 
 ''::::::::::
-'' name: drawHud
+'' name: scr_draw_hud
 '' desc: Sound VU bars, the statistics overlay and the watermark.
 ''::::::::::
 sub scr_draw_hud ( h_dst_dc as long )
@@ -264,7 +264,7 @@ end sub
 
 
 ''::::::::::
-'' name: ugluBMPSave
+'' name: scr_screenshot
 '' desc: Writes a DC out as an 8 bit Windows BMP.
 ''
 ''       uGL declares a screenshot routine in uglu.bi (ugluSaveTGA) but never
@@ -347,7 +347,7 @@ end sub
 
 
 ''::::::::::
-'' name: fontOpen
+'' name: draw_init_font
 ''::::::::::
 sub draw_init_font
     if ( not draw_load_font( "base.dat::font/4x6.fnt", 254 ) ) then
@@ -362,7 +362,7 @@ end sub
 
 
 ''::::::::::
-'' name: loadScreenOpen
+'' name: scr_begin_loading
 '' desc: Mode 13h for the duration of loading only.
 ''::::::::::
 sub scr_begin_loading
@@ -391,6 +391,7 @@ sub scr_count_frame
 
     if env.sec_timer.counter > 0 then
         scr.fps = fps1
+        if ( fps1 > 0 ) then scr.frame_time = 1.0 / fps1
         fps1 = 0
         env.sec_timer.counter = 0
         scr.bench_secs = scr.bench_secs + 1

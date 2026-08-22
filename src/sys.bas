@@ -31,7 +31,7 @@ option explicit
 
 
 ''::::::::::
-'' name: checkCommandLine
+'' name: sys_parse_args
 '' desc: A map on the command line, and the ini beside it.
 ''::::::::::
 sub sys_parse_args
@@ -60,6 +60,9 @@ sub sys_parse_args
         if ( lcase$(argv(i)) = "-bench" and i+1 <= argc-1 ) then
             env.bench_frames = val( argv(i+1) )
         end if
+        if ( lcase$(argv(i)) = "-walk" ) then
+            env.bench_walk = true
+        end if
     next i
 
     if ( (dir$( rtrim$(env.map_name) ) = "") ) then
@@ -78,7 +81,7 @@ end sub
 
 
 ''::::::::::
-'' name: initTables
+'' name: sys_init_tables
 '' desc: Reads stuff.ini and builds the bit mask table the PVS decoder indexes.
 ''::::::::::
 sub sys_init_tables
