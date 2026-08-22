@@ -196,13 +196,9 @@ end sub
 ''::::
 defint a-z
 sub doMain
-    dim a as single
-    dim b as single
-    static zm as single    
     dim mtxMdl as u3dMtrx
     dim mtxPrj as u3dMtrx
     dim mtxFin as u3dMtrx
-    dim mtxScl as u3dMtrx
     
     dim ppos(env.caminterp) as PNT3D
     dim plok(env.caminterp) as PNT3D
@@ -213,12 +209,8 @@ sub doMain
     dim pa as integer
     dim crrPnt as integer
     dim cntPnts as integer
-    dim xres as single, yres as single
     dim xresh as single, yresh as single
     
-    dim viewvec as vertex
-    dim polyc(3) as u3dVector4f
-    dim vtxb as quadtype    
     dim i as integer
     dim hz as long
     dim last_point as integer
@@ -236,8 +228,6 @@ sub doMain
     dim camPosB as u3dVector3f
     
     
-    xres  = env.xRes
-    yres  = env.yRes
     xresh = env.xRes/2.0
     yresh = env.yRes/2.0
 
@@ -283,7 +273,6 @@ sub doMain
         hDstDC = env.hVideoDC
     end if        
     
-    u3dMtrxScale mtxScl, 1.0, 1.0, 1.0
     u3dMtrxPersp mtxPrj, env.camfov, 320.0/240.0, env.zNear, env.zFar
     
     usemips = -1

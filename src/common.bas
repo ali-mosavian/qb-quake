@@ -127,7 +127,6 @@ sub parseIni ( filename as string )
 
     const xres_flag = 1
     const yres_flag = 2
-    const cfmt_flag = 4
     const zn_flag   = 8
     const zf_flag   = 16
     const cmscr_flag= 32

@@ -115,7 +115,6 @@ sub presentFrame ( hDstDC as long, page as integer )
     end if
     
     fps1 = fps1 + 1
-    env.frames = env.frames + 1.0
     
     if env.secTimer.counter > 0 then
         fps = fps1
