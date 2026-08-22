@@ -57,27 +57,27 @@ sub texLoadOffsets
     dim i as integer
     dim tex as miptex
 
-    seek #1, bsphead.texinfo.offs+1
+    seek #bspFile, bsphead.texinfo.offs+1
     for  i = 0 to texiCount-1
-        get #1 ,, texInfBuff(i)
+        get #bspFile ,, texInfBuff(i)
         
         loading = loading + (100.0/LOAD_STEPS)/texiCount
         if ( (i and 127) = 0 ) then drwLoadTick
     next i
     
-    seek #1, bsphead.miptex.offs+1
-    get #1,, numtex
+    seek #bspFile, bsphead.miptex.offs+1
+    get #bspFile,, numtex
     
     redim tmipinf( numtex-1 ) as miptex
     redim mipBuffInf( numtex-1 ) as miptexb
     
     for  i = 0 to numtex-1
-        get #1,, texoffs(i)
+        get #bspFile,, texoffs(i)
     next i    
     
     for  i = 0 to numtex-1
-        seek #1, bsphead.miptex.offs+texoffs(0)+1
-        get #1,, tex
+        seek #bspFile, bsphead.miptex.offs+texoffs(0)+1
+        get #bspFile,, tex
     next i
 
     
@@ -178,8 +178,8 @@ sub texLoadAll
     
     
     for  i = 0 to numtex-1
-        seek #1, bsphead.miptex.offs+texoffs(i)+1
-        get #1,, tmipinf(i)
+        seek #bspFile, bsphead.miptex.offs+texoffs(i)+1
+        get #bspFile,, tmipinf(i)
         
         
         mipBuffInf(i).hght = 1.0 / tmipinf(i).hght
@@ -192,12 +192,12 @@ sub texLoadAll
         
             mipl = 2^j            
             
-            seek #1, bsphead.miptex.offs+texoffs(i)+ tmipinf(i).offset(j)+1
+            seek #bspFile, bsphead.miptex.offs+texoffs(i)+ tmipinf(i).offset(j)+1
             
             def seg = cmpseg
             for  y = 0 to tmipinf(i).hght\mipl-1
                 for  x = 0 to tmipinf(i).wdth\mipl-1
-                    get #1,, byte
+                    get #bspFile,, byte
                     uglPset tmpdc&, x, y, peek( cmpofs+asc(byte) )
                 next x
             next y
@@ -310,7 +310,6 @@ sub texLoadAll
     erase colmap
         
     
-    close #1    
     
     uglRestore
     screen 0

@@ -99,14 +99,35 @@ end sub
 ''::::::::::
 defint a-z
 sub checkCommandLine
-    if ( rtrim$(ltrim$( command$ )) = "" ) then
-        print "Usage: qrender mapname.bsp"
+    dim argv(16) as string
+    dim argc as integer
+    dim cl as string
+    dim i as integer
+
+    cl = rtrim$(ltrim$( command$ ))
+    if ( cl = "" ) then
+        print "Usage: qrender mapname.bsp [-bench N]"
+        print "  -bench N   render N frames, write bench.bmp and bench.txt, exit"
         print "Copyleft Blitz, july/2003"
         doEnd
     end if
-    
-    if ( (dir$( command$ ) = "") ) then
-        print "File " + lcase$(command$) + " could not be found"
+
+    ''
+    '' The map used to be command$ itself, passed raw to OPEN. Splitting it
+    '' off is what lets anything else share the command line.
+    ''
+    strtok argv(), argc, " ", cl
+    env.mapName = argv(0)
+    env.benchFrames = 0
+
+    for  i = 1 to argc-1
+        if ( lcase$(argv(i)) = "-bench" and i+1 <= argc-1 ) then
+            env.benchFrames = val( argv(i+1) )
+        end if
+    next i
+
+    if ( (dir$( rtrim$(env.mapName) ) = "") ) then
+        print "File " + lcase$(rtrim$(env.mapName)) + " could not be found"
         doEnd
     end if
     

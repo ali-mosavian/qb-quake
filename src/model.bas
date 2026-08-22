@@ -41,15 +41,10 @@ dim shared mdlCount as long
 ''::::::::::
 defint a-z
 sub bspOpen
-    open command$ for binary as #1 
+    bspFile = freefile
+    open rtrim$( env.mapName ) for binary as #bspFile
     
-    dim vtx as vertex   
-    dim fce as face
-    dim nodetmp as node
-    dim leaftmp as leaf
-    dim planetmp as plane
-    
-    get #1,, bsphead
+    get #bspFile,, bsphead
     
     triCount = bsphead.faces.size \ len( fce )
     vtxCount = bsphead.vertices.size \ len( vtxBuffer(0) )
@@ -61,8 +56,8 @@ sub bspOpen
     ndsCount = bsphead.nodes.size \ len( nodetmp )
     mdlCount = bsphead.models.size \ len( mdlBuffer(0) )
     texiCount = bsphead.texinfo.size \ len( texInfBuff(0) )
-    seek #1, bsphead.miptex.offs+1
-    get #1,, numtex    
+    seek #bspFile, bsphead.miptex.offs+1
+    get #bspFile,, numtex    
 
 end sub
 
@@ -79,8 +74,8 @@ sub bspFindSpawn
     dim entity as string
 
     entity$ = space$( bsphead.entities.size )
-    seek #1, bsphead.entities.offs+1
-    get #1,, entity$
+    seek #bspFile, bsphead.entities.offs+1
+    get #bspFile,, entity$
     
     dim strm(50) as string
     dim strm_cnt as integer
@@ -159,9 +154,9 @@ defint a-z
 sub bspLoadVertices
     dim i as integer
 
-    seek #1, bsphead.vertices.offs+1
+    seek #bspFile, bsphead.vertices.offs+1
     for  i = 0 to vtxCount-1
-        get #1,, vtxBuffer(i)
+        get #bspFile,, vtxBuffer(i)
         loading = loading + ((100.0/LOAD_STEPS)/vtxCount)
         if ( (i and 127) = 0 ) then drwLoadTick
     next i
@@ -178,9 +173,9 @@ defint a-z
 sub bspLoadFaces
     dim i as integer
 
-    seek #1, bsphead.faces.offs+1
+    seek #bspFile, bsphead.faces.offs+1
     for  i = 0 to triCount-1
-        get #1,, fce
+        get #bspFile,, fce
         triBuffer(i).planeid = fce.planeid
         triBuffer(i).side = fce.side
         triBuffer(i).ledgeid = fce.ledgeid
@@ -203,9 +198,9 @@ defint a-z
 sub bspLoadEdges
     dim i as integer
 
-    seek #1, bsphead.edges.offs+1
+    seek #bspFile, bsphead.edges.offs+1
     for  i = 0 to edgCount-1
-        get #1,, edgBuffer(i)
+        get #bspFile,, edgBuffer(i)
         loading = loading + ((100.0/LOAD_STEPS)/edgCount)
         if ( (i and 127) = 0 ) then drwLoadTick
     next i        
@@ -223,9 +218,9 @@ sub bspLoadEdgeIndex
     dim i as integer
     dim tmp as long
 
-    seek #1, bsphead.ledges.offs+1
+    seek #bspFile, bsphead.ledges.offs+1
     for  i = 0 to ledgCount-1
-        get #1,, tmp&
+        get #bspFile,, tmp&
         ledgBuffer(i) = tmp&
         loading = loading + ((100.0/LOAD_STEPS)/ledgCount)
         if ( (i and 127) = 0 ) then drwLoadTick
@@ -243,9 +238,9 @@ defint a-z
 sub bspLoadLeaves
     dim i as integer
 
-    seek #1, bsphead.leaves.offs+1
+    seek #bspFile, bsphead.leaves.offs+1
     for  i = 0 to lefCount-1        
-        get #1,, leaftmp
+        get #bspFile,, leaftmp
         lefBuffer(i).vislist = leaftmp.vislist
         swap lefBuffer(i).bound, leaftmp.bound
         lefBuffer(i).lfaceid = leaftmp.lfaceid
@@ -266,9 +261,9 @@ defint a-z
 sub bspLoadFaceIndex
     dim i as integer
 
-    seek #1, bsphead.lface.offs+1
+    seek #bspFile, bsphead.lface.offs+1
     for  i = 0 to lfcCount-1
-        get #1,, lfcBuffer(i)
+        get #bspFile,, lfcBuffer(i)
         loading = loading + ((100.0/LOAD_STEPS)/lfcCount)
         if ( (i and 127) = 0 ) then drwLoadTick
     next i                
@@ -285,9 +280,9 @@ defint a-z
 sub bspLoadNodes
     dim i as integer
 
-    seek #1, bsphead.nodes.offs+1
+    seek #bspFile, bsphead.nodes.offs+1
     for  i = 0 to ndsCount-1
-        get #1,, nodetmp
+        get #bspFile,, nodetmp
         ndsBuffer(i).planeid = nodetmp.planeid
         ndsBuffer(i).child0  = nodetmp.child0
         ndsBuffer(i).child1  = nodetmp.child1
@@ -317,9 +312,9 @@ defint a-z
 sub bspLoadPlanes
     dim i as integer
 
-    seek #1, bsphead.planes.offs+1
+    seek #bspFile, bsphead.planes.offs+1
     for  i = 0 to plnCount-1
-        get #1,, planetmp
+        get #bspFile,, planetmp
         plnBuffer(i).norm.x = planetmp.norm.x
         plnBuffer(i).norm.y = planetmp.norm.y
         plnBuffer(i).norm.z = planetmp.norm.z
@@ -341,9 +336,9 @@ defint a-z
 sub bspLoadModels
     dim i as integer
 
-    seek #1, bsphead.models.offs+1
+    seek #bspFile, bsphead.models.offs+1
     for  i = 0 to mdlCount-1
-        get #1,, mdlBuffer(i)
+        get #bspFile,, mdlBuffer(i)
         
         loading = loading + ((100.0/LOAD_STEPS)/mdlCount)
         if ( (i and 127) = 0 ) then drwLoadTick
@@ -361,15 +356,29 @@ defint a-z
 sub bspLoadPvs
     dim i as integer
 
-    seek #1, bsphead.vislist.offs+1
+    seek #bspFile, bsphead.vislist.offs+1
     for  i = 0 to (bsphead.vislist.size\2)-1
-        get #1,, pvsBufferA(i)
+        get #bspFile,, pvsBufferA(i)
     next i
     
     if ( bsphead.vislist.size mod 2 ) then
-        get #1,, pvsBufferA(i)
+        get #bspFile,, pvsBufferA(i)
     end if
     loading = loading + (100.0/LOAD_STEPS)
     drwLoadTick 
 
+end sub
+
+
+''::::::::::
+'' name: bspClose
+'' desc: Releases the map file. r_tex.bas used to do this at the end of
+''       texLoadAll -- the module that opened the file was not the module
+''       that closed it, and the handle's lifetime spanned two modules
+''       with nothing naming the contract.
+''::::::::::
+defint a-z
+sub bspClose
+    close #bspFile
+    bspFile = 0
 end sub
