@@ -24,6 +24,28 @@ option explicit
 '$include: 'q_cam.bi'
 '$include: 'q_pl.bi'
 
+''
+'' Camera-script playback state. These were eight parameters threaded from
+'' host_main through v_update_camera, which is how the frame loop ended up
+'' owning the bezier control points for a camera path. They belong here.
+''
+'' '$DYNAMIC because ppos and plok are sized from env.caminterp, which is
+'' not known until stuff.ini is read. A module-level DIM under '$DYNAMIC
+'' never executes outside the main module, so v_open_script REDIMs them.
+''
+'$dynamic
+dim shared ppos() as PNT3D
+dim shared plok() as PNT3D
+dim shared cbzp() as PNT3D
+dim shared cbzl() as PNT3D
+
+'$static
+dim shared pa as integer            '' step within the current segment
+dim shared crr_pnt as integer       '' control point the path is on
+dim shared cnt_pnts as integer      '' how many the script held
+dim shared last_point as integer
+'$dynamic
+
 
 
 '' ==========================================================================
@@ -37,9 +59,7 @@ option explicit
 '' Once per frame, so the call is free. See the note by the shared
 '' renderer state for why the draw loop is not carved up the same way.
 ''::::::::::
-sub v_update_camera ( pa as integer, crr_pnt as integer, cnt_pnts as integer, _
-                ppos() as PNT3D, plok() as PNT3D, _
-                cbzp() as PNT3D, cbzl() as PNT3D, last_point as integer )
+sub v_update_camera ( byval dt as single )
     dim cam_pos_c as u3dVector3f
     dim tmx as integer, tmy as integer
     dim theta as single, phi as single
@@ -123,9 +143,9 @@ sub v_update_camera ( pa as integer, crr_pnt as integer, cnt_pnts as integer, _
             '' units every frame, so the camera flew at whatever speed the
             '' framerate happened to give it.
             ''
-            cam.pos.x = cam.pos.x + cam.look_at.x*PL_NOCLIP#*fwd*scr.frame_time
-            cam.pos.y = cam.pos.y + cam.look_at.y*PL_NOCLIP#*fwd*scr.frame_time
-            cam.pos.z = cam.pos.z + cam.look_at.z*PL_NOCLIP#*fwd*scr.frame_time
+            cam.pos.x = cam.pos.x + cam.look_at.x*PL_NOCLIP#*fwd*dt
+            cam.pos.y = cam.pos.y + cam.look_at.y*PL_NOCLIP#*fwd*dt
+            cam.pos.z = cam.pos.z + cam.look_at.z*PL_NOCLIP#*fwd*dt
 
             ''
             '' Keep the player in step with the free camera, so switching
@@ -160,7 +180,7 @@ sub v_update_camera ( pa as integer, crr_pnt as integer, cnt_pnts as integer, _
             if ( env.keyboard.spcbar ) then jump = -1
             if ( env.bench_jump       ) then jump = -1
 
-            pl_move fwd, 0.0, dir_x, dir_y, jump, scr.frame_time
+            pl_move fwd, 0.0, dir_x, dir_y, jump, dt
         end if
         
         if ( env.keyboard.n and env.cammode = 2 ) then
@@ -191,10 +211,13 @@ end sub
 ''       also terminated on eof(1), a hardcoded handle, while the file was
 ''       opened on one from freefile -- the same bug the ini parser had.
 ''::::::::::
-sub v_open_script ( ppos() as PNT3D, plok() as PNT3D, _
-                    cbzp() as PNT3D, cbzl() as PNT3D, _
-                    cnt_pnts as integer, crr_pnt as integer )
+sub v_open_script ( )
     dim i as integer
+
+    redim ppos( env.caminterp ) as PNT3D
+    redim plok( env.caminterp ) as PNT3D
+    redim cbzp( 10 ) as PNT3D
+    redim cbzl( 10 ) as PNT3D
 
     if ( env.cammode = 1 ) then
         cam.script_file = freefile

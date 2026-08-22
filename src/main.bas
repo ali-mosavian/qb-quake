@@ -237,24 +237,14 @@ end sub
 
 ''::::
 sub host_main
-    dim mtx_mdl as u3dMtrx
     dim mtx_prj as u3dMtrx
-    dim mtx_fin as u3dMtrx
     
-    dim ppos(env.caminterp) as PNT3D
-    dim plok(env.caminterp) as PNT3D
-    dim cbzp(10) as PNT3D
-    dim cbzl(10) as PNT3D
     
     dim h_dst_dc as long
-    dim pa as integer
-    dim crr_pnt as integer
-    dim cnt_pnts as integer
     dim xresh as single, yresh as single
     
     dim i as integer
     dim hz as long
-    dim last_point as integer
     dim page as integer
     dim frame_no as long
     dim benchf as integer
@@ -268,7 +258,6 @@ sub host_main
     '' Per-face texture axes with the texture size folded in, and the
     '' per-vertex projection the triangle fan shares. See the draw loop.
     ''
-    dim cam_pos_b as u3dVector3f
     
     
     xresh = env.x_res/2.0
@@ -286,7 +275,7 @@ sub host_main
     
 
     
-    v_open_script ppos(), plok(), cbzp(), cbzl(), cnt_pnts, crr_pnt
+    v_open_script
     
     
     
@@ -338,58 +327,12 @@ sub host_main
         ''
         scr.frame_time = sys_frame_time
 
-        v_update_camera pa, crr_pnt, cnt_pnts, ppos(), plok(), cbzp(), cbzl(), last_point
-
-        in_handle_toggles
+        host_tick scr.frame_time
 
         ''
         '' Combine all transforms 
         ''
-        u3dMtrxLookAt mtx_mdl, cam.pos, cam.look_at, cam_up        
-        u3dMtrxConc mtx_fin, mtx_mdl, mtx_prj
-        r_set_frustum frustum(), mtx_fin
-        
-
-        ''
-        '' Birdseye stuff
-        ''
-        '' Deliberate, and it looks like a bug: the frustum above was taken
-        '' from the PLAYER camera, and the view matrix is now rebuilt from a
-        '' fixed overhead one. Flying above the level while the culling still
-        '' answers to the player's view is the point of the mode -- you get to
-        '' watch what the PVS and the frustum actually throw away. Do not
-        '' "fix" it by moving ExtractFrustum below this block.
-        ''
-        if ( cam.fpsview = false ) then 
-            cam_pos_b.x = 351.0
-            cam_pos_b.y = 2119.0
-            cam_pos_b.z = -552.0            
-                        
-            cam.look_at.x = cam_pos_b.x + 1.991367e-8
-            cam.look_at.y = cam_pos_b.y + -1.0
-            cam.look_at.z = cam_pos_b.z + 1.570986e-2
-        else
-            cam_pos_b.x = cam.pos.x
-            cam_pos_b.y = cam.pos.y
-            cam_pos_b.z = cam.pos.z
-        end if
-        
-        '        
-        u3dMtrxLookAt mtx_mdl, cam_pos_b, cam.look_at, cam_up        
-        u3dMtrxConc mtx_fin, mtx_mdl, mtx_prj
-        
-        
-        ''
-        '' Walk BSP tree
-        ''
-        r_draw_world 0
-        
-        
-        d_draw_faces h_dst_dc, mtx_fin, xresh, yresh
-
-
-        
-        scr_draw_hud h_dst_dc
+        host_render h_dst_dc, mtx_prj, xresh, yresh
             
         
         ''
@@ -431,6 +374,92 @@ sub host_shutdown
     end
 
 end sub
+
+
+''::::::::::
+'' name: host_tick
+'' desc: One simulation step. Everything that changes the world in response
+''       to time or input happens here, and nothing here draws.
+''
+''       dt is a parameter rather than a global read so that the step is
+''       explicit at the call site: this is the one number that decides how
+''       far the world moves, and a caller can pass a different one -- a
+''       fixed step, a halved step for a sub-tick -- without the routine
+''       knowing or caring.
+''::::::::::
+sub host_tick ( byval dt as single )
+
+    '' what the player asked for
+    in_handle_toggles
+
+    '' and what the world does about it: camera, and the physics under it
+    v_update_camera dt
+
+end sub
+
+
+
+
+''::::::::::
+'' name: host_render
+'' desc: One frame's drawing. Reads the world, changes none of it -- the
+''       counterpart to host_tick, which changes it and draws none of it.
+''::::::::::
+sub host_render ( byval h_dst_dc as long, mtx_prj as u3dMtrx, _
+                  byval xresh as single, byval yresh as single )
+    dim mtx_mdl as u3dMtrx
+    dim mtx_fin as u3dMtrx
+    dim cam_pos_b as u3dVector3f
+
+    u3dMtrxLookAt mtx_mdl, cam.pos, cam.look_at, cam_up        
+    u3dMtrxConc mtx_fin, mtx_mdl, mtx_prj
+    r_set_frustum frustum(), mtx_fin
+    
+
+    ''
+    '' Birdseye stuff
+    ''
+    '' Deliberate, and it looks like a bug: the frustum above was taken
+    '' from the PLAYER camera, and the view matrix is now rebuilt from a
+    '' fixed overhead one. Flying above the level while the culling still
+    '' answers to the player's view is the point of the mode -- you get to
+    '' watch what the PVS and the frustum actually throw away. Do not
+    '' "fix" it by moving ExtractFrustum below this block.
+    ''
+    if ( cam.fpsview = false ) then 
+        cam_pos_b.x = 351.0
+        cam_pos_b.y = 2119.0
+        cam_pos_b.z = -552.0            
+                    
+        cam.look_at.x = cam_pos_b.x + 1.991367e-8
+        cam.look_at.y = cam_pos_b.y + -1.0
+        cam.look_at.z = cam_pos_b.z + 1.570986e-2
+    else
+        cam_pos_b.x = cam.pos.x
+        cam_pos_b.y = cam.pos.y
+        cam_pos_b.z = cam.pos.z
+    end if
+    
+    '        
+    u3dMtrxLookAt mtx_mdl, cam_pos_b, cam.look_at, cam_up        
+    u3dMtrxConc mtx_fin, mtx_mdl, mtx_prj
+    
+    
+    ''
+    '' Walk BSP tree
+    ''
+    r_draw_world 0
+    
+    
+    d_draw_faces h_dst_dc, mtx_fin, xresh, yresh
+
+
+    
+    scr_draw_hud h_dst_dc
+
+end sub
+
+
 
 
 ''::::::::::
