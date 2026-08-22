@@ -1776,35 +1776,44 @@ sub bspDrawFaces ( hDstDC as long, mtxFin as u3dMtrx, _
                         next j
                     end if
 
+                    ''
+                    '' Mip level, once per face.
+                    ''
+                    '' This used to run per triangle, on the mean of that
+                    '' triangle's three vertices -- and every fan triangle
+                    '' includes the pivot, so the two halves of a quad could
+                    '' straddle a threshold and land on different mips. The
+                    '' mips are box filtered resamples at different sizes, so
+                    '' a one texel mortar line falls on a different texel row
+                    '' in each: the seam shows as the texture stepping a
+                    '' couple of pixels along the fan diagonal. Quake picks a
+                    '' mip per surface, and so does this now.
+                    ''
+                    zl! = 0.0
+                    for  j = 0 to polycnt-1
+                        zl! = zl! + polyb(j).w
+                    next j
+                    zl! = zl! / polycnt
+
+                    if  ( zl! >= 1400.0 ) then
+                        miplevel = 3
+                    elseif  ( zl! >= 560.0 ) then
+                        miplevel = 2
+                    elseif  ( zl! >= 280.0 ) then
+                        miplevel = 1
+                    else
+                        miplevel = 0
+                    end if
+
+                    if ( usemips ) then
+                        texIndx = mipidx*4+miplevel
+                    else
+                        texIndx = mipidx*4
+                    end if
                         for j = 0 to polycnt-3
                             p2 = j+1
                             p3 = j+2
 
-                            ''
-                            '' Mip level from the mean view depth of the
-                            '' triangle. The nearest-corner selection that
-                            '' used to run here was overwritten by this
-                            '' mean on the next line, so it never chose
-                            '' anything; the thresholds are folded rather
-                            '' than multiplied out per triangle.
-                            ''
-                            zl! = (polyb(0).w+polyb(p2).w+polyb(p3).w)*0.3333333
-
-                            if  ( zl! >= 1400.0 ) then
-                                miplevel = 3
-                            elseif  ( zl! >= 560.0 ) then
-                                miplevel = 2
-                            elseif  ( zl! >= 280.0 ) then
-                                miplevel = 1
-                            else
-                                miplevel = 0
-                            end if
-
-                            if ( usemips ) then
-                                texIndx = mipidx*4+miplevel
-                            else
-                                texIndx = mipidx*4
-                            end if
 
                             ''
                             '' Rasterize. Vertex 0 is the fan pivot.
