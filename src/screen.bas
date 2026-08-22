@@ -233,6 +233,14 @@ sub scr_draw_hud ( h_dst_dc as long )
         else
             draw_string h_dst_dc, 0, 8*5, "Backface culling: disabled, press 'b' to enable"
         end if
+
+        ''
+        '' Cull efficiency. Both counters were already being incremented
+        '' once per leaf in the innermost traversal loop, and nothing read
+        '' them -- the cost was being paid for no output.
+        ''
+        draw_string h_dst_dc, 0, 8*6, "Leaves drawn:" + str$( vis.drw_leafs ) + _
+                                     "  culled:" + str$( vis.cul_leafs )
         
         draw_string h_dst_dc, 0, env.y_res-8*7-6, "Resolution: " + str$( env.x_res ) + "x" + ltrim$(str$( env.y_res ))
         draw_string h_dst_dc, 0, env.y_res-8*6-6, "Vertices:" + str$( wld.vtx_count )

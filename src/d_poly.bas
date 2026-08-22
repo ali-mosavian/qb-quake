@@ -178,251 +178,246 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
         for  ti = leaf_indx to leaf_end            
             i = ti
                    
-            if ( poly_flag(i) = vis.frame_stamp ) then
+            ''
+            '' Two guards instead of two nested ifs. BASIC has no CONTINUE,
+            '' so the skip is a GOTO to a label at the end of the loop body
+            '' -- which is precisely what Quake's C writes as `continue` in
+            '' this same loop. It takes the face body from column 20 to 12.
+            ''
+            if ( poly_flag(i) <> vis.frame_stamp ) then goto next_face
+
                 
-                ''
-                '' Backface cull.
-                ''
-                '' Signed distance from the camera to the face's plane,
-                '' with the face's side folded into the sign: side 0 is a
-                '' face pointing along the plane normal, side 1 one
-                '' pointing against it, and a face is only ever visible
-                '' from its own front. One sign test then decides it.
-                ''
-                '' Three separate faults used to make this inert. It read
-                '' triBuffer(nodenr), and nodenr does not exist in this
-                '' scope -- under defint a-z QuickBASIC created it as an
-                '' integer 0, so every face in the map was tested against
-                '' face 0's plane. It added the plane distance where the
-                '' rest of the file (bspClasifypoint, bspWalkNodeB)
-                '' subtracts it. And all three branches assigned
-                '' drawply = 1, so nothing was ever rejected and the HUD's
-                '' "backface culling: enabled" was reporting a switch that
-                '' did nothing.
-                ''
-                pid = tri_buffer(i).planeid
-                dp  = cam.pos.x*pln_buffer(pid).norm.x + _
-                      cam.pos.y*pln_buffer(pid).norm.z + _
-                      cam.pos.z*pln_buffer(pid).norm.y - _
-                      pln_buffer(pid).dist
+            ''
+            '' Backface cull.
+            ''
+            '' Signed distance from the camera to the face's plane,
+            '' with the face's side folded into the sign: side 0 is a
+            '' face pointing along the plane normal, side 1 one
+            '' pointing against it, and a face is only ever visible
+            '' from its own front. One sign test then decides it.
+            ''
+            '' Three separate faults used to make this inert. It read
+            '' triBuffer(nodenr), and nodenr does not exist in this
+            '' scope -- under defint a-z QuickBASIC created it as an
+            '' integer 0, so every face in the map was tested against
+            '' face 0's plane. It added the plane distance where the
+            '' rest of the file (bspClasifypoint, bspWalkNodeB)
+            '' subtracts it. And all three branches assigned
+            '' drawply = 1, so nothing was ever rejected and the HUD's
+            '' "backface culling: enabled" was reporting a switch that
+            '' did nothing.
+            ''
+            pid = tri_buffer(i).planeid
+            dp  = cam.pos.x*pln_buffer(pid).norm.x + _
+                  cam.pos.y*pln_buffer(pid).norm.z + _
+                  cam.pos.z*pln_buffer(pid).norm.y - _
+                  pln_buffer(pid).dist
                       
-                if ( tri_buffer(i).side ) then dp = -dp
+            if ( tri_buffer(i).side ) then dp = -dp
                 
-                if ( rdr.backface = 0 or dp > 0.01 ) then
+            if ( rdr.backface <> 0 and dp <= 0.01 ) then goto next_face
+
                 	
-        		''
-        		'' Build polygon
-        		''
-                    lid = tri_buffer(i).ledgeid
-                    tex = tri_buffer(i).texinfoid
-                    mipidx = tex_inf_buff(tex).miptex
-                    vcnt = tri_buffer(i).ledgenum
+		''
+		'' Build polygon
+		''
+            lid = tri_buffer(i).ledgeid
+            tex = tri_buffer(i).texinfoid
+            mipidx = tex_inf_buff(tex).miptex
+            vcnt = tri_buffer(i).ledgenum
                     
-                    ''
-                    '' Texture axes, scaled by the texture size once per
-                    '' face rather than per vertex.
-                    ''
-                    '' Each of these was an array index plus a UDT member
-                    '' fetch inside the vertex loop, and the size was a
-                    '' further two fetches and two multiplies per vertex.
-                    '' Folding the size into the axes is exact -- it is
-                    '' the same product in a different order -- and
-                    '' nothing downstream wants the unscaled value.
-                    ''
-                    tw = mip_buff_inf(mipidx).wdth
-                    th = mip_buff_inf(mipidx).hght
-                    su0 = tex_inf_buff(tex).vecs(0) * tw
-                    su1 = tex_inf_buff(tex).vecs(1) * tw
-                    su2 = tex_inf_buff(tex).vecs(2) * tw
-                    su3 = tex_inf_buff(tex).vecs(3) * tw
-                    sv0 = tex_inf_buff(tex).vect(0) * th
-                    sv1 = tex_inf_buff(tex).vect(1) * th
-                    sv2 = tex_inf_buff(tex).vect(2) * th
-                    sv3 = tex_inf_buff(tex).vect(3) * th
+            ''
+            '' Texture axes, scaled by the texture size once per
+            '' face rather than per vertex.
+            ''
+            '' Each of these was an array index plus a UDT member
+            '' fetch inside the vertex loop, and the size was a
+            '' further two fetches and two multiplies per vertex.
+            '' Folding the size into the axes is exact -- it is
+            '' the same product in a different order -- and
+            '' nothing downstream wants the unscaled value.
+            ''
+            tw = mip_buff_inf(mipidx).wdth
+            th = mip_buff_inf(mipidx).hght
+            su0 = tex_inf_buff(tex).vecs(0) * tw
+            su1 = tex_inf_buff(tex).vecs(1) * tw
+            su2 = tex_inf_buff(tex).vecs(2) * tw
+            su3 = tex_inf_buff(tex).vecs(3) * tw
+            sv0 = tex_inf_buff(tex).vect(0) * th
+            sv1 = tex_inf_buff(tex).vect(1) * th
+            sv2 = tex_inf_buff(tex).vect(2) * th
+            sv3 = tex_inf_buff(tex).vect(3) * th
                     
-                    for  j = 0 to vcnt-1
-                        edge_idx = ledg_buffer(lid+j)
+            for  j = 0 to vcnt-1
+                edge_idx = ledg_buffer(lid+j)
                         
-                        if ( edge_idx >= 0 ) then
-                            v0 = edg_buffer(edge_idx).v0
-                        else                        
-                            v0 = edg_buffer(-edge_idx).v1
-                        end if
-
-                        ''
-                        '' One fetch per component. The vertex was read
-                        '' nine times before: three for the position and
-                        '' three for each texture axis.
-                        ''
-                        vx = vtx_buffer(v0).x
-                        vy = vtx_buffer(v0).y
-                        vz = vtx_buffer(v0).z
-
-                        polyb(j).x = vx
-                        polyb(j).y = vz
-                        polyb(j).z = vy
-                        polyb(j).w = 1.0
-                        
-                        uvbuffb(j).u = su0*vx + su1*vy + su2*vz + su3
-                        uvbuffb(j).v = sv0*vx + sv1*vy + sv2*vz + sv3
-                    next j
-                    
-                    ''
-                    '' The lightmap extent that used to be computed here
-                    '' -- the min/max of u and v over the face, the 16
-                    '' unit block round-down, smax, tmax, size and the
-                    '' lightmap offset -- was never read by anything. It
-                    '' cost four compares per vertex and a divide per
-                    '' axis per face to produce values that were
-                    '' overwritten on the next face. Removed; the lump is
-                    '' still loaded, so it can come back with a consumer.
-                    ''
-
-                    
-                    ''
-                    '' Transform and clip to near and far
-                    ''
-                    u3dMtrxByVec4 polyb(0), len( polyb(0) ), mtx_fin, _
-                                  polyb(0), len( polyb(0) ), vcnt
-                    d_clip_z poly(), uvbuff(), polycnt, polyb(), uvbuffb(), vcnt
-
-        			''
-        			'' If more then 2 vertices, rasterize
-        			''
-                    if polycnt > 2 then
-                    	
-                    ''
-                    '' Project every vertex of the polygon once, then let
-                    '' the fan reference the results.
-                    ''
-                    '' The fan divided and projected all three corners of
-                    '' every triangle it emitted. Vertex 0 is in every
-                    '' triangle of a fan and was re-divided for each one,
-                    '' and each interior vertex appears in two triangles
-                    '' and was divided twice: a 7-gon paid 15 reciprocals
-                    '' where 7 do. On a 486 without a fast divide that is
-                    '' the most expensive line in the loop.
-                    ''
-                    ''
-                    '' Project every vertex of the polygon once, then let
-                    '' the fan reference the results.
-                    ''
-                    '' The fan divided and projected all three corners of
-                    '' every triangle it emitted. Vertex 0 is in every
-                    '' triangle of a fan and was re-divided for each one,
-                    '' and each interior vertex appears in two triangles
-                    '' and was divided twice: a 7-gon paid 15 reciprocals
-                    '' where 7 do. On a 486 without a fast divide that is
-                    '' the most expensive line in the loop.
-                    ''
-                    for  j = 0 to polycnt-1
-                        prj_w(j) = 1.0 / polyb(j).w
-                        prj_x(j) = xresh + polyb(j).x*prj_w(j)*xresh
-                        prj_y(j) = yresh - polyb(j).y*prj_w(j)*yresh
-                    next j
-
-                    ''
-                    '' The same argument for the texture coordinates: the
-                    '' perspective divide belongs to the vertex, not to
-                    '' each triangle that happens to share it. Choosing
-                    '' the mode out here also leaves ONE copy of the
-                    '' vertex assignment below instead of the three
-                    '' near-identical copies the mode branches used to
-                    '' carry.
-                    ''
-                    if ( rdr.rendmode = 0 ) then
-                        for  j = 0 to polycnt-1
-                            prj_u(j) = uvbuffb(j).u * prj_w(j)
-                            prj_v(j) = uvbuffb(j).v * prj_w(j)
-                        next j
-                    elseif ( rdr.rendmode = 1 ) then
-                        for  j = 0 to polycnt-1
-                            prj_u(j) = uvbuffb(j).u
-                            prj_v(j) = uvbuffb(j).v
-                        next j
-                    end if
-
-                    ''
-                    '' Mip level, once per face.
-                    ''
-                    '' This used to run per triangle, on the mean of that
-                    '' triangle's three vertices -- and every fan triangle
-                    '' includes the pivot, so the two halves of a quad could
-                    '' straddle a threshold and land on different mips. The
-                    '' mips are box filtered resamples at different sizes, so
-                    '' a one texel mortar line falls on a different texel row
-                    '' in each: the seam shows as the texture stepping a
-                    '' couple of pixels along the fan diagonal. Quake picks a
-                    '' mip per surface, and so does this now.
-                    ''
-                    zl! = 0.0
-                    for  j = 0 to polycnt-1
-                        zl! = zl! + polyb(j).w
-                    next j
-                    zl! = zl! / polycnt
-
-                    if  ( zl! >= 1400.0 ) then
-                        miplevel = 3
-                    elseif  ( zl! >= 560.0 ) then
-                        miplevel = 2
-                    elseif  ( zl! >= 280.0 ) then
-                        miplevel = 1
-                    else
-                        miplevel = 0
-                    end if
-
-                    if ( rdr.usemips ) then
-                        tex_indx = mipidx*4+miplevel
-                    else
-                        tex_indx = mipidx*4
-                    end if
-                        for j = 0 to polycnt-3
-                            p2 = j+1
-                            p3 = j+2
-
-
-                            ''
-                            '' Rasterize. Vertex 0 is the fan pivot.
-                            ''
-                            vtx(j).v1.z = prj_w(0)
-                            vtx(j).v2.z = prj_w(p2)
-                            vtx(j).v3.z = prj_w(p3)
-                            vtx(j).v1.x = prj_x(0)
-                            vtx(j).v1.y = prj_y(0)
-                            vtx(j).v2.x = prj_x(p2)
-                            vtx(j).v2.y = prj_y(p2)
-                            vtx(j).v3.x = prj_x(p3)
-                            vtx(j).v3.y = prj_y(p3)
-
-                            if ( rdr.rendmode = 2 ) then
-                                uglTriF h_dst_dc, vtx(j), 200
-                                uglLine h_dst_dc, vtx(j).v1.x, vtx(j).v1.y, vtx(j).v2.x, vtx(j).v2.y, 0
-                                uglLine h_dst_dc, vtx(j).v2.x, vtx(j).v2.y, vtx(j).v3.x, vtx(j).v3.y, 0
-                                uglLine h_dst_dc, vtx(j).v3.x, vtx(j).v3.y, vtx(j).v1.x, vtx(j).v1.y, 0
-                            else
-                                vtx(j).v1.u = prj_u(0)
-                                vtx(j).v1.v = prj_v(0)
-                                vtx(j).v2.u = prj_u(p2)
-                                vtx(j).v2.v = prj_v(p2)
-                                vtx(j).v3.u = prj_u(p3)
-                                vtx(j).v3.v = prj_v(p3)
-
-                                if ( rdr.rendmode = 0 ) then
-                                    uglTriTP h_dst_dc, vtx(j), 0, h_textr_dc(tex_indx)
-                                else
-                                    uglTriT h_dst_dc, vtx(j), 0, h_textr_dc(tex_indx)
-                                end if
-                            end if
-
-                            rdr.tris = rdr.tris + 1                                
-                        next j
-                        
-                    end if
+                if ( edge_idx >= 0 ) then
+                    v0 = edg_buffer(edge_idx).v0
+                else                        
+                    v0 = edg_buffer(-edge_idx).v1
                 end if
-                
-                rdr.polys = rdr.polys + 1
+
+                ''
+                '' One fetch per component. The vertex was read
+                '' nine times before: three for the position and
+                '' three for each texture axis.
+                ''
+                vx = vtx_buffer(v0).x
+                vy = vtx_buffer(v0).y
+                vz = vtx_buffer(v0).z
+
+                polyb(j).x = vx
+                polyb(j).y = vz
+                polyb(j).z = vy
+                polyb(j).w = 1.0
+                        
+                uvbuffb(j).u = su0*vx + su1*vy + su2*vz + su3
+                uvbuffb(j).v = sv0*vx + sv1*vy + sv2*vz + sv3
+            next j
+                    
+            ''
+            '' The lightmap extent that used to be computed here
+            '' -- the min/max of u and v over the face, the 16
+            '' unit block round-down, smax, tmax, size and the
+            '' lightmap offset -- was never read by anything. It
+            '' cost four compares per vertex and a divide per
+            '' axis per face to produce values that were
+            '' overwritten on the next face. Removed; the lump is
+            '' still loaded, so it can come back with a consumer.
+            ''
+
+                    
+            ''
+            '' Transform and clip to near and far
+            ''
+            u3dMtrxByVec4 polyb(0), len( polyb(0) ), mtx_fin, _
+                          polyb(0), len( polyb(0) ), vcnt
+            d_clip_z poly(), uvbuff(), polycnt, polyb(), uvbuffb(), vcnt
+
+			''
+			'' If more then 2 vertices, rasterize
+			''
+            if polycnt > 2 then
+                    	
+            ''
+            '' Project every vertex of the polygon once, then let
+            '' the fan reference the results.
+            ''
+            '' The fan divided and projected all three corners of
+            '' every triangle it emitted. Vertex 0 is in every
+            '' triangle of a fan and was re-divided for each one,
+            '' and each interior vertex appears in two triangles
+            '' and was divided twice: a 7-gon paid 15 reciprocals
+            '' where 7 do. On a 486 without a fast divide that is
+            '' the most expensive line in the loop.
+            ''
+            for  j = 0 to polycnt-1
+                prj_w(j) = 1.0 / polyb(j).w
+                prj_x(j) = xresh + polyb(j).x*prj_w(j)*xresh
+                prj_y(j) = yresh - polyb(j).y*prj_w(j)*yresh
+            next j
+
+            ''
+            '' The same argument for the texture coordinates: the
+            '' perspective divide belongs to the vertex, not to
+            '' each triangle that happens to share it. Choosing
+            '' the mode out here also leaves ONE copy of the
+            '' vertex assignment below instead of the three
+            '' near-identical copies the mode branches used to
+            '' carry.
+            ''
+            if ( rdr.rendmode = 0 ) then
+                for  j = 0 to polycnt-1
+                    prj_u(j) = uvbuffb(j).u * prj_w(j)
+                    prj_v(j) = uvbuffb(j).v * prj_w(j)
+                next j
+            elseif ( rdr.rendmode = 1 ) then
+                for  j = 0 to polycnt-1
+                    prj_u(j) = uvbuffb(j).u
+                    prj_v(j) = uvbuffb(j).v
+                next j
             end if
-            
+
+            ''
+            '' Mip level, once per face.
+            ''
+            '' This used to run per triangle, on the mean of that
+            '' triangle's three vertices -- and every fan triangle
+            '' includes the pivot, so the two halves of a quad could
+            '' straddle a threshold and land on different mips. The
+            '' mips are box filtered resamples at different sizes, so
+            '' a one texel mortar line falls on a different texel row
+            '' in each: the seam shows as the texture stepping a
+            '' couple of pixels along the fan diagonal. Quake picks a
+            '' mip per surface, and so does this now.
+            ''
+            zl! = 0.0
+            for  j = 0 to polycnt-1
+                zl! = zl! + polyb(j).w
+            next j
+            zl! = zl! / polycnt
+
+            if  ( zl! >= 1400.0 ) then
+                miplevel = 3
+            elseif  ( zl! >= 560.0 ) then
+                miplevel = 2
+            elseif  ( zl! >= 280.0 ) then
+                miplevel = 1
+            else
+                miplevel = 0
+            end if
+
+            if ( rdr.usemips ) then
+                tex_indx = mipidx*4+miplevel
+            else
+                tex_indx = mipidx*4
+            end if
+                for j = 0 to polycnt-3
+                    p2 = j+1
+                    p3 = j+2
+
+
+                    ''
+                    '' Rasterize. Vertex 0 is the fan pivot.
+                    ''
+                    vtx(j).v1.z = prj_w(0)
+                    vtx(j).v2.z = prj_w(p2)
+                    vtx(j).v3.z = prj_w(p3)
+                    vtx(j).v1.x = prj_x(0)
+                    vtx(j).v1.y = prj_y(0)
+                    vtx(j).v2.x = prj_x(p2)
+                    vtx(j).v2.y = prj_y(p2)
+                    vtx(j).v3.x = prj_x(p3)
+                    vtx(j).v3.y = prj_y(p3)
+
+                    if ( rdr.rendmode = 2 ) then
+                        uglTriF h_dst_dc, vtx(j), 200
+                        uglLine h_dst_dc, vtx(j).v1.x, vtx(j).v1.y, vtx(j).v2.x, vtx(j).v2.y, 0
+                        uglLine h_dst_dc, vtx(j).v2.x, vtx(j).v2.y, vtx(j).v3.x, vtx(j).v3.y, 0
+                        uglLine h_dst_dc, vtx(j).v3.x, vtx(j).v3.y, vtx(j).v1.x, vtx(j).v1.y, 0
+                    else
+                        vtx(j).v1.u = prj_u(0)
+                        vtx(j).v1.v = prj_v(0)
+                        vtx(j).v2.u = prj_u(p2)
+                        vtx(j).v2.v = prj_v(p2)
+                        vtx(j).v3.u = prj_u(p3)
+                        vtx(j).v3.v = prj_v(p3)
+
+                        if ( rdr.rendmode = 0 ) then
+                            uglTriTP h_dst_dc, vtx(j), 0, h_textr_dc(tex_indx)
+                        else
+                            uglTriT h_dst_dc, vtx(j), 0, h_textr_dc(tex_indx)
+                        end if
+                    end if
+
+                    rdr.tris = rdr.tris + 1                                
+                next j
+                        
+            end if
+
+            rdr.polys = rdr.polys + 1
+
+next_face:
         next ti
     next mi        
 end sub
