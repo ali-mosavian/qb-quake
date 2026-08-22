@@ -112,7 +112,7 @@ run)
     # 's' screenshots the backbuffer; fire a series so at least one lands
     # after the (slow) texture conversion finishes.
     sed -e "s|@CDRIVE@|$out|" -e "s|@VDRIVE@|$out|" -e "s|@MDRIVE@|$out|" \
-        -e "s|@BAT@|run.bat|" -e "s|@PRE@|autotype -w 60 -p 45.0 s s s s s s s s s s s s|" \
+        -e "s|@BAT@|run.bat|" -e "s|@PRE@|autotype -w 150 -p 20.0 s s s s s s s s s s s s|" \
         "$ROOT/dosbox/template.conf" > "$conf"
 
     launch "$conf" "${TIMEOUT:-900}"

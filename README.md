@@ -37,6 +37,9 @@ deliberately `'$STATIC` for direct addressing.
 built by `mkvbd.bat`. It has not been compiled; it uses `uglPalLoad` without
 including `pal.bi`, so it carries that defect too.
 
+See `AGENTS.md` for the toolchain constraints, the BASIC and DOSBox
+gotchas behind them, and what is still open.
+
 ## Building
 
 **It must be VBDOS 1.0.** This is not a preference:
