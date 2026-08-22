@@ -2,6 +2,23 @@
 
 Hard-won things, mostly the kind that cost an hour before they cost a minute.
 
+## Layout
+
+    src/main.bas      entry, frame loop, init
+    src/d_poly.bas    the rasteriser            (Quake d_*.c)
+    src/r_bsp.bas     traversal + visibility    (Quake r_bsp.c)
+    src/model.bas     Mod_Load* lump readers    (Quake model.c)
+    src/r_tex.bas     textures, mips, palette
+    src/common.bas    COM_Parse + config        (Quake common.c)
+    src/screen.bas    overlay, font, screenshot (Quake screen.c/sbar.c)
+    src/bspfile.bi    on-disk structures        (Quake bspfile.h)
+    src/quakedef.bi   the COMMON SHARED block   (Quake quakedef.h)
+    attic/            superseded rewrite, out of the build
+
+Quake uses both conventions and so does this: prefixed families for subsystems
+(`r_`, `d_`, and in Quake also `cl_`, `sv_`, `snd_`, `in_`, `vid_`, `sys_`),
+bare names for standalone units (`model.c`, `common.c`, `screen.c`, `host.c`).
+
 ## Toolchain
 
 **VBDOS 1.0 only.** Not a preference:
@@ -27,8 +44,6 @@ and then render a **black screen**. Assembler is **MASM 6.11d** — plain 6.11
 fails on the `misc/` clippers with a macro forward-reference error, and 6.14
 is Windows-only so it will not run under DOSBox.
 
-## BASIC / VBDOS
-
 **`defint a-z` means an undeclared name is a silent integer zero, not an
 error.** This is the single most productive bug family in this codebase. Real
 ones found here:
@@ -43,6 +58,43 @@ ones found here:
 When splitting routines out of a long one, audit every name the original
 *assigned* — not just the `dim`-declared ones. `texiCount` and `fps1` were
 both implicit.
+
+## Splitting a module
+
+Six cuts took `main.bas` from 2918 lines to 979. Two of them failed first, both
+for the same reason, and the failure mode is nasty: **builds clean, links
+clean, then the program exits in about 25 seconds with empty stdout and no
+`error.log`.** An unallocated array faults before the BASIC runtime can print
+anything.
+
+Run these four checks before building. They are cheap and each one has caught
+a real bug:
+
+1. **Every `COMMON` array is allocated somewhere.** `COMMON SHARED` can only
+   declare `name()`, so an array with a real bound in its `DIM` loses it.
+   Caught `hTextrDC( 256*4 )`.
+2. **Every non-main module-level array under `'$DYNAMIC` is `REDIM`med.**
+   See the rule below. Caught `texoffs( 256 )` and `hFontChar(255)`; still
+   flags `clpBuffer` as latent.
+3. **Every cross-module call has a `DECLARE` in `bspfile.bi`**, in both
+   directions. Within one module BASIC auto-declares its own `SUB`s; across a
+   boundary it does not. Caught `drwLoadingBar`.
+4. **Each module includes `quakedef.bi` and `bspfile.bi` exactly once.** Two
+   identical `COMMON` blocks is "Duplicate definition" on every line. Caught a
+   copied include list.
+
+Then split on **data ownership**, not on which routines feel related. Measure
+which variables each candidate group uses exclusively — the rasteriser touches
+47 shared variables but owns 15, and all 15 are the per-vertex scratch that
+must stay `'$STATIC`.
+
+Make the extractor **assert when a routine it was told to move has no
+definition**, rather than skipping quietly. That is how four dead declarations
+turned up in `bspfile.bi` — `ClipBBoxToFrustum`, `ClipToPlane`,
+`fontPrintChar`, and `ugluBMPSave`, which was declared *and called* but never
+existed anywhere and had kept the program from linking at all.
+
+## BASIC / VBDOS
 
 **`DIM SHARED` is module scope only.** Across separately-compiled modules you
 need `COMMON SHARED`, declared identically in every module (keep it in
@@ -96,6 +148,11 @@ message, which is worse than the runtime's specific one.
 **MASM logical-line limit is 512 chars** including continuations. Expanding
 tabs to spaces in µGL's asm pushed a `local` block over it.
 
+**Python's `open(f,'wb')` truncates before the write runs.** A `TypeError` on
+the following line leaves the file at zero bytes. This emptied `main.bas`
+during a rename; recovered from git. Read bytes, transform, write bytes — and
+never open for writing until the new content exists.
+
 ## Harness
 
 Verification runs go through **plain DOSBox with a redirect**, not the MCP.
@@ -140,6 +197,15 @@ identical harness before diagnosing.** Four separate times a harness artifact
 was mistaken for a code fault here. The A/B settles it in one cycle; reasoning
 about each anomaly in isolation cost about a dozen.
 
+**A real bug fixed with no change in symptom means the wrong cause, not a
+doomed approach.** The texture cut took three attempts. On the first I found
+`hTextrDC` losing its bound to `COMMON`, fixed it correctly, saw no
+improvement, and concluded the cut was hopeless — when the evidence actually
+said there was a second, different fault. It only became findable when
+`screen.bas` failed identically and gave a second data point to triangulate
+from. Two failures with one signature are worth more than one failure studied
+twice.
+
 **Measure, do not infer.** "Ran for 150s" read off a background task hitting
 its timeout was wrong; sampling CPU showed it exited in under 30.
 
@@ -160,9 +226,9 @@ Two techniques that paid for themselves:
 - **`sound.enabled = true` hangs at init** — spins with interrupts off before
   any video mode change, so the screen sits at `C:\>` while the title bar says
   the program is running. Not root-caused. `data/stuff.ini` still ships `true`.
-- **The texture module split is unfinished.** `texLoadOffsets`,
-  `palLoadColormap` and `texLoadAll` against a five-variable interface. It
-  builds, links, passes the allocation and declare audits, then exits inside
-  30s — before the ~90s texture conversion would finish, and *without printing
-  anything*, which rules out both `ExitError` and an untrapped runtime error.
-  Confirmed a real regression by A/B, not a harness artifact.
+- **`clpBuffer` in `model.bas` is a latent instance of the `'$DYNAMIC` rule.**
+  Module-level, no `REDIM`, so it is unallocated — safe today only because it
+  is read solely through `len( clpBuffer(0) )`, which the compiler folds. The
+  first write to it will fail silently. Move it to `'$STATIC`.
+- **`r_main.bas` and `vid.bas` are the obvious remaining cuts** — `camUpdate`
+  and `inputToggles`, then `videoOpen` and `presentFrame`.
