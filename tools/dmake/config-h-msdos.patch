@@ -1,0 +1,40 @@
+--- a/msdos/borland/bcc30/config.h
++++ b/msdos/borland/bcc30/config.h
+@@ -43,6 +43,37 @@
+ 
+ #define REAL_MSDOS 1
+ 
++/* itypes.h (added 2004) needs these; this hand-written DOS config was
++   never updated, so the msdos build has been broken upstream since. */
++#define SIZEOF_SHORT 2
++#define SIZEOF_INT   2
++#define SIZEOF_LONG  4
++
++/* The rest of what autoconf would have discovered. Borland C++ 3.1 has all
++   of these; sys/stat.h and sys/types.h are flattened to the include root in
++   this install, so they stay off and dmake takes its fallbacks. utime(NULL)
++   is safe because msdos/borland/utime.c replaces the library one. */
++#define HAVE_ERRNO_H      1
++#define HAVE_FCNTL_H      1
++#define HAVE_LIMITS_H     1
++#define HAVE_UTIME_H      1
++#define HAVE_GETCWD       1
++#define HAVE_TZSET        1
++#define HAVE_SETVBUF      1
++#define HAVE_TEMPNAM      1
++#define HAVE_STRLWR       1
++#define HAVE_UTIME_NULL   1
++#define HAVE_DRIVE_LETTERS 1
++
++/* win95/microsft/config.h carries these; the msdos one never got them. */
++#define PACKAGE   "dmake"
++#define VERSION   "4.13.1"
++#define BUILDINFO "MSDOS / Borland C++ 3.1"
++
++/* satisfied by the sys/stat.h shim in the source root, which -I. finds */
++#define HAVE_SYS_STAT_H 1
++
++
+ /* a small problem with pointer to voids on some unix machines needs this */
+ #define DMPVOID void *
+ 
