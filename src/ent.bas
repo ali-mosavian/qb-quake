@@ -116,6 +116,7 @@ sub ent_load_teleports
     redim mdl_solid( 63 ) as integer
     redim mdl_zofs( 63 ) as single
     redim face_mdl( wld.tri_count ) as integer
+    redim mdl_done( 63 ) as integer
     redim plat( ENT_MAXTELE ) as PlatEnt
 
     tele_count = 0
@@ -393,3 +394,91 @@ sub ent_move_plats ( byval dt as single )
     next p
 
 end sub
+
+
+
+''::::::::::
+'' name: ent_point_leaf
+'' desc: The world leaf a point falls in. The same descent as
+''       pl_point_contents, stopping one step earlier: that wants what is at
+''       the point, this wants where the point is.
+''::::::::::
+function ent_point_leaf ( p as vec3 ) as integer
+    dim nodenr as integer
+    dim pid as integer
+    dim d as single
+
+    nodenr = 0
+
+    do while ( (nodenr and &h8000) = 0 )
+        pid = nds_buffer(nodenr).planeid
+
+        d = p.x*pln_buffer(pid).norm.x + _
+            p.y*pln_buffer(pid).norm.y + _
+            p.z*pln_buffer(pid).norm.z - pln_buffer(pid).dist
+
+        if ( d >= 0.0 ) then
+            nodenr = nds_buffer(nodenr).child0
+        else
+            nodenr = nds_buffer(nodenr).child1
+        end if
+    loop
+
+    ent_point_leaf = not nodenr
+
+end function
+
+
+
+
+''::::::::::
+'' name: ent_place_models
+'' desc: Clears the per-frame "already drawn" flags.
+''
+''       An earlier version recorded which leaf each entity was in, so the walk
+''       could draw it on arrival. That fails: the leaf holding a sample point
+''       is often culled while the entity's own faces are plainly visible --
+''       measured, the lowered plat resolved to leaf 9, which the walk never
+''       reached, and the entity vanished. Overlap against each visible leaf is
+''       the robust question, and it is asked during the walk, not here.
+''::::::::::
+sub ent_place_models
+    dim m as integer
+
+    for  m = 1 to wld.mdl_count-1
+        mdl_done(m) = false
+    next m
+
+end sub
+
+
+
+''::::::::::
+'' name: ent_hits_leaf
+'' desc: Does submodel m, where it currently is, overlap this leaf's volume?
+''
+''       Asked of every visible leaf as the walk arrives, so an entity is drawn
+''       the first time the walk reaches anywhere it touches. That is roughly
+''       the right depth and much harder to miss than the single leaf a sample
+''       point happens to land in.
+''::::::::::
+function ent_hits_leaf ( byval m as integer, byval lf as integer ) as integer
+    dim z0 as single, z1 as single
+
+    ent_hits_leaf = false
+
+    if ( lf < 0 or lf > wld.lef_count-1 ) then exit function
+
+    z0 = mdl_buffer(m).mins.z + mdl_zofs(m)
+    z1 = mdl_buffer(m).maxs.z + mdl_zofs(m)
+
+    if ( mdl_buffer(m).maxs.x < lef_buffer(lf).bound.min.x ) then exit function
+    if ( mdl_buffer(m).mins.x > lef_buffer(lf).bound.max.x ) then exit function
+    if ( mdl_buffer(m).maxs.y < lef_buffer(lf).bound.min.y ) then exit function
+    if ( mdl_buffer(m).mins.y > lef_buffer(lf).bound.max.y ) then exit function
+    if ( z1 < lef_buffer(lf).bound.min.z ) then exit function
+    if ( z0 > lef_buffer(lf).bound.max.z ) then exit function
+
+    ent_hits_leaf = true
+
+end function

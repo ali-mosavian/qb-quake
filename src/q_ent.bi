@@ -57,6 +57,7 @@ common shared /ent_s/ mdl_zofs() as single
 ''
 common shared /ent_s/ face_mdl() as integer
 
+
 const ENT_PLAT_DOWN = 0
 const ENT_PLAT_UP   = 1
 
@@ -75,3 +76,10 @@ end type
 
 common shared /ent_s/ plat() as PlatEnt
 common shared /ent_s/ plat_count as integer
+
+''
+'' Set once an entity has been emitted this frame. A brush entity usually
+'' overlaps several leaves and the walk may visit all of them; without this
+'' it would be drawn once per leaf.
+''
+common shared /ent_s/ mdl_done() as integer

@@ -411,6 +411,24 @@ teleport texture in mid air.
 Verified by A/B rather than by eye: looking at the func_plat, 176 polys with
 brush entities against 170 without, and 10% of the frame's pixels different.
 
+**A brush entity is drawn during the walk, not after it.** There is no depth
+buffer: back-to-front order is the only reason anything looks right. Appending
+entities to `order_list` after the world puts them in front of everything, which
+is what a lift poking through a wall looks like.
+
+`r_recursive_world_node` emits an entity the first time the walk reaches a
+visible leaf its box overlaps. Two earlier attempts failed for instructive
+reasons: the leaf containing the entity's *centre* is often solid, since a
+lowered lift sits inside its shaft, and the leaf above its top surface can be
+frustum-culled while the entity's own faces are plainly visible. Overlap
+against each visited leaf survives both.
+
+**A viewpoint inside solid geometry makes every measurement from it
+meaningless.** An A/B that seemed to prove entity rendering worked was taken
+from a camera in leaf 0, contents SOLID. `ent_point_leaf` will tell you: leaf
+contents -2 means the camera is in a wall, and the PVS from there answers
+nothing.
+
 **A moving brush entity is traced by moving the line, not the hull.** Its tree
 sits where the compiler put it, so subtracting `mdl_zofs` from both ends of a
 sweep asks a stationary tree the same question that moving the tree would ask

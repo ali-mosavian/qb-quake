@@ -311,6 +311,9 @@ declare sub ent_load_teleports ( )
 declare sub ent_check_teleport ( )
 declare function ent_plat_touched ( byval p as integer ) as integer
 declare sub ent_move_plats ( byval dt as single )
+declare function ent_point_leaf ( p as vec3 ) as integer
+declare sub ent_place_models ( )
+declare function ent_hits_leaf ( byval m as integer, byval lf as integer ) as integer
 
 declare sub mod_load_texinfo ( )
 declare sub mod_load_textures ( )
