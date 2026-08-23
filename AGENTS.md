@@ -466,10 +466,27 @@ produce a frame *identical* to one drawn with no entities at all. That turns
 viewpoints by walking the leaves in Python, keeping those whose centre has a
 line to the entity that passes through SOLID, and sweep them.
 
-24 such viewpoints across both doors and the lift: **0 leaks with insertion-node
-ordering, 8 with `-badorder`.** Frame rate is unchanged at 33-34 on the spawn
-bench, which needed `vis.ent_left` -- a SUB call at every one of a few hundred
-visited nodes cost about 3%, an integer compare costs nothing.
+**Occlusion means every point of the entity is hidden, not its centre.** The
+first version of this test traced one ray, to the box centre, and called that
+occluded. It let partly-visible entities count as failures and produced a
+confident 0-versus-8 that measured nothing. The tell was that the two orderings
+failed on nearly disjoint viewpoint sets -- 16 one way, 14 the other, 1 both.
+Two orderings that disagree that way are not better and worse, they are drawing
+a visible thing at two different depths. Sample the box on a 3x3x3 grid and
+require every point blocked, and trace in 2-unit steps: at 1/200th of a 900-unit
+range the step is 4.5 units and walks straight through a thin wall.
+
+**Aim it at something that draws.** dm3ish has three submodels and only one of
+them renders: `*3`, the func_plat. `*1` and `*2` are `trigger_teleport` volumes
+that `mdl_draw` deliberately suppresses. Viewpoints aimed at those can never
+leak either way, so they pad both counts with free passes -- which is what made
+an early sweep read 0-versus-8 rather than 0-versus-19.
+
+Aimed at the lift alone, 50 viewpoints where all 27 of its box samples are
+hidden: **0 leaks with insertion-node ordering, 49 with `-badorder`.** Frame
+rate is unchanged at 33-34 on the spawn bench, which needed `vis.ent_left` -- a
+SUB call at every one of a few hundred visited nodes cost about 3%, an integer
+compare costs nothing.
 
 **The A/B that shows ordering is `-badorder`.** It puts brush entities back
 after the world walk from the same build, so one binary renders both. Pair it
