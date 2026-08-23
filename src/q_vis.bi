@@ -14,6 +14,8 @@ type VisState
     ord_count   as long         '' entries written to order_list
     drw_leafs   as integer      '' leaves the walk kept this frame, and
     cul_leafs   as integer      '' threw away; both shown on the stats panel
+    bad_order   as integer      '' -badorder, copied here from env because
+                                '' r_bsp.bas has no room for the env block
 end type
 
 common shared /vis_s/ vis as VisState

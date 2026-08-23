@@ -217,6 +217,13 @@ type EnvType
     start_y     as single       '' spawn point. For reaching a part of the
     start_z     as single       '' level without walking to it first.
     start_set   as integer
+    start_yaw   as single       '' -yaw D: face this way instead of the spawn
+    yaw_set     as integer      '' angle. For aiming a headless run at a thing.
+    bad_order   as integer      '' -badorder: put brush entities back after the
+                                '' world walk, the bug this flag exists to show.
+    no_stats    as integer      '' -nostats: the overlay covers a third of the
+                                '' frame, which is a third of what a screenshot
+                                '' was taken to look at.
     bench_ticks as integer      '' -ticks N: stop after N simulation steps
                                 '' rather than N frames, so two runs at
                                 '' different framerates simulate exactly the
