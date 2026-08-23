@@ -309,6 +309,8 @@ declare function ent_value ( strm() as string, byval strm_cnt as integer, kname 
 declare sub ent_vec ( strm() as string, byval strm_cnt as integer, kname as string, v as vec3 )
 declare sub ent_load_teleports ( )
 declare sub ent_check_teleport ( )
+declare function ent_plat_touched ( byval p as integer ) as integer
+declare sub ent_move_plats ( byval dt as single )
 
 declare sub mod_load_texinfo ( )
 declare sub mod_load_textures ( )

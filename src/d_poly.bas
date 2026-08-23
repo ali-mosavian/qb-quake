@@ -30,6 +30,7 @@ option explicit
 '$include: 'q_vis.bi'
 '$include: 'q_draw.bi'
 '$include: 'q_cam.bi'
+'$include: 'q_ent.bi'
 
 '$static
 ''
@@ -175,6 +176,7 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
     dim tu as single, tv as single
     dim tqi as long, tqj as long
     dim turbph as single
+    dim zofs as single
 
    ''
    '' Draw nodes
@@ -239,6 +241,7 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
             vcnt = tri_buffer(i).ledgenum
 
             liquid = mip_buff_inf(mipidx).liquid
+            zofs   = mdl_zofs( face_mdl(i) )
                     
             ''
             '' Texture axes, scaled by the texture size once per
@@ -292,7 +295,7 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
                 vz = vtx_buffer(v0).z
 
                 polyb(j).x = vx
-                polyb(j).y = vz
+                polyb(j).y = vz + zofs
                 polyb(j).z = vy
                 polyb(j).w = 1.0
                         

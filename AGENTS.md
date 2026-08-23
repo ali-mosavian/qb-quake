@@ -411,6 +411,21 @@ teleport texture in mid air.
 Verified by A/B rather than by eye: looking at the func_plat, 176 polys with
 brush entities against 170 without, and 10% of the frame's pixels different.
 
+**A moving brush entity is traced by moving the line, not the hull.** Its tree
+sits where the compiler put it, so subtracting `mdl_zofs` from both ends of a
+sweep asks a stationary tree the same question that moving the tree would ask
+of a stationary line. `pl_trace` walks the world's hull and then every solid
+submodel's; `tr` keeps the earliest hit by itself, since `pl_hull_check` only
+writes when it beats `tr.frac`. `all_solid` is the exception -- each walk sets
+it -- so it is gathered by hand.
+
+The renderer does the same offset in the other direction: one add per vertex,
+`polyb.y = vz + zofs`, because renderer y is bsp z.
+
+**A plat carries its rider upward only.** A descending one is left to drop away
+under the player, which is what it looks like in Quake, and what avoids pushing
+them through the floor of the shaft on the last step down.
+
 **Teleporters are entities, not geometry.** A `trigger_teleport` has no
 origin: it carries `"model" "*1"`, meaning submodel 1, whose bounding box is
 already in `mdl_buffer`. Its `"target"` names an `info_teleport_destination`,
