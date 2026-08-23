@@ -91,6 +91,16 @@ sub sys_parse_args
             env.start_z   = val( argv(i+3) )
             env.start_set = true
         end if
+        if ( lcase$(argv(i)) = "-badorder" ) then
+            env.bad_order = true
+        end if
+        if ( lcase$(argv(i)) = "-nostats" ) then
+            env.no_stats = true
+        end if
+        if ( lcase$(argv(i)) = "-yaw" and i+1 <= argc-1 ) then
+            env.start_yaw = val( argv(i+1) )
+            env.yaw_set   = true
+        end if
         if ( lcase$(argv(i)) = "-ticks" and i+1 <= argc-1 ) then
             env.bench_ticks = val( argv(i+1) )
         end if

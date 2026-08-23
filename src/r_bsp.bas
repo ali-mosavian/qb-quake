@@ -105,7 +105,7 @@ sub r_recursive_world_node ( byval nodenr as integer ) static
     	    '' when it is set, so the nested walk cannot reach this loop and
     	    '' cannot touch ebm.
     	    ''
-    	    if ( r_ignore_pvs = false ) then
+    	    if ( r_ignore_pvs = false and vis.bad_order = false ) then
     	        for  ebm = 1 to wld.mdl_count-1
     	            if ( mdl_draw(ebm) and mdl_done(ebm) = false ) then
     	                if ( ent_hits_leaf( ebm, not nodenr ) ) then
@@ -206,6 +206,21 @@ sub r_draw_world ( model as integer )
     '' Traverse tree
     ''
     r_recursive_world_node int(mdl_buffer(model).headnode0)
+
+    ''
+    '' -badorder reproduces what this used to do: every brush entity appended
+    '' once the world is finished, so all of them draw in front of it. Kept
+    '' so the fix can be shown rather than asserted.
+    ''
+    if ( vis.bad_order ) then
+        for  i = 1 to wld.mdl_count-1
+            if ( mdl_draw(i) ) then
+                r_ignore_pvs = true
+                r_recursive_world_node int( mdl_buffer(i).headnode0 )
+                r_ignore_pvs = false
+            end if
+        next i
+    end if
     
 end sub
 

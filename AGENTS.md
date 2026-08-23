@@ -356,6 +356,11 @@ F4 noclip, F5 screenshot, F12 stats, B backface culling.
 Screenshot is F5 because S walks backwards. That is the only binding WASD
 displaced.
 
+**`-at X Y Z`, `-yaw D` and `-nostats` aim a headless run at a thing and get
+the overlay out of the picture**, which is what makes a rendering bug
+photographable without a keyboard. `-yaw` is mirrored relative to the map's
+angle key: aim with `atan2(-dy, dx)`.
+
 **`-jump` holds jump, `-walk` holds forward, `-strafe` holds strafe**, and `peakz` records the highest
 point reached, so a jump is provable from a headless run: from the dm3ish
 spawn it should peak about 46 units above the resting height, which is
@@ -408,8 +413,10 @@ A trigger volume is a submodel too, and must not be drawn: `mdl_draw` is false
 for any submodel some `trigger_*` entity claims, or dm3ish hangs two slabs of
 teleport texture in mid air.
 
-Verified by A/B rather than by eye: looking at the func_plat, 176 polys with
-brush entities against 170 without, and 10% of the frame's pixels different.
+~~Verified by A/B: looking at the func_plat, 176 polys with brush entities
+against 170 without, and 10% of the frame's pixels different.~~ **Withdrawn.**
+That A/B was taken from (-80, 700, 100), which is leaf 0, contents SOLID. It
+measured nothing. See the note below on viewpoints.
 
 **A brush entity is drawn during the walk, not after it.** There is no depth
 buffer: back-to-front order is the only reason anything looks right. Appending
@@ -428,6 +435,18 @@ meaningless.** An A/B that seemed to prove entity rendering worked was taken
 from a camera in leaf 0, contents SOLID. `ent_point_leaf` will tell you: leaf
 contents -2 means the camera is in a wall, and the PVS from there answers
 nothing.
+
+**The A/B that shows ordering is `-badorder`.** It puts brush entities back
+after the world walk from the same build, so one binary renders both. Pair it
+with `-at X Y Z`, `-yaw D` and `-nostats`; `-yaw` is the map's angle
+convention mirrored -- the freelook math makes the eye direction
+`(cos a, -sin a)` in bsp x,y, so aim with `atan2(-dy, dx)`, not `atan2(dy, dx)`.
+
+Most viewpoints render identically either way, because ordering only shows
+where world geometry stands between the eye and the entity. The one that
+shows it on dm3ish is (-608, -544, 176) yaw 265, looking at the door at
+(-640, -192): 241 pixels of 64,000, a dark sliver of the door's edge bleeding
+through the wall. Small, but it is the whole bug.
 
 **A moving brush entity is traced by moving the line, not the hull.** Its tree
 sits where the compiler put it, so subtracting `mdl_zofs` from both ends of a

@@ -282,6 +282,7 @@ sub host_main
     cam_up.y = 1.0
     cam_up.z = 0.0   
     
+    if ( env.yaw_set ) then cam.start_angle = env.start_yaw
     mousePos (env.x_res-1) * cam.start_angle/360.0, 110
     
     
@@ -313,6 +314,8 @@ sub host_main
     ''
     rdr.backface = -1
     scr.stats    = -1
+    if ( env.no_stats ) then scr.stats = 0
+    vis.bad_order = env.bad_order
     
     if ( env.sound = true ) then
         modPlay mymod
