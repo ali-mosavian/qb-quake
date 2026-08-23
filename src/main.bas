@@ -316,6 +316,7 @@ sub host_main
     scr.stats    = -1
     if ( env.no_stats ) then scr.stats = 0
     vis.bad_order = env.bad_order
+    vis.no_ents   = env.no_ents
     
     if ( env.sound = true ) then
         modPlay mymod

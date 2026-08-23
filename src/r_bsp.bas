@@ -36,6 +36,13 @@ dim shared r_ignore_pvs as integer
 '$dynamic
 dim shared pvs_leaf as integer
 
+''
+'' The two walk routines call each other, so whichever comes second in the
+'' file needs declaring first. Module-local, so this does not belong in
+'' bspfile.bi with the cross-module declarations.
+''
+declare sub r_recursive_world_node ( byval nodenr as integer )
+
 
 
 ''::::::::::::
@@ -60,11 +67,42 @@ end function
 
 
 
+''::::::::::
+'' name: r_emit_entities
+'' desc: Draws every brush entity whose place in the order is this node.
+''
+''       Called from the walk at the one moment everything further away has
+''       been emitted and nothing nearer has, which is the whole of what
+''       makes a painter's algorithm work. ent_find_node picks the node.
+''
+''       Its own SUB rather than inline because r_recursive_world_node is
+''       STATIC: its locals are shared with its own recursion, and a loop
+''       counter read across the nested call below would not survive one.
+''       A separate SUB gets a frame of its own. r_ignore_pvs still has to
+''       stop the nested walk re-entering here, which would not terminate.
+''::::::::::
+sub r_emit_entities ( byval nodenr as integer )
+    dim m as integer
+
+    if ( r_ignore_pvs or vis.bad_order or vis.no_ents ) then exit sub
+
+    for  m = 1 to wld.mdl_count-1
+        if ( mdl_draw(m) and mdl_node(m) = nodenr ) then
+            vis.ent_left = vis.ent_left - 1
+            r_ignore_pvs = true
+            r_recursive_world_node int( mdl_buffer(m).headnode0 )
+            r_ignore_pvs = false
+        end if
+    next m
+
+end sub
+
+
+
 sub r_recursive_world_node ( byval nodenr as integer ) static
     dim dp as single
     dim frst as integer, last as integer, i as integer
     dim pid as integer, side as integer
-    dim ebm as integer
 
     
     ''
@@ -92,31 +130,11 @@ sub r_recursive_world_node ( byval nodenr as integer ) static
     	    '' Put leaf in ordering list
     	    ''
     	    ''
-    	    '' Any brush entity sitting in this leaf is drawn now, while the
-    	    '' walk is here. Appending it after the world instead puts it in
-    	    '' front of everything -- there is no depth buffer, and back to
-    	    '' front order is the only thing making any of this correct.
+    	    '' A brush entity small enough to fit inside one leaf is drawn
+    	    '' on arrival at that leaf. Anything larger straddles a plane
+    	    '' and is emitted at a node instead, further down.
     	    ''
-    	    '' This SUB is declared STATIC, so its locals are shared with every
-    	    '' call including its own recursion. The existing code survives
-    	    '' that by never reading a local across a recursive call. ebm is
-    	    '' read across one, so it is protected differently: r_ignore_pvs
-    	    '' is set before the nested call and the loop below is skipped
-    	    '' when it is set, so the nested walk cannot reach this loop and
-    	    '' cannot touch ebm.
-    	    ''
-    	    if ( r_ignore_pvs = false and vis.bad_order = false ) then
-    	        for  ebm = 1 to wld.mdl_count-1
-    	            if ( mdl_draw(ebm) and mdl_done(ebm) = false ) then
-    	                if ( ent_hits_leaf( ebm, not nodenr ) ) then
-    	                    mdl_done(ebm) = true
-    	                    r_ignore_pvs  = true
-    	                    r_recursive_world_node int( mdl_buffer(ebm).headnode0 )
-    	                    r_ignore_pvs  = false
-    	                end if
-    	            end if
-    	        next ebm
-    	    end if
+    	    if ( vis.ent_left ) then r_emit_entities nodenr
 
     	    vis.drw_leafs = vis.drw_leafs + 1
         else 
@@ -148,6 +166,7 @@ sub r_recursive_world_node ( byval nodenr as integer ) static
     	''
     		
         r_recursive_world_node nds_buffer(nodenr).child1
+        if ( vis.ent_left ) then r_emit_entities nodenr
 	    order_list(vis.ord_count) = nodenr
 	    vis.ord_count = vis.ord_count + 1
         r_recursive_world_node nds_buffer(nodenr).child0
@@ -159,6 +178,7 @@ sub r_recursive_world_node ( byval nodenr as integer ) static
 	    ''
     		
         r_recursive_world_node nds_buffer(nodenr).child0        
+        if ( vis.ent_left ) then r_emit_entities nodenr
 	    order_list(vis.ord_count) = nodenr
 	    vis.ord_count = vis.ord_count + 1        
         r_recursive_world_node nds_buffer(nodenr).child1
@@ -203,6 +223,15 @@ sub r_draw_world ( model as integer )
     r_mark_leaves int(mdl_buffer(model).headnode0)
     
     ''
+    '' How many brush entities the walk still has to place. Once it is zero
+    '' the per-node test below costs nothing.
+    ''
+    vis.ent_left = 0
+    for  i = 1 to wld.mdl_count-1
+        if ( mdl_draw(i) ) then vis.ent_left = vis.ent_left + 1
+    next i
+
+    ''
     '' Traverse tree
     ''
     r_recursive_world_node int(mdl_buffer(model).headnode0)
@@ -212,7 +241,7 @@ sub r_draw_world ( model as integer )
     '' once the world is finished, so all of them draw in front of it. Kept
     '' so the fix can be shown rather than asserted.
     ''
-    if ( vis.bad_order ) then
+    if ( vis.bad_order and vis.no_ents = false ) then
         for  i = 1 to wld.mdl_count-1
             if ( mdl_draw(i) ) then
                 r_ignore_pvs = true
