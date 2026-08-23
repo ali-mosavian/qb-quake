@@ -113,15 +113,37 @@ sub ent_load_teleports
 
     redim tele( ENT_MAXTELE ) as Teleporter
     redim mdl_draw( 63 ) as integer
+    redim mdl_solid( 63 ) as integer
+    redim mdl_zofs( 63 ) as single
+    redim face_mdl( wld.tri_count ) as integer
+    redim plat( ENT_MAXTELE ) as PlatEnt
 
     tele_count = 0
     dest_count = 0
     trig_count = 0
 
-    '' every submodel draws unless something claims it as a trigger
+    plat_count = 0
+
+    '' every submodel draws and blocks unless something claims it as a trigger
     for  i = 0 to 63
-        mdl_draw(i) = true
+        mdl_draw(i)  = true
+        mdl_solid(i) = true
+        mdl_zofs(i)  = 0.0
     next i
+
+    ''
+    '' Which submodel owns each face. The world's faces come first and the
+    '' submodels' follow in order, so this is a walk rather than a search.
+    ''
+    for  i = 0 to wld.tri_count-1
+        face_mdl(i) = 0
+    next i
+
+    for  j = 1 to wld.mdl_count-1
+        for  k = mdl_buffer(j).firstface to mdl_buffer(j).firstface + mdl_buffer(j).numfaces - 1
+            if ( k >= 0 and k <= wld.tri_count-1 ) then face_mdl(k) = j
+        next k
+    next j
 
     entity$ = space$( wld.head.entities.size )
     seek #wld.file, wld.head.entities.offs+1
@@ -159,6 +181,31 @@ sub ent_load_teleports
 
                 dest_count = dest_count + 1
 
+            elseif ( s$ = "func_plat" and plat_count < ENT_MAXTELE ) then
+                s$ = ent_value( strm(), strm_cnt, "model" )
+                if ( left$( s$, 1 ) = "*" ) then
+                    mdlnum = val( mid$( s$, 2 ) )
+
+                    if ( mdlnum > 0 and mdlnum <= wld.mdl_count-1 ) then
+                        plat( plat_count ).model  = mdlnum
+                        plat( plat_count ).speed  = val( ent_value( strm(), strm_cnt, "speed" ) )
+                        plat( plat_count ).travel = val( ent_value( strm(), strm_cnt, "height" ) )
+                        plat( plat_count ).mins   = mdl_buffer(mdlnum).mins
+                        plat( plat_count ).maxs   = mdl_buffer(mdlnum).maxs
+
+                        if ( plat( plat_count ).speed  <= 0.0 ) then plat( plat_count ).speed  = 150.0
+                        if ( plat( plat_count ).travel <= 0.0 ) then _
+                            plat( plat_count ).travel = mdl_buffer(mdlnum).maxs.z - mdl_buffer(mdlnum).mins.z
+
+                        '' Quake positions the brush raised, so a lift at rest
+                        '' is one full travel below where the map drew it.
+                        plat( plat_count ).state = ENT_PLAT_DOWN
+                        mdl_zofs( mdlnum ) = -plat( plat_count ).travel
+
+                        plat_count = plat_count + 1
+                    end if
+                end if
+
             elseif ( s$ = "trigger_teleport" and trig_count < ENT_MAXTELE ) then
                 trig_target( trig_count ) = ent_value( strm(), strm_cnt, "target" )
 
@@ -169,7 +216,8 @@ sub ent_load_teleports
                 s$ = ent_value( strm(), strm_cnt, "model" )
                 if ( left$( s$, 1 ) = "*" ) then
                     trig_model( trig_count ) = val( mid$( s$, 2 ) )
-                    mdl_draw( trig_model( trig_count ) ) = false
+                    mdl_draw( trig_model( trig_count ) )  = false
+                    mdl_solid( trig_model( trig_count ) ) = false
                     trig_count = trig_count + 1
                 end if
             end if
@@ -247,5 +295,101 @@ sub ent_check_teleport
             exit sub
         end if
     next i
+
+end sub
+
+
+
+''::::::::::
+'' name: ent_plat_touched
+'' desc: True when the player is standing on a plat, or in the column above
+''       it. Quake builds a trigger brush around the plat for this; the box is
+''       close enough and needs nothing from the compiler.
+''::::::::::
+function ent_plat_touched ( byval p as integer ) as integer
+    dim top as single
+
+    ent_plat_touched = false
+
+    if ( pl.pos.x + 16.0 < plat(p).mins.x ) then exit function
+    if ( pl.pos.x - 16.0 > plat(p).maxs.x ) then exit function
+    if ( pl.pos.y + 16.0 < plat(p).mins.y ) then exit function
+    if ( pl.pos.y - 16.0 > plat(p).maxs.y ) then exit function
+
+    ''
+    '' Above its surface and within a body's height of it. Anything higher is
+    '' someone on a walkway over the shaft, not a passenger.
+    ''
+    top = plat(p).maxs.z + mdl_zofs( plat(p).model )
+
+    if ( pl.pos.z - PL_FEET# < top - 8.0  ) then exit function
+    if ( pl.pos.z - PL_FEET# > top + 64.0 ) then exit function
+
+    ent_plat_touched = true
+
+end function
+
+
+
+
+''::::::::::
+'' name: ent_move_plats
+'' desc: Drives every func_plat, and carries whoever is riding one.
+''
+''       A plat rises while the player is on it and returns when they leave,
+''       which is Quake's behaviour without the delay and the sounds.
+''
+''       The rider is moved by the same delta the plat moved. Quake does this
+''       properly in SV_PushMove, which re-traces everything the mover touches
+''       and telefrags what it cannot push; this carries the one entity that
+''       exists.
+''::::::::::
+sub ent_move_plats ( byval dt as single )
+    dim p as integer
+    dim m as integer
+    dim goal as single, step_z as single, moved as single, was as single
+    dim riding as integer
+
+    for  p = 0 to plat_count-1
+        m = plat(p).model
+
+        riding = ent_plat_touched( p )
+
+        if ( riding ) then
+            plat(p).state = ENT_PLAT_UP
+        else
+            plat(p).state = ENT_PLAT_DOWN
+        end if
+
+        if ( plat(p).state = ENT_PLAT_UP ) then
+            goal = 0.0
+        else
+            goal = -plat(p).travel
+        end if
+
+        was = mdl_zofs(m)
+
+        if ( mdl_zofs(m) < goal ) then
+            step_z = plat(p).speed * dt
+            mdl_zofs(m) = mdl_zofs(m) + step_z
+            if ( mdl_zofs(m) > goal ) then mdl_zofs(m) = goal
+        elseif ( mdl_zofs(m) > goal ) then
+            step_z = plat(p).speed * dt
+            mdl_zofs(m) = mdl_zofs(m) - step_z
+            if ( mdl_zofs(m) < goal ) then mdl_zofs(m) = goal
+        end if
+
+        moved = mdl_zofs(m) - was
+
+        ''
+        '' Carry the rider. Only upward: a descending plat drops out from under
+        '' the player and gravity does the rest, which is what it looks like in
+        '' Quake. Pushing them down would shove them through the floor of the
+        '' shaft on the last step of the descent.
+        ''
+        if ( riding and moved > 0.0 ) then
+            pl.pos.z = pl.pos.z + moved
+        end if
+    next p
 
 end sub

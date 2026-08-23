@@ -452,6 +452,9 @@ sub host_tick ( byval dt as single )
     '' and anything the world does to the player as a result of moving
     ent_check_teleport
 
+    '' movers, after the player has moved and before anything is drawn
+    ent_move_plats dt
+
     '' map time, which drives every texture animation
     rdr.anim_time = rdr.anim_time + dt
 
@@ -564,6 +567,10 @@ sub host_bench_report ( frame_no as long, h_dst_dc as long )
     print #benchf, "waterlevel " + ltrim$(str$( pl.water_level ))
     print #benchf, "watertype " + ltrim$(str$( pl.water_type ))
     print #benchf, "animtime " + ltrim$(str$( rdr.anim_time ))
+    if ( plat_count > 0 ) then
+        print #benchf, "platzofs " + ltrim$(str$( mdl_zofs( plat(0).model ) ))
+        print #benchf, "platstate " + ltrim$(str$( plat(0).state ))
+    end if
     close #benchf
 
 end sub

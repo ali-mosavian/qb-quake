@@ -27,6 +27,7 @@ option explicit
 '$include: 'q_env.bi'
 '$include: 'q_map.bi'
 '$include: 'q_cam.bi'
+'$include: 'q_ent.bi'
 '$include: 'q_pl.bi'
 
 ''
@@ -265,20 +266,49 @@ end function
 
 ''::::::::::
 '' name: pl_trace
-'' desc: Sweeps the player hull from start to fin, leaving the result in tr.
+'' desc: Sweeps the player hull from start to fin, against the world and every
+''       solid brush entity, leaving the closest hit in tr.
+''
+''       A brush entity is traced by moving the LINE rather than the hull: its
+''       tree is at the position the map compiled it, so subtracting the
+''       entity's offset from both ends of the sweep asks the same question of
+''       a stationary tree that moving the tree would ask of a stationary line.
+''
+''       tr keeps the earliest hit by itself -- pl_hull_check only writes when
+''       it beats tr.frac -- so the hulls can be walked in any order. all_solid
+''       is the exception: each walk sets it, so it is gathered by hand.
 ''::::::::::
 sub pl_trace ( start as vec3, fin as vec3 )
     dim dummy as integer
+    dim i as integer
+    dim any_solid as integer
+    dim s2 as vec3, f2 as vec3
 
     tr.frac        = 1.0
     tr.end_pos     = fin
     tr.norm.x      = 0.0
     tr.norm.y      = 0.0
     tr.norm.z      = 0.0
-    tr.all_solid   = true
     tr.start_solid = false
 
+    tr.all_solid = true
     dummy = pl_hull_check( int( mdl_buffer(0).headnode1 ), 0.0, 1.0, start, fin )
+    any_solid = tr.all_solid
+
+    for  i = 1 to wld.mdl_count-1
+        if ( mdl_solid(i) ) then
+            s2 = start
+            f2 = fin
+            s2.z = s2.z - mdl_zofs(i)
+            f2.z = f2.z - mdl_zofs(i)
+
+            tr.all_solid = true
+            dummy = pl_hull_check( int( mdl_buffer(i).headnode1 ), 0.0, 1.0, s2, f2 )
+            if ( tr.all_solid ) then any_solid = true
+        end if
+    next i
+
+    tr.all_solid = any_solid
 
     if ( tr.frac < 1.0 ) then
         tr.end_pos.x = start.x + (fin.x - start.x) * tr.frac
