@@ -219,6 +219,9 @@ type EnvType
     start_set   as integer
     start_yaw   as single       '' -yaw D: face this way instead of the spawn
     yaw_set     as integer      '' angle. For aiming a headless run at a thing.
+    no_ents     as integer      '' -noents: draw no brush entities at all. The
+                                '' reference image for "is this entity leaking
+                                '' through the wall in front of it".
     bad_order   as integer      '' -badorder: put brush entities back after the
                                 '' world walk, the bug this flag exists to show.
     no_stats    as integer      '' -nostats: the overlay covers a third of the
@@ -320,7 +323,7 @@ declare function ent_plat_touched ( byval p as integer ) as integer
 declare sub ent_move_plats ( byval dt as single )
 declare function ent_point_leaf ( p as vec3 ) as integer
 declare sub ent_place_models ( )
-declare function ent_hits_leaf ( byval m as integer, byval lf as integer ) as integer
+declare function ent_find_node ( byval m as integer ) as integer
 
 declare sub mod_load_texinfo ( )
 declare sub mod_load_textures ( )

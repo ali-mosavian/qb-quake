@@ -116,7 +116,7 @@ sub ent_load_teleports
     redim mdl_solid( 63 ) as integer
     redim mdl_zofs( 63 ) as single
     redim face_mdl( wld.tri_count ) as integer
-    redim mdl_done( 63 ) as integer
+    redim mdl_node( 63 ) as integer
     redim plat( ENT_MAXTELE ) as PlatEnt
 
     tele_count = 0
@@ -433,20 +433,21 @@ end function
 
 ''::::::::::
 '' name: ent_place_models
-'' desc: Clears the per-frame "already drawn" flags.
+'' desc: Works out where in the world's back-to-front order each submodel
+''       belongs, once per frame, and leaves the answer in mdl_node.
 ''
-''       An earlier version recorded which leaf each entity was in, so the walk
-''       could draw it on arrival. That fails: the leaf holding a sample point
-''       is often culled while the entity's own faces are plainly visible --
-''       measured, the lowered plat resolved to leaf 9, which the walk never
-''       reached, and the entity vanished. Overlap against each visible leaf is
-''       the robust question, and it is asked during the walk, not here.
+''       Two earlier answers were wrong in instructive ways. Recording the leaf
+''       a sample point falls in fails because that leaf is often solid -- a
+''       lowered lift sits inside its own shaft -- and a solid leaf is never
+''       walked. Drawing at the first visible leaf the box overlaps fails
+''       because the walk reaches leaves in depth order, so "first" means
+''       "furthest", and everything the entity should hide gets drawn after it.
 ''::::::::::
 sub ent_place_models
     dim m as integer
 
     for  m = 1 to wld.mdl_count-1
-        mdl_done(m) = false
+        mdl_node(m) = ent_find_node(m)
     next m
 
 end sub
@@ -454,31 +455,77 @@ end sub
 
 
 ''::::::::::
-'' name: ent_hits_leaf
-'' desc: Does submodel m, where it currently is, overlap this leaf's volume?
+'' name: ent_find_node
+'' desc: The deepest world node whose plane submodel m's box does not straddle.
 ''
-''       Asked of every visible leaf as the walk arrives, so an entity is drawn
-''       the first time the walk reaches anywhere it touches. That is roughly
-''       the right depth and much harder to miss than the single leaf a sample
-''       point happens to land in.
+''       That node is where the entity belongs in the painter's order: every
+''       world face beyond it is drawn before the walk arrives, every face
+''       nearer is drawn after, and the entity goes in between. Descending
+''       stops as soon as a plane cuts the box, because past that point the
+''       entity is on both sides at once and no single position is right.
+''
+''       Returns a leaf, bit 15 set, when the box fits inside one.
 ''::::::::::
-function ent_hits_leaf ( byval m as integer, byval lf as integer ) as integer
+function ent_find_node ( byval m as integer ) as integer
+    dim nodenr as integer, pid as integer
+    dim dnear as single, dfar as single
+    dim x0 as single, x1 as single
+    dim y0 as single, y1 as single
     dim z0 as single, z1 as single
 
-    ent_hits_leaf = false
-
-    if ( lf < 0 or lf > wld.lef_count-1 ) then exit function
-
+    x0 = mdl_buffer(m).mins.x
+    x1 = mdl_buffer(m).maxs.x
+    y0 = mdl_buffer(m).mins.y
+    y1 = mdl_buffer(m).maxs.y
     z0 = mdl_buffer(m).mins.z + mdl_zofs(m)
     z1 = mdl_buffer(m).maxs.z + mdl_zofs(m)
 
-    if ( mdl_buffer(m).maxs.x < lef_buffer(lf).bound.min.x ) then exit function
-    if ( mdl_buffer(m).mins.x > lef_buffer(lf).bound.max.x ) then exit function
-    if ( mdl_buffer(m).maxs.y < lef_buffer(lf).bound.min.y ) then exit function
-    if ( mdl_buffer(m).mins.y > lef_buffer(lf).bound.max.y ) then exit function
-    if ( z1 < lef_buffer(lf).bound.min.z ) then exit function
-    if ( z0 > lef_buffer(lf).bound.max.z ) then exit function
+    nodenr = 0
 
-    ent_hits_leaf = true
+    do while ( (nodenr and &h8000) = 0 )
+        pid = nds_buffer(nodenr).planeid
+
+        ''
+        '' The box corner furthest along the normal and the one furthest
+        '' against it. If both land on the same side of the plane, so does
+        '' every other corner.
+        ''
+        if ( pln_buffer(pid).norm.x >= 0.0 ) then
+            dnear = pln_buffer(pid).norm.x * x0
+            dfar  = pln_buffer(pid).norm.x * x1
+        else
+            dnear = pln_buffer(pid).norm.x * x1
+            dfar  = pln_buffer(pid).norm.x * x0
+        end if
+
+        if ( pln_buffer(pid).norm.y >= 0.0 ) then
+            dnear = dnear + pln_buffer(pid).norm.y * y0
+            dfar  = dfar  + pln_buffer(pid).norm.y * y1
+        else
+            dnear = dnear + pln_buffer(pid).norm.y * y1
+            dfar  = dfar  + pln_buffer(pid).norm.y * y0
+        end if
+
+        if ( pln_buffer(pid).norm.z >= 0.0 ) then
+            dnear = dnear + pln_buffer(pid).norm.z * z0
+            dfar  = dfar  + pln_buffer(pid).norm.z * z1
+        else
+            dnear = dnear + pln_buffer(pid).norm.z * z1
+            dfar  = dfar  + pln_buffer(pid).norm.z * z0
+        end if
+
+        dnear = dnear - pln_buffer(pid).dist
+        dfar  = dfar  - pln_buffer(pid).dist
+
+        if ( dnear >= 0.0 ) then
+            nodenr = nds_buffer(nodenr).child0
+        elseif ( dfar < 0.0 ) then
+            nodenr = nds_buffer(nodenr).child1
+        else
+            exit do
+        end if
+    loop
+
+    ent_find_node = nodenr
 
 end function

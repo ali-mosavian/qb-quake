@@ -418,23 +418,58 @@ against 170 without, and 10% of the frame's pixels different.~~ **Withdrawn.**
 That A/B was taken from (-80, 700, 100), which is leaf 0, contents SOLID. It
 measured nothing. See the note below on viewpoints.
 
-**A brush entity is drawn during the walk, not after it.** There is no depth
-buffer: back-to-front order is the only reason anything looks right. Appending
-entities to `order_list` after the world puts them in front of everything, which
-is what a lift poking through a wall looks like.
+**Ordering brush entities correctly without a depth buffer is not possible in
+general, and it is worth knowing why before trying.** A BSP back-to-front walk
+is not an approximation -- it is exact, and that is the theorem the tree exists
+for (Fuchs, Kedem, Naylor 1980): every polygon lies on a plane in the tree, so
+the traversal is a total depth order valid from any camera. That exactness
+holds for **one** tree. A brush entity is a second, independent, moving tree,
+and two trees admit no exact whole-object ordering: they can overlap
+cyclically, and even without a cycle an entity straddling a world plane has
+world faces both in front of part of it and behind another part.
 
-`r_recursive_world_node` emits an entity the first time the walk reaches a
-visible leaf its box overlaps. Two earlier attempts failed for instructive
-reasons: the leaf containing the entity's *centre* is often solid, since a
-lowered lift sits inside its shaft, and the leaf above its top surface can be
-frustum-culled while the entity's own faces are plainly visible. Overlap
-against each visited leaf survives both.
+The exact answers are (a) split the entity's polygons against world planes so
+every fragment lands in one leaf -- which this pipeline cannot express, since
+it addresses faces by index out of the face buffers and a fragment has no
+index -- or (b) what Quake actually did, which is not to sort at all: the
+software renderer builds a global edge list and resolves depth per span with
+1/z (`R_DrawSurfaces`, `surf->key`). Quake never needed a whole-object order.
+Do not cite Quake as precedent for a painter's algorithm; it is not one.
+
+**What is here is (c): insert the whole entity at the right node.** It is an
+approximation, and correct exactly when the entity does not straddle a plane
+separating world geometry in front of it from world geometry behind it -- a
+door in a doorway, a lift in a shaft. Say so rather than claiming the bug is
+fixed.
+
+`ent_find_node` descends the world tree with the entity's box and stops at the
+deepest plane the box does not straddle; `r_emit_entities` draws it there,
+between the far subtree and that node's own faces.
+
+Three placements were tried, and the two failures are the instructive part.
+The leaf holding the entity's *centre* is often solid -- a lowered lift sits
+inside its own shaft -- and a solid leaf is never walked, so the entity
+vanished. The **first visible leaf its box overlaps** was not merely
+approximate but backwards: the walk reaches leaves far-to-near, so "first"
+means "furthest", and everything the entity should hide is drawn after it.
 
 **A viewpoint inside solid geometry makes every measurement from it
 meaningless.** An A/B that seemed to prove entity rendering worked was taken
 from a camera in leaf 0, contents SOLID. `ent_point_leaf` will tell you: leaf
 contents -2 means the camera is in a wall, and the PVS from there answers
 nothing.
+
+**`-noents` is the reference image, and the only objective test here.** From a
+viewpoint where the world fully occludes an entity, a correct renderer must
+produce a frame *identical* to one drawn with no entities at all. That turns
+"does it still overdraw" into a number instead of a squint. Generate the
+viewpoints by walking the leaves in Python, keeping those whose centre has a
+line to the entity that passes through SOLID, and sweep them.
+
+24 such viewpoints across both doors and the lift: **0 leaks with insertion-node
+ordering, 8 with `-badorder`.** Frame rate is unchanged at 33-34 on the spawn
+bench, which needed `vis.ent_left` -- a SUB call at every one of a few hundred
+visited nodes cost about 3%, an integer compare costs nothing.
 
 **The A/B that shows ordering is `-badorder`.** It puts brush entities back
 after the world walk from the same build, so one binary renders both. Pair it

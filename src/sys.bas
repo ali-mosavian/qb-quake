@@ -91,6 +91,9 @@ sub sys_parse_args
             env.start_z   = val( argv(i+3) )
             env.start_set = true
         end if
+        if ( lcase$(argv(i)) = "-noents" ) then
+            env.no_ents = true
+        end if
         if ( lcase$(argv(i)) = "-badorder" ) then
             env.bad_order = true
         end if

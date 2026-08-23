@@ -14,6 +14,12 @@ type VisState
     ord_count   as long         '' entries written to order_list
     drw_leafs   as integer      '' leaves the walk kept this frame, and
     cul_leafs   as integer      '' threw away; both shown on the stats panel
+    ent_left    as integer      '' brush entities the walk has yet to emit.
+                                '' Counted down so the per-node test costs an
+                                '' integer compare, not a call, once they are
+                                '' all placed -- which is early, there being
+                                '' three of them and hundreds of nodes.
+    no_ents     as integer      '' -noents, and
     bad_order   as integer      '' -badorder, copied here from env because
                                 '' r_bsp.bas has no room for the env block
 end type

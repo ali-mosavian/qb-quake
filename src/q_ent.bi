@@ -78,8 +78,11 @@ common shared /ent_s/ plat() as PlatEnt
 common shared /ent_s/ plat_count as integer
 
 ''
-'' Set once an entity has been emitted this frame. A brush entity usually
-'' overlaps several leaves and the walk may visit all of them; without this
-'' it would be drawn once per leaf.
+'' Where in the world's back-to-front order each submodel is drawn: the
+'' deepest world node whose plane its box does not straddle. Recomputed
+'' every frame because a lift moves, and because -1 offsets move with it.
 ''
-common shared /ent_s/ mdl_done() as integer
+'' Bit 15 set means the box fell entirely inside one leaf, and the walk
+'' emits it there instead.
+''
+common shared /ent_s/ mdl_node() as integer
