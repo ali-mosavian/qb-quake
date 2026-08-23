@@ -218,6 +218,31 @@ directly and prints to **stdout**, so always capture `> run.out` too.
 - The built exe's mtime comes from the DOS guest's clock. `make` stamps it
   afterwards or its bookkeeping goes wrong in whichever direction the skew runs.
 
+## Rebuilding uGL
+
+`tools/mglbuild.sh uglplxtg` rebuilds a module and swaps it into `uglv.lib`;
+`--all` does all 151, `--list` prints the module-to-directory map it reads out
+of the `.mk` ASMLIST declarations.
+
+- **The shipped `uglv.lib` is stale against `src/`.** `uglTriTG`, `uglTriTPG`,
+  `uglSetLUT` and `uglBlit` are all in the sources and in the module lists, and
+  in none of the built libraries. A missing symbol means the library is old,
+  not that the feature was never written -- the texture atlas design was
+  abandoned on exactly the opposite assumption about `uglBlit`.
+- **There is no dmake here.** mgl's makefiles are dmake's dialect (`.IF`, `:=`,
+  `{list}.obj`, `$(mktmp ...)`); NMAKE and Borland MAKE cannot parse it and
+  neither the toolchains nor mgl ship it. The recipes it would run are two
+  commands, which is what the script issues.
+- **The script updates the library module by module rather than rebuilding it**,
+  which leaves the three C sub-libraries -- music, xsnd, snddrv, built with
+  Borland `bcc` -- alone, so MASM is the only toolchain involved. The shipped
+  library is preserved as `uglv.lib.orig`.
+- **`ml` has no `/omf`** (MASM 6.11), and an invalid option aborts parsing of
+  every option after it. `/omf /D__CMP__=VBD` therefore assembles with
+  `__CMP__` undefined, and the error surfaces inside `lang.inc`, nowhere near
+  the cause.
+- `lib16` blocks on a prompt without a trailing `;`, the same as LINK.
+
 ## Harness: benchmark mode
 
     qrender.exe dm3ish.bsp -bench 500
@@ -261,6 +286,18 @@ evidence.
 animation, `mousePos` forced. Seven consecutive verification screenshots had
 the same md5. An identical picture cannot distinguish a working build from one
 that never rebuilt; the fps and frame count in `bench.txt` can.
+
+**`bench.bmp` is the LAST frame, and since liquids animate that is no longer
+deterministic.** `-bench N` alone runs N frames of wall time, so `animtime`
+lands wherever the host's speed puts it -- three runs of one unchanged binary
+gave md5 8ff755af, 3ee2547c, 8ff755af, tracking animtime 5.933297 / 5.749966 /
+5.933297. A changed md5 after a library swap means nothing on its own; it cost
+a false alarm here.
+
+**Add `-ticks N` for a comparable frame.** The fixed timestep drives
+`anim_time`, so a tick-bounded run pins it: `-bench 400 -ticks 120` gave
+animtime 1.999995 and one md5 across three runs at 69, 68 and 68 frames. Every
+A/B in this file that compares images uses `-ticks`.
 
 **`make build` copies `data/stuff.ini` over `build/vbd/stuff.ini`.** Editing
 the build copy does not survive a rebuild. This is how `sound.enabled = true`
