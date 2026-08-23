@@ -455,6 +455,9 @@ sub host_tick ( byval dt as single )
     '' movers, after the player has moved and before anything is drawn
     ent_move_plats dt
 
+    '' where each mover ended up, so the draw order can place it
+    ent_place_models
+
     '' map time, which drives every texture animation
     rdr.anim_time = rdr.anim_time + dt
 
@@ -514,14 +517,6 @@ sub host_render ( byval h_dst_dc as long, mtx_prj as u3dMtrx, _
     ''
     r_draw_world 0
 
-    ''
-    '' Brush entities: submodel 0 is the world, 1 upward are doors, lifts
-    '' and trigger volumes. They join the same draw order as the world,
-    '' after it, so they sort against it back to front.
-    ''
-    for  bm = 1 to wld.mdl_count-1
-        if ( mdl_draw(bm) ) then r_draw_brush_model bm
-    next bm
     
     
     d_draw_faces h_dst_dc, mtx_fin, xresh, yresh

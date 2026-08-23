@@ -23,6 +23,7 @@ option explicit
 '$include: 'q_map.bi'
 '$include: 'q_vis.bi'
 '$include: 'q_cam.bi'
+'$include: 'q_ent.bi'
 
 '$static
 ''
@@ -63,6 +64,7 @@ sub r_recursive_world_node ( byval nodenr as integer ) static
     dim dp as single
     dim frst as integer, last as integer, i as integer
     dim pid as integer, side as integer
+    dim ebm as integer
 
     
     ''
@@ -89,6 +91,33 @@ sub r_recursive_world_node ( byval nodenr as integer ) static
     	    ''
     	    '' Put leaf in ordering list
     	    ''
+    	    ''
+    	    '' Any brush entity sitting in this leaf is drawn now, while the
+    	    '' walk is here. Appending it after the world instead puts it in
+    	    '' front of everything -- there is no depth buffer, and back to
+    	    '' front order is the only thing making any of this correct.
+    	    ''
+    	    '' This SUB is declared STATIC, so its locals are shared with every
+    	    '' call including its own recursion. The existing code survives
+    	    '' that by never reading a local across a recursive call. ebm is
+    	    '' read across one, so it is protected differently: r_ignore_pvs
+    	    '' is set before the nested call and the loop below is skipped
+    	    '' when it is set, so the nested walk cannot reach this loop and
+    	    '' cannot touch ebm.
+    	    ''
+    	    if ( r_ignore_pvs = false ) then
+    	        for  ebm = 1 to wld.mdl_count-1
+    	            if ( mdl_draw(ebm) and mdl_done(ebm) = false ) then
+    	                if ( ent_hits_leaf( ebm, not nodenr ) ) then
+    	                    mdl_done(ebm) = true
+    	                    r_ignore_pvs  = true
+    	                    r_recursive_world_node int( mdl_buffer(ebm).headnode0 )
+    	                    r_ignore_pvs  = false
+    	                end if
+    	            end if
+    	        next ebm
+    	    end if
+
     	    vis.drw_leafs = vis.drw_leafs + 1
         else 
             vis.cul_leafs = vis.cul_leafs + 1
