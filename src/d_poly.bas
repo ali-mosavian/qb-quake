@@ -173,7 +173,7 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
     dim polycnt as integer
     dim mi as integer, m as integer
     dim leaf_indx as integer, leaf_end as integer, ti as integer, i as integer
-    dim pid as integer, lid as integer, tex as integer, j as integer
+    dim pid as integer, lid as long, tex as integer, j as integer
     dim edge_idx as integer, v0 as integer
     dim zl as single
     dim miplevel as integer, tex_indx as integer
@@ -242,6 +242,7 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
 		'' Build polygon
 		''
             lid = tri_buffer(i).ledgeid
+            if ( lid < 0 ) then lid = lid + 65536
             tex = tri_buffer(i).texinfoid
             mipidx = tex_inf_buff(tex).miptex
             vcnt = tri_buffer(i).ledgenum
