@@ -369,7 +369,7 @@ const DEG2RAD# = 3.14159265359 / 180.0
 '' defined in main.bas, called from model.bas -- within one module
 '' BASIC auto-declares, across modules it needs this.
 declare sub draw_bar ( h_dc as long, x as integer, y as integer, wdt as integer, _
-                            hgt as integer, percent as single, col as long )
+                            hgt as integer, percent as single )
 declare sub scr_load_tick ( )
 declare sub mod_close ( )
 declare sub scr_mip_tick  ( percent as single )
@@ -503,6 +503,15 @@ end type
 declare sub com_tokenize ( strm() as string, strm_cnt as integer, _
              tokenlist as string, stream as string )
 declare function draw_load_font ( flname as string, col as long ) as integer
+declare sub scr_load_palette ( )
+declare sub hud_panel ( dc as long, x as integer, y as integer, w as integer, h as integer, title as string )
+declare sub hud_row ( dc as long, x as integer, w as integer, y as integer, label as string, value as string )
+declare sub hud_bar ( dc as long, x as integer, y as integer, w as integer, h as integer, percent as single )
+declare sub scr_load_chrome ( )
+declare sub scr_load_stage ( msg as string )
+declare sub draw_string_scl ( dc as long, x as integer, y as integer, scale as single, text as string )
+declare sub draw_string_r ( dc as long, xright as integer, y as integer, text as string )
+declare sub draw_pct ( dc as long, xright as integer, y as integer, percent as single )
 declare sub draw_string ( dc as long, x as integer, y as integer, _
                             text as string ) 
                             

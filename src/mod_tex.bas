@@ -45,6 +45,7 @@ dim shared tmipinf( 1 ) as miptex
 '' desc: Reads the miptex directory and sizes the texture tables.
 ''::::::::::
 sub mod_load_texinfo
+    scr_load_stage "texture info"
     ''
     '' hTextrDC is COMMON now, and COMMON can only declare it as hTextrDC()
     '' with no elements. It carried a real bound, so size it here.
@@ -100,7 +101,7 @@ sub mod_load_textures
     ''
     pal = uglPalLoad( "base.dat::color/palette.lmp", PALRGB )
 
-    draw_string ldr.dc, 0, 199-8, "Loading textures..."
+    scr_load_stage "textures"
 
     for  i = 0 to wld.numtex-1
         ''

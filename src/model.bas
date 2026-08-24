@@ -164,6 +164,7 @@ end sub
 '' name: mod_load_vertexes
 ''::::::::::
 sub mod_load_vertexes
+    scr_load_stage "geometry"
     def seg = varseg( vtx_buffer(0) )
     bload "verts.bld", varptr( vtx_buffer(0) )
     def seg
@@ -179,6 +180,7 @@ end sub
 '' name: mod_load_faces
 ''::::::::::
 sub mod_load_faces
+    scr_load_stage "faces"
     def seg = varseg( tri_buffer(0) )
     bload "faces.bld", varptr( tri_buffer(0) )
     def seg
@@ -202,6 +204,7 @@ end sub
 ''       memAlloc's paragraph alignment: the builder only PEEKs the table.
 ''::::::::::
 sub mod_load_colormap
+    scr_load_stage "colormap"
     redim cm_buf(8191) as integer
 
     def seg = varseg( cm_buf(0) )
@@ -232,6 +235,7 @@ end sub
 ''       where segments past 0x8000 are not a signed-integer problem.
 ''::::::::::
 sub mod_load_lightmaps
+    scr_load_stage "lightmaps"
     dim f as FILE
     dim got as long
 
@@ -290,6 +294,7 @@ end sub
 '' name: mod_load_edges
 ''::::::::::
 sub mod_load_edges
+    scr_load_stage "edges"
     def seg = varseg( edg_buffer(0) )
     bload "edges.bld", varptr( edg_buffer(0) )
     def seg
@@ -320,6 +325,7 @@ end sub
 '' name: mod_load_leafs
 ''::::::::::
 sub mod_load_leafs
+    scr_load_stage "bsp leaves"
     def seg = varseg( lef_buffer(0) )
     bload "leaves.bld", varptr( lef_buffer(0) )
     def seg
@@ -350,6 +356,7 @@ end sub
 '' name: mod_load_nodes
 ''::::::::::
 sub mod_load_nodes
+    scr_load_stage "bsp nodes"
     def seg = varseg( nds_buffer(0) )
     bload "nodes.bld", varptr( nds_buffer(0) )
     def seg
@@ -365,6 +372,7 @@ end sub
 '' name: mod_load_planes
 ''::::::::::
 sub mod_load_planes
+    scr_load_stage "planes"
     def seg = varseg( pln_buffer(0) )
     bload "planes.bld", varptr( pln_buffer(0) )
     def seg
@@ -380,6 +388,7 @@ end sub
 '' name: mod_load_submodels
 ''::::::::::
 sub mod_load_submodels
+    scr_load_stage "submodels"
     def seg = varseg( mdl_buffer(0) )
     bload "models.bld", varptr( mdl_buffer(0) )
     def seg
@@ -403,6 +412,7 @@ end sub
 ''       first cleanup commit of this refactor.
 ''::::::::::
 sub mod_load_clipnodes
+    scr_load_stage "clip hulls"
     def seg = varseg( clp_buffer(0) )
     bload "clip.bld", varptr( clp_buffer(0) )
     def seg
@@ -418,6 +428,7 @@ end sub
 '' name: mod_load_visibility
 ''::::::::::
 sub mod_load_visibility
+    scr_load_stage "visibility"
     def seg = varseg( pvs_buffer_a(0) )
     bload "pvs.bld", varptr( pvs_buffer_a(0) )
     def seg
