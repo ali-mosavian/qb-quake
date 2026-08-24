@@ -29,7 +29,9 @@ format). Standalone — no dependency on any other bundle.
   numpy-style views added to uGL, 228 DCs → 21 on dm3ish); the `ul$fillView` EMS handle bug that
   hid inside it (the logical page must be *added* to the handle word, not written over it, or a
   view addresses another allocation once handles pass 255) and why the surface cache rendered
-  correctly anyway; the texture store this unblocked (160 texture DCs and 160 asset files → one
+  correctly anyway; the 256-page ceiling on any EMS DC (`ems_New`'s page counter is one byte,
+  4 MB max at 16384 wide — found by growing the cache to 16 MB and getting the same corruption
+  signature back); the texture store this unblocked (160 texture DCs and 160 asset files → one
   packed image plus four views, pixel-identical); four ways a *passing* standalone test can be
   vacuous — never exercising the failing combination, always allocating first, test data that
   cannot fail, and read-back through the same broken accessor; six ways one can look like it

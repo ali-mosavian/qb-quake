@@ -85,6 +85,40 @@ walk with lightmaps clean — though note that this verification passed
 writes and reads through views. Correct output through a broken
 accessor is not evidence the accessor works.
 
+## The 256-page EMS DC ceiling
+
+A single EMS `DC` cannot exceed 256 pages, full stop, no matter the
+width. `ems_New` (`mgl/src/dct/dctems.asm`) packs a scanline's logical
+page into ONE BYTE of the `DC_addrTB` entry (`dh`), incremented with
+`adc dh, 0` on every page crossing and never checked for overflow. Page
+256 wraps `dh` back to 0 and silently aliases page 0 -- not a crash,
+not an error return, just wrong pixels from then on.
+
+Found by trying to grow the surface cache to 16 MB (1024 pages at
+16384 wide) and getting back the same red/white streak corruption the
+`uglNewView` bug produced -- worth taking seriously as a signal on its
+own: *that specific visual signature means "reading the wrong EMS
+page," from whatever cause.* Bracketed empirically with a fresh,
+isolated DC swept from 16 to 300 rows: 256 rows byte-perfect every
+time, 257 corrupts 233 of 257 rows immediately, no partial-failure
+zone in between. An earlier sweep on a single 300-row DC showed a
+messier pattern (rows 0-22 off by a constant +5, then a fixed wrong
+byte from row 23 to past row 300 with a correct island at 256-278) --
+that was noise from a specific test's state, not the shape of the
+underlying limit; the isolated per-size sweep is the trustworthy
+result.
+
+**Consequence for any EMS store shaped 16384 wide: 256 pages is the
+maximum, full stop -- 4 MB.** The surface cache was set to 16 MB
+before this was known; it is 4 MB now (`SC_PAGES = 256` in
+`d_surf.bas`), verified `sctest 1` and pixel-identical to the working
+1.5 MB build. The texture store (`mod_tex.bas`) shares the same
+ceiling at a different width -- 2048 wide caps at 256 * 2048 = 512 KB,
+which is roughly 91 textures at dm3ish's ~5,440-bytes-per-texture mip
+set. dm3ish uses 20. Not yet hit, not yet guarded against at
+asset-build time -- worth an assertion in `mkassets.py` before a
+larger map hits it silently.
+
 ## The uglNewView EMS handle bug (found late, root cause of it all)
 
 `uglNewView`/`uglSetView` addressed the **wrong EMS handle** for any

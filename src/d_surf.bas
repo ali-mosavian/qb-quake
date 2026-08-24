@@ -73,11 +73,22 @@ const SC_NCLS   = 25            '' (SC_MAXSH-SC_MINSH+1) squared
 '' How many bytes of surfaces to keep. This is EMS, and EMS is the one
 '' thing here there is plenty of -- what used to bound the cache was the
 '' conventional memory each surface's DC needed for its scanline table,
-'' and surfaces no longer have DCs. dm3ish's whole working set is ~640K.
+'' and surfaces no longer have DCs. dm3ish's whole working set is ~640K,
+'' so 256 pages is deliberately far past that, room for bigger maps and
+'' repeated evictions on a long walk.
 ''
-const SC_PGBYTES = 16384        '' one EMS page: the widest bps allowed
-const SC_PAGES   = 96           '' so the store is 96 pages ...
-const SC_STORE#  = 1572864#     '' ... which is 1.5 MB
+'' 256 pages is not a size someone chose -- it is the hard ceiling for any
+'' EMS DC. ems_New (mgl/src/dct/dctems.asm) packs a scanline's logical
+'' page into the ONE BYTE at DC_addrTB's dh position, incremented with
+'' "adc dh, 0" and no overflow check. A 257th page wraps dh back to 0 and
+'' silently aliases page 0 -- verified on target: a fresh fully-isolated
+'' fresh DC scanned row by row is byte-perfect through exactly 256 rows
+'' and corrupts on the 257th, every time. Do not raise SC_PAGES past 256;
+'' a second store is the only way to hold more than 4 MB of surfaces.
+''
+const SC_PGBYTES = 16384         '' one EMS page: the widest bps allowed
+const SC_PAGES   = 256           '' the max ANY EMS DC can be -- see above
+const SC_STORE#  = 4194304#      '' 256 * 16384
 
 ''
 '' The 16 light levels of the face being built, rebuilt at the top of each
