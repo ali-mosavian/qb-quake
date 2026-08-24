@@ -92,10 +92,16 @@ end type
 '' d_surf.bas's lmtmin/lm_info replaced it entirely, and nobody removed the
 '' field when that landed. Confirmed by grep: no `.lightmap` read anywhere
 '' in src/*.bas.
+''
+'' ledgeid narrowed long->integer: it is a ledges.bld index, unsigned by
+'' nature, and e3m6's max is 32,880 -- 113 over signed int16 range. Packed
+'' as the two's-complement bit pattern (mkassets.py), so the reader must
+'' undo the same wrap: value + 65536 when it comes back negative. See
+'' d_poly.bas where lid is read.
 type face2
     planeid     as integer
     side        as integer
-    ledgeid     as long
+    ledgeid     as integer
     ledgenum    as integer
     texinfoid   as integer
 end type

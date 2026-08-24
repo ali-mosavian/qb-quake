@@ -284,14 +284,19 @@ def convert_lumps(d, lumps, outdir):
         struct.pack('<h', struct.unpack_from('<i', raw, k)[0])
         for k in range(0, len(raw), 4))
 
-    # faces: face(20) -> face2(12), dropping the two flag words and the
-    # LIGHTING-lump offset (unused: d_surf.bas's lmtmin/lm_info replaced it)
+    # faces: face(20) -> face2(10), dropping the two flag words and the
+    # LIGHTING-lump offset (unused: d_surf.bas's lmtmin/lm_info replaced it),
+    # and narrowing ledgeid to an integer -- it is an unsigned ledges.bld
+    # index (max 32,880 on e3m6), so values over 32,767 are packed as their
+    # two's-complement bit pattern; the BASIC side undoes the wrap on read.
     raw = lump(7)
     buf = bytearray()
     for k in range(0, len(raw), 20):
         planeid, side, ledgeid, ledgenum, texinfoid, _f1, _f2, _lightmap = \
             struct.unpack_from('<hhihhhhi', raw, k)
-        buf += struct.pack('<hhihh', planeid, side, ledgeid,
+        if ledgeid >= 32768:
+            ledgeid -= 65536
+        buf += struct.pack('<hhhhh', planeid, side, ledgeid,
                            ledgenum, texinfoid)
     out['faces.bld'] = bytes(buf)
 
