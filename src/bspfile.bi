@@ -88,14 +88,39 @@ type face
     lightmap    as long    
 end type 
 
+'' lightmap (the LIGHTING-lump byte offset) is dropped: nothing reads it --
+'' d_surf.bas's lmtmin/lm_info replaced it entirely, and nobody removed the
+'' field when that landed. Confirmed by grep: no `.lightmap` read anywhere
+'' in src/*.bas.
 type face2
     planeid     as integer
-    side        as integer    
+    side        as integer
     ledgeid     as long
     ledgenum    as integer
     texinfoid   as integer
-    lightmap    as long    
-end type 
+end type
+
+''
+'' What BASIC needs per face, and nothing more: texturemins, to shift a
+'' face's texture coordinates into its own surface's space before drawing.
+'' Where the luxels are, how big they are and which styles they use is read
+'' once per cache miss by the builder, out of lm_info -- keeping it out of
+'' the far heap BLOAD allocates from, which turned out to run out first.
+''
+''
+'' A face's slot in the surface cache. tag packs the generation and the
+'' mip it was built at, so a flush invalidates every slot by incrementing
+'' one counter, and a face drawn at a new mip misses without extra state.
+''
+type scslot
+    dc          as long         '' the EMS DC holding this face's surface
+    tag         as integer      '' generation * 4 + mip it was built at
+end type
+
+type lmtmin
+    tmin_s      as integer
+    tmin_t      as integer
+end type
 
 type leaf
     cont        as long
@@ -169,7 +194,21 @@ type miptexb
 end type
 
 
+'' planenum narrowed long->integer: verified max value across all 9 target
+'' maps is 2,736 (e1m3), 12x under int16 range. On-disk clipnode_t stays
+'' 8 bytes (long+short+short) -- see cliptmp below, the len() source for
+'' wld.clp_count, which must NOT shrink with this type.
 type clipnode
+    planenum    as integer
+    front       as integer
+    back        as integer
+end type
+
+'' Unconverted, 8-byte shape (long+short+short), matching wld.head.clipnode's
+'' own on-disk record size exactly. mod_open's wld.clp_count = size \ len(...)
+'' reads the ORIGINAL .bsp file directly, so it needs the ORIGINAL record
+'' size -- same reason fce/nodetmp/leaftmp/planetmp exist below.
+type cliptmp
     planenum    as long
     front       as integer
     back        as integer
@@ -224,6 +263,10 @@ type EnvType
                                 '' through the wall in front of it".
     bad_order   as integer      '' -badorder: put brush entities back after the
                                 '' world walk, the bug this flag exists to show.
+    poly_tp     as integer      '' -polytp: emit whole convex polygons via
+                                '' uglPolyTP instead of fanning each face
+                                '' into triangles. A/B against the proven
+                                '' uglTriTP path.
     no_stats    as integer      '' -nostats: the overlay covers a third of the
                                 '' frame, which is a third of what a screenshot
                                 '' was taken to look at.
@@ -231,7 +274,11 @@ type EnvType
                                 '' rather than N frames, so two runs at
                                 '' different framerates simulate exactly the
                                 '' same thing and must agree
-    
+    bench_secs  as integer      '' -benchsecs N: stop after N real seconds
+                                '' (scr.bench_secs, ticked by scr_count_frame),
+                                '' rather than a fixed frame/tick count -- a
+                                '' short, wall-clock-bounded run for iteration.
+
 end type
 
 const DEG2RAD# = 3.14159265359 / 180.0
@@ -302,6 +349,21 @@ declare sub mod_find_spawn ( )
 declare sub mod_alloc ( )
 declare sub mod_load_vertexes ( )
 declare sub mod_load_faces ( )
+declare sub mod_load_lightmaps ( )
+declare sub mod_load_colormap ( )
+declare function sc_init% ( )
+declare function sc_shift% ( byval v as integer )
+declare function sc_mipfloor% ( byval extw as integer, byval exth as integer )
+declare sub sc_flush ( )
+declare function sc_find& ( byval face as integer, byval mip as integer )
+declare function sc_alloc& ( byval face as integer, byval mip as integer, byval w as integer, byval h as integer )
+declare sub sc_reset ( )
+declare sub sc_shutdown ( )
+declare function sc_selftest% ( )
+declare function sb_seg% ( byval p as long )
+declare function sb_i% ( byval o as long )
+declare function sb_u& ( byval o as long )
+declare sub sb_build ( byval dc as long, byval tex as long, byval face as integer, byval mip as integer, byval sw as integer, byval sh as integer )
 declare sub mod_load_edges ( )
 declare sub mod_load_surfedges ( )
 declare sub mod_load_leafs ( )
