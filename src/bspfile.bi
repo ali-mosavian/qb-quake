@@ -160,10 +160,25 @@ type SBPARM
     msk         as integer      '' texture wrap mask
 end type
 
+''
+'' One per face, and SIX bytes not eight -- there is one of these for every
+'' face in the map (2,293 on dm3ish) against maybe 400 cached surfaces, so
+'' anything per-face is the expensive place to put state. The LRU links live
+'' in the block table instead, which is sized by surfaces. Growing this to
+'' twelve bytes was enough to hard-fault the program at load: the far heap
+'' has ~14 KB spare and a REDIM that cannot be honestly satisfied corrupts
+'' rather than failing (see docs/knowledge/dos-mcb-memory-diagnosis.md).
+''
+'' cls is fixed for a face's lifetime, sized at its mip FLOOR rather than the
+'' mip it is currently drawn at. That is what keeps this simple: a face reuses
+'' its own block across mip changes (a coarser mip needs less room and fits),
+'' so no block is ever orphaned, and class membership never moves -- which is
+'' what makes same-class eviction always fit.
+''
 type scslot
-    ofs         as long         '' byte offset of this surface in the store
-    tag         as integer      '' generation * 4 + mip it was built at
-    cls         as integer      '' size class, i.e. which descriptor draws it
+    blk         as integer      '' index into the block table, -1 for none
+    tag         as integer      '' generation * 4 + mip the CONTENT holds
+    cls         as integer      '' size class of the block, fixed per face
 end type
 
 type lmtmin
@@ -336,10 +351,12 @@ type EnvType
                                 '' different framerates simulate exactly the
                                 '' same thing and must agree
     use_lm      as integer      '' -lm: composite lightmaps through the
-                                '' surface cache. Correct, but off by
-                                '' default until sb_build has an assembly
-                                '' implementation -- the BASIC one is a
-                                '' per-texel reference and far too slow.
+                                '' surface cache. sb_build hands its texel
+                                '' loop to uglBuildSurf now, so the old
+                                '' "too slow to default on" reason is gone;
+                                '' still opt-in only because the mip-floor
+                                '' streaks trim edges -- see the surface
+                                '' cache knowledge note.
     bench_secs  as integer      '' -benchsecs N: stop after N real seconds
                                 '' (scr.bench_secs, ticked by scr_count_frame),
                                 '' rather than a fixed frame/tick count -- a
@@ -425,8 +442,10 @@ declare function sc_grab& ( byval sz as long )
 declare function sc_shift% ( byval v as integer )
 declare function sc_mipfloor% ( byval extw as integer, byval exth as integer )
 declare sub sc_flush ( )
-declare function sc_find& ( byval face as integer, byval mip as integer )
-declare function sc_alloc& ( byval face as integer, byval mip as integer, byval w as integer, byval h as integer )
+declare function sc_find& ( byval face as integer, byval mip as integer, byval w as integer, byval h as integer )
+declare function sc_alloc& ( byval face as integer, byval mip as integer, byval w as integer, byval h as integer, byval fw as integer, byval fh as integer )
+declare sub sc_lru_unlink ( byval b as integer )
+declare sub sc_lru_touch ( byval b as integer )
 declare sub sc_reset ( )
 declare sub sc_shutdown ( )
 declare function sc_selftest% ( )
