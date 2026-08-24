@@ -91,14 +91,14 @@ const SC_STORE#  = 1572864#     '' ... which is 1.5 MB
 dim shared lm_ftab(15) as integer
 
 ''
-'' The surface store. One EMS handle holds every cached surface's bytes;
-'' emsAlloc gives a handle and nothing else, so unlike a DC it costs no
-'' conventional memory. Surfaces are bump-allocated inside it.
+'' The surface store: one big DC holding every cached surface's bytes,
+'' which surfaces are bump-allocated inside. It is shaped 16384 wide so
+'' that its own scanline table stays small -- see sc_store_open.
 ''
-'' The DCs are only views now -- one per size class, re-aimed at a
-'' surface's offset before it is built or drawn. uglNewView/uglSetView do
-'' the aiming; see their note in ugl.bi for why a view costs so much less
-'' than a DC of its own.
+'' Nothing else here is a DC. A surface gets a view instead: one per size
+'' class, re-aimed at the surface's offset before it is built or drawn.
+'' uglNewView/uglSetView do the aiming; see their note in ugl.bi for why a
+'' view costs so much less than a DC of its own.
 ''
 dim shared sc_hnd as long               '' the DC that owns every surface's bytes
 dim shared sc_next as long              '' bump pointer within it
@@ -218,7 +218,7 @@ end function
 
 ''::::::::::
 '' name: sc_store_open
-'' desc: Claims the EMS block, on first use. Deliberately not in sc_init --
+'' desc: Claims the store DC, on first use. Deliberately not in sc_init --
 ''       see the note there.
 ''::::::::::
 function sc_store_open% ( )
@@ -273,8 +273,7 @@ function sc_find& ( byval face as integer, byval mip as integer )
         exit function
     end if
     ''
-    '' Hand back this class's descriptor aimed at the face. One entry is
-    '' enough: the fillers read addrTB[0] and derive the rest themselves.
+    '' Hand back this class's view, aimed at the face.
     ''
     dc = sc_desc( sc_slot(face).cls )
     if ( dc <> 0 ) then
@@ -317,9 +316,9 @@ function sc_alloc& ( byval face as integer, byval mip as integer, _
     cidx = (a - SC_MINSH) * 5 + (b - SC_MINSH)
 
     ''
-    '' One descriptor per class, made once and aimed somewhere new every
-    '' time. This is the only uglNew the cache ever does -- 25 of them at
-    '' the very most, against one per cached surface before.
+    '' One view per class, made once and aimed somewhere new every time.
+    '' These are every DC the cache ever makes -- 25 at the very most,
+    '' against one per cached surface before.
     ''
     if ( sc_desc(cidx) = 0 ) then
         dc = uglNewView&( sc_hnd, 0, 2 ^ a, 2 ^ b )
@@ -345,7 +344,7 @@ function sc_alloc& ( byval face as integer, byval mip as integer, _
     sc_slot(face).cls = cidx
     sc_slot(face).tag = sc_gen * 4 + mip
 
-    '' the builder writes scanline by scanline, so it needs the whole table
+    '' aim it at the bytes just claimed, ready for the builder to write
     if ( uglSetView%( dc, ofs ) = 0 ) then
         sc_alloc& = 0
         exit function
@@ -420,8 +419,8 @@ function sc_selftest% ( )
     d1 = sc_alloc&( 1, 0, 112, 96 )
     if ( d0 = 0 ) then sc_selftest% = -7 : exit function
     if ( d1 = 0 ) then sc_selftest% = -8 : exit function
-    '' both round to 128x128, so they share a descriptor and differ only in
-    '' where it points -- the whole point of the store
+    '' both round to 128x128, so they share a view and differ only in where
+    '' it points -- the whole point of the store
     if ( d0 <> d1 ) then sc_selftest% = -18 : exit function
     if ( sc_slot(0).ofs = sc_slot(1).ofs ) then sc_selftest% = -21 : exit function
     if ( sc_hnd = 0 ) then sc_selftest% = -22 : exit function
@@ -454,7 +453,7 @@ function sc_selftest% ( )
     if ( sc_gen = gen0 ) then sc_selftest% = -13 : exit function
     if ( sc_find&( 0, 0 ) <> 0 ) then sc_selftest% = -14 : exit function
 
-    '' a flush rewinds the store and makes no new descriptor
+    '' a flush rewinds the store and makes no new view
     d2 = sc_alloc&( 5, 0, 112, 112 )
     if ( d2 <> d0 ) then sc_selftest% = -15 : exit function
     if ( sc_made <> made0 ) then sc_selftest% = -16 : exit function
