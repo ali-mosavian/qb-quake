@@ -222,6 +222,10 @@ sub host_init
     mod_load_textures
     mod_close
 
+    '' the shade table the surface builder composites through; only the
+    '' lightmap path reads it, and it is 16K that used to be unaffordable
+    if ( env.use_lm ) then mod_load_colormap
+
     sc_ok = sc_init%
 
     t_tex = timer

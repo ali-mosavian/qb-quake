@@ -307,6 +307,14 @@ type EnvType
                                 '' rather than N frames, so two runs at
                                 '' different framerates simulate exactly the
                                 '' same thing and must agree
+    use_lm      as integer      '' -lm: composite lightmaps through the
+                                '' surface cache. OFF by default and not yet
+                                '' shippable: the image is correct but the
+                                '' run dies in BASIC's string heap after a
+                                '' while ("String space corrupt"). See the
+                                '' note above sb_build. The BASIC builder is
+                                '' also a per-texel reference, far too slow
+                                '' until it has an assembly implementation.
     bench_secs  as integer      '' -benchsecs N: stop after N real seconds
                                 '' (scr.bench_secs, ticked by scr_count_frame),
                                 '' rather than a fixed frame/tick count -- a

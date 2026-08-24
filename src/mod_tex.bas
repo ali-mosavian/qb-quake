@@ -26,6 +26,7 @@ option explicit
 '$include: 'bspfile.bi'
 '$include: 'snd.bi'
 '$include: 'mod.bi'
+'$include: 'q_env.bi'
 '$include: 'q_map.bi'
 '$include: 'q_draw.bi'
 '$include: 'q_snd.bi'
@@ -49,6 +50,9 @@ sub mod_load_texinfo
     '' with no elements. It carried a real bound, so size it here.
     ''
     redim h_textr_dc( 256*4 ) as long
+    if ( env.use_lm ) then
+        redim h_rawtx_dc( 256*4 ) as long
+    end if
 
     dim i as integer
 
@@ -147,6 +151,22 @@ sub mod_load_textures
             end if
 
             h_textr_dc(i*4+j) = dc
+
+            ''
+            '' The raw-index twin, for the surface builder only. It shades
+            '' through the whole colormap itself, and t* already had row 0
+            '' applied on the way in -- feeding it those would treat a
+            '' brightened index as a raw one. See mkassets.py's r*/t* note.
+            ''
+            if ( env.use_lm ) then
+                bmpfile = "r" + right$( "00" + ltrim$(str$( i )), 3 ) + _
+                          "m" + ltrim$(str$( j )) + ".bmp"
+                dc = uglNewBMPEx( UGL.EMS, UGL.8BIT, bmpfile, BMPOPT.NO332 )
+                if ( dc = false ) then
+                    sys_error "0x0005, missing " + bmpfile + " -- run tools/mkassets.py"
+                end if
+                h_rawtx_dc(i*4+j) = dc
+            end if
 
             if ( (i and 15) = 0 ) then scr_mip_tick (j+1)*25
         next j

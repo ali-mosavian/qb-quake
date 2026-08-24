@@ -188,11 +188,28 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
     dim tqi as long, tqj as long
     dim turbph as single
     dim zofs as single
+    dim lm_on as integer, lm_iseg as integer, o_lm as long
+    dim lm_tms as integer, lm_tmt as integer
+    dim lm_extw as integer, lm_exth as integer
+    dim lm_mip as integer, lm_floor as integer
+    dim lm_sw as integer, lm_sh as integer
+    dim lm_dc as long, src_dc as long
+    dim lm_su as single, lm_sv as single
 
    ''
    '' Draw nodes
    ''       
     turbph = rdr.anim_time * TURB_RATE#
+
+    ''
+    '' The per-face lightmap table lives in a memAlloc'd block, so it is
+    '' reached by DEF SEG and an offset rather than as an array. The segment
+    '' is fixed for the whole frame; only the offset moves.
+    ''
+    lm_iseg = 0
+    if ( env.use_lm and sc_ok <> 0 and lm_info <> 0 ) then
+        lm_iseg = sb_seg%( lm_info )
+    end if
 
     for mi = 0 to vis.ord_count-1
         m = order_list(mi)
@@ -268,14 +285,55 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
             ''
             tw = mip_buff_inf(mipidx).wdth
             th = mip_buff_inf(mipidx).hght
-            su0 = tex_inf_buff(tex).vecs(0) * tw
-            su1 = tex_inf_buff(tex).vecs(1) * tw
-            su2 = tex_inf_buff(tex).vecs(2) * tw
-            su3 = tex_inf_buff(tex).vecs(3) * tw
-            sv0 = tex_inf_buff(tex).vect(0) * th
-            sv1 = tex_inf_buff(tex).vect(1) * th
-            sv2 = tex_inf_buff(tex).vect(2) * th
-            sv3 = tex_inf_buff(tex).vect(3) * th
+
+            ''
+            '' Is this face a surface-cache candidate? It must have a
+            '' lightmap (ofs_hi = -1 marks one that does not), and it must
+            '' not be a liquid -- those perturb their own coordinates per
+            '' vertex -- or animated, which would rebuild the surface every
+            '' time the frame index moved.
+            ''
+            lm_on = 0
+            if ( lm_iseg <> 0 and liquid = 0 and _
+                 mip_buff_inf(mipidx).anim_count <= 1 ) then
+                def seg = lm_iseg
+                o_lm = clng(i) * 16&
+                if ( sb_i%( o_lm ) >= 0 ) then
+                    lm_tms  = sb_i%( o_lm + 4& )
+                    lm_tmt  = sb_i%( o_lm + 6& )
+                    lm_extw = (sb_i%( o_lm + 8& ) - 1) * 16
+                    lm_exth = (sb_i%( o_lm + 10& ) - 1) * 16
+                    if ( lm_extw > 0 and lm_exth > 0 ) then lm_on = -1
+                end if
+                def seg
+            end if
+
+            ''
+            '' A cached face's coordinates stay in ORIGINAL TEXEL units --
+            '' the surface is a piece of the texture, not the whole of it,
+            '' so the shift to surface-local space needs the unscaled value
+            '' and cannot be applied until the mip is known (below). Every
+            '' other face normalises against the atlas here as before.
+            ''
+            if ( lm_on ) then
+                su0 = tex_inf_buff(tex).vecs(0)
+                su1 = tex_inf_buff(tex).vecs(1)
+                su2 = tex_inf_buff(tex).vecs(2)
+                su3 = tex_inf_buff(tex).vecs(3)
+                sv0 = tex_inf_buff(tex).vect(0)
+                sv1 = tex_inf_buff(tex).vect(1)
+                sv2 = tex_inf_buff(tex).vect(2)
+                sv3 = tex_inf_buff(tex).vect(3)
+            else
+                su0 = tex_inf_buff(tex).vecs(0) * tw
+                su1 = tex_inf_buff(tex).vecs(1) * tw
+                su2 = tex_inf_buff(tex).vecs(2) * tw
+                su3 = tex_inf_buff(tex).vecs(3) * tw
+                sv0 = tex_inf_buff(tex).vect(0) * th
+                sv1 = tex_inf_buff(tex).vect(1) * th
+                sv2 = tex_inf_buff(tex).vect(2) * th
+                sv3 = tex_inf_buff(tex).vect(3) * th
+            end if
 
             ''
             '' Animation, once per face rather than per vertex.
@@ -429,6 +487,79 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
             else
                 tex_indx = mipidx*4
             end if
+
+            ''
+            '' The cached surface, now that the mip is settled. sc_mipfloor
+            '' is the finest mip whose padded surface still fits the single
+            '' EMS page the filler maps, so it is a floor on the distance
+            '' choice, never a substitute for it.
+            ''
+            src_dc = h_textr_dc(tex_indx)
+            if ( lm_on ) then
+                lm_mip = miplevel
+                if ( rdr.usemips = 0 ) then lm_mip = 0
+                lm_floor = sc_mipfloor%( lm_extw, lm_exth )
+                if ( lm_mip < lm_floor ) then lm_mip = lm_floor
+
+                lm_sw = lm_extw \ (2 ^ lm_mip)
+                lm_sh = lm_exth \ (2 ^ lm_mip)
+                if ( lm_sw < 1 ) then lm_sw = 1
+                if ( lm_sh < 1 ) then lm_sh = 1
+
+                lm_dc = sc_find&( i, lm_mip )
+                if ( lm_dc = 0 ) then
+                    lm_dc = sc_alloc&( i, lm_mip, lm_sw, lm_sh )
+                    if ( lm_dc <> 0 ) then
+                        ''
+                        '' Build the DC's WHOLE padded extent, not just the
+                        '' surface's own sw by sh. The face's far edge lands
+                        '' exactly on texel sw, one past the last one a
+                        '' sw-wide fill writes, so every face was drawing a
+                        '' black seam of recycled DC along two of its sides.
+                        '' sb_build clamps its luxel and atlas reads, so the
+                        '' extra columns come out edge-extended.
+                        ''
+                        sb_build lm_dc, h_rawtx_dc(mipidx*4 + lm_mip), _
+                                 i, lm_mip, 2 ^ sc_shift%( lm_sw ), _
+                                 2 ^ sc_shift%( lm_sh )
+                    end if
+                end if
+
+                if ( lm_dc <> 0 ) then
+                    ''
+                    '' Texel units -> surface-local, normalised against the
+                    '' DC's padded size: subtract the surface origin, divide
+                    '' by the texels-per-surface-texel the mip implies. In
+                    '' perspective mode the coordinates are already over w,
+                    '' so the origin has to be scaled by w to match.
+                    ''
+                    lm_su = 1.0 / ((2 ^ lm_mip) * (2 ^ sc_shift%( lm_sw )))
+                    lm_sv = 1.0 / ((2 ^ lm_mip) * (2 ^ sc_shift%( lm_sh )))
+                    if ( rdr.rendmode = 0 ) then
+                        for  j = 0 to polycnt-1
+                            prj_u(j) = (prj_u(j) - lm_tms*prj_w(j)) * lm_su
+                            prj_v(j) = (prj_v(j) - lm_tmt*prj_w(j)) * lm_sv
+                        next j
+                    else
+                        for  j = 0 to polycnt-1
+                            prj_u(j) = (prj_u(j) - lm_tms) * lm_su
+                            prj_v(j) = (prj_v(j) - lm_tmt) * lm_sv
+                        next j
+                    end if
+                    src_dc = lm_dc
+                else
+                    ''
+                    '' No surface to be had -- the class was exhausted or the
+                    '' DC would not fit. The coordinates are still in texel
+                    '' units, so put them back on the atlas scale.
+                    ''
+                    for  j = 0 to polycnt-1
+                        prj_u(j) = prj_u(j) * tw
+                        prj_v(j) = prj_v(j) * th
+                    next j
+                    lm_on = 0
+                end if
+            end if
                 ''
                 '' One convex polygon, one call -- no fan pivot, so no
                 '' internal edges for the rasteriser to seam along.
@@ -443,7 +574,7 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
                         pvtx(j).v = prj_v(j)
                     next j
 
-                    uglPolyTP h_dst_dc, pvtx(0), polycnt, 0, h_textr_dc(tex_indx)
+                    uglPolyTP h_dst_dc, pvtx(0), polycnt, 0, src_dc
                     rdr.tris = rdr.tris + (polycnt-2)
                     goto poly_done
                 end if
@@ -480,9 +611,9 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
                         vtx(j).v3.v = prj_v(p3)
 
                         if ( rdr.rendmode = 0 ) then
-                            uglTriTP h_dst_dc, vtx(j), 0, h_textr_dc(tex_indx)
+                            uglTriTP h_dst_dc, vtx(j), 0, src_dc
                         else
-                            uglTriT h_dst_dc, vtx(j), 0, h_textr_dc(tex_indx)
+                            uglTriT h_dst_dc, vtx(j), 0, src_dc
                         end if
                     end if
 

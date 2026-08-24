@@ -385,6 +385,18 @@ end function
 ''       assembly has to match it byte for byte, and the conventions are far
 ''       easier to get right here. Three of them, each got wrong once:
 ''
+''       KNOWN BAD, which is why -lm defaults off: a run with the surface
+''       cache live dies in BASIC's string heap ("String space corrupt")
+''       after rendering correctly for a while. The image itself is right --
+''       verified against the unlit path -- so the fault is a write landing
+''       somewhere it should not, or DGROUP being squeezed. What has been
+''       ruled out: the padded fill below (crash survives reverting it to a
+''       sw-by-sh fill), the luxel decode (a constant `light` still crashes),
+''       and the default no -lm path (unaffected, still 153 polys/365 tris).
+''       Prime remaining suspect is mod_load_colormap's 16K cm_buf: the OKF
+''       memory map records that exact allocation wedging the program before
+''       the compression work, and DGROUP is where BASIC's strings live.
+''
 ''       - The atlas is the whole texture resampled to 64/32/16/8, so an
 ''         original texel is not an atlas texel. u advances by atlasW/origW
 ''         per surface texel, in 16.16, and wraps with an AND because the
@@ -413,6 +425,7 @@ sub sb_build ( byval dc as long, byval tex as long, _
     dim o as long, iseg as integer, lmsg as integer, cmsg as integer
     dim nidx as long, nbyt as long
     dim lbase as integer, lrng as integer, lj as integer
+    dim cmofs as long
     dim mi as integer, recip as single
 
     aw = 64 \ (2 ^ mip)
@@ -422,6 +435,14 @@ sub sb_build ( byval dc as long, byval tex as long, _
     iseg = sb_seg%( lm_info )
     lmsg = sb_seg%( lm_base )
     cmsg = varseg( cm_buf(0) )
+    ''
+    '' VARPTR is a SIGNED integer, so a far-heap offset past 32767 comes
+    '' back negative; the table is 16K and lands wherever the heap has room.
+    '' Mask it back to the unsigned offset the bit pattern actually means --
+    '' peeking from the negative value reads a wholly unrelated address, and
+    '' the surface comes out speckled with whatever lives there.
+    ''
+    cmofs = clng( varptr( cm_buf(0) ) ) and 65535&
 
     def seg = iseg
     o = clng(face) * 16&
@@ -508,7 +529,7 @@ sub sb_build ( byval dc as long, byval tex as long, _
             if ( row > 63 ) then row = 63
 
             def seg = cmsg
-            uglPSet dc, x, y, clng( peek( clng( varptr( cm_buf(0) ) ) + clng(row) * 256& + clng(texel) ) )
+            uglPSet dc, x, y, clng( peek( cmofs + clng(row) * 256& + clng(texel) ) )
             def seg
 
             au = au + du
