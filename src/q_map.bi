@@ -69,7 +69,11 @@ common shared /map_a/ clp_buffer() as clipnode
 common shared /map_a/ lmt_buffer() as lmtmin
 common shared /map_a/ lm_base as long, lm_size as long, lm_read as long
 common shared /map_a/ lm_info as long, lm_isize as long
-common shared /map_a/ cm_buf() as integer, cm_size as long
+'' The shade table is a far pointer, not a BASIC array: 16K inside BASIC's
+'' own memory is exactly the allocation the OKF memory map records wedging
+'' this program, and it is only ever PEEKed. cm_base points at the file as
+'' read, so the table itself starts CM_HDR bytes in.
+common shared /map_a/ cm_base as long, cm_size as long
 ''
 '' Surface cache state. In COMMON rather than d_surf.bas's own DIM SHARED
 '' because DIM SHARED is scoped to the module that writes it, and the
