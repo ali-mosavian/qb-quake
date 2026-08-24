@@ -139,6 +139,27 @@ end type
 '' before use. A DC costs sizeof(DC) + yRes*4 bytes of CONVENTIONAL memory
 '' for its scanline address table, so one per cached surface is what put
 '' the old pool into BASIC's string heap.
+''
+'' What uglBuildSurf needs to composite one surface. Mirrors the SBPARM
+'' struc in mgl/src/ugl/uglsurf.asm field for field -- the two must move
+'' together, the same rule the .bld lumps live by.
+''
+type SBPARM
+    lmptr       as long         '' -> this face's luxel nibbles
+    ftabptr     as long         '' -> the 16 light levels
+    cmapptr     as long         '' -> colormap[64][256]
+    au0         as long         '' initial u, 16.16
+    av0         as long         '' initial v, 16.16
+    du          as long         '' u step per texel
+    dv          as long         '' v step per row
+    sw          as integer      '' surface width  (padded)
+    sh          as integer      '' surface height (padded)
+    lmw         as integer      '' luxel grid width
+    lmh         as integer      '' luxel grid height
+    shft        as integer      '' log2(texels per luxel)
+    msk         as integer      '' texture wrap mask
+end type
+
 type scslot
     ofs         as long         '' byte offset of this surface in the store
     tag         as integer      '' generation * 4 + mip it was built at
