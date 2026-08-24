@@ -202,25 +202,13 @@ end sub
 ''       memAlloc's paragraph alignment: the builder only PEEKs the table.
 ''::::::::::
 sub mod_load_colormap
-    dim f as FILE
+    redim cm_buf(8191) as integer
 
-    cm_base = 0
-    cm_size = 0
+    def seg = varseg( cm_buf(0) )
+    bload "colmap.bld", varptr( cm_buf(0) )
+    def seg
 
-    if ( fileOpen( f, "colmap.bld", F4READ ) <> 0 ) then
-        cm_size = fileSize( f )
-        cm_base = memAlloc( cm_size )
-        if ( cm_base <> 0 ) then
-            if ( fileReadH( f, cm_base, cm_size ) <> cm_size ) then
-                memFree cm_base
-                cm_base = 0
-                cm_size = 0
-            end if
-        else
-            cm_size = 0
-        end if
-        fileClose f
-    end if
+    cm_size = 16384
 end sub
 
 

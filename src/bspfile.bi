@@ -133,9 +133,16 @@ end type
 '' mip it was built at, so a flush invalidates every slot by incrementing
 '' one counter, and a face drawn at a new mip misses without extra state.
 ''
+'' A cached face no longer owns a DC. The bytes live in one EMS block that
+'' carries no descriptor at all (emsAlloc, not uglNew), and the drawing DC
+'' is one shared descriptor per size class, repointed at this offset just
+'' before use. A DC costs sizeof(DC) + yRes*4 bytes of CONVENTIONAL memory
+'' for its scanline address table, so one per cached surface is what put
+'' the old pool into BASIC's string heap.
 type scslot
-    dc          as long         '' the EMS DC holding this face's surface
+    ofs         as long         '' byte offset of this surface in the store
     tag         as integer      '' generation * 4 + mip it was built at
+    cls         as integer      '' size class, i.e. which descriptor draws it
 end type
 
 type lmtmin
@@ -390,6 +397,10 @@ declare sub mod_load_faces ( )
 declare sub mod_load_lightmaps ( )
 declare sub mod_load_colormap ( )
 declare function sc_init% ( )
+declare function sc_store_open% ( )
+declare function sc_probe_atb% ( byval dc as long )
+declare sub sc_point ( byval dc as long, byval ofs as long, byval rows as integer )
+declare function sc_grab& ( byval sz as long )
 declare function sc_shift% ( byval v as integer )
 declare function sc_mipfloor% ( byval extw as integer, byval exth as integer )
 declare sub sc_flush ( )
