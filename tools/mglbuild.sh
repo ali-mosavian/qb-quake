@@ -114,10 +114,14 @@ built=$(ls "$W"/*.OBJ 2>/dev/null | wc -l | tr -d ' ')
 
 # lib16's output was previously never inspected, so a librarian failure left a
 # silently stale library behind and the assembly check above still passed.
-# U4151 (deleting a module the library does not have yet) is expected for
-# modules the shipped library predates, so only hard errors count.
-if grep -qiE "error U[0-9]|fatal|cannot " "$W/lib.txt" 2>/dev/null; then
-    echo "== LIBRARIAN FAILED"; grep -iE -B2 "error U[0-9]|fatal|cannot " "$W/lib.txt" | head -30; exit 1
+# Deleting a module the library does not have yet is expected -- for modules
+# the shipped library predates, and for brand new ones being added. LIB says
+# U2155 for that (U4151 in some versions); neither is a real failure, so
+# filter them out and let anything else count.
+if grep -iE "error U[0-9]|fatal|cannot " "$W/lib.txt" 2>/dev/null | grep -qvE "U2155|U4151"; then
+    echo "== LIBRARIAN FAILED"
+    grep -iE -B2 "error U[0-9]|fatal|cannot " "$W/lib.txt" | grep -vE "U2155|U4151" | head -30
+    exit 1
 fi
 
 cp "$W/UGLV.LIB" "$LIB"

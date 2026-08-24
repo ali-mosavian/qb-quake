@@ -75,7 +75,9 @@ const SC_NCLS   = 25            '' (SC_MAXSH-SC_MINSH+1) squared
 '' conventional memory each surface's DC needed for its scanline table,
 '' and surfaces no longer have DCs. dm3ish's whole working set is ~640K.
 ''
-const SC_STORE# = 1572864#      '' 1.5 MB
+const SC_PGBYTES = 16384        '' one EMS page: the widest bps allowed
+const SC_PAGES   = 96           '' so the store is 96 pages ...
+const SC_STORE#  = 1572864#     '' ... which is 1.5 MB
 
 ''
 '' The 16 light levels of the face being built, rebuilt at the top of each
@@ -93,14 +95,14 @@ dim shared lm_ftab(15) as integer
 '' emsAlloc gives a handle and nothing else, so unlike a DC it costs no
 '' conventional memory. Surfaces are bump-allocated inside it.
 ''
-'' The DCs are only descriptors now -- one per size class, repointed at a
-'' surface's offset before it is built or drawn. sc_atb is where a DC's
-'' scanline address table starts, discovered once rather than assumed.
+'' The DCs are only views now -- one per size class, re-aimed at a
+'' surface's offset before it is built or drawn. uglNewView/uglSetView do
+'' the aiming; see their note in ugl.bi for why a view costs so much less
+'' than a DC of its own.
 ''
-dim shared sc_hnd as integer            '' EMS handle for the whole store
+dim shared sc_hnd as long               '' the DC that owns every surface's bytes
 dim shared sc_next as long              '' bump pointer within it
 dim shared sc_cap as long               '' how big it is
-dim shared sc_atb as integer            '' offset of DC_addrTB inside a DC
 '$dynamic
 '' one drawing DC per size class. '$DYNAMIC, so the array lands in the far
 '' heap rather than DGROUP -- DGROUP is shared with BASIC's stack and string
@@ -149,68 +151,6 @@ function sc_shift% ( byval v as integer )
 end function
 
 ''::::::::::
-'' name: sc_probe_atb
-'' desc: Where DC_addrTB begins, in bytes from the top of a DC. Derived from
-''       a real DC rather than hardcoded: the struct's own layout is uGL's
-''       business, and a fresh EMS DC has a signature that cannot be missed
-''       -- entry 0 is the bare EMS handle at page 0 offset 0, and entry 1 is
-''       the same handle one bps further in.
-''::::::::::
-function sc_probe_atb% ( byval dc as long )
-    dim o as integer, h as integer, bp as integer
-
-    def seg = sb_seg%( dc )
-    h  = sb_i%( 28& )                   '' DC.hnd, in the type union
-    bp = sb_i%( 10& )                   '' DC.bps
-    for o = 30 to 48 step 2
-        if ( sb_i%( clng(o)      ) = h  and _
-             sb_i%( clng(o) + 2& ) = 0  and _
-             sb_i%( clng(o) + 4& ) = h  and _
-             sb_i%( clng(o) + 6& ) = bp ) then
-            def seg
-            sc_probe_atb% = o
-            exit function
-        end if
-    next o
-    def seg
-    sc_probe_atb% = 0
-end function
-
-''::::::::::
-'' name: sc_point
-'' desc: Aims a descriptor at a surface. An entry is a dword: the low word
-''       is the EMS handle with the logical page added into its high byte,
-''       the high word the offset inside that page -- exactly what ems_New
-''       lays down and ems_RdAccess reads back.
-''
-''       rows is the point of the whole exercise. Every texture filler does
-''       `xor si, si` before rdAccess, so drawing reads entry 0 and nothing
-''       else: one entry is all a draw needs. uglPSet goes through
-''       uglDCAccessWr, which indexes the table per scanline, so building
-''       needs the lot -- and that cost vanishes beside the builder's own
-''       per-texel loop.
-''::::::::::
-sub sc_point ( byval dc as long, byval ofs as long, byval rows as integer )
-    dim i as integer
-    dim bp as long, lin as long, a as long, lo as long, hi as long
-
-    def seg = sb_seg%( dc )
-    bp = clng( sb_i%( 10& ) )           '' DC.bps
-    a  = clng( sc_atb )
-    for i = 0 to rows-1
-        lin = ofs + clng(i) * bp
-        lo  = clng( sc_hnd ) or ((lin \ 16384&) * 256&)
-        hi  = lin and 16383&
-        poke a     , lo and 255&
-        poke a + 1&, (lo \ 256&) and 255&
-        poke a + 2&, hi and 255&
-        poke a + 3&, (hi \ 256&) and 255&
-        a = a + 4&
-    next i
-    def seg
-end sub
-
-''::::::::::
 '' name: sc_grab
 '' desc: Bump-allocates a surface's bytes. Aligned to its own size, which
 ''       keeps it inside one 16K logical page: the fillers map a single page
@@ -254,7 +194,6 @@ function sc_init% ( )
     sc_hnd  = 0
     sc_next = 0
     sc_cap  = 0
-    sc_atb  = 0
 
     if ( emsCheck% = 0 ) then
         sc_ok = 0
@@ -287,14 +226,19 @@ function sc_store_open% ( )
         sc_store_open% = -1
         exit function
     end if
-    sc_cap = SC_STORE#
-    sc_hnd = emsAlloc%( sc_cap )
-    if ( sc_hnd <= 0 ) then
-        sc_hnd = 0
+    ''
+    '' Shaped so its own scanline table stays tiny. bps is capped at one EMS
+    '' page, so a 16384-wide DC is exactly one page per scanline: 1.5 MB of
+    '' store costs 96 entries, 384 bytes. Shape it 128 wide instead and the
+    '' parent's own table would be 49K, which is the very cost being dodged.
+    ''
+    sc_hnd = uglNew&( UGL.EMS, UGL.8BIT, SC_PGBYTES, SC_PAGES )
+    if ( sc_hnd = 0 ) then
         sc_cap = 0
         sc_store_open% = 0
         exit function
     end if
+    sc_cap = SC_STORE#
     sc_next = 0
     sc_store_open% = -1
 end function
@@ -333,7 +277,9 @@ function sc_find& ( byval face as integer, byval mip as integer )
     '' enough: the fillers read addrTB[0] and derive the rest themselves.
     ''
     dc = sc_desc( sc_slot(face).cls )
-    if ( dc <> 0 ) then sc_point dc, sc_slot(face).ofs, 1
+    if ( dc <> 0 ) then
+        if ( uglSetView%( dc, sc_slot(face).ofs ) = 0 ) then dc = 0
+    end if
     sc_find& = dc
 end function
 
@@ -376,13 +322,8 @@ function sc_alloc& ( byval face as integer, byval mip as integer, _
     '' the very most, against one per cached surface before.
     ''
     if ( sc_desc(cidx) = 0 ) then
-        dc = uglNew&( UGL.EMS, UGL.8BIT, 2 ^ a, 2 ^ b )
+        dc = uglNewView&( sc_hnd, 0, 2 ^ a, 2 ^ b )
         if ( dc = 0 ) then
-            sc_alloc& = 0
-            exit function
-        end if
-        if ( sc_atb = 0 ) then sc_atb = sc_probe_atb%( dc )
-        if ( sc_atb = 0 ) then          '' cannot find the table: refuse
             sc_alloc& = 0
             exit function
         end if
@@ -405,7 +346,10 @@ function sc_alloc& ( byval face as integer, byval mip as integer, _
     sc_slot(face).tag = sc_gen * 4 + mip
 
     '' the builder writes scanline by scanline, so it needs the whole table
-    sc_point dc, ofs, 2 ^ b
+    if ( uglSetView%( dc, ofs ) = 0 ) then
+        sc_alloc& = 0
+        exit function
+    end if
 
     sc_alloc& = dc
 end function
@@ -431,11 +375,12 @@ end sub
 sub sc_shutdown
     dim i as integer
 
+    '' views first: they borrow the store's pixels, so the store outlives them
     for i = 0 to SC_NCLS-1
-        if ( sc_desc(i) <> 0 ) then uglDel sc_desc(i)
+        if ( sc_desc(i) <> 0 ) then uglDelView sc_desc(i)
         sc_desc(i) = 0
     next i
-    if ( sc_hnd <> 0 ) then emsFree sc_hnd
+    if ( sc_hnd <> 0 ) then uglDel sc_hnd
     sc_hnd = 0
     sc_cap = 0
     sc_next = 0
@@ -479,7 +424,7 @@ function sc_selftest% ( )
     '' where it points -- the whole point of the store
     if ( d0 <> d1 ) then sc_selftest% = -18 : exit function
     if ( sc_slot(0).ofs = sc_slot(1).ofs ) then sc_selftest% = -21 : exit function
-    if ( sc_atb = 0 ) then sc_selftest% = -22 : exit function
+    if ( sc_hnd = 0 ) then sc_selftest% = -22 : exit function
 
     '' and the floor it implies: 224 needs mip 1, 112 does not
     if ( sc_mipfloor%( 224, 224 ) <> 1 ) then sc_selftest% = -19 : exit function
@@ -561,7 +506,7 @@ end function
 ''       This used to die in BASIC's string heap ("String space corrupt")
 ''       after rendering correctly for a while, because every cached
 ''       surface owned a DC and a DC costs conventional memory. Surfaces
-''       share descriptors now, so that is gone; see sc_point. -lm still
+''       share views over one store now, so that is gone. -lm still
 ''       defaults off only because this builder is a per-texel BASIC
 ''       reference and far too slow.
 ''
