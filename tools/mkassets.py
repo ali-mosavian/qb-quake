@@ -17,6 +17,42 @@ import struct, sys, os, math
 MIPS   = 4
 SIZES  = [64, 32, 16, 8]        # what the renderer wants, per mip level
 
+# The texture store. Every texture and mip lands in ONE image, at the exact
+# byte offset the renderer will aim a uGL view at, so the target loads the
+# whole set with a single uglPutBMPEx instead of one call per texture.
+#
+# It used to be a BMP per texture per mip (t<k>m<l>.bmp, 160 files). That
+# meant 160 uglNewBMPEx calls, each building a DC that costs conventional
+# memory for its scanline table and each allocating and freeing uGL's 10K BMP
+# scratch buffer -- the churn fragmented the heap even though every DC was
+# freed again.
+#
+# STORE_W is 2048 because a store row must divide the 16K EMS page evenly (8
+# rows to a page) and because uGL's BMP loader caps a scanline at 8192 bytes.
+STORE_W   = 2048
+EMS_PAGE  = 16384
+STORE_RPP = EMS_PAGE // STORE_W         # store rows per EMS page
+
+def pack_offsets(ntex):
+    """Byte offset of every (texture, mip), and the page count that implies.
+
+    Packed end to end, skipping to the next EMS page whenever a texture would
+    straddle one: the uGL texture fillers map a single page and then address
+    the texture flat, so crossing a page boundary is what breaks -- being
+    unaligned within one does not. Four mips are 5,440 bytes, so three whole
+    textures fit a page and the fourth starts the next.
+    """
+    offs, nxt = [], 0
+    for _ in range(ntex):
+        for lvl in range(MIPS):
+            sz = SIZES[lvl] * SIZES[lvl]
+            if (nxt % EMS_PAGE) + sz > EMS_PAGE:
+                nxt = ((nxt // EMS_PAGE) + 1) * EMS_PAGE
+            offs.append(nxt)
+            nxt += sz
+    pages = (nxt + EMS_PAGE - 1) // EMS_PAGE
+    return offs, pages
+
 def read_lumps(d):
     return [struct.unpack_from('<ii', d, 4 + 8*i) for i in range(15)]
 
@@ -511,14 +547,28 @@ def main():
     ntex    = struct.unpack_from('<i', d, toff)[0]
     offs    = [struct.unpack_from('<i', d, toff + 4 + 4*k)[0] for k in range(ntex)]
 
-    # One BMP per texture per mip level, DOS 8.3: t<idx>m<level>.bmp.
+    # Two stores: one image each for the shaded and the raw texel sets, with
+    # every texture and mip already at the offset the renderer aims a view at.
+    # See STORE_W / pack_offsets above for why this replaced 160 files.
     #
-    # An atlas per mip level would mean fewer files, but pulling a cell out of
-    # one needs uglBlit, and uglBlit is declared in ugl.bi without being
-    # implemented in the VBD library -- LINK resolves the call to an int 3.
-    # uglNewBMPEx is present, and it builds a DC straight from a file, so a
-    # file per texture is both simpler and one call per texture on the target.
-    written = 0
+    # texofs.bld is emitted rather than recomputed on the target so the packer
+    # and the loader cannot drift apart -- an offset table and the code that
+    # reads it have to move together, the lesson clip.bld already taught once.
+    offsets, pages = pack_offsets(ntex)
+    store_h = pages * STORE_RPP
+    shaded  = bytearray(STORE_W * store_h)
+    rawbuf  = bytearray(STORE_W * store_h)
+
+    def place(buf, ofs, tile, cell):
+        """Drop a cell x cell tile into a store at byte offset ofs.
+
+        The tile occupies cell*cell CONTIGUOUS bytes there, which is exactly
+        what a view of width cell reads back as cell rows -- checked on the
+        target with a standalone test before any of this was written."""
+        for r in range(cell):
+            at = ofs + r * cell
+            buf[at:at + cell] = tile[r*cell:(r+1)*cell]
+
     for lvl in range(MIPS):
         cell = SIZES[lvl]
         for k, o in enumerate(offs):
@@ -534,24 +584,27 @@ def main():
                 continue
             # Two sets, because they feed two different things.
             #
-            # t*: shade0 applied, as texLoadAll did -- what the current
-            # unlit path draws directly.
+            # shaded: shade0 applied, as texLoadAll did -- what the unlit path
+            # draws directly.
             #
-            # r*: raw indices, for the surface builder. It shades through the
+            # raw: raw indices, for the surface builder. It shades through the
             # full colormap itself, and colormap row 0 is not the identity --
             # it BRIGHTENS (index 40, luminance 83, becomes 47, luminance
             # 146). Shading a texel that already went through row 0 treats a
             # brightened index as a raw one, and the lighting range collapses
             # to almost nothing.
-            raw  = resample(src, mw, mh, cell, cell, pal, cube, bits)
-            write_bmp8(os.path.join(outdir, f"r{k:03d}m{lvl}.bmp"),
-                       cell, cell, raw, pal)
-            src  = bytes(shade0[b] for b in src)        # as texLoadAll did
-            tile = resample(src, mw, mh, cell, cell, pal, cube, bits)
-            out  = os.path.join(outdir, f"t{k:03d}m{lvl}.bmp")
-            write_bmp8(out, cell, cell, tile, pal)
-            written += 2
+            at = offsets[k*MIPS + lvl]
+            place(rawbuf, at, resample(src, mw, mh, cell, cell, pal, cube, bits), cell)
+            shd = bytes(shade0[b] for b in src)         # as texLoadAll did
+            place(shaded, at, resample(shd, mw, mh, cell, cell, pal, cube, bits), cell)
         print(f"  mip {lvl}: {ntex} textures @ {cell}x{cell}")
-    print(f"done: {written} bmps for {ntex} textures across {MIPS} mip levels")
+
+    write_bmp8(os.path.join(outdir, 'tex.bmp'),  STORE_W, store_h, shaded, pal)
+    write_bmp8(os.path.join(outdir, 'texr.bmp'), STORE_W, store_h, rawbuf, pal)
+    write_bload(os.path.join(outdir, 'texofs.bld'),
+                b''.join(struct.pack('<i', v) for v in offsets))
+    print(f"  tex.bmp/texr.bmp  {STORE_W}x{store_h}  "
+          f"({pages} EMS pages, {ntex} textures x {MIPS} mips)")
+    print(f"  texofs.bld    {len(offsets)*4:7,} bytes  ({len(offsets)} offsets)")
 
 main()

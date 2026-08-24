@@ -9,8 +9,9 @@ tags: [basic, mgl, ugl, ems, debugging, dosbox-x, surface-cache]
 Lightmap rendering needed a surface cache; the cache needed to stop
 spending conventional memory per cached surface; that needed a new uGL
 primitive; validating the new primitive needed a standalone test harness
-that didn't already exist. This covers all four, plus the texture-store
-work that is still mid-debug.
+that didn't already exist. This covers all four, the texture store the
+same primitive then made possible, and the bug in that primitive which
+took four passing standalone tests to corner.
 
 ## The DC-per-surface memory bug (fixed)
 
@@ -58,9 +59,12 @@ per-texel loop.
 to write `ul$fillView`: an entry is a dword, low word addresses a
 "bank", high word an offset inside it.
 - `DC_EMS`: low = `handle | (logical_page << 8)`, offset wraps at 16K,
-  page +1 on wrap. Real handles are small (<256), so overwriting the
-  high byte of a handle-seeded `dx` is equivalent to what `ems_New`
-  does with an accumulating `adc dh,0` — same result, simpler code.
+  page +1 on wrap. The page must be **added** to the handle word
+  (`add dh, al`), matching `ems_New`'s accumulating `adc dh, 0` —
+  writing it (`mov dh, al`) destroys the handle's own high byte. This
+  file previously argued the two were equivalent "since real handles
+  are small (<256)"; that reasoning was wrong and cost most of a
+  session. See the EMS handle bug below.
 - `DC_MEM`: low = far segment, offset wraps at 64K, segment +0x1000 on
   wrap (paragraphs).
 
@@ -76,47 +80,113 @@ be checked, not just the per-user savings.
 **Result**: dm3ish's surface cache went from 228 DCs to 21 (one per
 size class, made once). Verified: `sc_selftest%` still passes with the
 store swapped in for the old pool, pixel-identical render, 40-frame
-walk with lightmaps clean.
+walk with lightmaps clean — though note that this verification passed
+*while the EMS handle bug below was live*, because the cache both
+writes and reads through views. Correct output through a broken
+accessor is not evidence the accessor works.
 
-## Texture store consolidation (in progress, currently hangs)
+## The uglNewView EMS handle bug (found late, root cause of it all)
 
-Applying the same trick to the 160 t\*/r\* texture DCs (46 KB of
-descriptors) via `tex_stash&`: load through `uglNewBMPEx` as before,
-row-copy into a shared `tx_store`, free the temporary DC. This is
-**currently broken** — a `-nostats -bench 60` run of dm3ish hangs
-partway through `sys_time_init`'s busy-wait for `TIMER` to tick, which
-is the signature of something freezing the BIOS tick counter at
-0040:006C via a wild write, not a normal DOS-level hang.
+`uglNewView`/`uglSetView` addressed the **wrong EMS handle** for any
+parent that was not one of the first allocations. One line in
+`ul$fillView`:
 
-Ruled out, in order:
-- Sound (DOSBox mixer `nosound=true` and qrender's own `env.sound`,
-  already false by default in `stuff.ini`) — same hang either way.
-- Watchpoint tooling itself — arming a `write` watchpoint and
-  continuing kills the dosbox-x debug socket instantly, no crash log;
-  a tooling problem, not a guest one. Abandoned that path.
-- Many repeated alloc/copy/free cycles exhausting something — hangs
-  with exactly **one** `tex_stash` call (1 texture, 1 mip, 64 rows).
-- The view machinery — a version of `tex_stash` that copies into a
-  **plain fresh `uglNew`'d DC** (zero view calls) hangs identically.
-- The row-copy logic and the rebuilt library themselves — see below,
-  proven fine in isolation.
+```asm
+mov     dx, es:[DC.hnd]
+mov     dh, al          ;; WRONG -- al is the logical page
+```
 
-**The standalone test — same "withview" library, same `uglNewBMPEx` +
-64-row copy — runs clean and verifies byte-correct.** So the bug is
-not in `uglview.asm`, not in the library rebuild, and not in
-`uglRowRead`/`uglRowWriteBuff` as such. It is something specific to
-qrender's own context at the point `tex_stash` runs there (DGROUP
-pressure from the rest of the program, interaction with state the
-standalone test never sets up, or a difference between the *actual*
-call site's DC sizes/sequencing and what the repro exercises). Not yet
-found — the standalone repro needs to be grown toward qrender's actual
-call pattern (loop over real mip sizes rather than a fixed 64×64,
-inside a program that has also loaded a real map) rather than debugged
-further inside qrender itself, since print/serial bisection inside the
-full program had already been exhausted without narrowing further than
-"before `sys_time_init`, after `mod_load_textures`".
+`ems_New` encodes a scanline address as `handle | (logical_page << 8)`
+and *accumulates* the page onto the handle word with `adc dh, 0`. So
+the page is **added** to the handle's high byte, not written over it.
+`mov dh, al` discards that high byte, which is zero only while EMS
+handles stay under 256 — true for the first few allocations of a
+program and false later. The fix is `add dh, al`.
 
-## Standalone mgl test harness: five ways to fool yourself
+This is why every symptom moved around. A view over an early DC worked;
+a view over a DC allocated after the loading screen, the font and the
+lightmap atlas read somebody else's pages. In qrender the texture store
+read back 227 where 45 was expected — 227 being whatever the neighbour
+happened to hold, which is also why the render showed *valid textures
+on the wrong surfaces* rather than noise.
+
+**It was live in the surface cache too, silently.** The cache writes
+surfaces through views and draws through views, both with the same
+wrong base — self-consistent, so it rendered correctly and "verified
+pixel-identical" while addressing another handle's memory. A test that
+writes and reads through the same broken accessor cannot see the break;
+only comparing a view against an *independent* read of the parent can.
+
+## Texture store consolidation (done)
+
+The 160 t\*/r\* texture DCs are now one image per texel set plus one
+view per mip size:
+
+- `tools/mkassets.py` packs every texture and mip into a single 2048
+  wide image at the exact byte offset the renderer aims a view at, and
+  emits `texofs.bld` beside it. 2048 because a store row must divide
+  the 16K EMS page evenly (8 rows to a page) and uGL's BMP loader caps
+  a scanline at 8192 bytes.
+- `mod_load_textures` does one `uglNewBMPEx` per store. No per-texture
+  load at all, so the 160 DC allocations *and* the 160 alloc/free
+  cycles of uGL's 10K BMP scratch buffer are both gone — the churn was
+  fragmenting the heap even though every DC was freed again.
+- `h_textr_dc` holds a byte offset now, not a DC. `tex_indx` is
+  `mipidx*4 + miplevel`, so its low two bits are the mip, which is the
+  view to aim.
+
+Offsets are emitted rather than recomputed on the target: an offset
+table and the code that reads it have to move together, which is the
+lesson `clip.bld` already taught once.
+
+Result on dm3ish, verified pixel-identical to the previous build on a
+deterministic `-ticks 60` run (`-bench N` is *not* deterministic — it
+counts frames, so a different `dt` walks the camera somewhere else and
+~97% of pixels differ for no reason):
+
+| | DCs | conventional bytes for scanline tables | asset files |
+|---|---|---|---|
+| before | 160 | ~12.3 KB (~24.6 KB with `-lm`) | 160 |
+| after | 1 store + 4 views | ~0.9 KB (~1.7 KB with `-lm`) | 3 |
+
+## How the isolation kept lying
+
+Four standalone tests passed while the bug was live. Each was wrong in
+a way worth recognising again:
+
+1. **Never the failing combination.** One test put views over a
+   `uglNew` DC; another loaded via `uglNewBMPEx` and read the DC
+   *directly*. qrender does views over a `uglNewBMPEx` DC — the one
+   pairing nothing covered.
+2. **Always the first allocation.** Every test allocated its subject
+   first, which is precisely where a handle-high-byte bug is invisible.
+   Adding three throwaway `uglNew(UGL.EMS, ...)` DCs before the subject
+   reproduced it on the first try. **If a bug appears only inside a
+   real program, make the repro allocate like one before concluding the
+   library is fine.**
+3. **A palette that hid a remap.** A synthetic BMP filled with a
+   grayscale `(i,i,i)` palette round-trips identically even if the
+   loader is colour-matching, because nearest-match on grey *is* the
+   identity. It "proved" `BMPOPT.NO332` was honoured; it proved
+   nothing. Test data has to be able to fail.
+4. **Self-consistent read-back.** Writing a pattern through a view and
+   reading it back through the same view passes no matter where the
+   view points. The check that mattered was view-vs-direct.
+
+The false conclusions these produced, in order, were: the library
+rebuild is fine, `uglview.asm` is fine, `uglPutBMPEx` is broken on wide
+images, and `uglNewBMPEx` must be remapping the palette. All four were
+wrong, and each cost a rebuild cycle.
+
+**Read the harness before the guest.** A run under
+`SDL_VIDEODRIVER=dummy` that never wrote `ran.txt` was called a hang
+for most of a session; it was `qrender.exe` invoked *without* `-bench`,
+which runs interactively forever waiting for a keypress that headless
+has no way to send. Nothing was wrong with headless mode at all — the
+same batch with `-bench 60` had already produced a full `run.out` and
+`ran.txt` earlier in the same session.
+
+## Standalone mgl test harness: six ways to fool yourself
 
 None of these produced a hard, obvious signal — each one manifested as
 "looks like it built, produces no useful output," which is exactly the
@@ -170,6 +240,15 @@ order of how long each one cost:
    have usually already been chased and fixed, so it reads like
    "well THIS time it's really something new" rather than "one more
    flag missing from the copied command line."
+6. **DOS 8.3 filenames apply to scratch test files too.** A test file
+   named `serialtest.bas` (10-character base) failed `BC.EXE` outright
+   with `Input file not found` — not a compile error, a file-not-found,
+   even though the file was sitting right there on the mounted drive.
+   DOSBox-X's mounted drives enforce the same 8.3 limit real DOS does;
+   nothing about a scratch/test context exempts it. Renamed to
+   `comtst.bas` (6 chars), no other change, and it compiled immediately.
+   Keep standalone test basenames to 8 characters on principle rather
+   than re-discovering this per test.
 
 **The general lesson, not specific to any one of these**: a standalone
 test that builds without a visible compiler error and then produces no
@@ -180,28 +259,30 @@ a "clean" result from anything more complex, and don't reuse flags
 copied from a different build context (multi-module vs. standalone)
 without checking what they actually mean.
 
-## COM1 serial logging: set up correctly, still unproven here
+## COM1 serial logging: validated, working
 
 `serial1=file file:<path> timeout:<ms>` in DOSBox-X's `[serial]`
 section captures whatever the guest writes to the UART, independent of
 disk I/O — useful in principle for a hang that might be corrupting the
 guest's own file-I/O state, since a frozen-mid-write disk log looks
 identical to "never got there." d32x's own convention
-(`src/rt/16/serial.inc`) is raw port I/O at 0x3F8-0x3FD (115200 8N1, no
-interrupts), not BASIC's `OPEN "COM1:"`, which goes through DOS's own
-COM driver — another layer a suspected-corruption test shouldn't lean
-on.
+(`src/rt/16/serial.inc`) is raw port I/O at 0x3F8-0x3FD, not BASIC's
+`OPEN "COM1:"`, which goes through DOS's own COM driver — another layer
+a suspected-corruption test shouldn't lean on. Init sequence: `OUT
+&H3FB,&H83` (DLAB=1) → `OUT &H3F8,&H01` / `OUT &H3F9,&H00` (divisor low/
+high, 115200 baud) → `OUT &H3FB,&H03` (DLAB=0, 8N1) → `OUT &H3FC,&H03`
+(DTR+RTS) → `OUT &H3F9,&H00` (no interrupts). Send byte: busy-wait
+`(INP(&H3FD) AND &H20) = 0` (LSR THR-empty bit) then `OUT &H3F8,byte`.
 
-Implemented (`SerialInit`/`SerialStr` in the current `rowio.bas`, raw
-`OUT`/`INP`) but never actually validated end-to-end this session — the
-log file never appeared during testing, and the eventual working repro
-used console `Print` + a disk `result.txt` instead (safe once the
-build-harness bugs above were fixed and the guest was confirmed not to
-hang in the isolated case). Whether the gap was DOSBox-X config, guest
-UART init, or something else is still open. Worth resolving before
-leaning on it for the texture-store hang above, since that is exactly
-the "disk I/O might itself be compromised" scenario this channel exists
-for.
+Validated end-to-end with a minimal test (`comtst.bas`, six-char
+basename — see pitfall 6 above; the original 10-char `serialtest.bas`
+never got the chance to run at all): console `Print` checkpoints plus
+raw UART init/send of `"hello from serial" + Chr$(13) + Chr$(10)`. The
+resulting `serial1=file` capture matched byte-for-byte:
+`68656c6c6f2066726f6d2073657269616c0d0a` = `hello from serial\r\n`. The
+channel works; the earlier "never appeared" result was the 8.3-filename
+bug preventing the test from compiling at all, not a serial or DOSBox-X
+config problem.
 
 ## dosbox-x debug-socket notes from this session
 
