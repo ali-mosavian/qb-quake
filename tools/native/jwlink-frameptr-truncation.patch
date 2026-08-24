@@ -1,0 +1,29 @@
+--- /private/tmp/claude-501/-Users-alim-work-personal-gba-affine-raster-lab/6adb0289-6e74-4bcd-abde-6dbd855b4af1/scratchpad/pristine2/jwlink_pristine/c/obj2supp.c	2026-08-23 14:39:01
++++ /private/tmp/claude-501/-Users-alim-work-personal-gba-affine-raster-lab/6adb0289-6e74-4bcd-abde-6dbd855b4af1/scratchpad/native/JWlink/c/obj2supp.c	2026-08-23 14:34:07
+@@ -218,7 +218,15 @@
+     } else {
+         retval = sizeof( save_fixup ) + CalcAddendSize( fixtype );
+         if( FRAME_HAS_DATA( FIX_GET_FRAME( fixtype ) ) ) {
+-            retval += sizeof( unsigned_32 );
++            /* IncExecRelocs() reads this back with
++             *   frame.u.ptr = *((void **)( save + 1 ));
++             * a full pointer, not a 32-bit value -- unlike the
++             * FIX_CHANGE_SEG case above, which already accounts for
++             * 64-bit hosts. Reserving only 4 bytes here while the
++             * write below stores 4 and the read pulls 8 corrupts
++             * every subsequent record in the saved-fixup stream and
++             * segfaults in GetFrameAddr on a garbage frame->u.group. */
++            retval += sizeof( void * );
+         }
+     }
+     return( retval );
+@@ -626,7 +634,8 @@
+     }
+     PermSaveFixup( &save, sizeof( save_fixup ) );
+     if( FRAME_HAS_DATA( frame->type ) ) {
+-        PermSaveFixup( &frame->u.abs, sizeof( unsigned_32 ) );
++        /* full pointer width -- see CalcSavedFixSize()'s matching note */
++        PermSaveFixup( &frame->u.abs, sizeof( void * ) );
+     }
+     if( !( save.flags & FIX_ADDEND_ZERO ) )  {
+         PermSaveFixup( buff, CalcAddendSize( save.flags ) );

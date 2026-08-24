@@ -17,6 +17,10 @@
 # and uglBlit are all in the sources and the module lists but not in the
 # library. Rebuilding a module is how you get it back.
 #
+# Builds run on the dynamic core at cycles=max. That is only safe because
+# there is no debug socket here -- the socket needs core=normal and a fixed
+# cycle count or the guest starves it.
+#
 # Env: MGL, TOOLCHAINS, DOSBOX_BIN as in dosbox.sh.
 
 set -euo pipefail
@@ -88,9 +92,14 @@ for m in $mods; do
     n=$((n+1))
 done > "$W/body.txt"
 
-{ cat "$W/head.txt"; cat "$W/body.txt"; echo "exit"; } > "$W/auto.txt"
+# The commands go into a batch file on W: rather than straight into
+# [autoexec]: --all emits 3 lines per module (453 for 151 modules) and
+# dosbox-x silently truncates an oversized autoexec, so the run ended after
+# the mounts with nothing built and no error anywhere.
+cp "$W/body.txt" "$W/build.bat"
+{ cat "$W/head.txt"; echo "call build.bat"; echo "exit"; } > "$W/auto.txt"
 { printf '[sdl]\nautolock=false\n[dosbox]\nmemsize=32\nstartbanner=false\n'
-  printf '[cpu]\ncore=normal\ncycles=60000\n[dos]\nxms=true\n[autoexec]\n'
+  printf '[cpu]\ncore=dynamic\ncycles=max\n[dos]\nxms=true\n[autoexec]\n'
   cat "$W/auto.txt"
 } > "$W/build.conf"
 
@@ -102,6 +111,14 @@ if grep -qiE "error A[0-9]|fatal" "$W/ml.txt" 2>/dev/null; then
 fi
 built=$(ls "$W"/*.OBJ 2>/dev/null | wc -l | tr -d ' ')
 [[ "$built" == "$n" ]] || { echo "== only $built of $n objects built"; exit 1; }
+
+# lib16's output was previously never inspected, so a librarian failure left a
+# silently stale library behind and the assembly check above still passed.
+# U4151 (deleting a module the library does not have yet) is expected for
+# modules the shipped library predates, so only hard errors count.
+if grep -qiE "error U[0-9]|fatal|cannot " "$W/lib.txt" 2>/dev/null; then
+    echo "== LIBRARIAN FAILED"; grep -iE -B2 "error U[0-9]|fatal|cannot " "$W/lib.txt" | head -30; exit 1
+fi
 
 cp "$W/UGLV.LIB" "$LIB"
 echo "== $n module(s) rebuilt and installed into $LIB"

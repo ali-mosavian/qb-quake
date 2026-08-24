@@ -1,0 +1,101 @@
+diff --git a/assemble.c b/assemble.c
+index c0720cf..3849065 100644
+--- a/assemble.c
++++ b/assemble.c
+@@ -1162,7 +1162,11 @@ static void open_files( void )
+ 
+     /* open OBJ file */
+     if ( Options.syntax_check_only == FALSE ) {
+-        CurrFile[OBJ] = fopen( CurrFName[OBJ], "wb" );
++        /* v2.12+patch: "w+b", not "wb" -- omf_write_module() has to read
++         * the already-written records back when the final header turns out
++         * larger than the space reserved for it after pass one.
++         */
++        CurrFile[OBJ] = fopen( CurrFName[OBJ], "w+b" );
+         if( CurrFile[OBJ] == NULL ) {
+             DebugMsg(("open_files(): cannot open object file, fopen(\"%s\") failed\n", CurrFName[OBJ] ));
+             Fatal( CANNOT_OPEN_FILE, CurrFName[OBJ], ErrnoStr() );
+diff --git a/omf.c b/omf.c
+index 8210a4e..f9afd7a 100644
+--- a/omf.c
++++ b/omf.c
+@@ -1598,16 +1598,70 @@ static ret_code omf_write_module( struct module_info *modinfo )
+ 
+ #endif
+ 
+-    /* write SEGDEF records. Since these records contain the segment's length,
+-     * the records have to be written again after the final assembly pass.
+-     */
+-    fseek( CurrFile[OBJ] , seg_pos, SEEK_SET );
+-    omf_write_segdef();
+-    /* write PUBDEF records. Since the final value of offsets isn't known after
+-     * the first pass, this has to be called again after the final pass.
++    /* write SEGDEF and PUBDEF records again: SEGDEF because the records
++     * carry the segment's final length, PUBDEF because the final value of
++     * offsets isn't known after the first pass.
++     *
++     * v2.12+patch: these were rewritten in place, which assumes they still
++     * fit the space reserved after pass one. They need not: an EXTERNDEF
++     * naming a PROC defined further down leaves the symbol external during
++     * pass one, so it is not queued as public until pass two, and the PUBDEF
++     * section grows. The surplus bytes then ran over the first LEDATA record
++     * -- silent corruption, still reported as "0 errors" (hit by every
++     * module in mgl's src/dct/). So save everything past the header, rewrite
++     * the header at whatever size it now needs, and append the saved part.
++     * OMF records store no absolute file offsets, so relocating them is safe.
+      */
+-    fseek( CurrFile[OBJ], public_pos, SEEK_SET);
+-    omf_write_pubdef();
++    {
++        uint_32 total;
++        uint_32 tail_len = 0;
++        uint_32 new_end;
++        uint_8 *tail = NULL;
++
++        fseek( CurrFile[OBJ], 0, SEEK_END );
++        total = ftell( CurrFile[OBJ] );
++        if ( total > end_of_header ) {
++            tail_len = total - end_of_header;
++            tail = MemAlloc( tail_len );
++            fseek( CurrFile[OBJ], end_of_header, SEEK_SET );
++            if ( fread( tail, 1, tail_len, CurrFile[OBJ] ) != tail_len ) {
++                MemFree( tail );
++                tail = NULL;
++                tail_len = 0;
++            }
++        }
++
++        fseek( CurrFile[OBJ], seg_pos, SEEK_SET );
++        omf_write_segdef();
++        fseek( CurrFile[OBJ], public_pos, SEEK_SET );
++        omf_write_pubdef();
++        /* these followed PUBDEF in the initial header; re-emit them so the
++         * rewritten header is complete and byte-identical when nothing grew.
++         */
++        omf_write_export();
++        if ( !modinfo->g.start_fixup )
++            omf_end_of_pass1();
++        new_end = ftell( CurrFile[OBJ] );
++
++        if ( tail_len ) {
++            fwrite( tail, 1, tail_len, CurrFile[OBJ] );
++            MemFree( tail );
++        }
++        end_of_header = new_end;
++#if TRUNCATE
++        size = new_end + tail_len;
++#if defined(__UNIX__) || defined(__CYGWIN__) || defined(__DJGPP__)
++        fh = fileno( CurrFile[OBJ] );
++        if ( ftruncate( fh, size ) );
++#elif defined(__BORLANDC__)
++        fh = _fileno( CurrFile[OBJ] );
++        chsize( fh, size );
++#else
++        fh = _fileno( CurrFile[OBJ] );
++        _chsize( fh, size );
++#endif
++#endif
++    }
+     return( NOT_ERROR );
+ }
+ 
