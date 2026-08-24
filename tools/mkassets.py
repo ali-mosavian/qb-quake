@@ -263,8 +263,27 @@ def convert_lumps(d, lumps, outdir):
         o, n = lumps[i]
         return d[o:o+n]
 
-    # vertices, edges, marksurfaces, texinfo, models: identical either side
-    out['verts.bld'] = lump(3)
+    # vertices: vertex(12, 3 floats) -> vertex2(6, Q12.4 fixed point).
+    # scale by 16 and round to the nearest 1/16 unit; bspfile.bi's vertex2
+    # comment has the range/precision reasoning. A coordinate whose scaled
+    # value doesn't fit a signed 16-bit integer would silently wrap in
+    # BASIC's overflow-unchecked build, corrupting geometry with no error --
+    # so this fails loudly at asset-build time instead.
+    raw = lump(3)
+    buf = bytearray()
+    for k in range(0, len(raw), 12):
+        vidx = k // 12
+        x, y, z = struct.unpack_from('<fff', raw, k)
+        for axis, coord in (('x', x), ('y', y), ('z', z)):
+            scaled = round(coord * 16)
+            if not (-32768 <= scaled <= 32767):
+                raise SystemExit(
+                    f"verts.bld: vertex {vidx} {axis}={coord} scales to "
+                    f"{scaled}, outside signed 16-bit Q12.4 range")
+            buf += struct.pack('<h', scaled)
+    out['verts.bld'] = bytes(buf)
+
+    # edges, marksurfaces, texinfo, models: identical either side
     out['edges.bld'] = lump(12)
     out['lface.bld'] = lump(11)
     out['texinf.bld'] = lump(6)

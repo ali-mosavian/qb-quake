@@ -30,6 +30,8 @@ dim shared leaftmp as leaf              '' the lump counts in bspOpen.
 dim shared planetmp as plane
 dim shared clptmp as cliptmp           '' clipnode narrowed the live type;
                                          '' this stays the on-disk 8 bytes
+dim shared vtxtmp as vertex            '' vtx_buffer narrowed to Q12.4; this
+                                         '' stays the on-disk 12 float bytes
 dim shared ledg_count as long
 dim shared lfc_count as long
 dim shared pln_count as long
@@ -48,7 +50,7 @@ sub mod_open
     get #wld.file,, wld.head
     
     wld.tri_count = wld.head.faces.size \ len( fce )
-    wld.vtx_count = wld.head.vertices.size \ len( vtx_buffer(0) )
+    wld.vtx_count = wld.head.vertices.size \ len( vtxtmp )
     wld.edg_count = wld.head.edges.size \ len( edg_buffer(0) )
     ledg_count = wld.head.ledges.size \ 4
     wld.lef_count = wld.head.leaves.size \ len( leaftmp )
@@ -130,7 +132,7 @@ sub mod_alloc
     redim tri_buffer(wld.tri_count-1) as face2
     redim edg_buffer(wld.edg_count-1) as edge    
     redim ledg_buffer(ledg_count-1) as integer
-    redim vtx_buffer(wld.vtx_count-1) as vertex
+    redim vtx_buffer(wld.vtx_count-1) as vertex2
     redim lef_buffer(wld.lef_count-1) as leaf2
     redim lfc_buffer(lfc_count-1) as integer
     redim pln_buffer(pln_count-1) as plane2

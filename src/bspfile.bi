@@ -63,6 +63,19 @@ type vertex
     z           as single
 end type
 
+'' Q12.4 fixed point: coordinate * 16, rounded, stored as a signed integer.
+'' dm3ish's coords are already ~99% integer-valued and span +-1056, so 12
+'' bits of range (+-2048) plus 4 fractional bits (1/16 unit) both fit one
+'' integer with room to spare -- see mkassets.py's verts.bld packer for the
+'' bounds check on the scale, and d_poly.bas's vx/vy/vz reads for the
+'' dequantise (divide back by 16 into a single) that undoes it. The buffer
+'' stays fixed point in memory; nothing reads a raw .x/.y/.z off it.
+type vertex2
+    x           as integer
+    y           as integer
+    z           as integer
+end type
+
 type surface
     vector_s    as vec3
     dist_s      as single
