@@ -59,7 +59,8 @@ sub sys_parse_args
     cl = rtrim$(ltrim$( command$ ))
     if ( cl = "" ) then
         print "Usage: qrender mapname.bsp [-bench N]"
-        print "  -bench N   render N frames, write bench.bmp and bench.txt, exit"
+        print "  -bench N      render N frames, write bench.bmp and bench.txt, exit"
+        print "  -benchsecs N  run for N real seconds, then report, exit"
         print "Copyleft Blitz, july/2003"
         host_shutdown
     end if
@@ -97,6 +98,9 @@ sub sys_parse_args
         if ( lcase$(argv(i)) = "-badorder" ) then
             env.bad_order = true
         end if
+        if ( lcase$(argv(i)) = "-polytp" ) then
+            env.poly_tp = true
+        end if
         if ( lcase$(argv(i)) = "-nostats" ) then
             env.no_stats = true
         end if
@@ -106,6 +110,9 @@ sub sys_parse_args
         end if
         if ( lcase$(argv(i)) = "-ticks" and i+1 <= argc-1 ) then
             env.bench_ticks = val( argv(i+1) )
+        end if
+        if ( lcase$(argv(i)) = "-benchsecs" and i+1 <= argc-1 ) then
+            env.bench_secs = val( argv(i+1) )
         end if
     next i
 

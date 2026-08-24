@@ -2,9 +2,9 @@ option explicit
 ''
 '' model.bas -- reading the BSP lumps into the renderer's buffers.
 ''
-'' The staging records (fce, nodetmp, leaftmp, planetmp) and the counts only
-'' this module consumes stay local; the buffers the renderer walks are in
-'' qshared.bi as COMMON SHARED.
+'' The staging records (fce, nodetmp, leaftmp, planetmp, clptmp) and the
+'' counts only this module consumes stay local; the buffers the renderer
+'' walks are in qshared.bi as COMMON SHARED.
 ''
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
@@ -28,6 +28,8 @@ dim shared fce as face                  '' fields the renderer keeps, discard
 dim shared nodetmp as node              '' the rest. Also the len() source for
 dim shared leaftmp as leaf              '' the lump counts in bspOpen.
 dim shared planetmp as plane
+dim shared clptmp as cliptmp           '' clipnode narrowed the live type;
+                                         '' this stays the on-disk 8 bytes
 dim shared ledg_count as long
 dim shared lfc_count as long
 dim shared pln_count as long
@@ -55,7 +57,7 @@ sub mod_open
     wld.nds_count = wld.head.nodes.size \ len( nodetmp )
     wld.mdl_count = wld.head.models.size \ len( mdl_buffer(0) )
     wld.texi_count = wld.head.texinfo.size \ len( tex_inf_buff(0) )
-    wld.clp_count = wld.head.clipnode.size \ len( clp_buffer(0) )
+    wld.clp_count = wld.head.clipnode.size \ len( clptmp )
     seek #wld.file, wld.head.miptex.offs+1
     get #wld.file,, wld.numtex    
 
@@ -136,8 +138,15 @@ sub mod_alloc
     redim mdl_buffer(wld.mdl_count-1) as model
     redim order_list(wld.nds_count-1) as integer
     redim pvs_buffer_a( (wld.head.vislist.size+1)\2 ) as integer
-    redim pvs_buffer_b( 4096 ) as integer
-    redim poly_flag( 4096 ) as integer
+    '' Sized to the map like every buffer above it, not a fixed 4096: r_bsp.bas
+    '' indexes pvs_buffer_b 0..wld.lef_count-1 and poly_flag by face index
+    '' 0..wld.tri_count-1 (see its own comment: "a run can carry past the last
+    '' leaf; in real mode that writes over whatever follows the array"). e3m6
+    '' has 6,985 faces -- a fixed 4096 was too SMALL for poly_flag there, an
+    '' out-of-bounds write waiting to happen, not just wasted space on the
+    '' smaller maps.
+    redim pvs_buffer_b( wld.lef_count-1 ) as integer
+    redim poly_flag( wld.tri_count-1 ) as integer
     redim tex_inf_buff(wld.texi_count-1) as texinfo
     redim clp_buffer(wld.clp_count-1) as clipnode
 
@@ -168,6 +177,102 @@ sub mod_load_faces
     def seg = varseg( tri_buffer(0) )
     bload "faces.bld", varptr( tri_buffer(0) )
     def seg
+
+    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
+    scr_load_tick
+end sub
+
+
+
+
+''::::::::::
+'' name: mod_load_colormap
+'' desc: The 64-shade table the builder shades through.
+''
+''       A BASIC array, not memAlloc. Once low memory is tight enough DOS
+''       satisfies a 16K request from an upper memory block -- the probe
+''       came back with segment 0D0A8h, which is 835K, and memAvail did not
+''       move because the block came from a different arena entirely.
+''       Merely holding that block wedges the program. Nothing here needs
+''       memAlloc's paragraph alignment: the builder only PEEKs the table.
+''::::::::::
+sub mod_load_colormap
+    redim cm_buf(8191) as integer
+
+    def seg = varseg( cm_buf(0) )
+    bload "colmap.bld", varptr( cm_buf(0) )
+    def seg
+
+    cm_size = 16384
+end sub
+
+
+
+''::::::::::
+'' name: mod_load_lightmaps
+'' desc: Loads the per-face lightmap table, then the luxels into a block
+''       outside BASIC's heap.
+''
+''       The table is 16 bytes a face and BLOADs like every other lump. The
+''       luxels do not: 71K of them made BASIC fail with 'out of string
+''       space' while setmem reported 397K of far heap free, so they are
+''       read into memAlloc'd storage instead. fileReadH, not fileRead --
+''       the latter takes a long but issues one int 21h with only its low
+''       word, so 71,307 bytes read as 5,771 and said so. That sidesteps
+''       BLOAD's 64K limit too, which is why the blob is one raw file and
+''       not a pile of chunks.
+''
+''       No pointer fixup here on purpose: a face's luxels are lm_base plus
+''       a flat 32-bit offset, and the builder does that sum in assembly,
+''       where segments past 0x8000 are not a signed-integer problem.
+''::::::::::
+sub mod_load_lightmaps
+    dim f as FILE
+    dim got as long
+
+    redim lmt_buffer(wld.tri_count-1) as lmtmin
+
+    def seg = varseg( lmt_buffer(0) )
+    bload "lmtmin.bld", varptr( lmt_buffer(0) )
+    def seg
+
+    lm_base = 0
+    lm_size = 0
+
+    lm_info = 0
+    lm_isize = 0
+
+    if ( fileOpen( f, "lmface.bin", F4READ ) <> 0 ) then
+        lm_isize = fileSize( f )
+        lm_info = memAlloc( lm_isize )
+        if ( lm_info <> 0 ) then
+            if ( fileReadH( f, lm_info, lm_isize ) <> lm_isize ) then
+                memFree lm_info
+                lm_info = 0
+                lm_isize = 0
+            end if
+        else
+            lm_isize = 0
+        end if
+        fileClose f
+    end if
+
+    if ( fileOpen( f, "lmdat.bin", F4READ ) <> 0 ) then
+        lm_size = fileSize( f )
+        lm_base = memAlloc( lm_size )
+        if ( lm_base <> 0 ) then
+            got = fileReadH( f, lm_base, lm_size )
+            lm_read = got
+            if ( got <> lm_size ) then
+                memFree lm_base
+                lm_base = 0
+                lm_size = 0
+            end if
+        else
+            lm_size = 0
+        end if
+        fileClose f
+    end if
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     scr_load_tick

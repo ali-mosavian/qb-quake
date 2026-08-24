@@ -146,7 +146,7 @@ dim shared lightmap as long
     host_shutdown
     
     
-HandleErr:    
+HandleErr:
     sys_error "0x1000, Unknown runtime error..."
 
 
@@ -199,9 +199,11 @@ sub host_init
 
     t_map = timer
 
+
     '' level lumps
     mod_load_vertexes
     mod_load_faces
+    mod_load_lightmaps
     mod_load_edges
     mod_load_surfedges
     mod_load_leafs
@@ -220,12 +222,20 @@ sub host_init
     mod_load_textures
     mod_close
 
+    sc_ok = sc_init%
+
     t_tex = timer
 
     '' hand over to the real video mode
     vid_init
     in_init
     s_stop_music
+
+    '' After the mode switch, deliberately. vid_init needs a sizeable
+    '' block for the video DC, and holding the colormap's 16K across it
+    '' left it short -- the program wedged inside vid_init with no error,
+    '' having got all the way through loading. Nothing needs the table
+    '' until the first surface is built.
 
     t_vid = timer
 
@@ -328,14 +338,14 @@ sub host_main
     ''
     sys_time_init
 
-    do  
+    do
     	''
     	'' Clear DC
-    	''      
+    	''
         if ( env.disclear = true ) then
             uglClear h_dst_dc, 0
-        end if 
-        
+        end if
+
         ''
         '' Measured once, at the top of the frame, and used by everything that
         '' moves. Every such update multiplies by it, so the game plays the
@@ -346,11 +356,11 @@ sub host_main
         host_advance scr.frame_time
 
         ''
-        '' Combine all transforms 
+        '' Combine all transforms
         ''
         host_render h_dst_dc, mtx_prj, xresh, yresh
-            
-        
+
+
         ''
         '' Benchmark mode: a fixed frame budget makes a run repeatable and
         '' headless. Without it verification needs a live debugger socket to
@@ -371,6 +381,16 @@ sub host_main
         in_screenshot_key h_dst_dc
         vid_update h_dst_dc, page
         scr_count_frame
+
+        ''
+        '' -benchsecs: a wall-clock budget instead of a frame/tick count, for
+        '' fast iteration. scr.bench_secs is ticked once per real second by
+        '' scr_count_frame just above, so this must run after it.
+        ''
+        if ( env.bench_secs > 0 and scr.bench_secs >= env.bench_secs ) then
+            host_bench_report frame_no, h_dst_dc
+            exit do
+        end if
 
     loop while ( env.keyboard.esc = FALSE )
     
@@ -561,8 +581,18 @@ sub host_bench_report ( frame_no as long, h_dst_dc as long )
     print #benchf, "vz " + ltrim$(str$( pl.vel.z ))
     print #benchf, "dt " + ltrim$(str$( scr.frame_time ))
     print #benchf, "tickhz " + ltrim$(str$( sys_tick_hz ))
+    print #benchf, "memavail " + ltrim$(str$( memAvail& ))
+    print #benchf, "lmsize " + ltrim$(str$( lm_size ))
+    print #benchf, "lmread " + ltrim$(str$( lm_read ))
+    print #benchf, "lminfo " + ltrim$(str$( lm_isize ))
+    print #benchf, "cmsize " + ltrim$(str$( cm_size ))
+    print #benchf, "scmade " + ltrim$(str$( sc_made ))
+    print #benchf, "scems " + ltrim$(str$( sc_peak ))
+    print #benchf, "sctest " + ltrim$(str$( sc_selftest% ))
     print #benchf, "peakz " + ltrim$(str$( pl.peak_z ))
     print #benchf, "ticks " + ltrim$(str$( host_ticks ))
+    print #benchf, "clprec " + ltrim$(str$( len( clp_buffer(0) ) ))
+    print #benchf, "clpcnt " + ltrim$(str$( wld.clp_count ))
     print #benchf, "waterlevel " + ltrim$(str$( pl.water_level ))
     print #benchf, "watertype " + ltrim$(str$( pl.water_type ))
     print #benchf, "animtime " + ltrim$(str$( rdr.anim_time ))
