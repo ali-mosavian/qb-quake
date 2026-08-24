@@ -14,7 +14,7 @@
 '' texture passes. Fourteen sites used to spell the divisor as a literal 14.0
 '' and had to agree with each other by hand.
 ''
-const LOAD_STEPS = 15
+const LOAD_STEPS = 16
 
 type MapState
     head        as header       '' the on-disk lump directory
@@ -59,3 +59,23 @@ common shared /map_a/ tex_inf_buff() as texinfo, poly_flag() as integer
 '' through them is equivalent to a box trace through the world.
 ''
 common shared /map_a/ clp_buffer() as clipnode
+
+''
+'' Lightmaps. The per-face table is small enough for BASIC, but the luxels
+'' are not: 71K on dm3ish, and asking BASIC's far heap for that failed even
+'' with 397K reportedly free. They go in a memAlloc'd block instead, which
+'' also drops BLOAD's 64K cap, so the blob is one raw file.
+''
+common shared /map_a/ lmt_buffer() as lmtmin
+common shared /map_a/ lm_base as long, lm_size as long, lm_read as long
+common shared /map_a/ lm_info as long, lm_isize as long
+common shared /map_a/ cm_buf() as integer, cm_size as long
+''
+'' Surface cache state. In COMMON rather than d_surf.bas's own DIM SHARED
+'' because DIM SHARED is scoped to the module that writes it, and the
+'' renderer and the bench report both read these.
+''
+common shared /map_a/ sc_slot() as scslot
+common shared /map_a/ sc_pool() as long, sc_nmade() as integer, sc_nused() as integer
+common shared /map_a/ sc_gen as integer, sc_ok as integer, sc_made as integer
+common shared /map_a/ sc_flushes as long, sc_peak as long

@@ -52,6 +52,12 @@ dim shared uvbuff(64) as uv
 dim shared uvbuffb(32) as uv
 dim shared vcnt as integer, mipidx as integer
 dim shared vtx(31) as tritype
+''
+'' Whole-face vertex buffer for uglPolyTP. The clipper caps a polygon at
+'' SH_MAXV (12); faces arriving here are already z-clipped, so 16 is
+'' headroom rather than a limit worth policing.
+''
+dim shared pvtx(15) as vector3f
 dim shared vx as single, vy as single, vz as single
 
 
@@ -417,6 +423,25 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
             else
                 tex_indx = mipidx*4
             end if
+                ''
+                '' One convex polygon, one call -- no fan pivot, so no
+                '' internal edges for the rasteriser to seam along.
+                '' Wireframe mode still fans, it wants the triangles.
+                ''
+                if ( env.poly_tp and polycnt <= 12 ) then
+                    for  j = 0 to polycnt-1
+                        pvtx(j).x = prj_x(j)
+                        pvtx(j).y = prj_y(j)
+                        pvtx(j).z = prj_w(j)
+                        pvtx(j).u = prj_u(j)
+                        pvtx(j).v = prj_v(j)
+                    next j
+
+                    uglPolyTP h_dst_dc, pvtx(0), polycnt, 0, h_textr_dc(tex_indx)
+                    rdr.tris = rdr.tris + (polycnt-2)
+                    goto poly_done
+                end if
+
                 for j = 0 to polycnt-3
                     p2 = j+1
                     p3 = j+2
@@ -457,7 +482,8 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
 
                     rdr.tris = rdr.tris + 1                                
                 next j
-                        
+
+poly_done:
             end if
 
             rdr.polys = rdr.polys + 1

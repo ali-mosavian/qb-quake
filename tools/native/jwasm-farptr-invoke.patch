@@ -1,0 +1,20 @@
+diff --git a/invoke.c b/invoke.c
+index 9c034e2..2d04822 100644
+--- a/invoke.c
++++ b/invoke.c
+@@ -921,7 +921,14 @@ static int PushInvokeParam( int i, struct asm_tok tokenarray[], struct dsym *pro
+                     goto push_address;
+                 if ( opnd.Ofssize == USE_EMPTY )
+                     opnd.Ofssize = ModuleInfo.Ofssize;
+-                asize = SizeFromMemtype( opnd.mem_type, opnd.Ofssize, opnd.type );
++                /* v2.12+patch: MT_PTR's size here falls back to the memory
++                 * model's default data-pointer distance (SIZE_DATAPTR),
++                 * ignoring this specific symbol's own explicit far/near
++                 * qualifier -- unlike every other SizeFromMemtype() call
++                 * site in the codebase (proc.c, types.c, expreval.c), which
++                 * all resolve MT_PTR to MT_FAR/MT_NEAR via sym->isfar first.
++                 */
++                asize = SizeFromMemtype( ( opnd.mem_type == MT_PTR && opnd.sym && opnd.sym->isfar ) ? MT_FAR : opnd.mem_type, opnd.Ofssize, opnd.type );
+             } else {
+                 if ( opnd.sym != NULL )
+                     asize = opnd.sym->type->total_size;
