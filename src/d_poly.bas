@@ -60,6 +60,11 @@ dim shared vtx(31) as tritype
 dim shared pvtx(15) as vector3f
 dim shared vx as single, vy as single, vz as single
 
+'' vtx_buffer is Q12.4 fixed point (bspfile.bi's vertex2); every read
+'' multiplies back up to world-space float. A multiply, not a divide --
+'' cheaper on the FPU and this runs per vertex per visible face per frame.
+const VTX_UNSCALE# = 1.0 / 16.0
+
 
 
 
@@ -297,9 +302,9 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
                 '' nine times before: three for the position and
                 '' three for each texture axis.
                 ''
-                vx = vtx_buffer(v0).x
-                vy = vtx_buffer(v0).y
-                vz = vtx_buffer(v0).z
+                vx = vtx_buffer(v0).x * VTX_UNSCALE#
+                vy = vtx_buffer(v0).y * VTX_UNSCALE#
+                vz = vtx_buffer(v0).z * VTX_UNSCALE#
 
                 polyb(j).x = vx
                 polyb(j).y = vz + zofs
