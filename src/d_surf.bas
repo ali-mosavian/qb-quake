@@ -60,12 +60,18 @@ option explicit
 '' at once.
 ''
 
+'' BSAVE's own header, still on the front of colmap.bld: a type byte, then
+'' the segment and offset it was saved from, then the length.
+const CM_HDR    = 7
+
 const SC_MINSH  = 4             '' 16, the smallest class
 const SC_MAXSH  = 8             '' 256 on one axis, if the other stays small
 const SC_MAXSUM = 14            '' 2^a * 2^b <= 16384: one EMS page, which is
                                 '' all a single rdAccess brings in
 const SC_NCLS   = 25            '' (SC_MAXSH-SC_MINSH+1) squared
-const SC_PERCLS = 48            '' DCs kept per class
+const SC_PERCLS = 12            '' DCs kept per class. 48 across 25 classes
+                                '' is up to 1200 live EMS DCs; dm3ish alone
+                                '' made 228 in two frames.
 
 ''
 '' The 16 light levels of the face being built, rebuilt at the top of each
@@ -385,17 +391,14 @@ end function
 ''       assembly has to match it byte for byte, and the conventions are far
 ''       easier to get right here. Three of them, each got wrong once:
 ''
-''       KNOWN BAD, which is why -lm defaults off: a run with the surface
-''       cache live dies in BASIC's string heap ("String space corrupt")
-''       after rendering correctly for a while. The image itself is right --
-''       verified against the unlit path -- so the fault is a write landing
-''       somewhere it should not, or DGROUP being squeezed. What has been
-''       ruled out: the padded fill below (crash survives reverting it to a
-''       sw-by-sh fill), the luxel decode (a constant `light` still crashes),
-''       and the default no -lm path (unaffected, still 153 polys/365 tris).
-''       Prime remaining suspect is mod_load_colormap's 16K cm_buf: the OKF
-''       memory map records that exact allocation wedging the program before
-''       the compression work, and DGROUP is where BASIC's strings live.
+''       This used to die in BASIC's string heap ("String space corrupt")
+''       after rendering correctly for a while. It was the pool size, not
+''       any of the arithmetic: SC_PERCLS was 48, so 25 classes could hold
+''       1200 live EMS DCs and dm3ish made 228 in two frames. Moving the
+''       shade table out of BASIC's memory did NOT fix it and the fill
+''       extent below did NOT cause it -- both were ruled out by test
+''       before the pool was. -lm still defaults off only because this
+''       builder is a per-texel BASIC reference and far too slow.
 ''
 ''       - The atlas is the whole texture resampled to 64/32/16/8, so an
 ''         original texel is not an atlas texel. u advances by atlasW/origW
@@ -434,15 +437,13 @@ sub sb_build ( byval dc as long, byval tex as long, _
 
     iseg = sb_seg%( lm_info )
     lmsg = sb_seg%( lm_base )
-    cmsg = varseg( cm_buf(0) )
     ''
-    '' VARPTR is a SIGNED integer, so a far-heap offset past 32767 comes
-    '' back negative; the table is 16K and lands wherever the heap has room.
-    '' Mask it back to the unsigned offset the bit pattern actually means --
-    '' peeking from the negative value reads a wholly unrelated address, and
-    '' the surface comes out speckled with whatever lives there.
+    '' The shade table sits in its own memAlloc'd block, so the segment is
+    '' its far pointer's and the table starts past the BSAVE header the
+    '' file still carries.
     ''
-    cmofs = clng( varptr( cm_buf(0) ) ) and 65535&
+    cmsg  = sb_seg%( cm_base )
+    cmofs = (clng( cm_base ) and 65535&) + CM_HDR
 
     def seg = iseg
     o = clng(face) * 16&
