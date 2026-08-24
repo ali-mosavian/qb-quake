@@ -60,10 +60,10 @@ dim shared vtx(31) as tritype
 dim shared pvtx(15) as vector3f
 dim shared vx as single, vy as single, vz as single
 
-'' vtx_buffer is Q12.4 fixed point (bspfile.bi's vertex2); every read
+'' vtx_buffer is Q13.3 fixed point (bspfile.bi's vertex2); every read
 '' multiplies back up to world-space float. A multiply, not a divide --
 '' cheaper on the FPU and this runs per vertex per visible face per frame.
-const VTX_UNSCALE# = 1.0 / 16.0
+const VTX_UNSCALE# = 1.0 / 8.0
 
 
 

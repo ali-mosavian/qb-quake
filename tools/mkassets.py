@@ -263,8 +263,8 @@ def convert_lumps(d, lumps, outdir):
         o, n = lumps[i]
         return d[o:o+n]
 
-    # vertices: vertex(12, 3 floats) -> vertex2(6, Q12.4 fixed point).
-    # scale by 16 and round to the nearest 1/16 unit; bspfile.bi's vertex2
+    # vertices: vertex(12, 3 floats) -> vertex2(6, Q13.3 fixed point).
+    # scale by 8 and round to the nearest 1/8 unit; bspfile.bi's vertex2
     # comment has the range/precision reasoning. A coordinate whose scaled
     # value doesn't fit a signed 16-bit integer would silently wrap in
     # BASIC's overflow-unchecked build, corrupting geometry with no error --
@@ -275,11 +275,11 @@ def convert_lumps(d, lumps, outdir):
         vidx = k // 12
         x, y, z = struct.unpack_from('<fff', raw, k)
         for axis, coord in (('x', x), ('y', y), ('z', z)):
-            scaled = round(coord * 16)
+            scaled = round(coord * 8)
             if not (-32768 <= scaled <= 32767):
                 raise SystemExit(
                     f"verts.bld: vertex {vidx} {axis}={coord} scales to "
-                    f"{scaled}, outside signed 16-bit Q12.4 range")
+                    f"{scaled}, outside signed 16-bit Q13.3 range")
             buf += struct.pack('<h', scaled)
     out['verts.bld'] = bytes(buf)
 
