@@ -40,7 +40,7 @@ case "$cmd" in
 build)
     tc="${arg:-vbd}"
     case "$tc" in
-      vbd)  cdir=vbdos;  bc='V:\BIN\BC.EXE /O /FPi /R /G3 /E';         lnk='V:\BIN\LINK.EXE';  rt='V:\LIB\VBDCL10E.LIB';   ugl='M:\LIB\RELEASE\VBD\UGLV.LIB' ;;
+      vbd)  cdir=vbdos;  bc='V:\BIN\BC.EXE /O /FPi /R /G3 /E';         lnk='V:\BIN\LINK.EXE';  rt='V:\LIB\VBDCL10E.LIB';   ugl='C:\UGLV.LIB' ;;
       pds)  cdir=pds71;  bc='V:\BINB\BC.EXE /O /FPi /R /G2 /FS /LR /ES'; lnk='V:\BINB\LINK.EXE'; rt='V:\LIB\BCL71EFR.LIB'; ugl='M:\LIB\RELEASE\PDS\UGLP.LIB' ;;
       qb45) cdir=qb45;   bc='V:\BC.EXE /O /FPi /R';                    lnk='V:\LINK.EXE';      rt='V:\LIB\BCOM45.LIB';    ugl='M:\LIB\RELEASE\QB\UGL.LIB' ;;
       *) echo "unknown target: $tc (want vbd, pds or qb45)" >&2; exit 1 ;;
@@ -48,6 +48,16 @@ build)
     out="$ROOT/build/$tc"
     mkdir -p "$out"
     cp "$ROOT"/src/*.bas "$ROOT"/src/*.bi "$ROOT"/data/stuff.ini "$ROOT"/data/base.dat "$out/"
+    ##
+    ## uGL comes from the NATIVE build (tools/native/Makefile), not from a
+    ## prebuilt lib in the mgl tree: uglBuildSurf and the view API only exist
+    ## in the one we assemble ourselves, and mixing a stale shipped lib with
+    ## current headers is the trap mgl-lib-stale-vs-headers describes.
+    ##
+    NATIVE_UGL="$ROOT/build/native-mgl/UGLV.LIB"
+    [[ -f "$NATIVE_UGL" ]] || {
+        echo "no $NATIVE_UGL -- run: make -f tools/native/Makefile" >&2; exit 1; }
+    cp "$NATIVE_UGL" "$out/UGLV.LIB"
     # Preprocessed assets (tools/mkassets.py): the .bmp textures texLoadAll
     # hands to uglNewBMPEx, and the .bld lumps model.bas BLOADs straight into
     # its arrays. Copy the whole directory -- naming the extensions here is
