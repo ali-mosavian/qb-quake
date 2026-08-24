@@ -51,7 +51,7 @@ common shared /map_a/ tri_buffer() as face2, edg_buffer() as edge, ledg_buffer()
 common shared /map_a/ vtx_buffer() as vertex2, lef_buffer() as leaf2, lfc_buffer() as integer
 common shared /map_a/ mdl_buffer() as model, pln_buffer() as plane2, nds_buffer() as nodeb
 common shared /map_a/ order_list() as integer, pvs_buffer_a() as integer, pvs_buffer_b() as integer
-common shared /map_a/ tex_inf_buff() as texinfo, poly_flag() as integer
+common shared /map_a/ tex_inf_buff() as texinfo2, poly_flag() as integer
 
 ''
 '' The collision hulls. Separate trees from the render nodes: same planes,
