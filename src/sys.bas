@@ -61,6 +61,7 @@ sub sys_parse_args
         print "Usage: qrender mapname.bsp [-bench N]"
         print "  -bench N      render N frames, write bench.bmp and bench.txt, exit"
         print "  -benchsecs N  run for N real seconds, then report, exit"
+        print "  -lm           composite lightmaps via the surface cache"
         print "Copyleft Blitz, july/2003"
         host_shutdown
     end if
@@ -110,6 +111,9 @@ sub sys_parse_args
         end if
         if ( lcase$(argv(i)) = "-ticks" and i+1 <= argc-1 ) then
             env.bench_ticks = val( argv(i+1) )
+        end if
+        if ( lcase$(argv(i)) = "-lm" ) then
+            env.use_lm = true
         end if
         if ( lcase$(argv(i)) = "-benchsecs" and i+1 <= argc-1 ) then
             env.bench_secs = val( argv(i+1) )

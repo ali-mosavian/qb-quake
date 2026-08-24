@@ -43,3 +43,7 @@ end type
 
 common shared /drw_s/ rdr as RenderState
 common shared /drw_a/ h_textr_dc() as long, mip_buff_inf() as miptexb
+'' Raw-index atlases, sized and filled only under -lm: the surface builder
+'' shades through the full colormap and must not be handed a t* texel that
+'' already went through row 0. See mkassets.py's r*/t* note.
+common shared /drw_a/ h_rawtx_dc() as long
