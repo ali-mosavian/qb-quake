@@ -131,12 +131,15 @@ type leaf
     stuff       as string * 4
 end type
 
-type leaf2    
-    cont        as long         '' CONTENTS_*: only hull 0 knows about water
-    vislist     as long    
+'' cont narrowed long->integer: CONTENTS_* is always one of six small
+'' negatives (-1..-6, q_pl.bi), and pl_point_contents already returns it
+'' as an integer -- the long here only ever held a value that fits in one.
+type leaf2
+    cont        as integer      '' CONTENTS_*: only hull 0 knows about water
+    vislist     as long
     bound       as bboundbox
     lfaceid     as integer
-    lfacenum    as integer    
+    lfacenum    as integer
 end type
 
 type plane
