@@ -63,13 +63,15 @@ type vertex
     z           as single
 end type
 
-'' Q12.4 fixed point: coordinate * 16, rounded, stored as a signed integer.
-'' dm3ish's coords are already ~99% integer-valued and span +-1056, so 12
-'' bits of range (+-2048) plus 4 fractional bits (1/16 unit) both fit one
-'' integer with room to spare -- see mkassets.py's verts.bld packer for the
-'' bounds check on the scale, and d_poly.bas's vx/vy/vz reads for the
-'' dequantise (divide back by 16 into a single) that undoes it. The buffer
-'' stays fixed point in memory; nothing reads a raw .x/.y/.z off it.
+'' Q13.3 fixed point: coordinate * 8, rounded, stored as a signed integer.
+'' dm3ish alone only needed Q12.4 (+-1056), but checking the shareware
+'' episode against the packer's own bounds check found six of the nine real
+'' maps overflow it -- start.bsp and e1m1 reach +-3200. Q13.3 (13 bits of
+'' range, +-4096, 3 fractional bits, 1/8 unit) covers all nine with margin.
+'' See mkassets.py's verts.bld packer for the bounds check on the scale,
+'' and d_poly.bas's vx/vy/vz reads for the dequantise (divide back by 8
+'' into a single) that undoes it. The buffer stays fixed point in memory;
+'' nothing reads a raw .x/.y/.z off it.
 type vertex2
     x           as integer
     y           as integer
