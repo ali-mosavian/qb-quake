@@ -42,24 +42,8 @@ type RenderState
 end type
 
 common shared /drw_s/ rdr as RenderState
-''
-'' h_textr_dc holds a BYTE OFFSET into tx_store, not a DC. Every texture and
-'' mip lives in that one store; a view per mip size, re-aimed with uglSetView,
-'' stands in for the 160 DCs this used to be. A DC costs conventional memory
-'' for its scanline table, and loading each texture into one of its own also
-'' fragmented the heap with 160 alloc/free cycles. mkassets.py now packs the
-'' whole set into one image, loaded by a single uglNewBMPEx.
-''
 common shared /drw_a/ h_textr_dc() as long, mip_buff_inf() as miptexb
-'' Raw-index offsets, used only under -lm: the surface builder shades
-'' through the full colormap and must not be handed a texel that already
-'' went through row 0. Same layout as the shaded set, hence the same
-'' offsets -- see mkassets.py's shaded/raw note.
+'' Raw-index atlases, sized and filled only under -lm: the surface builder
+'' shades through the full colormap and must not be handed a t* texel that
+'' already went through row 0. See mkassets.py's r*/t* note.
 common shared /drw_a/ h_rawtx_dc() as long
-''
-'' The two stores, and one view per mip size (64/32/16/8) into each.
-'' tx_rview is the -lm twin, so a raw-index texture can be aimed at without
-'' disturbing the view the draw path is using.
-''
-common shared /drw_a/ tx_store as long, tx_rstore as long
-common shared /drw_a/ tx_view() as long, tx_rview() as long
