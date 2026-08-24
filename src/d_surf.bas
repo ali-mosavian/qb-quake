@@ -95,6 +95,22 @@ const SC_NCLS   = 25            '' (SC_MAXSH-SC_MINSH+1) squared
 const SC_NBLK   = 1024
 const SC_GRAN   = 256            '' smallest class, 16x16: the offset unit
 
+''
+'' Reclaim is keyed on a block's SIZE, not on its class shape. The 25
+'' classes are only 7 distinct byte sizes -- 2^a * 2^b is 2^(a+b) and a+b
+'' runs 8..14 -- and a 4096-byte block serves (4,8), (5,7), (6,6), (7,5)
+'' and (8,4) identically: same bytes, same alignment. Pooling by size
+'' instead of by shape turns 25 pools into 7, which is most of what stops
+'' one class starving while another holds the store.
+''
+'' Order o means 2^(o+SC_MINORD) bytes, so o is 0..6 and a block spans
+'' 2^o granules. Everything below is a buddy allocator over that: split a
+'' larger free block when a small one is wanted, and on free, merge with
+'' the buddy at gran XOR 2^o so the large sizes can come back.
+''
+const SC_MINORD = 8              '' log2(SC_GRAN)
+const SC_NORD   = 7              '' SC_MAXSUM - SC_MINORD + 1
+
 const SC_PGBYTES = 16384         '' one EMS page: the widest bps allowed
 const SC_PAGES   = 256           '' the max ANY EMS DC can be -- see above
 const SC_STORE#  = 4194304#      '' 256 * 16384
@@ -137,10 +153,12 @@ dim shared sc_cap as long               '' how big it is
 '' DGROUP, which is shared with BASIC's stack and string space and has none
 '' to spare -- see sc_desc's note directly below.
 '$dynamic
-dim shared sc_lhead() as integer        '' per-class LRU, -1 empty. Head is
-dim shared sc_ltail() as integer        '' the least recently used.
+dim shared sc_lhead() as integer        '' per-ORDER LRU of owned blocks, -1
+dim shared sc_ltail() as integer        '' empty. Head is least recently used.
+dim shared sc_fhead() as integer        '' per-ORDER free blocks, via sc_bnext
+dim shared sc_rfree as integer          '' recycled block records, via sc_bnext
 dim shared sc_bgrn() as integer         '' block offset / SC_GRAN
-dim shared sc_bcls() as integer         '' size class, fixed once made
+dim shared sc_bord() as integer         '' size order: 2^(o+SC_MINORD) bytes
 dim shared sc_bown() as integer         '' owning face, -1 if none
 dim shared sc_bprev() as integer        '' the class's LRU chain
 dim shared sc_bnext() as integer
@@ -193,6 +211,145 @@ function sc_shift% ( byval v as integer )
 end function
 
 ''::::::::::
+'' name: sc_brec / sc_bput
+'' desc: Block records, recycled. A merge consumes one record (two blocks
+''       become one), a split produces one, so the count churns and must
+''       not just walk sc_bcnt upward forever.
+''::::::::::
+function sc_brec% ( )
+    dim b as integer
+
+    if ( sc_rfree >= 0 ) then
+        b = sc_rfree
+        sc_rfree = sc_bnext(b)
+        sc_brec% = b
+        exit function
+    end if
+    if ( sc_bcnt < SC_NBLK ) then
+        sc_brec% = sc_bcnt
+        sc_bcnt = sc_bcnt + 1
+        exit function
+    end if
+    sc_brec% = -1
+end function
+
+sub sc_bput ( byval b as integer )
+    sc_bnext(b) = sc_rfree
+    sc_rfree = b
+end sub
+
+''::::::::::
+'' name: sc_fpush / sc_fpop / sc_ftake
+'' desc: The per-order free lists, singly linked through sc_bnext. sc_ftake
+''       pulls out one specific granule rather than the head -- that is how
+''       a merge finds its buddy, and the lists are short enough that a
+''       walk costs nothing.
+''::::::::::
+sub sc_fpush ( byval b as integer )
+    sc_bown(b) = -1
+    sc_bnext(b) = sc_fhead( sc_bord(b) )
+    sc_fhead( sc_bord(b) ) = b
+end sub
+
+function sc_fpop% ( byval ord as integer )
+    dim b as integer
+
+    b = sc_fhead(ord)
+    if ( b >= 0 ) then sc_fhead(ord) = sc_bnext(b)
+    sc_fpop% = b
+end function
+
+function sc_ftake% ( byval ord as integer, byval gran as integer )
+    dim b as integer, p as integer
+
+    b = sc_fhead(ord)
+    p = -1
+    while ( b >= 0 )
+        if ( sc_bgrn(b) = gran ) then
+            if ( p >= 0 ) then sc_bnext(p) = sc_bnext(b) else sc_fhead(ord) = sc_bnext(b)
+            sc_ftake% = b
+            exit function
+        end if
+        p = b
+        b = sc_bnext(b)
+    wend
+    sc_ftake% = -1
+end function
+
+''::::::::::
+'' name: sc_bfree
+'' desc: Hands a block back, merging with its buddy for as long as the
+''       buddy is also free. The buddy of a block of order o sits at
+''       gran XOR 2^o -- the two halves of an aligned 2^(o+1) block differ
+''       in exactly that bit -- and the merged block keeps the lower
+''       address, which is what keeps it aligned to its new, larger size.
+''
+''       Without this the store silently sorts itself into small free
+''       blocks and can never satisfy a large one again.
+''::::::::::
+sub sc_bfree ( byval blk as integer )
+    dim b as integer, bud as integer, ord as integer, g as integer
+    dim more as integer
+
+    b = blk
+    sc_bown(b) = -1
+    ord = sc_bord(b)
+    more = -1
+    '' WHILE/WEND has no EXIT in this dialect, hence the flag
+    while ( more and ord < SC_NORD - 1 )
+        g = sc_bgrn(b) xor cint( 2 ^ ord )
+        bud = sc_ftake%( ord, g )
+        if ( bud < 0 ) then
+            more = 0
+        else
+            '' the merged block is the lower of the two, one order bigger,
+            '' which is what keeps it aligned to its new size
+            if ( sc_bgrn(bud) < sc_bgrn(b) ) then
+                sc_bput b
+                b = bud
+            else
+                sc_bput bud
+            end if
+            ord = ord + 1
+            sc_bord(b) = ord
+        end if
+    wend
+    sc_fpush b
+end sub
+
+''::::::::::
+'' name: sc_bsplit
+'' desc: A free block of exactly this order, made by halving a bigger one
+''       repeatedly. -1 if nothing larger is free. The upper half of each
+''       split goes on its own free list, so nothing is lost.
+''::::::::::
+function sc_bsplit% ( byval ord as integer )
+    dim j as integer, b as integer, h as integer
+
+    for j = ord + 1 to SC_NORD - 1
+        b = sc_fpop%( j )
+        if ( b >= 0 ) then
+            while ( sc_bord(b) > ord )
+                h = sc_brec%
+                if ( h < 0 ) then          '' no record to hold the half
+                    sc_fpush b
+                    sc_bsplit% = -1
+                    exit function
+                end if
+                sc_bord(b) = sc_bord(b) - 1
+                sc_bgrn(h) = sc_bgrn(b) + cint( 2 ^ sc_bord(b) )
+                sc_bord(h) = sc_bord(b)
+                sc_bprev(h) = -1
+                sc_fpush h
+            wend
+            sc_bsplit% = b
+            exit function
+        end if
+    next j
+    sc_bsplit% = -1
+end function
+
+''::::::::::
 '' name: sc_grab
 '' desc: Bump-allocates a surface's bytes. Aligned to its own size, which
 ''       keeps it inside one 16K logical page: the fillers map a single page
@@ -223,7 +380,7 @@ sub sc_lru_unlink ( byval b as integer )
     dim c as integer, p as integer, n as integer
 
     if ( b < 0 ) then exit sub
-    c = sc_bcls(b)
+    c = sc_bord(b)
     p = sc_bprev(b)
     n = sc_bnext(b)
     ''
@@ -247,7 +404,7 @@ sub sc_lru_touch ( byval b as integer )
     dim c as integer, t as integer
 
     if ( b < 0 ) then exit sub
-    c = sc_bcls(b)
+    c = sc_bord(b)
     if ( sc_ltail(c) = b ) then exit sub         '' already the most recent
     sc_lru_unlink b
     t = sc_ltail(c)
@@ -279,10 +436,11 @@ function sc_init% ( )
     redim sc_slot(wld.tri_count-1) as scslot
     redim sc_desc(SC_NCLS-1) as long
 
-    redim sc_lhead(SC_NCLS-1) as integer
-    redim sc_ltail(SC_NCLS-1) as integer
+    redim sc_lhead(SC_NORD-1) as integer
+    redim sc_ltail(SC_NORD-1) as integer
+    redim sc_fhead(SC_NORD-1) as integer
     redim sc_bgrn(SC_NBLK-1) as integer
-    redim sc_bcls(SC_NBLK-1) as integer
+    redim sc_bord(SC_NBLK-1) as integer
     redim sc_bown(SC_NBLK-1) as integer
     redim sc_bprev(SC_NBLK-1) as integer
     redim sc_bnext(SC_NBLK-1) as integer
@@ -290,9 +448,13 @@ function sc_init% ( )
 
     for i = 0 to SC_NCLS-1
         sc_desc(i) = 0
+    next i
+    for i = 0 to SC_NORD-1
         sc_lhead(i) = -1
         sc_ltail(i) = -1
+        sc_fhead(i) = -1
     next i
+    sc_rfree = -1
     ''
     '' REDIM zeroes, and 0 is a perfectly good block index -- "no block"
     '' has to be spelled out or every face would claim to own the first
@@ -371,10 +533,12 @@ sub sc_flush
     sc_evict = sc_evict + sc_live
     sc_live = 0
 
-    for i = 0 to SC_NCLS-1
+    for i = 0 to SC_NORD-1
         sc_lhead(i) = -1
         sc_ltail(i) = -1
+        sc_fhead(i) = -1
     next i
+    sc_rfree = -1
     for i = 0 to wld.tri_count-1
         sc_slot(i).blk = -1
     next i
@@ -435,9 +599,9 @@ end function
 function sc_alloc& ( byval face as integer, byval mip as integer, _
                      byval w as integer, byval h as integer, _
                      byval fw as integer, byval fh as integer )
-    dim a as integer, b as integer, cidx as integer, bcls as integer
+    dim a as integer, b as integer, cidx as integer, bord as integer
     dim dc as long
-    dim vic as integer, blk as integer
+    dim vic as integer, blk as integer, j as integer, b2 as integer
 
     dim ofs as long, sz as long
 
@@ -479,20 +643,15 @@ function sc_alloc& ( byval face as integer, byval mip as integer, _
     dc = sc_desc(cidx)
 
     ''
-    '' The BLOCK is sized at the face's finest allowed mip (fw by fh), not
-    '' at the mip being drawn now. That fixes a face's class for its
-    '' lifetime, which is what makes the rest of this work: the face reuses
-    '' its own block whenever its mip changes, so nothing is ever orphaned,
-    '' and class membership never moves, so a same-class eviction is always
-    '' an exact fit.
+    '' The block is sized at the mip being drawn NOW, and grows only if a
+    '' finer mip is later wanted. Sizing it at the face's floor mip instead
+    '' -- which is what fw and fh are for, and what this used to do -- made
+    '' every block as big as the face could ever need: 6.9 KB average, and
+    '' the 4 MB store full at roughly 600 surfaces even though most faces
+    '' are never seen close up. fw and fh are kept in the signature because
+    '' the caller has them and a future shrink-on-demand would want them.
     ''
-    a = sc_shift%( fw )
-    b = sc_shift%( fh )
-    if ( a + b > SC_MAXSUM ) then
-        sc_alloc& = 0
-        exit function
-    end if
-    bcls = (a - SC_MINSH) * 5 + (b - SC_MINSH)
+    bord = (a + b) - SC_MINORD
     sz   = clng(2 ^ a) * clng(2 ^ b)
 
     ''
@@ -502,55 +661,98 @@ function sc_alloc& ( byval face as integer, byval mip as integer, _
     '' aligned to it, so evicting one always suffices and never fragments.
     ''
     blk = sc_slot(face).blk
-    if ( blk >= 0 and sc_slot(face).cls = bcls ) then
+    if ( blk >= 0 and sc_bord(blk) >= bord ) then
+        '' what it already owns is big enough -- a coarser mip just uses
+        '' less of it, and not shrinking avoids churn on every mip step
         ofs = clng( sc_bgrn(blk) ) * SC_GRAN
     else
-        blk = -1
-        '' room for another block, and store to back it?
-        if ( sc_bcnt < SC_NBLK ) then
-            ofs = sc_grab&( sz )
-            if ( ofs >= 0 ) then
-                blk = sc_bcnt
-                sc_bcnt = sc_bcnt + 1
-                sc_bgrn(blk) = cint( ofs \ SC_GRAN )
-                sc_bcls(blk) = bcls
-                sc_bprev(blk) = -1
-                sc_bnext(blk) = -1
-                sc_live = sc_live + 1
+        if ( blk >= 0 ) then
+            '' growing: the old block goes back for someone else to use,
+            '' which is the leak the bump allocator never plugged
+            sc_lru_unlink blk
+            sc_bfree blk
+            sc_slot(face).blk = -1
+            sc_live = sc_live - 1
+        end if
+
+        ''
+        '' Five ways to get a block, cheapest first. Only the last is an
+        '' eviction, and only the very last gives up.
+        ''
+        blk = sc_fpop%( bord )                  '' 1. already free, right size
+        if ( blk < 0 ) then blk = sc_bsplit%( bord )   '' 2. halve a bigger free one
+        if ( blk < 0 ) then                     '' 3. fresh store
+            ''
+            '' Splitting comes BEFORE growing on purpose. The store is the
+            '' finite resource and free blocks are already paid for, so
+            '' reusing them keeps the high-water mark down and fits more
+            '' surfaces; taking virgin store first would leave the free
+            '' pool untouched until the store was exhausted.
+            ''
+            blk = sc_brec%
+            if ( blk >= 0 ) then
+                ofs = sc_grab&( sz )
+                if ( ofs < 0 ) then
+                    sc_bput blk
+                    blk = -1
+                else
+                    sc_bgrn(blk) = cint( ofs \ SC_GRAN )
+                    sc_bord(blk) = bord
+                end if
+            end if
+        end if
+        if ( blk < 0 ) then                     '' 4. evict LRU of this size
+            blk = sc_lhead(bord)
+            if ( blk >= 0 ) then
+                vic = sc_bown(blk)
+                if ( vic >= 0 ) then
+                    sc_slot(vic).tag = 0
+                    sc_slot(vic).blk = -1
+                    sc_live  = sc_live - 1
+                    sc_evict = sc_evict + 1
+                end if
+                sc_lru_unlink blk
             end if
         end if
         if ( blk < 0 ) then
             ''
-            '' Nothing left to hand out, so take the least recently used
-            '' surface of THIS class. Same class means same size and the
-            '' same alignment, so one eviction always fits exactly and the
-            '' store never fragments.
+            '' 5. Nothing of this size anywhere, so evict the least
+            '' recently used LARGER block and split it down. This is what
+            '' stops one size starving while another holds the store --
+            '' the failure the per-class version had.
             ''
-            blk = sc_lhead(bcls)
-            if ( blk < 0 ) then
-                ''
-                '' This class has nothing resident and there is no room to
-                '' make any. The old all-or-nothing flush, kept only as a
-                '' backstop -- scflush in the bench report says whether it
-                '' ever fires.
-                ''
-                sc_flush
-                sc_alloc& = 0
-                exit function
-            end if
-            vic = sc_bown(blk)
-            if ( vic >= 0 ) then
-                sc_slot(vic).tag = 0
-                sc_slot(vic).blk = -1
-                sc_evict = sc_evict + 1
-            end if
-            sc_lru_unlink blk
-            ofs = clng( sc_bgrn(blk) ) * SC_GRAN
+            for j = bord + 1 to SC_NORD - 1
+                vic = sc_lhead(j)
+                if ( vic >= 0 ) then
+                    b2 = sc_bown(vic)
+                    if ( b2 >= 0 ) then
+                        sc_slot(b2).tag = 0
+                        sc_slot(b2).blk = -1
+                        sc_live  = sc_live - 1
+                        sc_evict = sc_evict + 1
+                    end if
+                    sc_lru_unlink vic
+                    sc_bfree vic
+                    blk = sc_bsplit%( bord )
+                    if ( blk >= 0 ) then exit for
+                end if
+            next j
         end if
+        if ( blk < 0 ) then
+            '' the backstop, and it should now be unreachable
+            sc_flush
+            sc_alloc& = 0
+            exit function
+        end if
+
         sc_bown(blk) = face
+        sc_bprev(blk) = -1
+        sc_bnext(blk) = -1
         sc_slot(face).blk = blk
-        sc_slot(face).cls = bcls
+        sc_slot(face).cls = bord
+        sc_live = sc_live + 1
     end if
+    ofs = clng( sc_bgrn(blk) ) * SC_GRAN
     if ( sc_next > sc_peak ) then sc_peak = sc_next
 
     sc_slot(face).tag = sc_gen * 4 + mip
@@ -577,10 +779,12 @@ sub sc_reset
         sc_slot(i).tag = 0
         sc_slot(i).blk = -1
     next i
-    for i = 0 to SC_NCLS-1
+    for i = 0 to SC_NORD-1
         sc_lhead(i) = -1
         sc_ltail(i) = -1
+        sc_fhead(i) = -1
     next i
+    sc_rfree = -1
     sc_bcnt = 0
     sc_next = 0
     sc_gen = 1
@@ -615,7 +819,7 @@ function sc_selftest% ( )
     dim d0 as long, d1 as long, d2 as long
     dim i as integer, gen0 as integer, made0 as integer
     dim wr(31) as integer, rd(31) as integer
-    dim ofs0 as long, live0 as long, flush0 as long
+    dim ofs0 as long, live0 as long, flush0 as long, next0 as long
     dim fp as long
 
     if ( sc_ok = 0 ) then
@@ -718,6 +922,43 @@ function sc_selftest% ( )
 
     '' and a mip change must not have cost a flush
     if ( sc_flushes <> flush0 ) then sc_selftest% = -32 : exit function
+
+    ''
+    '' ---- buddy merge -------------------------------------------------
+    ''
+    '' Everything above passes with per-class reuse and no buddy logic at
+    '' all, so prove the two things only this allocator does. sc_next is
+    '' the witness: if a request is served from the free list it does not
+    '' move, and if it had to take fresh store it does.
+    ''
+    '' Two 16x16 blocks are order 0 and land at granules 0 and 1 -- buddies,
+    '' since 0 XOR 1 is 2^0. Growing both faces frees both, and the second
+    '' free must merge them into one order-1 block.
+    ''
+    sc_reset
+    if ( sc_alloc&( 0, 0, 16, 16, 16, 16 ) = 0 ) then sc_selftest% = -40 : exit function
+    if ( sc_alloc&( 1, 0, 16, 16, 16, 16 ) = 0 ) then sc_selftest% = -41 : exit function
+    '' grow both: each takes a new order-2 block and hands its order-0 back
+    if ( sc_alloc&( 0, 0, 32, 32, 32, 32 ) = 0 ) then sc_selftest% = -42 : exit function
+    if ( sc_alloc&( 1, 0, 32, 32, 32, 32 ) = 0 ) then sc_selftest% = -43 : exit function
+
+    next0 = sc_next
+    '' 32x16 is 512 bytes, order 1: only the MERGED pair can serve it
+    if ( sc_alloc&( 2, 0, 32, 16, 32, 16 ) = 0 ) then sc_selftest% = -44 : exit function
+    if ( sc_next <> next0 ) then sc_selftest% = -45 : exit function
+
+    ''
+    '' ---- buddy split -------------------------------------------------
+    ''
+    '' A freed order-2 block must be halved to serve an order-0 request
+    '' rather than the store being grown again.
+    ''
+    sc_reset
+    if ( sc_alloc&( 0, 0, 32, 32, 32, 32 ) = 0 ) then sc_selftest% = -46 : exit function
+    if ( sc_alloc&( 0, 0, 64, 64, 64, 64 ) = 0 ) then sc_selftest% = -47 : exit function
+    next0 = sc_next
+    if ( sc_alloc&( 1, 0, 16, 16, 16, 16 ) = 0 ) then sc_selftest% = -48 : exit function
+    if ( sc_next <> next0 ) then sc_selftest% = -49 : exit function
 
     sc_reset
     sc_selftest% = 1
