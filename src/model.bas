@@ -30,8 +30,11 @@ dim shared leaftmp as leaf              '' the lump counts in bspOpen.
 dim shared planetmp as plane
 dim shared clptmp as cliptmp           '' clipnode narrowed the live type;
                                          '' this stays the on-disk 8 bytes
-dim shared vtxtmp as vertex            '' vtx_buffer narrowed to Q12.4; this
+dim shared vtxtmp as vertex            '' vtx_buffer narrowed to Q13.3; this
                                          '' stays the on-disk 12 float bytes
+dim shared texinfotmp as texinfo       '' tex_inf_buff dropped flags and
+                                         '' narrowed miptex; this stays the
+                                         '' on-disk 40 bytes
 dim shared ledg_count as long
 dim shared lfc_count as long
 dim shared pln_count as long
@@ -58,7 +61,7 @@ sub mod_open
     pln_count = wld.head.planes.size \ len( planetmp )
     wld.nds_count = wld.head.nodes.size \ len( nodetmp )
     wld.mdl_count = wld.head.models.size \ len( mdl_buffer(0) )
-    wld.texi_count = wld.head.texinfo.size \ len( tex_inf_buff(0) )
+    wld.texi_count = wld.head.texinfo.size \ len( texinfotmp )
     wld.clp_count = wld.head.clipnode.size \ len( clptmp )
     seek #wld.file, wld.head.miptex.offs+1
     get #wld.file,, wld.numtex    
@@ -149,7 +152,7 @@ sub mod_alloc
     '' smaller maps.
     redim pvs_buffer_b( wld.lef_count-1 ) as integer
     redim poly_flag( wld.tri_count-1 ) as integer
-    redim tex_inf_buff(wld.texi_count-1) as texinfo
+    redim tex_inf_buff(wld.texi_count-1) as texinfo2
     redim clp_buffer(wld.clp_count-1) as clipnode
 
 end sub

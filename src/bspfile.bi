@@ -200,6 +200,15 @@ type texinfo
     flags       as long
 end type
 
+'' flags is dropped: nothing reads it -- confirmed by grep, no `.flags`
+'' anywhere in src/*.bas. miptex narrows long->integer: it indexes this
+'' map's own texture list, max seen across all target maps is 72.
+type texinfo2
+    vecs(3)     as single
+    vect(3)     as single
+    miptex      as integer
+end type
+
 
 type miptex
     name        as string * 16

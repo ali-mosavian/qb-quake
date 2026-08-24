@@ -283,12 +283,27 @@ def convert_lumps(d, lumps, outdir):
             buf += struct.pack('<h', scaled)
     out['verts.bld'] = bytes(buf)
 
-    # edges, marksurfaces, texinfo, models: identical either side
+    # edges, marksurfaces, models: identical either side
     out['edges.bld'] = lump(12)
     out['lface.bld'] = lump(11)
-    out['texinf.bld'] = lump(6)
     out['models.bld'] = lump(14)
     out['pvs.bld'] = lump(4)
+
+    # texinfo: texinfo(40) -> texinfo2(34). flags is dropped (nothing reads
+    # it -- see bspfile.bi's texinfo2 comment) and miptex narrows to an
+    # integer (it indexes this map's own texture list, max seen is 72).
+    raw = lump(6)
+    buf = bytearray()
+    for k in range(0, len(raw), 40):
+        tidx = k // 40
+        vals = struct.unpack_from('<8fii', raw, k)
+        miptex = vals[8]
+        if not (-32768 <= miptex <= 32767):
+            raise SystemExit(
+                f"texinf.bld: texinfo {tidx} miptex={miptex}, outside "
+                f"signed 16-bit range")
+        buf += struct.pack('<8fh', *vals[:8], miptex)
+    out['texinf.bld'] = bytes(buf)
     # clipnodes: the collision hulls. planenum narrowed long->integer (see
     # bspfile.bi's clipnode/cliptmp comment): 8 bytes on disk, 6 in memory.
     raw = lump(9)
