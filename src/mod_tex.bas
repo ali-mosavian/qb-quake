@@ -37,9 +37,6 @@ dim shared texoffs( 256 ) as long
 '$dynamic
 dim shared tmipinf( 1 ) as miptex
 
-
-
-
 ''::::::::::
 '' name: mod_load_texinfo
 '' desc: Reads the miptex directory and sizes the texture tables.
@@ -53,6 +50,8 @@ sub mod_load_texinfo
     if ( env.use_lm ) then
         redim h_rawtx_dc( 256*4 ) as long
     end if
+    redim tx_view( 3 ) as long
+    redim tx_rview( 3 ) as long
 
     dim i as integer
 
@@ -90,9 +89,7 @@ end sub
 ''       numtex, so it is one routine.
 ''::::::::::
 sub mod_load_textures
-    dim i as integer, j as integer
-    dim bmpfile as string
-    dim dc as long
+    dim i as integer, j as integer, cell as integer
 
     ''
     '' The palette is still read here because videoOpen installs it and frees
@@ -102,11 +99,69 @@ sub mod_load_textures
 
     draw_string ldr.dc, 0, 199-8, "Loading textures..."
 
+    ''
+    '' ONE store for every texel of every texture and mip, built by ONE
+    '' uglNewBMPEx, with a view per mip size aimed into it.
+    ''
+    '' This used to be a DC per texture per mip -- 160 of them, each built by
+    '' its own uglNewBMPEx from its own file. A DC costs conventional memory
+    '' for its scanline table, and every one of those calls also allocated and
+    '' freed uGL's 10K BMP scratch buffer, so the loading churn fragmented the
+    '' heap even though the DCs were all freed again. tools/mkassets.py now
+    '' packs the whole set into one image, each texture already at the byte
+    '' offset a view will be aimed at, so none of that happens at all.
+    ''
+    '' uglNewBMPEx builds the DC from the file, so the image's own
+    '' dimensions define the store and nothing beside the data can go
+    '' stale. BMPOPT.NO332 matters: without it uGL remaps the image to
+    '' its own 3-3-2 palette and the indices, already correct, would be
+    '' destroyed.
+    ''
+    tx_store = uglNewBMPEx( UGL.EMS, UGL.8BIT, "tex.bmp", BMPOPT.NO332 )
+    if ( tx_store = 0 ) then
+        sys_error "0x0004, missing tex.bmp -- run tools/mkassets.py"
+    end if
+
+    def seg = varseg( h_textr_dc(0) )
+    bload "texofs.bld", varptr( h_textr_dc(0) )
+    def seg
+
+    for  j = 0 to 3
+        cell = 64 \ (2 ^ j)
+        tx_view(j) = uglNewView&( tx_store, 0, cell, cell )
+        if ( tx_view(j) = 0 ) then sys_error "0x0007, uglNewView failed"
+    next j
+
+    ''
+    '' The raw-index twin, for the surface builder only. It shades through the
+    '' whole colormap itself, and tex.bmp already had row 0 applied on the way
+    '' in -- feeding it those would treat a brightened index as a raw one. See
+    '' mkassets.py's shaded/raw note. Same layout, so the same offset table.
+    ''
+    if ( env.use_lm ) then
+        tx_rstore = uglNewBMPEx( UGL.EMS, UGL.8BIT, "texr.bmp", BMPOPT.NO332 )
+        if ( tx_rstore = 0 ) then
+            sys_error "0x0005, missing texr.bmp -- run tools/mkassets.py"
+        end if
+
+        def seg = varseg( h_rawtx_dc(0) )
+        bload "texofs.bld", varptr( h_rawtx_dc(0) )
+        def seg
+
+        for  j = 0 to 3
+            cell = 64 \ (2 ^ j)
+            tx_rview(j) = uglNewView&( tx_rstore, 0, cell, cell )
+            if ( tx_rview(j) = 0 ) then sys_error "0x0007, uglNewView failed"
+        next j
+    end if
+
+    scr_mip_tick 100
+
     for  i = 0 to wld.numtex-1
         ''
         '' Per-texture header only: the renderer scales texture axes by the
         '' reciprocal of the ORIGINAL texture size, so those dimensions are
-        '' still needed even though the pixels come from the bmps.
+        '' still needed even though the texels come from the store.
         ''
         seek #wld.file, wld.head.miptex.offs+texoffs(i)+1
         get #wld.file,, tmipinf(i)
@@ -126,50 +181,6 @@ sub mod_load_textures
         if ( left$( tmipinf(i).name, 1 ) = "*" ) then
             mip_buff_inf(i).liquid = true
         end if
-
-        ''
-        '' One DC per texture per mip, built straight from a preprocessed bmp
-        '' by uGL's own loader.
-        ''
-        '' This replaced a per-texel loop that read the miptex data a byte at
-        '' a time, expanded each index to RGB, filtered, and then searched all
-        '' 256 palette entries to get back to an index -- for dm3ish, 150,960
-        '' single-byte reads, 108,800 output texels and 27,852,800 palette
-        '' searches, every launch, recomputing something that depends only on
-        '' the map and the palette. tools/mkassets.py does it in ~1.5s.
-        ''
-        '' BMPOPT.NO332 matters: without it uGL remaps the image to its own
-        '' 3-3-2 palette and the indices, already correct, would be destroyed.
-        ''
-        for  j = 0 to 3
-            bmpfile = "t" + right$( "00" + ltrim$(str$( i )), 3 ) + _
-                      "m" + ltrim$(str$( j )) + ".bmp"
-
-            dc = uglNewBMPEx( UGL.EMS, UGL.8BIT, bmpfile, BMPOPT.NO332 )
-            if ( dc = false ) then
-                sys_error "0x0004, missing " + bmpfile + " -- run tools/mkassets.py"
-            end if
-
-            h_textr_dc(i*4+j) = dc
-
-            ''
-            '' The raw-index twin, for the surface builder only. It shades
-            '' through the whole colormap itself, and t* already had row 0
-            '' applied on the way in -- feeding it those would treat a
-            '' brightened index as a raw one. See mkassets.py's r*/t* note.
-            ''
-            if ( env.use_lm ) then
-                bmpfile = "r" + right$( "00" + ltrim$(str$( i )), 3 ) + _
-                          "m" + ltrim$(str$( j )) + ".bmp"
-                dc = uglNewBMPEx( UGL.EMS, UGL.8BIT, bmpfile, BMPOPT.NO332 )
-                if ( dc = false ) then
-                    sys_error "0x0005, missing " + bmpfile + " -- run tools/mkassets.py"
-                end if
-                h_rawtx_dc(i*4+j) = dc
-            end if
-
-            if ( (i and 15) = 0 ) then scr_mip_tick (j+1)*25
-        next j
 
         ldr.pct = ldr.pct + (100.0/LOAD_STEPS)/wld.numtex
         if ( (i and 15) = 0 ) then scr_load_tick
