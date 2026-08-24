@@ -24,3 +24,10 @@ format). Standalone — no dependency on any other bundle.
   per-face 4-bit lightmaps with reconstruction-fit assignment; plus the measured rejections
   (texinfo fixed point, Huffman, perceptual quantization, global-palette dithering) and the
   verification methodology
+- [surface-cache-and-standalone-testing.md](surface-cache-and-standalone-testing.md) — the
+  DC-per-surface conventional-memory bug and its fix (`uglNewView`/`uglSetView`/`uglDelView`,
+  numpy-style views added to uGL, 228 DCs → 21 on dm3ish); the texture-store consolidation this
+  unblocked, currently hung on a qrender-context-specific bug the standalone repro doesn't
+  reproduce; and five ways a standalone mgl test can look like it built and ran while silently
+  not doing either (CRLF, `$INCLUDE` path scope, BC's object-name requirement, the `/E` flag,
+  `/SEG:800`) — check these before trusting a "clean, no-output" result from anything new
