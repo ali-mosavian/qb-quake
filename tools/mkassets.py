@@ -174,6 +174,85 @@ def face_lightmap_geometry(d, lumps):
     return geo
 
 
+'''Lightmap 4-bit encoding, per style plane: 16 LINEAR levels between the
+plane's own min and max, DXT-style. A global 16-level palette banded --
+adjacent levels sat ~15 apart, and the renderer's bilinear reconstruction
+turned every smooth gradient into visible plateaus (and dithering traded
+the plateaus for luxel-scale ripple, since alternating levels 15 apart
+rides a +-7 wave that a 16-texel-per-luxel bilerp cannot hide). Per-plane
+ranges are narrow -- dm3ish median max-min is 34, so the median step is
+~2.3 and the reconstruction is visually exact. Encoder and decoder must
+agree on the level formula: level(j) = base + (j*rng + 7) \\ 15.'''
+
+PLANE_FIT_THRESHOLD = 120   # rng up to this, nearest-level rounding errs by
+                            # at most rng/30 = 4 light values -- one row of
+                            # the 64-row colormap, invisible by construction.
+                            # Above it, plateaus can straddle 2+ rows, so
+                            # switch to the reconstruction-fit assignment,
+                            # whose alternation noise is the lesser artifact
+
+
+def plane_levels(base, rng):
+    return [base + (j * rng + 7) // 15 for j in range(16)]
+
+
+def fit_plane(plane, w, h, levels, sweeps=6):
+    """Choose nibble indices minimizing the BILERP-RECONSTRUCTED error, not
+    the per-luxel error. The renderer reconstructs by bilinearly blending
+    the four surrounding luxels, so the reconstruction error is a quadratic
+    form in the per-luxel errors with positive cross-couplings (the bilinear
+    element mass matrix: within a cell, self 4, edge-adjacent 2, diagonal 1,
+    /36) -- meaning neighbours that err in OPPOSITE signs cancel through the
+    interpolation, PWM-style. Iterated conditional modes: sweep the plane,
+    each luxel picking the level that minimizes its quadratic contribution
+    given its neighbours' current errors, until no luxel changes."""
+    v = [float(b) for b in plane]
+    n = w * h
+    Mii = [0.0] * n
+    nbr = [dict() for _ in range(n)]
+    W = [[4, 2, 2, 1], [2, 4, 1, 2], [2, 1, 4, 2], [1, 2, 2, 4]]
+    for cy in range(h - 1):
+        for cx in range(w - 1):
+            c = [cy*w + cx, cy*w + cx + 1, (cy+1)*w + cx, (cy+1)*w + cx + 1]
+            for a in range(4):
+                Mii[c[a]] += W[a][a]
+                for b in range(4):
+                    if a != b:
+                        nbr[c[a]][c[b]] = nbr[c[a]].get(c[b], 0.0) + W[a][b]
+    q = [min(range(16), key=lambda j: abs(levels[j] - x)) for x in v]
+    e = [levels[qi] - vi for qi, vi in zip(q, v)]
+    for s in range(sweeps):
+        changed = 0
+        order = range(n) if (s & 1) == 0 else range(n - 1, -1, -1)
+        for i in order:
+            S = sum(wgt * e[j] for j, wgt in nbr[i].items())
+            best_j, best_c = q[i], None
+            for j in range(16):
+                ei = levels[j] - v[i]
+                cost = Mii[i] * ei * ei + 2.0 * ei * S
+                if best_c is None or cost < best_c:
+                    best_c, best_j = cost, j
+            if best_j != q[i]:
+                q[i] = best_j
+                e[i] = levels[best_j] - v[i]
+                changed += 1
+        if changed == 0:
+            break
+    return q
+
+
+def encode_plane(plane, w, h):
+    """One style plane -> (base, rng, nibble indices)."""
+    base, mx = min(plane), max(plane)
+    rng = mx - base
+    levels = plane_levels(base, rng)
+    if rng > PLANE_FIT_THRESHOLD:
+        q = fit_plane(plane, w, h, levels)
+    else:
+        q = [min(range(16), key=lambda j: abs(levels[j] - b)) for b in plane]
+    return base, rng, q
+
+
 def convert_lightmaps(d, lumps, out):
     """Repack the LIGHTING lump face-by-face, plus a per-face index.
 
@@ -213,13 +292,26 @@ def convert_lightmaps(d, lumps, out):
                                  styles[2] | (styles[3] << 8))
             continue
 
-        size = lm_w * lm_h * nstyles
+        plane_sz = lm_w * lm_h
+        size = plane_sz * nstyles
         blk = lighting[lightofs:lightofs+size]
         if len(blk) != size:
             raise SystemExit(f"face {k//20}: lightofs {lightofs}+{size} "
                              f"runs past the {len(lighting)}-byte LIGHTING lump")
+
         ofs = len(blob)
-        blob += blk
+        # each style plane: [base][rng] then its nibbles packed two per byte,
+        # low nibble first, padded to a whole byte -- so every plane starts
+        # byte-aligned and sb_build reaches plane s at a computable offset.
+        # Planes are quantized independently: each gets its own base/rng.
+        for s in range(nstyles):
+            base, rng, q = encode_plane(blk[s*plane_sz:(s+1)*plane_sz], lm_w, lm_h)
+            if len(q) % 2:
+                q.append(0)            # pad nibble; unused, never read
+            packed = bytearray(len(q) // 2)
+            for i in range(0, len(q), 2):
+                packed[i // 2] = q[i] | (q[i+1] << 4)
+            blob += bytes([base, rng]) + packed
         lit += 1
         # flat 32-bit byte offset, split low/high across the first two fields;
         # mod_load_lightmaps turns it into a far pointer once the blob has an

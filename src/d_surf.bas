@@ -67,6 +67,18 @@ const SC_MAXSUM = 14            '' 2^a * 2^b <= 16384: one EMS page, which is
 const SC_NCLS   = 25            '' (SC_MAXSH-SC_MINSH+1) squared
 const SC_PERCLS = 48            '' DCs kept per class
 
+''
+'' The 16 light levels of the face being built, rebuilt at the top of each
+'' sb_build from the two header bytes (base, range) that prefix the face's
+'' packed luxel nibbles: level(j) = base + (j*range + 7) \ 15. Per face
+'' because a global 16-level palette banded -- each face spans a narrow
+'' slice of the 0..255 range, and 16 linear steps across its own slice are
+'' visually exact. mkassets.py's encode_plane writes the matching encoder.
+''
+'$static
+dim shared lm_ftab(15) as integer
+'$dynamic
+
 ''::::::::::
 '' name: sc_mipfloor
 '' desc: Finest mip at which this face's surface still fits a single EMS
@@ -399,6 +411,8 @@ sub sb_build ( byval dc as long, byval tex as long, _
     dim lt as long, lb as long, light as long
     dim t as long, row as integer, texel as integer
     dim o as long, iseg as integer, lmsg as integer, cmsg as integer
+    dim nidx as long, nbyt as long
+    dim lbase as integer, lrng as integer, lj as integer
     dim mi as integer, recip as single
 
     aw = 64 \ (2 ^ mip)
@@ -417,6 +431,19 @@ sub sb_build ( byval dc as long, byval tex as long, _
     lmw = sb_i%( o + 8& )
     lmh = sb_i%( o + 10& )
     def seg
+
+    ''
+    '' This face's 16 light levels, from the two header bytes ahead of its
+    '' luxel nibbles. See lm_ftab's declaration for why they are per face.
+    ''
+    def seg = lmsg
+    lbase = cint( peek( lofs ) )
+    lrng  = cint( peek( lofs + 1& ) )
+    def seg
+    for lj = 0 to 15
+        lm_ftab(lj) = lbase + (lj * lrng + 7) \ 15
+    next lj
+    lofs = lofs + 2&
 
     '' atlas texels per surface texel, 16.16. wdth is 1/origW already.
     recip = mip_buff_inf(mi).wdth
@@ -447,11 +474,28 @@ sub sb_build ( byval dc as long, byval tex as long, _
             tx = (clng(x) - clng(lx) * clng(stp)) * 65536& \ clng(stp)
             if ( tx > 65536& ) then tx = 65536&
 
+            ''
+            '' Luxels are 4-bit indices into this face's lm_ftab, two packed
+            '' per byte, low nibble first (mkassets.py's encode_plane/pack).
+            '' nidx is the luxel's position in that nibble stream; nidx\2
+            '' is its byte, nidx and 1 picks which half.
+            ''
             def seg = lmsg
-            l00 = clng( peek( lofs + clng(ly) * clng(lmw) + clng(lx) ) )
-            l10 = clng( peek( lofs + clng(ly) * clng(lmw) + clng(lx) + 1& ) )
-            l01 = clng( peek( lofs + clng(ly+1) * clng(lmw) + clng(lx) ) )
-            l11 = clng( peek( lofs + clng(ly+1) * clng(lmw) + clng(lx) + 1& ) )
+            nidx = clng(ly) * clng(lmw) + clng(lx)
+            nbyt = clng( peek( lofs + (nidx \ 2&) ) )
+            if ( (nidx and 1&) <> 0 ) then l00 = lm_ftab( (nbyt \ 16&) and 15& ) else l00 = lm_ftab( nbyt and 15& )
+
+            nidx = clng(ly) * clng(lmw) + clng(lx) + 1&
+            nbyt = clng( peek( lofs + (nidx \ 2&) ) )
+            if ( (nidx and 1&) <> 0 ) then l10 = lm_ftab( (nbyt \ 16&) and 15& ) else l10 = lm_ftab( nbyt and 15& )
+
+            nidx = clng(ly+1) * clng(lmw) + clng(lx)
+            nbyt = clng( peek( lofs + (nidx \ 2&) ) )
+            if ( (nidx and 1&) <> 0 ) then l01 = lm_ftab( (nbyt \ 16&) and 15& ) else l01 = lm_ftab( nbyt and 15& )
+
+            nidx = clng(ly+1) * clng(lmw) + clng(lx) + 1&
+            nbyt = clng( peek( lofs + (nidx \ 2&) ) )
+            if ( (nidx and 1&) <> 0 ) then l11 = lm_ftab( (nbyt \ 16&) and 15& ) else l11 = lm_ftab( nbyt and 15& )
             def seg
 
             lt = (l00 * (65536& - tx) + l10 * tx) \ 65536&
