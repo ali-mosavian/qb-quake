@@ -151,10 +151,18 @@ pixel-identical" while addressing another handle's memory. A test that
 writes and reads through the same broken accessor cannot see the break;
 only comparing a view against an *independent* read of the parent can.
 
-## Texture store consolidation (done)
+## Texture store consolidation (WRITTEN, THEN REVERTED)
 
-The 160 t\*/r\* texture DCs are now one image per texel set plus one
-view per mip size:
+**Reverted in a9ee111 — it corrupts lightmapped surfaces.** The unlit
+path is byte-identical, but under `-lm` it differs from the pre-change
+build by 87.9% of pixels at spawn+35 degrees, with identical geometry
+submitted (polys 202, tris 634) and identical cache stats. Dumping the
+cached surfaces shows 67% of *their* pixels differ, so the damage happens
+when a surface is built, not when it is drawn. The commit stays in history
+so it can be re-landed once that is understood; the reason is still not
+known, and every obvious suspect checks out (see below).
+
+What it did, and would do again:
 
 - `tools/mkassets.py` packs every texture and mip into a single 2048
   wide image at the exact byte offset the renderer aims a view at, and
@@ -182,6 +190,20 @@ counts frames, so a different `dt` walks the camera somewhere else and
 |---|---|---|---|
 | before | 160 | ~12.3 KB (~24.6 KB with `-lm`) | 160 |
 | after | 1 store + 4 views | ~0.9 KB (~1.7 KB with `-lm`) | 3 |
+
+**Ruled out for the `-lm` corruption specifically**, all verified: the
+packed stores are byte-identical to the per-texture BMPs they replace
+(80/80, shaded *and* raw); the offsets the renderer aims with match
+`texofs.bld` exactly; the texels `uglPGet` returns through the raw view
+match the host's ground truth at every coordinate sampled; and
+`lmdat.bin`, `lmface.bin`, `lmtmin.bld` and `colmap.bld` are byte-identical
+between the two builds. So `sb_build` is handed correct data and still
+produces different surfaces.
+
+**The verification gap that let it land.** The unlit path was pixel-diffed
+against a pre-change baseline; `-lm` was only eyeballed, at a single
+camera — and the default yaw happens to be an angle where the two builds
+agree. Re-landing needs `-lm` pixel-diffed at several angles.
 
 ## How the isolation kept lying
 
@@ -219,6 +241,90 @@ which runs interactively forever waiting for a keypress that headless
 has no way to send. Nothing was wrong with headless mode at all — the
 same batch with `-bench 60` had already produced a full `run.out` and
 `ran.txt` earlier in the same session.
+
+## The lightmap "streaks": over-bright pixels on big faces
+
+Under `-lm`, thin dark texture features (mortar grooves, trim lines) break
+into dashes with *light* pixels in them. Present since the first working
+`-lm` build, on dm3ish at spawn+35 degrees.
+
+**The measurement that made it tractable.** The unlit path draws through
+colormap row 0, which is the brightest row there is, so a lit pixel can
+never legitimately be brighter than the same pixel unlit. Rendering the
+same settled camera both ways and counting pixels where lit exceeds unlit
+gives **269** — and mapping them traces exactly the trim lines and floor
+speckle that look wrong. That count is a regression metric: score any
+attempted fix against it rather than squinting at crops.
+
+The pixel values say it is not a shading error at all. At the streaks the
+lit and unlit renders hold *different palette entries* (lit 109 vs unlit
+22; lit 6 vs unlit 172), not the same texel at two brightnesses. The two
+paths are sampling different source texels.
+
+**Cause: the surface is built from a coarser texture mip than the unlit
+path draws.** `sc_mipfloor` clamps `lm_mip` upward so a surface fits the
+single 16K EMS page the filler maps (`SC_MAXSUM = 14`). A face with
+224x224 texel extents pads to 256x256 = 65,536 bytes at mip 0 -- four
+pages -- so it is forced to mip 1, which pads to 128x128 = exactly 16,384.
+A coarser mip is a box-filtered average, and averaging a one-texel dark
+groove with the bright mortar beside it produces a value *brighter* than
+the dark texel the unlit path samples. Hence over-bright pixels, on thin
+dark features, only on large faces.
+
+Measured on one settled frame: 26 of 374 faces build coarser than the
+texture path (every one with `lm_floor = 1`, extents 128x224 up to
+224x224); the other 348 match. Those 26 are the big wall and floor faces,
+which is where the streaks are.
+
+This is a consequence of the one-page surface limit, not a coding bug.
+Quake does not hit it because its surface blocks are not capped at 16K.
+Fixing it means letting a surface span pages (needs a filler that handles
+the seam), putting large surfaces in conventional memory, or splitting big
+faces into several surface blocks -- an architectural choice, not a patch.
+
+### Ruled out, with evidence
+
+Each of these was tested and is *not* the cause. They are recorded so the
+ground is not re-covered:
+
+- **Lightmap precision / level count.** Raw 8-bit luxels -- exactly what
+  Quake itself stores, no quantization -- still dash. This also makes the
+  whole 4-bit encoding question moot as an explanation.
+- **`fit_plane` level assignment.** Disabled entirely, and forced on every
+  plane: no change either way.
+- **Colormap row truncation vs rounding.** Rounding to nearest changed 15%
+  of the frame and left the dash identical.
+- **Surface content.** The cached surfaces are correct -- dumped and
+  inspected directly.
+- **View aiming.** Dumping through a fresh `uglNewView` aimed at each
+  surface's own offset is byte-identical to blitting from the shared
+  per-size-class view, across all 37 pages. The shared view is not stale.
+- **A constant sampling phase offset.** Half a texel in either direction
+  made it *worse* (484 and 479 over-bright, against 269), so the existing
+  alignment is already a local optimum and the error varies rather than
+  being a uniform shift.
+- **Non-square textures forced into the square 64x64 atlas.** Plausible,
+  and wrong: the streaks appear on `sfloor4_6` and `column01_3`, both
+  64x64.
+- **Coarser mips as a *fix*.** Choosing the surface mip from projected
+  screen density removes the dash only by destroying the detail, and adds
+  visible mip seams between adjacent faces. Worse than the disease.
+
+### On instrumenting this
+
+Two dumps lied before they were fixed, both worth recognising again:
+
+- The first surface dump tiled into one 320x200 DC at 68px steps, so it
+  held about twelve surfaces and **silently discarded the rest** -- the
+  settled frame builds ~440. Any conclusion drawn from it was drawn from
+  an arbitrary subset. Page the output instead (37 pages here).
+- It also accumulated across every frame rather than resetting per frame,
+  so it was a smear of history rather than one settled frame.
+
+And the camera has to be settled before a dump means anything: the player
+spawns in the air, so an early-tick frame is a different viewpoint. The
+cheap check is to confirm a known landmark texture is present in the dump
+-- the blue arrow sign here -- before trusting it.
 
 ## Standalone mgl test harness: six ways to fool yourself
 
