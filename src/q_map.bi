@@ -69,17 +69,17 @@ common shared /map_a/ clp_buffer() as clipnode
 common shared /map_a/ lmt_buffer() as lmtmin
 common shared /map_a/ lm_base as long, lm_size as long, lm_read as long
 common shared /map_a/ lm_info as long, lm_isize as long
-'' The shade table is a far pointer, not a BASIC array: 16K inside BASIC's
-'' own memory is exactly the allocation the OKF memory map records wedging
-'' this program, and it is only ever PEEKed. cm_base points at the file as
-'' read, so the table itself starts CM_HDR bytes in.
-common shared /map_a/ cm_base as long, cm_size as long
+'' A BASIC array, not memAlloc: a 16K memAlloc lands in an upper memory
+'' block once low memory is tight, and merely holding that block wedges the
+'' program -- tried, and it wedges inside vid_init with no error. See the
+'' OKF memory map. Only PEEK ever touches it.
+common shared /map_a/ cm_buf() as integer, cm_size as long
 ''
 '' Surface cache state. In COMMON rather than d_surf.bas's own DIM SHARED
 '' because DIM SHARED is scoped to the module that writes it, and the
 '' renderer and the bench report both read these.
 ''
 common shared /map_a/ sc_slot() as scslot
-common shared /map_a/ sc_pool() as long, sc_nmade() as integer, sc_nused() as integer
+
 common shared /map_a/ sc_gen as integer, sc_ok as integer, sc_made as integer
 common shared /map_a/ sc_flushes as long, sc_peak as long

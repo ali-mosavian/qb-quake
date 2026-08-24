@@ -222,10 +222,6 @@ sub host_init
     mod_load_textures
     mod_close
 
-    '' the shade table the surface builder composites through; only the
-    '' lightmap path reads it, and it is 16K that used to be unaffordable
-    if ( env.use_lm ) then mod_load_colormap
-
     sc_ok = sc_init%
 
     t_tex = timer
@@ -240,6 +236,7 @@ sub host_init
     '' left it short -- the program wedged inside vid_init with no error,
     '' having got all the way through loading. Nothing needs the table
     '' until the first surface is built.
+    if ( env.use_lm ) then mod_load_colormap
 
     t_vid = timer
 

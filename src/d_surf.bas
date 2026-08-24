@@ -69,9 +69,13 @@ const SC_MAXSH  = 8             '' 256 on one axis, if the other stays small
 const SC_MAXSUM = 14            '' 2^a * 2^b <= 16384: one EMS page, which is
                                 '' all a single rdAccess brings in
 const SC_NCLS   = 25            '' (SC_MAXSH-SC_MINSH+1) squared
-const SC_PERCLS = 12            '' DCs kept per class. 48 across 25 classes
-                                '' is up to 1200 live EMS DCs; dm3ish alone
-                                '' made 228 in two frames.
+''
+'' How many bytes of surfaces to keep. This is EMS, and EMS is the one
+'' thing here there is plenty of -- what used to bound the cache was the
+'' conventional memory each surface's DC needed for its scanline table,
+'' and surfaces no longer have DCs. dm3ish's whole working set is ~640K.
+''
+const SC_STORE# = 1572864#      '' 1.5 MB
 
 ''
 '' The 16 light levels of the face being built, rebuilt at the top of each
@@ -83,7 +87,25 @@ const SC_PERCLS = 12            '' DCs kept per class. 48 across 25 classes
 ''
 '$static
 dim shared lm_ftab(15) as integer
+
+''
+'' The surface store. One EMS handle holds every cached surface's bytes;
+'' emsAlloc gives a handle and nothing else, so unlike a DC it costs no
+'' conventional memory. Surfaces are bump-allocated inside it.
+''
+'' The DCs are only descriptors now -- one per size class, repointed at a
+'' surface's offset before it is built or drawn. sc_atb is where a DC's
+'' scanline address table starts, discovered once rather than assumed.
+''
+dim shared sc_hnd as integer            '' EMS handle for the whole store
+dim shared sc_next as long              '' bump pointer within it
+dim shared sc_cap as long               '' how big it is
+dim shared sc_atb as integer            '' offset of DC_addrTB inside a DC
 '$dynamic
+'' one drawing DC per size class. '$DYNAMIC, so the array lands in the far
+'' heap rather than DGROUP -- DGROUP is shared with BASIC's stack and string
+'' space here and has no room to spare.
+dim shared sc_desc() as long
 
 ''::::::::::
 '' name: sc_mipfloor
@@ -127,6 +149,89 @@ function sc_shift% ( byval v as integer )
 end function
 
 ''::::::::::
+'' name: sc_probe_atb
+'' desc: Where DC_addrTB begins, in bytes from the top of a DC. Derived from
+''       a real DC rather than hardcoded: the struct's own layout is uGL's
+''       business, and a fresh EMS DC has a signature that cannot be missed
+''       -- entry 0 is the bare EMS handle at page 0 offset 0, and entry 1 is
+''       the same handle one bps further in.
+''::::::::::
+function sc_probe_atb% ( byval dc as long )
+    dim o as integer, h as integer, bp as integer
+
+    def seg = sb_seg%( dc )
+    h  = sb_i%( 28& )                   '' DC.hnd, in the type union
+    bp = sb_i%( 10& )                   '' DC.bps
+    for o = 30 to 48 step 2
+        if ( sb_i%( clng(o)      ) = h  and _
+             sb_i%( clng(o) + 2& ) = 0  and _
+             sb_i%( clng(o) + 4& ) = h  and _
+             sb_i%( clng(o) + 6& ) = bp ) then
+            def seg
+            sc_probe_atb% = o
+            exit function
+        end if
+    next o
+    def seg
+    sc_probe_atb% = 0
+end function
+
+''::::::::::
+'' name: sc_point
+'' desc: Aims a descriptor at a surface. An entry is a dword: the low word
+''       is the EMS handle with the logical page added into its high byte,
+''       the high word the offset inside that page -- exactly what ems_New
+''       lays down and ems_RdAccess reads back.
+''
+''       rows is the point of the whole exercise. Every texture filler does
+''       `xor si, si` before rdAccess, so drawing reads entry 0 and nothing
+''       else: one entry is all a draw needs. uglPSet goes through
+''       uglDCAccessWr, which indexes the table per scanline, so building
+''       needs the lot -- and that cost vanishes beside the builder's own
+''       per-texel loop.
+''::::::::::
+sub sc_point ( byval dc as long, byval ofs as long, byval rows as integer )
+    dim i as integer
+    dim bp as long, lin as long, a as long, lo as long, hi as long
+
+    def seg = sb_seg%( dc )
+    bp = clng( sb_i%( 10& ) )           '' DC.bps
+    a  = clng( sc_atb )
+    for i = 0 to rows-1
+        lin = ofs + clng(i) * bp
+        lo  = clng( sc_hnd ) or ((lin \ 16384&) * 256&)
+        hi  = lin and 16383&
+        poke a     , lo and 255&
+        poke a + 1&, (lo \ 256&) and 255&
+        poke a + 2&, hi and 255&
+        poke a + 3&, (hi \ 256&) and 255&
+        a = a + 4&
+    next i
+    def seg
+end sub
+
+''::::::::::
+'' name: sc_grab
+'' desc: Bump-allocates a surface's bytes. Aligned to its own size, which
+''       keeps it inside one 16K logical page: the fillers map a single page
+''       and then address the texture flat, so a surface that straddled two
+''       would read garbage past the seam. Every size here is a power of two
+''       that divides the page, so aligning to it is enough. -1 when full.
+''::::::::::
+function sc_grab& ( byval sz as long )
+    dim o as long
+
+    o = sc_next
+    if ( (o mod sz) <> 0 ) then o = o + (sz - (o mod sz))
+    if ( o + sz > sc_cap ) then
+        sc_grab& = -1
+        exit function
+    end if
+    sc_next = o + sz
+    sc_grab& = o
+end function
+
+''::::::::::
 '' name: sc_init
 '' desc: Empties the pool. DCs are made on demand, so nothing is claimed
 ''       here beyond the bookkeeping.
@@ -140,17 +245,16 @@ function sc_init% ( )
     sc_made = 0
 
     redim sc_slot(wld.tri_count-1) as scslot
-    redim sc_pool(SC_NCLS-1, SC_PERCLS-1) as long
-    redim sc_nmade(SC_NCLS-1) as integer
-    redim sc_nused(SC_NCLS-1) as integer
+    redim sc_desc(SC_NCLS-1) as long
 
     for i = 0 to SC_NCLS-1
-        sc_nmade(i) = 0
-        sc_nused(i) = 0
-        for j = 0 to SC_PERCLS-1
-            sc_pool(i, j) = 0
-        next j
+        sc_desc(i) = 0
     next i
+
+    sc_hnd  = 0
+    sc_next = 0
+    sc_cap  = 0
+    sc_atb  = 0
 
     if ( emsCheck% = 0 ) then
         sc_ok = 0
@@ -158,8 +262,41 @@ function sc_init% ( )
         exit function
     end if
 
+    ''
+    '' One block for every surface. It is only bytes -- no DC, so no
+    '' scanline table and no conventional memory at all.
+    ''
+    ''
+    '' The store itself is NOT claimed here. sc_init runs before vid_init,
+    '' which needs a sizeable block of its own and wedges with no error if
+    '' it is short -- the same trap the shade table is loaded late to dodge.
+    '' Nothing needs a surface until the first one is built, so the handle
+    '' is taken then. See sc_store_open.
+    ''
     sc_ok = -1
     sc_init% = -1
+end function
+
+''::::::::::
+'' name: sc_store_open
+'' desc: Claims the EMS block, on first use. Deliberately not in sc_init --
+''       see the note there.
+''::::::::::
+function sc_store_open% ( )
+    if ( sc_hnd <> 0 ) then
+        sc_store_open% = -1
+        exit function
+    end if
+    sc_cap = SC_STORE#
+    sc_hnd = emsAlloc%( sc_cap )
+    if ( sc_hnd <= 0 ) then
+        sc_hnd = 0
+        sc_cap = 0
+        sc_store_open% = 0
+        exit function
+    end if
+    sc_next = 0
+    sc_store_open% = -1
 end function
 
 ''::::::::::
@@ -169,11 +306,7 @@ end function
 ''       correctness, and making them again is the expensive part.
 ''::::::::::
 sub sc_flush
-    dim i as integer
-
-    for i = 0 to SC_NCLS-1
-        sc_nused(i) = 0
-    next i
+    sc_next = 0
     sc_gen = sc_gen + 1
     if ( sc_gen > 16000 ) then sc_gen = 1
     sc_flushes = sc_flushes + 1
@@ -185,6 +318,8 @@ end sub
 ''       A mip other than the cached one counts as a miss.
 ''::::::::::
 function sc_find& ( byval face as integer, byval mip as integer )
+    dim dc as long
+
     if ( sc_ok = 0 ) then
         sc_find& = 0
         exit function
@@ -193,7 +328,13 @@ function sc_find& ( byval face as integer, byval mip as integer )
         sc_find& = 0
         exit function
     end if
-    sc_find& = sc_slot(face).dc
+    ''
+    '' Hand back this class's descriptor aimed at the face. One entry is
+    '' enough: the fillers read addrTB[0] and derive the rest themselves.
+    ''
+    dc = sc_desc( sc_slot(face).cls )
+    if ( dc <> 0 ) then sc_point dc, sc_slot(face).ofs, 1
+    sc_find& = dc
 end function
 
 ''::::::::::
@@ -206,9 +347,18 @@ function sc_alloc& ( byval face as integer, byval mip as integer, _
     dim a as integer, b as integer, cidx as integer
     dim dc as long
 
+    dim ofs as long, sz as long
+
     if ( sc_ok = 0 or w <= 0 or h <= 0 ) then
         sc_alloc& = 0
         exit function
+    end if
+    if ( sc_hnd = 0 ) then
+        if ( sc_store_open% = 0 ) then
+            sc_ok = 0                   '' no store, no cache
+            sc_alloc& = 0
+            exit function
+        end if
     end if
 
     a = sc_shift%( w )
@@ -220,29 +370,42 @@ function sc_alloc& ( byval face as integer, byval mip as integer, _
     end if
     cidx = (a - SC_MINSH) * 5 + (b - SC_MINSH)
 
-    if ( sc_nused(cidx) < sc_nmade(cidx) ) then
-        dc = sc_pool(cidx, sc_nused(cidx))            '' recycle
-    else
-        if ( sc_nmade(cidx) >= SC_PERCLS ) then
-            sc_flush                                '' class exhausted
-            sc_alloc& = 0
-            exit function
-        end if
+    ''
+    '' One descriptor per class, made once and aimed somewhere new every
+    '' time. This is the only uglNew the cache ever does -- 25 of them at
+    '' the very most, against one per cached surface before.
+    ''
+    if ( sc_desc(cidx) = 0 ) then
         dc = uglNew&( UGL.EMS, UGL.8BIT, 2 ^ a, 2 ^ b )
         if ( dc = 0 ) then
             sc_alloc& = 0
             exit function
         end if
-        sc_pool(cidx, sc_nmade(cidx)) = dc
-        sc_nmade(cidx) = sc_nmade(cidx) + 1
+        if ( sc_atb = 0 ) then sc_atb = sc_probe_atb%( dc )
+        if ( sc_atb = 0 ) then          '' cannot find the table: refuse
+            sc_alloc& = 0
+            exit function
+        end if
+        sc_desc(cidx) = dc
         sc_made = sc_made + 1
-        sc_peak = sc_peak + clng(2 ^ a) * clng(2 ^ b)
     end if
+    dc = sc_desc(cidx)
 
-    sc_nused(cidx) = sc_nused(cidx) + 1
+    sz  = clng(2 ^ a) * clng(2 ^ b)
+    ofs = sc_grab&( sz )
+    if ( ofs < 0 ) then
+        sc_flush                        '' store full: everything goes stale
+        sc_alloc& = 0
+        exit function
+    end if
+    if ( sc_next > sc_peak ) then sc_peak = sc_next
 
-    sc_slot(face).dc = dc
+    sc_slot(face).ofs = ofs
+    sc_slot(face).cls = cidx
     sc_slot(face).tag = sc_gen * 4 + mip
+
+    '' the builder writes scanline by scanline, so it needs the whole table
+    sc_point dc, ofs, 2 ^ b
 
     sc_alloc& = dc
 end function
@@ -258,9 +421,7 @@ sub sc_reset
     for i = 0 to wld.tri_count-1
         sc_slot(i).tag = 0
     next i
-    for i = 0 to SC_NCLS-1
-        sc_nused(i) = 0
-    next i
+    sc_next = 0
     sc_gen = 1
 end sub
 
@@ -268,16 +429,16 @@ end sub
 '' name: sc_shutdown
 ''::::::::::
 sub sc_shutdown
-    dim i as integer, j as integer
+    dim i as integer
 
     for i = 0 to SC_NCLS-1
-        for j = 0 to sc_nmade(i)-1
-            if ( sc_pool(i, j) <> 0 ) then uglDel sc_pool(i, j)
-            sc_pool(i, j) = 0
-        next j
-        sc_nmade(i) = 0
-        sc_nused(i) = 0
+        if ( sc_desc(i) <> 0 ) then uglDel sc_desc(i)
+        sc_desc(i) = 0
     next i
+    if ( sc_hnd <> 0 ) then emsFree sc_hnd
+    sc_hnd = 0
+    sc_cap = 0
+    sc_next = 0
     sc_ok = 0
 end sub
 
@@ -314,7 +475,11 @@ function sc_selftest% ( )
     d1 = sc_alloc&( 1, 0, 112, 96 )
     if ( d0 = 0 ) then sc_selftest% = -7 : exit function
     if ( d1 = 0 ) then sc_selftest% = -8 : exit function
-    if ( d0 = d1 ) then sc_selftest% = -18 : exit function
+    '' both round to 128x128, so they share a descriptor and differ only in
+    '' where it points -- the whole point of the store
+    if ( d0 <> d1 ) then sc_selftest% = -18 : exit function
+    if ( sc_slot(0).ofs = sc_slot(1).ofs ) then sc_selftest% = -21 : exit function
+    if ( sc_atb = 0 ) then sc_selftest% = -22 : exit function
 
     '' and the floor it implies: 224 needs mip 1, 112 does not
     if ( sc_mipfloor%( 224, 224 ) <> 1 ) then sc_selftest% = -19 : exit function
@@ -344,9 +509,11 @@ function sc_selftest% ( )
     if ( sc_gen = gen0 ) then sc_selftest% = -13 : exit function
     if ( sc_find&( 0, 0 ) <> 0 ) then sc_selftest% = -14 : exit function
 
+    '' a flush rewinds the store and makes no new descriptor
     d2 = sc_alloc&( 5, 0, 112, 112 )
     if ( d2 <> d0 ) then sc_selftest% = -15 : exit function
     if ( sc_made <> made0 ) then sc_selftest% = -16 : exit function
+    if ( sc_slot(5).ofs <> 0 ) then sc_selftest% = -23 : exit function
 
     sc_reset
     sc_selftest% = 1
@@ -392,13 +559,11 @@ end function
 ''       easier to get right here. Three of them, each got wrong once:
 ''
 ''       This used to die in BASIC's string heap ("String space corrupt")
-''       after rendering correctly for a while. It was the pool size, not
-''       any of the arithmetic: SC_PERCLS was 48, so 25 classes could hold
-''       1200 live EMS DCs and dm3ish made 228 in two frames. Moving the
-''       shade table out of BASIC's memory did NOT fix it and the fill
-''       extent below did NOT cause it -- both were ruled out by test
-''       before the pool was. -lm still defaults off only because this
-''       builder is a per-texel BASIC reference and far too slow.
+''       after rendering correctly for a while, because every cached
+''       surface owned a DC and a DC costs conventional memory. Surfaces
+''       share descriptors now, so that is gone; see sc_point. -lm still
+''       defaults off only because this builder is a per-texel BASIC
+''       reference and far too slow.
 ''
 ''       - The atlas is the whole texture resampled to 64/32/16/8, so an
 ''         original texel is not an atlas texel. u advances by atlasW/origW
@@ -437,13 +602,13 @@ sub sb_build ( byval dc as long, byval tex as long, _
 
     iseg = sb_seg%( lm_info )
     lmsg = sb_seg%( lm_base )
+    cmsg  = varseg( cm_buf(0) )
     ''
-    '' The shade table sits in its own memAlloc'd block, so the segment is
-    '' its far pointer's and the table starts past the BSAVE header the
-    '' file still carries.
+    '' VARPTR is signed, so an offset past 32767 comes back negative; mask
+    '' it to the unsigned offset the bits actually mean. Hoisted out of the
+    '' texel loop while we are here.
     ''
-    cmsg  = sb_seg%( cm_base )
-    cmofs = (clng( cm_base ) and 65535&) + CM_HDR
+    cmofs = clng( varptr( cm_buf(0) ) ) and 65535&
 
     def seg = iseg
     o = clng(face) * 16&
