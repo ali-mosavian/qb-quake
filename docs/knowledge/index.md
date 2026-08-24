@@ -31,8 +31,12 @@ format). Standalone — no dependency on any other bundle.
   view addresses another allocation once handles pass 255) and why the surface cache rendered
   correctly anyway; the 256-page ceiling on any EMS DC (`ems_New`'s page counter is one byte,
   4 MB max at 16384 wide — found by growing the cache to 16 MB and getting the same corruption
-  signature back); the texture store this unblocked (160 texture DCs and 160 asset files → one
-  packed image plus four views, pixel-identical); four ways a *passing* standalone test can be
+  signature back); the texture store this unblocked, written then REVERTED because it corrupts
+  lightmapped surfaces (unlit byte-identical, `-lm` 87.9% different — and the one-angle `-lm`
+  check that let it through); the lightmap "streaks" traced to `sc_mipfloor` forcing large faces
+  to a coarser surface mip than the texture path, which box-averages a one-texel groove into
+  pixels *brighter* than colormap row 0 can produce — plus the 269-pixel over-bright count that
+  makes it measurable and the eight hypotheses it eliminated; four ways a *passing* standalone test can be
   vacuous — never exercising the failing combination, always allocating first, test data that
   cannot fail, and read-back through the same broken accessor; six ways one can look like it
   built and ran while silently not doing either (CRLF, `$INCLUDE` path scope, BC's object-name
