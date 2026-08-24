@@ -193,7 +193,7 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
     dim lm_extw as integer, lm_exth as integer
     dim lm_mip as integer, lm_floor as integer
     dim lm_sw as integer, lm_sh as integer
-    dim lm_dc as long, src_dc as long, raw_dc as long
+    dim lm_dc as long, src_dc as long
     dim lm_su as single, lm_sv as single
 
    ''
@@ -494,15 +494,7 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
             '' EMS page the filler maps, so it is a floor on the distance
             '' choice, never a substitute for it.
             ''
-            ''
-            '' h_textr_dc is a byte offset into the store, not a DC: aim
-            '' this mip's view at it. tex_indx is mipidx*4+miplevel, so
-            '' its low two bits ARE the mip, which is the view to use.
-            ''
-            src_dc = tx_view( tex_indx and 3 )
-            if ( uglSetView%( src_dc, h_textr_dc(tex_indx) ) = 0 ) then
-                src_dc = 0
-            end if
+            src_dc = h_textr_dc(tex_indx)
             if ( lm_on ) then
                 lm_mip = miplevel
                 if ( rdr.usemips = 0 ) then lm_mip = 0
@@ -527,14 +519,9 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
                         '' sb_build clamps its luxel and atlas reads, so the
                         '' extra columns come out edge-extended.
                         ''
-                        '' the raw twin, aimed the same way
-                        raw_dc = tx_rview( lm_mip )
-                        if ( uglSetView%( raw_dc, _
-                                h_rawtx_dc(mipidx*4 + lm_mip) ) <> 0 ) then
-                            sb_build lm_dc, raw_dc, _
-                                     i, lm_mip, 2 ^ sc_shift%( lm_sw ), _
-                                     2 ^ sc_shift%( lm_sh )
-                        end if
+                        sb_build lm_dc, h_rawtx_dc(mipidx*4 + lm_mip), _
+                                 i, lm_mip, 2 ^ sc_shift%( lm_sw ), _
+                                 2 ^ sc_shift%( lm_sh )
                     end if
                 end if
 

@@ -48,11 +48,10 @@ build)
     out="$ROOT/build/$tc"
     mkdir -p "$out"
     cp "$ROOT"/src/*.bas "$ROOT"/src/*.bi "$ROOT"/data/stuff.ini "$ROOT"/data/base.dat "$out/"
-    # Preprocessed assets (tools/mkassets.py): tex.bmp/texr.bmp, the packed
-    # texture stores mod_load_textures pulls in with one uglPutBMPEx each, and
-    # the .bld lumps model.bas BLOADs straight into its arrays. Copy the whole
-    # directory -- naming the extensions here is how the .bld files silently
-    # failed to stage the first time.
+    # Preprocessed assets (tools/mkassets.py): the .bmp textures texLoadAll
+    # hands to uglNewBMPEx, and the .bld lumps model.bas BLOADs straight into
+    # its arrays. Copy the whole directory -- naming the extensions here is
+    # how the .bld files silently failed to stage the first time.
     cp "$ROOT"/data/assets/. "$out/" -R 2>/dev/null || \
         cp -R "$ROOT"/data/assets/* "$out/" 2>/dev/null || true
     # every .bas except the superseded rewrite is a module of the program
@@ -116,10 +115,7 @@ run)
     out="$ROOT/build/vbd"
     [[ -f "$out/qrender.exe" ]] || { echo "no exe; run: tools/dosbox.sh build" >&2; exit 1; }
     cp "$ROOT/data/$map" "$out/"
-    # Screenshots only. The texture store itself is a .bmp now
-    # (tex.bmp/texr.bmp), so a blanket *.bmp wipe deletes the assets.
-    rm -f "$out"/scrn*.bmp "$out"/SCRN*.BMP "$out"/bench.bmp "$out"/BENCH.BMP \
-          "$out"/ran.txt "$out"/RAN.TXT
+    rm -f "$out"/*.bmp "$out"/*.BMP "$out"/ran.txt "$out"/RAN.TXT
 
     printf '%s\r\n' \
       '@echo off' \
@@ -137,8 +133,7 @@ run)
     launch "$conf" "${TIMEOUT:-900}"
     echo "== exited: $(cat "$out/ran.txt" 2>/dev/null || echo 'did not return to DOS')"
     cat "$out/run.out" 2>/dev/null
-    ls -l "$out"/scrn*.bmp "$out"/SCRN*.BMP "$out"/bench.bmp "$out"/BENCH.BMP \
-        2>/dev/null || echo "(no screenshot captured)"
+    ls -l "$out"/*.bmp "$out"/*.BMP 2>/dev/null || echo "(no screenshot captured)"
     ;;
 viz)
     # windowed run for watching it live. core=dynamic + high cycles is fast but
