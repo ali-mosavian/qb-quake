@@ -252,6 +252,22 @@ sub scr_draw_hud ( h_dst_dc as long )
         draw_string h_dst_dc, 0, env.y_res-8*3-6, "Nodes:" + str$( wld.nds_count )
         draw_string h_dst_dc, 0, env.y_res-8*2-6, "Leaves:" + str$( wld.lef_count )
         draw_string h_dst_dc, 0, env.y_res-8*1-6, "PVS entries:" + str$( wld.lef_count^2 )
+        ''
+        '' Surface cache. A build is milliseconds, so builds-in-one-frame is
+        '' what a hitch is made of -- the worst frame is kept because an
+        '' average over the run hides exactly the spike being hunted.
+        ''
+        draw_string h_dst_dc, 0, 8*7, "Surf hit:" + str$( sc_hits ) + _
+                                     "  built:" + str$( sc_builds ) + _
+                                     "  worst:" + str$( sc_bpeak )
+        draw_string h_dst_dc, 0, 8*8, "Surf live:" + str$( sc_live ) + _
+                                     "  evicted:" + str$( sc_evict ) + _
+                                     "  flushes:" + str$( sc_flushes )
+        '' sc_next and sc_cap are DIM SHARED inside d_surf.bas, so they are
+        '' module scope only. sc_peak is the one in the common block.
+        draw_string h_dst_dc, 0, 8*9, "Surf total:" + str$( sc_tbuilds ) + _
+                                     "  peak kb:" + str$( sc_peak \ 1024& )
+
         draw_string h_dst_dc, 0, env.y_res-8*0-6, "Stats: enabled, press f12 to disable"             
     else 
         draw_string h_dst_dc, 0, env.y_res-8*0-6, "Stats: disabled, press f12 to enable"
@@ -398,5 +414,11 @@ sub scr_count_frame
 
     rdr.tris = 0
     rdr.polys = 0
+
+    '' Per-frame cache counters. The peak is kept before the reset because a
+    '' hitch is one bad frame, and an average over the run hides it.
+    if ( sc_builds > sc_bpeak ) then sc_bpeak = sc_builds
+    sc_hits = 0
+    sc_builds = 0
 
 end sub

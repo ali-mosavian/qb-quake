@@ -589,6 +589,16 @@ sub host_bench_report ( frame_no as long, h_dst_dc as long )
     print #benchf, "cmsize " + ltrim$(str$( cm_size ))
     print #benchf, "scmade " + ltrim$(str$( sc_made ))
     print #benchf, "scems " + ltrim$(str$( sc_peak ))
+    ''
+    '' Cache behaviour. scworst is the most surfaces built in any ONE
+    '' frame, which is what a hitch is made of -- a run-wide total says
+    '' nothing about whether they arrived together or spread out.
+    ''
+    print #benchf, "scbuilt " + ltrim$(str$( sc_tbuilds ))
+    print #benchf, "scworst " + ltrim$(str$( sc_bpeak ))
+    print #benchf, "sclive " + ltrim$(str$( sc_live ))
+    print #benchf, "scevict " + ltrim$(str$( sc_evict ))
+    print #benchf, "scflush " + ltrim$(str$( sc_flushes ))
     print #benchf, "sctest " + ltrim$(str$( sc_selftest% ))
     print #benchf, "peakz " + ltrim$(str$( pl.peak_z ))
     print #benchf, "ticks " + ltrim$(str$( host_ticks ))

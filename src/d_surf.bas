@@ -86,6 +86,15 @@ const SC_NCLS   = 25            '' (SC_MAXSH-SC_MINSH+1) squared
 '' and corrupts on the 257th, every time. Do not raise SC_PAGES past 256;
 '' a second store is the only way to hold more than 4 MB of surfaces.
 ''
+''
+'' How many surfaces may be resident at once. dm3ish settles at ~230 and a
+'' long walk reached 314, so 512 is real headroom -- and it is a HARD bound,
+'' which the bump allocator never had: past it the LRU evicts instead of the
+'' store filling. 10 bytes each, so the whole table is 5 KB.
+''
+const SC_NBLK   = 1024
+const SC_GRAN   = 256            '' smallest class, 16x16: the offset unit
+
 const SC_PGBYTES = 16384         '' one EMS page: the widest bps allowed
 const SC_PAGES   = 256           '' the max ANY EMS DC can be -- see above
 const SC_STORE#  = 4194304#      '' 256 * 16384
@@ -114,6 +123,28 @@ dim shared lm_ftab(15) as integer
 dim shared sc_hnd as long               '' the DC that owns every surface's bytes
 dim shared sc_next as long              '' bump pointer within it
 dim shared sc_cap as long               '' how big it is
+
+''
+'' The block table. One entry per surface actually resident, NOT per face --
+'' 2,293 faces share at most SC_NBLK blocks, and the far heap has no room to
+'' spend on the difference. Everything the LRU needs hangs off here.
+''
+'' The offset is kept in 256-byte granules so it fits an integer: 256 is the
+'' smallest class (16x16), so every block is a whole number of them, and
+'' 4 MB / 256 is 16,384 which is inside int16.
+''
+'' '$DYNAMIC, like everything else here: '$STATIC would put these in
+'' DGROUP, which is shared with BASIC's stack and string space and has none
+'' to spare -- see sc_desc's note directly below.
+'$dynamic
+dim shared sc_lhead() as integer        '' per-class LRU, -1 empty. Head is
+dim shared sc_ltail() as integer        '' the least recently used.
+dim shared sc_bgrn() as integer         '' block offset / SC_GRAN
+dim shared sc_bcls() as integer         '' size class, fixed once made
+dim shared sc_bown() as integer         '' owning face, -1 if none
+dim shared sc_bprev() as integer        '' the class's LRU chain
+dim shared sc_bnext() as integer
+dim shared sc_bcnt as integer           '' blocks made so far
 '$dynamic
 '' one drawing DC per size class. '$DYNAMIC, so the array lands in the far
 '' heap rather than DGROUP -- DGROUP is shared with BASIC's stack and string
@@ -183,6 +214,50 @@ function sc_grab& ( byval sz as long )
 end function
 
 ''::::::::::
+'' name: sc_lru_unlink / sc_lru_touch
+'' desc: The LRU list, both ends O(1). A face is in its class's list exactly
+''       while it owns a block, which .ofs >= 0 is the test for -- unlinking
+''       one that is not in a list would corrupt the head or the tail.
+''::::::::::
+sub sc_lru_unlink ( byval b as integer )
+    dim c as integer, p as integer, n as integer
+
+    if ( b < 0 ) then exit sub
+    c = sc_bcls(b)
+    p = sc_bprev(b)
+    n = sc_bnext(b)
+    ''
+    '' Existing is not the same as being IN the list: a block just made has
+    '' no neighbours yet. Without this test its first link takes the "I am
+    '' both ends" branch and clears the class's head and tail, stranding
+    '' everything already chained there.
+    ''
+    if ( p < 0 and n < 0 and sc_lhead(c) <> b ) then exit sub
+    if ( p >= 0 ) then sc_bnext(p) = n else sc_lhead(c) = n
+    if ( n >= 0 ) then sc_bprev(n) = p else sc_ltail(c) = p
+    sc_bprev(b) = -1
+    sc_bnext(b) = -1
+end sub
+
+''
+'' Move to the most-recent end. A cache HIT calls this too -- that is the
+'' whole difference between LRU and the bump-and-flush it replaces.
+''
+sub sc_lru_touch ( byval b as integer )
+    dim c as integer, t as integer
+
+    if ( b < 0 ) then exit sub
+    c = sc_bcls(b)
+    if ( sc_ltail(c) = b ) then exit sub         '' already the most recent
+    sc_lru_unlink b
+    t = sc_ltail(c)
+    sc_bprev(b) = t
+    sc_bnext(b) = -1
+    if ( t >= 0 ) then sc_bnext(t) = b else sc_lhead(c) = b
+    sc_ltail(c) = b
+end sub
+
+''::::::::::
 '' name: sc_init
 '' desc: Empties the pool. DCs are made on demand, so nothing is claimed
 ''       here beyond the bookkeeping.
@@ -194,12 +269,37 @@ function sc_init% ( )
     sc_flushes = 0
     sc_peak = 0
     sc_made = 0
+    sc_hits = 0
+    sc_builds = 0
+    sc_bpeak = 0
+    sc_live = 0
+    sc_evict = 0
+    sc_tbuilds = 0
 
     redim sc_slot(wld.tri_count-1) as scslot
     redim sc_desc(SC_NCLS-1) as long
 
+    redim sc_lhead(SC_NCLS-1) as integer
+    redim sc_ltail(SC_NCLS-1) as integer
+    redim sc_bgrn(SC_NBLK-1) as integer
+    redim sc_bcls(SC_NBLK-1) as integer
+    redim sc_bown(SC_NBLK-1) as integer
+    redim sc_bprev(SC_NBLK-1) as integer
+    redim sc_bnext(SC_NBLK-1) as integer
+    sc_bcnt = 0
+
     for i = 0 to SC_NCLS-1
         sc_desc(i) = 0
+        sc_lhead(i) = -1
+        sc_ltail(i) = -1
+    next i
+    ''
+    '' REDIM zeroes, and 0 is a perfectly good block index -- "no block"
+    '' has to be spelled out or every face would claim to own the first
+    '' surface in the store.
+    ''
+    for i = 0 to wld.tri_count-1
+        sc_slot(i).blk = -1
     next i
 
     sc_hnd  = 0
@@ -261,10 +361,24 @@ end function
 ''       correctness, and making them again is the expensive part.
 ''::::::::::
 sub sc_flush
+    dim i as integer
+
     sc_next = 0
     sc_gen = sc_gen + 1
     if ( sc_gen > 16000 ) then sc_gen = 1
     sc_flushes = sc_flushes + 1
+    '' a flush is a mass eviction: every surface in the store at once
+    sc_evict = sc_evict + sc_live
+    sc_live = 0
+
+    for i = 0 to SC_NCLS-1
+        sc_lhead(i) = -1
+        sc_ltail(i) = -1
+    next i
+    for i = 0 to wld.tri_count-1
+        sc_slot(i).blk = -1
+    next i
+    sc_bcnt = 0
 end sub
 
 ''::::::::::
@@ -272,10 +386,16 @@ end sub
 '' desc: The DC holding this face's surface, or 0 if it has to be built.
 ''       A mip other than the cached one counts as a miss.
 ''::::::::::
-function sc_find& ( byval face as integer, byval mip as integer )
+function sc_find& ( byval face as integer, byval mip as integer, _
+                    byval w as integer, byval h as integer )
     dim dc as long
+    dim a as integer, b as integer, vcls as integer
 
     if ( sc_ok = 0 ) then
+        sc_find& = 0
+        exit function
+    end if
+    if ( sc_slot(face).blk < 0 ) then
         sc_find& = 0
         exit function
     end if
@@ -284,11 +404,25 @@ function sc_find& ( byval face as integer, byval mip as integer )
         exit function
     end if
     ''
-    '' Hand back this class's view, aimed at the face.
+    '' The view is the CURRENT mip's shape, which is not the block's: a
+    '' block is sized once at the face's finest mip, and a coarser mip just
+    '' uses less of it. Aiming a smaller view at a larger block's offset is
+    '' safe -- the bigger alignment implies the smaller one.
     ''
-    dc = sc_desc( sc_slot(face).cls )
+    a = sc_shift%( w )
+    b = sc_shift%( h )
+    if ( a + b > SC_MAXSUM ) then
+        sc_find& = 0
+        exit function
+    end if
+    vcls = (a - SC_MINSH) * 5 + (b - SC_MINSH)
+    dc = sc_desc( vcls )
     if ( dc <> 0 ) then
-        if ( uglSetView%( dc, sc_slot(face).ofs ) = 0 ) then dc = 0
+        if ( uglSetView%( dc, clng( sc_bgrn( sc_slot(face).blk ) ) * SC_GRAN ) = 0 ) then dc = 0
+    end if
+    if ( dc <> 0 ) then
+        sc_hits = sc_hits + 1
+        sc_lru_touch sc_slot(face).blk  '' a hit is a use -- the whole point
     end if
     sc_find& = dc
 end function
@@ -299,9 +433,11 @@ end function
 ''       if the surface is larger than the filler can address or EMS is out.
 ''::::::::::
 function sc_alloc& ( byval face as integer, byval mip as integer, _
-                     byval w as integer, byval h as integer )
-    dim a as integer, b as integer, cidx as integer
+                     byval w as integer, byval h as integer, _
+                     byval fw as integer, byval fh as integer )
+    dim a as integer, b as integer, cidx as integer, bcls as integer
     dim dc as long
+    dim vic as integer, blk as integer
 
     dim ofs as long, sz as long
 
@@ -342,18 +478,83 @@ function sc_alloc& ( byval face as integer, byval mip as integer, _
     end if
     dc = sc_desc(cidx)
 
-    sz  = clng(2 ^ a) * clng(2 ^ b)
-    ofs = sc_grab&( sz )
-    if ( ofs < 0 ) then
-        sc_flush                        '' store full: everything goes stale
+    ''
+    '' The BLOCK is sized at the face's finest allowed mip (fw by fh), not
+    '' at the mip being drawn now. That fixes a face's class for its
+    '' lifetime, which is what makes the rest of this work: the face reuses
+    '' its own block whenever its mip changes, so nothing is ever orphaned,
+    '' and class membership never moves, so a same-class eviction is always
+    '' an exact fit.
+    ''
+    a = sc_shift%( fw )
+    b = sc_shift%( fh )
+    if ( a + b > SC_MAXSUM ) then
         sc_alloc& = 0
         exit function
     end if
+    bcls = (a - SC_MINSH) * 5 + (b - SC_MINSH)
+    sz   = clng(2 ^ a) * clng(2 ^ b)
+
+    ''
+    '' Three ways to get bytes, cheapest first: the block this face already
+    '' owns, then fresh store while any is left, then the least recently
+    '' used surface of the SAME class -- exactly this size and already
+    '' aligned to it, so evicting one always suffices and never fragments.
+    ''
+    blk = sc_slot(face).blk
+    if ( blk >= 0 and sc_slot(face).cls = bcls ) then
+        ofs = clng( sc_bgrn(blk) ) * SC_GRAN
+    else
+        blk = -1
+        '' room for another block, and store to back it?
+        if ( sc_bcnt < SC_NBLK ) then
+            ofs = sc_grab&( sz )
+            if ( ofs >= 0 ) then
+                blk = sc_bcnt
+                sc_bcnt = sc_bcnt + 1
+                sc_bgrn(blk) = cint( ofs \ SC_GRAN )
+                sc_bcls(blk) = bcls
+                sc_bprev(blk) = -1
+                sc_bnext(blk) = -1
+                sc_live = sc_live + 1
+            end if
+        end if
+        if ( blk < 0 ) then
+            ''
+            '' Nothing left to hand out, so take the least recently used
+            '' surface of THIS class. Same class means same size and the
+            '' same alignment, so one eviction always fits exactly and the
+            '' store never fragments.
+            ''
+            blk = sc_lhead(bcls)
+            if ( blk < 0 ) then
+                ''
+                '' This class has nothing resident and there is no room to
+                '' make any. The old all-or-nothing flush, kept only as a
+                '' backstop -- scflush in the bench report says whether it
+                '' ever fires.
+                ''
+                sc_flush
+                sc_alloc& = 0
+                exit function
+            end if
+            vic = sc_bown(blk)
+            if ( vic >= 0 ) then
+                sc_slot(vic).tag = 0
+                sc_slot(vic).blk = -1
+                sc_evict = sc_evict + 1
+            end if
+            sc_lru_unlink blk
+            ofs = clng( sc_bgrn(blk) ) * SC_GRAN
+        end if
+        sc_bown(blk) = face
+        sc_slot(face).blk = blk
+        sc_slot(face).cls = bcls
+    end if
     if ( sc_next > sc_peak ) then sc_peak = sc_next
 
-    sc_slot(face).ofs = ofs
-    sc_slot(face).cls = cidx
     sc_slot(face).tag = sc_gen * 4 + mip
+    sc_lru_touch blk
 
     '' aim it at the bytes just claimed, ready for the builder to write
     if ( uglSetView%( dc, ofs ) = 0 ) then
@@ -374,7 +575,13 @@ sub sc_reset
 
     for i = 0 to wld.tri_count-1
         sc_slot(i).tag = 0
+        sc_slot(i).blk = -1
     next i
+    for i = 0 to SC_NCLS-1
+        sc_lhead(i) = -1
+        sc_ltail(i) = -1
+    next i
+    sc_bcnt = 0
     sc_next = 0
     sc_gen = 1
 end sub
@@ -408,6 +615,7 @@ function sc_selftest% ( )
     dim d0 as long, d1 as long, d2 as long
     dim i as integer, gen0 as integer, made0 as integer
     dim wr(31) as integer, rd(31) as integer
+    dim ofs0 as long, live0 as long, flush0 as long
     dim fp as long
 
     if ( sc_ok = 0 ) then
@@ -424,25 +632,25 @@ function sc_selftest% ( )
     if ( sc_shift%( 16 ) <> 4 ) then sc_selftest% = -5 : exit function
 
     '' 224x224 pads to 256x256 = 64K, four pages: it must be refused
-    if ( sc_alloc&( 9, 0, 224, 224 ) <> 0 ) then sc_selftest% = -6 : exit function
+    if ( sc_alloc&( 9, 0, 224, 224, 224, 224 ) <> 0 ) then sc_selftest% = -6 : exit function
     '' 112x112 pads to 128x128 = 16,384, exactly one page: it must not be
-    d0 = sc_alloc&( 0, 0, 112, 112 )
-    d1 = sc_alloc&( 1, 0, 112, 96 )
+    d0 = sc_alloc&( 0, 0, 112, 112, 112, 112 )
+    d1 = sc_alloc&( 1, 0, 112, 96, 112, 96 )
     if ( d0 = 0 ) then sc_selftest% = -7 : exit function
     if ( d1 = 0 ) then sc_selftest% = -8 : exit function
     '' both round to 128x128, so they share a view and differ only in where
     '' it points -- the whole point of the store
     if ( d0 <> d1 ) then sc_selftest% = -18 : exit function
-    if ( sc_slot(0).ofs = sc_slot(1).ofs ) then sc_selftest% = -21 : exit function
+    if ( sc_slot(0).blk = sc_slot(1).blk ) then sc_selftest% = -21 : exit function
     if ( sc_hnd = 0 ) then sc_selftest% = -22 : exit function
 
     '' and the floor it implies: 224 needs mip 1, 112 does not
     if ( sc_mipfloor%( 224, 224 ) <> 1 ) then sc_selftest% = -19 : exit function
     if ( sc_mipfloor%( 112, 112 ) <> 0 ) then sc_selftest% = -20 : exit function
 
-    if ( sc_find&( 0, 0 ) <> d0 ) then sc_selftest% = -9 : exit function
-    if ( sc_find&( 1, 0 ) <> d1 ) then sc_selftest% = -10 : exit function
-    if ( sc_find&( 1, 1 ) <> 0 ) then sc_selftest% = -11 : exit function
+    if ( sc_find&( 0, 0, 112, 112 ) <> d0 ) then sc_selftest% = -9 : exit function
+    if ( sc_find&( 1, 0, 112, 96 ) <> d1 ) then sc_selftest% = -10 : exit function
+    if ( sc_find&( 1, 1, 112, 96 ) <> 0 ) then sc_selftest% = -11 : exit function
 
     '' a write into the last row of the largest class, the 16K page edge
     for i = 0 to 31
@@ -462,13 +670,54 @@ function sc_selftest% ( )
     made0 = sc_made
     sc_flush
     if ( sc_gen = gen0 ) then sc_selftest% = -13 : exit function
-    if ( sc_find&( 0, 0 ) <> 0 ) then sc_selftest% = -14 : exit function
+    if ( sc_find&( 0, 0, 112, 112 ) <> 0 ) then sc_selftest% = -14 : exit function
 
     '' a flush rewinds the store and makes no new view
-    d2 = sc_alloc&( 5, 0, 112, 112 )
+    d2 = sc_alloc&( 5, 0, 112, 112, 112, 112 )
     if ( d2 <> d0 ) then sc_selftest% = -15 : exit function
     if ( sc_made <> made0 ) then sc_selftest% = -16 : exit function
-    if ( sc_slot(5).ofs <> 0 ) then sc_selftest% = -23 : exit function
+    if ( sc_slot(5).blk < 0 ) then sc_selftest% = -23 : exit function
+    if ( sc_bgrn( sc_slot(5).blk ) <> 0 ) then sc_selftest% = -33 : exit function
+
+    ''
+    '' ---- the LRU itself ---------------------------------------------
+    ''
+    '' Everything above would pass just as well with the bump-and-flush
+    '' this replaced, so prove the part that is actually new: that reuse
+    '' happens, that a HIT changes who gets evicted, and that eviction
+    '' takes exactly one surface rather than the whole store.
+    ''
+    sc_reset
+
+    '' fill one class: three faces, three distinct blocks
+    d0 = sc_alloc&( 0, 0, 112, 112, 112, 112 )
+    d1 = sc_alloc&( 1, 0, 112, 112, 112, 112 )
+    d2 = sc_alloc&( 2, 0, 112, 112, 112, 112 )
+    if ( d0 = 0 or d1 = 0 or d2 = 0 ) then sc_selftest% = -24 : exit function
+    '' PROBE: three allocations should be three new blocks. Separate codes --
+    '' a single packed number turned out to have two valid decodes.
+    if ( sc_bcnt <> 3 ) then sc_selftest% = -(2000 + sc_bcnt) : exit function
+    if ( sc_slot(0).blk < 0 ) then sc_selftest% = -2999 : exit function
+    if ( sc_slot(0).blk = sc_slot(1).blk ) then sc_selftest% = -25 : exit function
+    if ( sc_slot(1).blk = sc_slot(2).blk ) then sc_selftest% = -26 : exit function
+
+    '' face 0 is the oldest, so touching it must make face 1 the victim
+    if ( sc_find&( 0, 0, 112, 112 ) = 0 ) then sc_selftest% = -27 : exit function
+    if ( sc_lhead( sc_slot(0).cls ) < 0 ) then sc_selftest% = -28 : exit function
+    if ( sc_bown( sc_lhead( sc_slot(0).cls ) ) <> 1 ) then _
+        sc_selftest% = -(4000 + sc_bown( sc_lhead( sc_slot(0).cls ) )) : exit function
+
+    '' rebuilding the SAME face at a new mip must reuse its own block, not
+    '' take a second one -- this is the leak the old allocator had
+    ofs0 = clng( sc_slot(0).blk )
+    live0 = sc_live
+    flush0 = sc_flushes
+    if ( sc_alloc&( 0, 1, 56, 56, 112, 112 ) = 0 ) then sc_selftest% = -29 : exit function
+    if ( clng( sc_slot(0).blk ) <> ofs0 ) then sc_selftest% = -30 : exit function
+    if ( sc_live <> live0 ) then sc_selftest% = -31 : exit function
+
+    '' and a mip change must not have cost a flush
+    if ( sc_flushes <> flush0 ) then sc_selftest% = -32 : exit function
 
     sc_reset
     sc_selftest% = 1
@@ -509,16 +758,18 @@ end function
 '' name: sb_build
 '' desc: Composites one face's texture and lightmap into a cache DC.
 ''
-''       The reference implementation, in BASIC and deliberately slow: the
-''       assembly has to match it byte for byte, and the conventions are far
-''       easier to get right here. Three of them, each got wrong once:
+''       Sets up an SBPARM and hands the texel loop to uglBuildSurf. What
+''       stays here is per face, not per texel: the light table, the
+''       resampling steps, and normalising the luxel pointer.
 ''
-''       This used to die in BASIC's string heap ("String space corrupt")
-''       after rendering correctly for a while, because every cached
-''       surface owned a DC and a DC costs conventional memory. Surfaces
-''       share views over one store now, so that is gone. -lm still
-''       defaults off only because this builder is a per-texel BASIC
-''       reference and far too slow.
+''       The BASIC loop this replaces is gone from the source but not from
+''       the record -- mgl/src/test/surftst.bas checks the assembly against
+''       the same arithmetic on a synthetic case, and tools/sbref.py is a
+''       Python reference validated against the old BASIC on the target
+''       (face 1544 mip 1: 0 of 8192 bytes differ). Change the maths in
+''       either place and both must be re-run.
+''
+''       Three conventions, each got wrong once:
 ''
 ''       - The atlas is the whole texture resampled to 64/32/16/8, so an
 ''         original texel is not an atlas texel. u advances by atlasW/origW
@@ -534,22 +785,16 @@ end function
 sub sb_build ( byval dc as long, byval tex as long, _
                byval face as integer, byval mip as integer, _
                byval sw as integer, byval sh as integer )
-    dim x as integer, y as integer
-    dim ax as integer, ay as integer
     dim au as long, av as long, du as long, dv as long
     dim aw as integer, msk as integer
     dim lmw as integer, lmh as integer, lofs as long
     dim tms as integer, tmt as integer
-    dim stp as integer, lx as integer, ly as integer
-    dim tx as long, ty as long
-    dim l00 as long, l10 as long, l01 as long, l11 as long
-    dim lt as long, lb as long, light as long
-    dim t as long, row as integer, texel as integer
     dim o as long, iseg as integer, lmsg as integer, cmsg as integer
-    dim nidx as long, nbyt as long
     dim lbase as integer, lrng as integer, lj as integer
     dim cmofs as long
     dim mi as integer, recip as single
+    dim sbp as SBPARM
+    dim lseg as long, lofs16 as long
 
     aw = 64 \ (2 ^ mip)
     msk = aw - 1
@@ -575,17 +820,31 @@ sub sb_build ( byval dc as long, byval tex as long, _
     def seg
 
     ''
+    '' A face's luxels are lm_base plus a flat 32-bit offset, so this cannot
+    '' stay lmsg:lofs -- lmdat.bin passes 64K on the bigger maps and PEEK's
+    '' offset is only 16 bits. Fold the whole sum into the segment, 16 bytes
+    '' at a time, and everything below addresses through the normalised
+    '' pointer. A segment past 8000h comes back as a negative half, which is
+    '' the bit pattern DEF SEG wants and the one the assembly loads into FS.
+    ''
+    lseg   = clng( lmsg ) and 65535&
+    lofs16 = (lm_base and 65535&) + lofs
+    lseg   = (lseg + (lofs16 \ 16&)) and 65535&
+    lofs16 = lofs16 and 15&
+    if ( lseg > 32767& ) then lseg = lseg - 65536&
+
+    ''
     '' This face's 16 light levels, from the two header bytes ahead of its
     '' luxel nibbles. See lm_ftab's declaration for why they are per face.
     ''
-    def seg = lmsg
-    lbase = cint( peek( lofs ) )
-    lrng  = cint( peek( lofs + 1& ) )
+    def seg = cint( lseg )
+    lbase = cint( peek( lofs16 ) )
+    lrng  = cint( peek( lofs16 + 1& ) )
     def seg
     for lj = 0 to 15
         lm_ftab(lj) = lbase + (lj * lrng + 7) \ 15
     next lj
-    lofs = lofs + 2&
+    lofs16 = lofs16 + 2&                '' past the header, at the nibbles
 
     '' atlas texels per surface texel, 16.16. wdth is 1/origW already.
     recip = mip_buff_inf(mi).wdth
@@ -593,69 +852,30 @@ sub sb_build ( byval dc as long, byval tex as long, _
     recip = mip_buff_inf(mi).hght
     dv = clng( aw * 65536.0 * recip ) * clng(2 ^ mip)
 
-    stp = 16 \ (2 ^ mip)
-
+    au = clng(tms) * (du \ clng(2 ^ mip))
     av = clng(tmt) * (dv \ clng(2 ^ mip))
-    for y = 0 to sh-1
-        ay = cint( (av \ 65536&) and clng(msk) )
 
-        ly = y \ stp
-        if ( ly > lmh-2 ) then ly = lmh-2
-        if ( ly < 0 ) then ly = 0
-        ty = (clng(y) - clng(ly) * clng(stp)) * 65536& \ clng(stp)
-        if ( ty > 65536& ) then ty = 65536&
+    sbp.lmptr   = lseg * 65536& + lofs16
+    sbp.ftabptr = clng( varseg( lm_ftab(0) ) ) * 65536& + _
+                  (clng( varptr( lm_ftab(0) ) ) and 65535&)
+    sbp.cmapptr = clng( cmsg ) * 65536& + cmofs
+    sbp.au0 = au
+    sbp.av0 = av
+    sbp.du  = du
+    sbp.dv  = dv
+    sbp.sw  = sw
+    sbp.sh  = sh
+    sbp.lmw = lmw
+    sbp.lmh = lmh
+    '' stp is 2^(4-mip) by construction, so its log2 needs no loop
+    sbp.shft = 4 - mip
+    sbp.msk  = msk
 
-        au = clng(tms) * (du \ clng(2 ^ mip))
-        for x = 0 to sw-1
-            ax = cint( (au \ 65536&) and clng(msk) )
-            texel = uglPGet( tex, ax, ay )
-
-            lx = x \ stp
-            if ( lx > lmw-2 ) then lx = lmw-2
-            if ( lx < 0 ) then lx = 0
-            tx = (clng(x) - clng(lx) * clng(stp)) * 65536& \ clng(stp)
-            if ( tx > 65536& ) then tx = 65536&
-
-            ''
-            '' Luxels are 4-bit indices into this face's lm_ftab, two packed
-            '' per byte, low nibble first (mkassets.py's encode_plane/pack).
-            '' nidx is the luxel's position in that nibble stream; nidx\2
-            '' is its byte, nidx and 1 picks which half.
-            ''
-            def seg = lmsg
-            nidx = clng(ly) * clng(lmw) + clng(lx)
-            nbyt = clng( peek( lofs + (nidx \ 2&) ) )
-            if ( (nidx and 1&) <> 0 ) then l00 = lm_ftab( (nbyt \ 16&) and 15& ) else l00 = lm_ftab( nbyt and 15& )
-
-            nidx = clng(ly) * clng(lmw) + clng(lx) + 1&
-            nbyt = clng( peek( lofs + (nidx \ 2&) ) )
-            if ( (nidx and 1&) <> 0 ) then l10 = lm_ftab( (nbyt \ 16&) and 15& ) else l10 = lm_ftab( nbyt and 15& )
-
-            nidx = clng(ly+1) * clng(lmw) + clng(lx)
-            nbyt = clng( peek( lofs + (nidx \ 2&) ) )
-            if ( (nidx and 1&) <> 0 ) then l01 = lm_ftab( (nbyt \ 16&) and 15& ) else l01 = lm_ftab( nbyt and 15& )
-
-            nidx = clng(ly+1) * clng(lmw) + clng(lx) + 1&
-            nbyt = clng( peek( lofs + (nidx \ 2&) ) )
-            if ( (nidx and 1&) <> 0 ) then l11 = lm_ftab( (nbyt \ 16&) and 15& ) else l11 = lm_ftab( nbyt and 15& )
-            def seg
-
-            lt = (l00 * (65536& - tx) + l10 * tx) \ 65536&
-            lb = (l01 * (65536& - tx) + l11 * tx) \ 65536&
-            light = (lt * (65536& - ty) + lb * ty) \ 65536&
-
-            t = (65280& - light * 264&) \ 4&
-            if ( t < 64& ) then t = 64&
-            row = cint( t \ 256& )
-            if ( row > 63 ) then row = 63
-
-            def seg = cmsg
-            uglPSet dc, x, y, clng( peek( cmofs + clng(row) * 256& + clng(texel) ) )
-            def seg
-
-            au = au + du
-        next x
-        av = av + dv
-    next y
+    if ( uglBuildSurf%( dc, tex, _
+                        clng( varseg( sbp ) ) * 65536& + _
+                        (clng( varptr( sbp ) ) and 65535&) ) = 0 ) then
+        '' only a luxel grid too big for the builder's stack buffer gets
+        '' here; leave the surface as it is rather than half-composite it
+    end if
 end sub
 

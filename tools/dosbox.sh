@@ -146,7 +146,8 @@ run)
     ls -l "$out"/*.bmp "$out"/*.BMP 2>/dev/null || echo "(no screenshot captured)"
     ;;
 viz)
-    # windowed run for watching it live. core=dynamic + high cycles is fast but
+    # windowed run for watching it live. Keeps the template's core=normal:
+    # mgl's fillers are self-modifying, so the dynamic core is out.
     # starves the debug socket; use dosbox.sh debug for a controllable one.
     map="${arg:-dm3ish.bsp}"
     out="$ROOT/build/vbd"
@@ -155,7 +156,6 @@ viz)
     conf="$out/dosbox-viz.conf"
     sed -e "s|@CDRIVE@|$out|" -e "s|@VDRIVE@|$out|" -e "s|@MDRIVE@|$out|" \
         -e "s|@BAT@|qrender.exe $map|" -e "s|@PRE@||" "$ROOT/dosbox/template.conf" \
-      | sed -e 's/^core=dynamic$/core=dynamic/' \
             -e 's/^cycles=max$/cycles=150000/' \
             -e 's/^output=surface$/output=opengl/' \
             -e '/^\[sdl\]/a\

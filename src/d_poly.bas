@@ -193,6 +193,8 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
     dim lm_extw as integer, lm_exth as integer
     dim lm_mip as integer, lm_floor as integer
     dim lm_sw as integer, lm_sh as integer
+    dim lm_fw as integer, lm_fh as integer
+    dim lm_cm as integer
     dim lm_dc as long, src_dc as long
     dim lm_su as single, lm_sv as single
 
@@ -501,14 +503,45 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
                 lm_floor = sc_mipfloor%( lm_extw, lm_exth )
                 if ( lm_mip < lm_floor ) then lm_mip = lm_floor
 
+                ''
+                '' Sticky mip. zl above is the average w over the CLIPPED
+                '' vertices, so it moves when the camera merely rotates -- a
+                '' face sitting near one of the thresholds flips mip every
+                '' few frames, and every flip is a full rebuild because
+                '' sc_find keys on the mip. Keep whatever this face is
+                '' already cached at unless the new choice is more than one
+                '' level away: one mip of error is not visible, and the
+                '' rebuild it saves is milliseconds.
+                ''
+                '' The generation has to match too, or a stale tag from
+                '' before a flush would pin the mip to a surface that is no
+                '' longer there.
+                ''
+                if ( sc_ok <> 0 ) then
+                    if ( sc_slot(i).blk >= 0 and (sc_slot(i).tag \ 4) = sc_gen ) then
+                        lm_cm = sc_slot(i).tag and 3
+                        if ( abs( lm_mip - lm_cm ) <= 1 ) then lm_mip = lm_cm
+                        if ( lm_mip < lm_floor ) then lm_mip = lm_floor
+                    end if
+                end if
+
                 lm_sw = lm_extw \ (2 ^ lm_mip)
                 lm_sh = lm_exth \ (2 ^ lm_mip)
                 if ( lm_sw < 1 ) then lm_sw = 1
                 if ( lm_sh < 1 ) then lm_sh = 1
 
-                lm_dc = sc_find&( i, lm_mip )
+                ''
+                '' The block is sized at the face's FLOOR mip, so it stays
+                '' the same block whatever mip is drawn -- see sc_alloc.
+                ''
+                lm_fw = lm_extw \ (2 ^ lm_floor)
+                lm_fh = lm_exth \ (2 ^ lm_floor)
+                if ( lm_fw < 1 ) then lm_fw = 1
+                if ( lm_fh < 1 ) then lm_fh = 1
+
+                lm_dc = sc_find&( i, lm_mip, lm_sw, lm_sh )
                 if ( lm_dc = 0 ) then
-                    lm_dc = sc_alloc&( i, lm_mip, lm_sw, lm_sh )
+                    lm_dc = sc_alloc&( i, lm_mip, lm_sw, lm_sh, lm_fw, lm_fh )
                     if ( lm_dc <> 0 ) then
                         ''
                         '' Build the DC's WHOLE padded extent, not just the
@@ -519,6 +552,8 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
                         '' sb_build clamps its luxel and atlas reads, so the
                         '' extra columns come out edge-extended.
                         ''
+                        sc_builds = sc_builds + 1
+                        sc_tbuilds = sc_tbuilds + 1
                         sb_build lm_dc, h_rawtx_dc(mipidx*4 + lm_mip), _
                                  i, lm_mip, 2 ^ sc_shift%( lm_sw ), _
                                  2 ^ sc_shift%( lm_sh )
