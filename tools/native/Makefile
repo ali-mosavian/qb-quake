@@ -37,8 +37,26 @@ JWASMFLAGS := -c -Cp -Zg -D__CMP__=VBD -I$(INC) -omf
 # Transcribed from each src/**/​*.mk's ASMLIST (see tools/native/README.md
 # for how). Order matches mgl's own src/makefile.mk SRC variable.
 
-LIBS := DOS EMS XMS DCT MODS MISC B8 B15 B16 B32 UGL UGLU 2DFX \
-        MUSIC XSND SNDDRV
+# B15/B16/B32 are NOT built here: qrender creates only 8-bit DCs
+# (env.c_fmt is UGL.8BIT everywhere -- confirmed by grep), so their
+# fillers are pure dead weight for this project. uglmain.asm still
+# references b15_Init/b15_End/b16_Init/b16_End/b32_Init/b32_End
+# unconditionally (a static CFMT table, ul$cfmtTB, one row per format,
+# built at assemble time and walked in full by uglInit/_end) -- STUB
+# supplies minimal stand-ins for exactly those six symbols, from THIS
+# project's own tree (tools/native/stubs/fmtstub.asm), not mgl's. mgl
+# itself is untouched; swap B15/B16/B32 back into LIBS and drop STUB to
+# revert.
+# 2DFX (tfxmain, tfxblt, ...) is also NOT built here: nothing outside
+# src/2dfx/ references any tfx* symbol anywhere in mgl (checked: only
+# ugl.inc defines FMT_1BIT/FMT_4BIT, the two format constants 2DFX uses,
+# and neither is read by uglInit's CLR_FORMATS loop -- 2DFX is not wired
+# into any unconditional startup table the way CFMT was), and qrender's
+# own source never calls anything tfx*. No stub needed: if that reasoning
+# is wrong the linker will say so by name, the same way it did for
+# b15_8/b16_8/b32_8.
+LIBS := DOS EMS XMS DCT MODS MISC B8 UGL UGLU \
+        MUSIC XSND SNDDRV STUB
 
 DIR_DOS   := dos
 MODS_DOS  := dosfile dosmem dosbfile
@@ -138,7 +156,23 @@ $(BUILD)/$(1).LIB: $$(addprefix $(BUILD)/$(1)/,$$(addsuffix .obj,$$(MODS_$(1)) $
 	$(JWLIB) $$@ $$(addprefix +,$$^)
 endef
 
-$(foreach lib,$(LIBS),$(eval $(call BUILD_LIB,$(lib))))
+# STUB is not a real mgl sub-library -- it has no DIR_STUB/MODS_STUB and
+# no source under mgl's own tree -- so it is excluded from the generic
+# per-library rule generator and given its own small rule instead,
+# pointing at THIS project's tools/native/stubs/ directory.
+$(foreach lib,$(filter-out STUB,$(LIBS)),$(eval $(call BUILD_LIB,$(lib))))
+
+STUBSRC := $(CURDIR)/tools/native/stubs
+
+$(BUILD)/STUB:
+	mkdir -p $@
+
+$(BUILD)/STUB/fmtstub.obj: $(STUBSRC)/fmtstub.asm | $(BUILD)/STUB
+	cd $(STUBSRC) && $(JWASM) $(JWASMFLAGS) -Fo$@ fmtstub.asm
+
+$(BUILD)/STUB.LIB: $(BUILD)/STUB/fmtstub.obj
+	rm -f $@
+	$(JWLIB) $@ +$(BUILD)/STUB/fmtstub.obj
 
 $(UGLV): $(foreach lib,$(LIBS),$(BUILD)/$(lib).LIB)
 	rm -f $@
