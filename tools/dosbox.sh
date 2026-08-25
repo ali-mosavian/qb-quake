@@ -125,7 +125,12 @@ run)
     out="$ROOT/build/vbd"
     [[ -f "$out/qrender.exe" ]] || { echo "no exe; run: tools/dosbox.sh build" >&2; exit 1; }
     cp "$ROOT/data/$map" "$out/"
-    rm -f "$out"/*.bmp "$out"/*.BMP "$out"/ran.txt "$out"/RAN.TXT
+    ## Screenshot names only -- scrn*.bmp from the 's' key, bench.bmp from
+    ## the benchmark. A blanket *.bmp takes the staged texture assets with
+    ## it (build copies them into this very directory), which is the trap
+    ## docs/bugs.md records.
+    rm -f "$out"/scrn*.bmp "$out"/SCRN*.BMP "$out"/bench.bmp "$out"/BENCH.BMP \
+          "$out"/ran.txt "$out"/RAN.TXT
 
     printf '%s\r\n' \
       '@echo off' \
@@ -143,7 +148,8 @@ run)
     launch "$conf" "${TIMEOUT:-900}"
     echo "== exited: $(cat "$out/ran.txt" 2>/dev/null || echo 'did not return to DOS')"
     cat "$out/run.out" 2>/dev/null
-    ls -l "$out"/*.bmp "$out"/*.BMP 2>/dev/null || echo "(no screenshot captured)"
+    ls -l "$out"/scrn*.bmp "$out"/SCRN*.BMP "$out"/bench.bmp "$out"/BENCH.BMP \
+        2>/dev/null || echo "(no screenshot captured)"
     ;;
 viz)
     # windowed run for watching it live. Keeps the template's core=normal:
