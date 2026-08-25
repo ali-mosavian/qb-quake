@@ -218,21 +218,18 @@ end sub
 
 ''::::::::::
 '' name: mod_load_lightmaps
-'' desc: Loads the per-face lightmap table, then the luxels into a block
-''       outside BASIC's heap.
+'' desc: Loads the per-face lightmap table, then the luxels into EMS.
 ''
 ''       The table is 16 bytes a face and BLOADs like every other lump. The
-''       luxels do not: 71K of them made BASIC fail with 'out of string
-''       space' while setmem reported 397K of far heap free, so they are
-''       read into memAlloc'd storage instead. fileReadH, not fileRead --
-''       the latter takes a long but issues one int 21h with only its low
-''       word, so 71,307 bytes read as 5,771 and said so. That sidesteps
-''       BLOAD's 64K limit too, which is why the blob is one raw file and
-''       not a pile of chunks.
+''       luxels never could: 71K of them made BASIC fail with 'out of
+''       string space' while setmem reported 397K of far heap free. They
+''       are now one 8-bit atlas in a single EMS dc, loaded by uglNewBMPEx
+''       exactly as the textures are -- which puts them outside
+''       conventional memory entirely rather than merely outside the BASIC
+''       heap, and costs no bespoke loader at all.
 ''
-''       No pointer fixup here on purpose: a face's luxels are lm_base plus
-''       a flat 32-bit offset, and the builder does that sum in assembly,
-''       where segments past 0x8000 are not a signed-integer problem.
+''       No pointer fixup here: a face's rect is found by mapping its atlas
+''       scanline, which sb_build does per build.
 ''::::::::::
 sub mod_load_lightmaps
     scr_load_stage "lightmaps"
@@ -245,7 +242,7 @@ sub mod_load_lightmaps
     bload "lmtmin.bld", varptr( lmt_buffer(0) )
     def seg
 
-    lm_base = 0
+    lm_atlas = 0
     lm_size = 0
 
     lm_info = 0
@@ -266,21 +263,24 @@ sub mod_load_lightmaps
         fileClose f
     end if
 
-    if ( fileOpen( f, "lmdat.bin", F4READ ) <> 0 ) then
+    ''
+    '' Every luxel in the map, as one 8-bit EMS dc built straight from a
+    '' BMP -- the same path mod_tex.bas takes for the textures, and
+    '' BMPOPT.NO332 for the same reason: these bytes are luxel values, not
+    '' colours for uGL to remap through its own palette.
+    ''
+    '' It costs no conventional memory at all. The packed blob it replaces
+    '' cost 40K on dm3ish and more on the bigger maps.
+    ''
+    if ( fileOpen( f, "lm.bmp", F4READ ) <> 0 ) then
         lm_size = fileSize( f )
-        lm_base = memAlloc( lm_size )
-        if ( lm_base <> 0 ) then
-            got = fileReadH( f, lm_base, lm_size )
-            lm_read = got
-            if ( got <> lm_size ) then
-                memFree lm_base
-                lm_base = 0
-                lm_size = 0
-            end if
-        else
-            lm_size = 0
-        end if
         fileClose f
+    end if
+    lm_atlas = uglNewBMPEx( UGL.EMS, UGL.8BIT, "lm.bmp", BMPOPT.NO332 )
+    if ( lm_atlas <> 0 ) then
+        lm_read = lm_size
+    else
+        lm_read = 0
     end if
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)

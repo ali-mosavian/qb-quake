@@ -116,15 +116,28 @@ const SC_PAGES   = 256           '' the max ANY EMS DC can be -- see above
 const SC_STORE#  = 4194304#      '' 256 * 16384
 
 ''
-'' The 16 light levels of the face being built, rebuilt at the top of each
-'' sb_build from the two header bytes (base, range) that prefix the face's
-'' packed luxel nibbles: level(j) = base + (j*range + 7) \ 15. Per face
-'' because a global 16-level palette banded -- each face spans a narrow
-'' slice of the 0..255 range, and 16 linear steps across its own slice are
-'' visually exact. mkassets.py's encode_plane writes the matching encoder.
+'' The physical page uglMapEx puts the luxel atlas in. Slots 0 and 1 are
+'' where uglBuildSurf's own rdAccess/wrAccess land the texture and the
+'' destination surface, so the atlas takes 2 and survives the whole build.
+''
+const LM_SLOT    = 2
+''
+'' Atlas width, mirroring LM_ATLAS_W in tools/mkassets.py -- the two move
+'' together, the same rule the .bld lumps live by. A face's luxel rect is
+'' packed into a power-of-two slot aligned to its own size, so it never
+'' crosses one scanline and one uglMapEx reaches all of it.
+''
+'' 8192 is also uglbmp.asm's BMP_MAX_BPS, the widest scanline that loader
+'' accepts.
+''
+const LM_ATLAS_W = 8192
+
+''
+'' One luxel, for faces the compiler left unlit. DIM SHARED rather than a
+'' literal because the builder wants an address to read it from.
 ''
 '$static
-dim shared lm_ftab(15) as integer
+dim shared lm_flat(0) as integer
 
 ''
 '' The surface store: one big DC holding every cached surface's bytes,
@@ -996,6 +1009,21 @@ function sb_u& ( byval o as long )
 end function
 
 ''::::::::::
+'' name: sb_pot
+'' desc: v rounded up to a power of two. Luxel grids top out at 17, so the
+''       loop runs at most five times and only once per surface build.
+''::::::::::
+function sb_pot% ( byval v as integer )
+    dim p as integer
+
+    p = 1
+    while ( p < v )
+        p = p * 2
+    wend
+    sb_pot% = p
+end function
+
+''::::::::::
 '' name: sb_build
 '' desc: Composites one face's texture and lightmap into a cache DC.
 ''
@@ -1028,10 +1056,10 @@ sub sb_build ( byval dc as long, byval tex as long, _
                byval sw as integer, byval sh as integer )
     dim au as long, av as long, du as long, dv as long
     dim aw as integer, msk as integer
-    dim lmw as integer, lmh as integer, lofs as long
+    dim lmw as integer, lmh as integer
+    dim lmx as long, lmy as integer, lmp as long
     dim tms as integer, tmt as integer
-    dim o as long, iseg as integer, lmsg as integer, cmsg as integer
-    dim lbase as integer, lrng as integer, lj as integer
+    dim o as long, iseg as integer, cmsg as integer
     dim cmofs as long
     dim mi as integer, recip as single
     dim sbp as SBPARM
@@ -1042,7 +1070,6 @@ sub sb_build ( byval dc as long, byval tex as long, _
     mi = tex_inf_buff( tri_buffer(face).texinfoid ).miptex
 
     iseg = sb_seg%( lm_info )
-    lmsg = sb_seg%( lm_base )
     cmsg  = varseg( cm_buf(0) )
     ''
     '' VARPTR is signed, so an offset past 32767 comes back negative; mask
@@ -1053,7 +1080,8 @@ sub sb_build ( byval dc as long, byval tex as long, _
 
     def seg = iseg
     o = clng(face) * 16&
-    lofs = clng( sb_i%( o ) ) * 65536& + sb_u&( o + 2& )
+    lmy = sb_i%( o )                    '' atlas scanline, -1 if unlit
+    lmx = sb_u&( o + 2& )               '' byte offset within that scanline
     tms = sb_i%( o + 4& )
     tmt = sb_i%( o + 6& )
     lmw = sb_i%( o + 8& )
@@ -1061,31 +1089,28 @@ sub sb_build ( byval dc as long, byval tex as long, _
     def seg
 
     ''
-    '' A face's luxels are lm_base plus a flat 32-bit offset, so this cannot
-    '' stay lmsg:lofs -- lmdat.bin passes 64K on the bigger maps and PEEK's
-    '' offset is only 16 bits. Fold the whole sum into the segment, 16 bytes
-    '' at a time, and everything below addresses through the normalised
-    '' pointer. A segment past 8000h comes back as a negative half, which is
-    '' the bit pattern DEF SEG wants and the one the assembly loads into FS.
+    '' The luxels live in one EMS atlas dc. Map the face's scanline into
+    '' LM_SLOT and point at its rect inside the mapped window. The packer
+    '' keeps a face's whole rect within one scanline, so this single
+    '' mapping reaches all of it, and uglBuildSurf's own texture and
+    '' destination go to slots 0 and 1 without disturbing it.
     ''
-    lseg   = clng( lmsg ) and 65535&
-    lofs16 = (lm_base and 65535&) + lofs
-    lseg   = (lseg + (lofs16 \ 16&)) and 65535&
-    lofs16 = lofs16 and 15&
+    '' An unlit face has no rect at all. It used to compute a pointer from
+    '' the -1 sentinel and read whatever that landed on; point it at one
+    '' flat luxel instead, so its surface comes out evenly lit rather than
+    '' lit by whatever was in memory.
+    ''
+    if ( lmy < 0 ) then
+        lseg   = clng( varseg( lm_flat(0) ) ) and 65535&
+        lofs16 = clng( varptr( lm_flat(0) ) ) and 65535&
+        lmw    = 1
+        lmh    = 1
+    else
+        lmp    = uglMapEx&( lm_atlas, lmy, LM_SLOT )
+        lseg   = clng( sb_seg%( lmp ) ) and 65535&
+        lofs16 = (lmp and 65535&) + lmx
+    end if
     if ( lseg > 32767& ) then lseg = lseg - 65536&
-
-    ''
-    '' This face's 16 light levels, from the two header bytes ahead of its
-    '' luxel nibbles. See lm_ftab's declaration for why they are per face.
-    ''
-    def seg = cint( lseg )
-    lbase = cint( peek( lofs16 ) )
-    lrng  = cint( peek( lofs16 + 1& ) )
-    def seg
-    for lj = 0 to 15
-        lm_ftab(lj) = lbase + (lj * lrng + 7) \ 15
-    next lj
-    lofs16 = lofs16 + 2&                '' past the header, at the nibbles
 
     '' atlas texels per surface texel, 16.16. wdth is 1/origW already.
     recip = mip_buff_inf(mi).wdth
@@ -1096,9 +1121,13 @@ sub sb_build ( byval dc as long, byval tex as long, _
     au = clng(tms) * (du \ clng(2 ^ mip))
     av = clng(tmt) * (dv \ clng(2 ^ mip))
 
-    sbp.lmptr   = lseg * 65536& + lofs16
-    sbp.ftabptr = clng( varseg( lm_ftab(0) ) ) * 65536& + _
-                  (clng( varptr( lm_ftab(0) ) ) and 65535&)
+    sbp.lmptr = lseg * 65536& + lofs16
+    ''
+    '' Atlas bytes per luxel row. The slot is padded to a power of two in
+    '' each dimension for alignment, so the rows are pot(lmw) apart even
+    '' though only lmw of each is ours.
+    ''
+    sbp.lmstride = clng( sb_pot%( lmw ) )
     sbp.cmapptr = clng( cmsg ) * 65536& + cmofs
     sbp.au0 = au
     sbp.av0 = av

@@ -145,8 +145,10 @@ end type
 '' together, the same rule the .bld lumps live by.
 ''
 type SBPARM
-    lmptr       as long         '' -> this face's luxel nibbles
-    ftabptr     as long         '' -> the 16 light levels
+    lmptr       as long         '' -> this face's rect in the luxel atlas
+    lmstride    as long         '' atlas bytes per row. Long only so every
+                                '' field below keeps its offset; the high
+                                '' half is never read
     cmapptr     as long         '' -> colormap[64][256]
     au0         as long         '' initial u, 16.16
     av0         as long         '' initial v, 16.16
@@ -452,6 +454,7 @@ declare function sc_selftest% ( )
 declare function sb_seg% ( byval p as long )
 declare function sb_i% ( byval o as long )
 declare function sb_u& ( byval o as long )
+declare function sb_pot% ( byval v as integer )
 declare sub sb_build ( byval dc as long, byval tex as long, byval face as integer, byval mip as integer, byval sw as integer, byval sh as integer )
 declare sub mod_load_edges ( )
 declare sub mod_load_surfedges ( )

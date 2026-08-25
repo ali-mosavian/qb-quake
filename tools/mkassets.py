@@ -92,6 +92,9 @@ def resample(src, sw, sh, dw, dh, pal, cube, bits):
     return out
 
 def write_bmp8(path, w, h, pixels, pal):
+    open(path, 'wb').write(bmp8_bytes(w, h, pixels, pal))
+
+def bmp8_bytes(w, h, pixels, pal):
     """8-bit uncompressed BMP, bottom-up, rows padded to 4 bytes."""
     stride = (w + 3) & ~3
     pad    = stride - w
@@ -104,7 +107,7 @@ def write_bmp8(path, w, h, pixels, pal):
     off  = 14 + 40 + 1024
     hdr  = b'BM' + struct.pack('<IHHI', off + len(px), 0, 0, off)
     info = struct.pack('<IiiHHIIiiII', 40, w, h, 1, 8, 0, len(px), 2835, 2835, 256, 256)
-    open(path, 'wb').write(hdr + info + palb + px)
+    return hdr + info + palb + px
 
 def write_bload(path, payload):
     """BSAVE-format file: 0xFD, segment, offset, length, then the bytes.
@@ -121,6 +124,22 @@ def write_bload(path, payload):
 
 LM_CHUNK = 32000        # keep a chunk's byte offsets inside a signed 16-bit
                         # BASIC integer, and every chunk under BLOAD's 64K cap
+# The luxel atlas. 8192 divides an EMS page exactly -- two scanlines per
+# page, neither straddling one -- which mgl's EMS dcs do NOT guarantee for
+# an arbitrary width. It is also uglbmp.asm's BMP_MAX_BPS, the widest
+# scanline that loader will take.
+EMS_PGSIZE  = 16384
+LM_ATLAS_W  = 8192
+LM_BMP_MAXBPS = 8192        # uglbmp.asm's BMP_MAX_BPS
+assert LM_ATLAS_W <= LM_BMP_MAXBPS, "atlas scanline wider than uGL will load"
+
+def pot2(v):
+    """v rounded up to a power of two."""
+    p = 1
+    while p < v:
+        p <<= 1
+    return p
+
 LM_FACES_PER_CHUNK = 4000   # 16 bytes a record, so 64,000 -- also under the cap.
                             # e3m6 has 6,985 faces and would otherwise need a
                             # 111K table, which BLOAD cannot take.
@@ -174,85 +193,6 @@ def face_lightmap_geometry(d, lumps):
     return geo
 
 
-'''Lightmap 4-bit encoding, per style plane: 16 LINEAR levels between the
-plane's own min and max, DXT-style. A global 16-level palette banded --
-adjacent levels sat ~15 apart, and the renderer's bilinear reconstruction
-turned every smooth gradient into visible plateaus (and dithering traded
-the plateaus for luxel-scale ripple, since alternating levels 15 apart
-rides a +-7 wave that a 16-texel-per-luxel bilerp cannot hide). Per-plane
-ranges are narrow -- dm3ish median max-min is 34, so the median step is
-~2.3 and the reconstruction is visually exact. Encoder and decoder must
-agree on the level formula: level(j) = base + (j*rng + 7) \\ 15.'''
-
-PLANE_FIT_THRESHOLD = 120   # rng up to this, nearest-level rounding errs by
-                            # at most rng/30 = 4 light values -- one row of
-                            # the 64-row colormap, invisible by construction.
-                            # Above it, plateaus can straddle 2+ rows, so
-                            # switch to the reconstruction-fit assignment,
-                            # whose alternation noise is the lesser artifact
-
-
-def plane_levels(base, rng):
-    return [base + (j * rng + 7) // 15 for j in range(16)]
-
-
-def fit_plane(plane, w, h, levels, sweeps=6):
-    """Choose nibble indices minimizing the BILERP-RECONSTRUCTED error, not
-    the per-luxel error. The renderer reconstructs by bilinearly blending
-    the four surrounding luxels, so the reconstruction error is a quadratic
-    form in the per-luxel errors with positive cross-couplings (the bilinear
-    element mass matrix: within a cell, self 4, edge-adjacent 2, diagonal 1,
-    /36) -- meaning neighbours that err in OPPOSITE signs cancel through the
-    interpolation, PWM-style. Iterated conditional modes: sweep the plane,
-    each luxel picking the level that minimizes its quadratic contribution
-    given its neighbours' current errors, until no luxel changes."""
-    v = [float(b) for b in plane]
-    n = w * h
-    Mii = [0.0] * n
-    nbr = [dict() for _ in range(n)]
-    W = [[4, 2, 2, 1], [2, 4, 1, 2], [2, 1, 4, 2], [1, 2, 2, 4]]
-    for cy in range(h - 1):
-        for cx in range(w - 1):
-            c = [cy*w + cx, cy*w + cx + 1, (cy+1)*w + cx, (cy+1)*w + cx + 1]
-            for a in range(4):
-                Mii[c[a]] += W[a][a]
-                for b in range(4):
-                    if a != b:
-                        nbr[c[a]][c[b]] = nbr[c[a]].get(c[b], 0.0) + W[a][b]
-    q = [min(range(16), key=lambda j: abs(levels[j] - x)) for x in v]
-    e = [levels[qi] - vi for qi, vi in zip(q, v)]
-    for s in range(sweeps):
-        changed = 0
-        order = range(n) if (s & 1) == 0 else range(n - 1, -1, -1)
-        for i in order:
-            S = sum(wgt * e[j] for j, wgt in nbr[i].items())
-            best_j, best_c = q[i], None
-            for j in range(16):
-                ei = levels[j] - v[i]
-                cost = Mii[i] * ei * ei + 2.0 * ei * S
-                if best_c is None or cost < best_c:
-                    best_c, best_j = cost, j
-            if best_j != q[i]:
-                q[i] = best_j
-                e[i] = levels[best_j] - v[i]
-                changed += 1
-        if changed == 0:
-            break
-    return q
-
-
-def encode_plane(plane, w, h):
-    """One style plane -> (base, rng, nibble indices)."""
-    base, mx = min(plane), max(plane)
-    rng = mx - base
-    levels = plane_levels(base, rng)
-    if rng > PLANE_FIT_THRESHOLD:
-        q = fit_plane(plane, w, h, levels)
-    else:
-        q = [min(range(16), key=lambda j: abs(levels[j] - b)) for b in plane]
-    return base, rng, q
-
-
 def convert_lightmaps(d, lumps, out):
     """Repack the LIGHTING lump face-by-face, plus a per-face index.
 
@@ -274,9 +214,9 @@ def convert_lightmaps(d, lumps, out):
     faces = d[lumps[7][0]:lumps[7][0]+lumps[7][1]]
     geo = face_lightmap_geometry(d, lumps)
 
-    blob = bytearray()
-    table = bytearray()
-    lit = unlit = 0
+    # Every lit face's style-0 plane, in face order. Only style 0 is kept:
+    # the builder has never read the others, and they were pure weight.
+    runs = []
     for k in range(0, len(faces), 20):
         styles = faces[k+12:k+16]
         lightofs = struct.unpack_from('<i', faces, k+16)[0]
@@ -284,56 +224,80 @@ def convert_lightmaps(d, lumps, out):
         lm_w = (ext[0] >> 4) + 1
         lm_h = (ext[1] >> 4) + 1
         nstyles = sum(1 for b in styles if b != 255)
-
         if lightofs < 0 or nstyles == 0:
-            unlit += 1
-            table += struct.pack('<hH4h2H', -1, 0, tmin[0], tmin[1], lm_w, lm_h,
-                                 styles[0] | (styles[1] << 8),
-                                 styles[2] | (styles[3] << 8))
             continue
-
-        plane_sz = lm_w * lm_h
-        size = plane_sz * nstyles
-        blk = lighting[lightofs:lightofs+size]
-        if len(blk) != size:
+        size = lm_w * lm_h
+        if lightofs + size > len(lighting):
             raise SystemExit(f"face {k//20}: lightofs {lightofs}+{size} "
                              f"runs past the {len(lighting)}-byte LIGHTING lump")
+        if pot2(lm_w) * pot2(lm_h) > LM_ATLAS_W:
+            raise SystemExit(f"face {k//20}: {lm_w}x{lm_h} luxels round up to "
+                             f"a slot past one {LM_ATLAS_W}-byte scanline")
+        runs.append((k // 20, size, lightofs, lm_w, lm_h))
 
-        ofs = len(blob)
-        # each style plane: [base][rng] then its nibbles packed two per byte,
-        # low nibble first, padded to a whole byte -- so every plane starts
-        # byte-aligned and sb_build reaches plane s at a computable offset.
-        # Planes are quantized independently: each gets its own base/rng.
-        for s in range(nstyles):
-            base, rng, q = encode_plane(blk[s*plane_sz:(s+1)*plane_sz], lm_w, lm_h)
-            if len(q) % 2:
-                q.append(0)            # pad nibble; unused, never read
-            packed = bytearray(len(q) // 2)
-            for i in range(0, len(q), 2):
-                packed[i // 2] = q[i] | (q[i+1] << 4)
-            blob += bytes([base, rng]) + packed
-        lit += 1
-        # flat 32-bit byte offset, split low/high across the first two fields;
-        # mod_load_lightmaps turns it into a far pointer once the blob has an
-        # address. 0..65535 low, 0..n high -- 4 GB of headroom we will not use.
-        table += struct.pack('<hH4h2H', ofs >> 16, ofs & 0xFFFF, tmin[0], tmin[1],
-                             lm_w, lm_h,
+    # Each face gets a slot of pot(lm_w) x pot(lm_h) bytes. Two reasons.
+    #
+    # Alignment: a run whose size is 2^k, placed at an offset that is a
+    # multiple of 2^k, cannot cross an 8192-byte scanline -- 8192 being a
+    # power of two itself. Allocating slots in DESCENDING size order from
+    # offset 0 keeps every one of them naturally aligned, so the invariant
+    # costs no padding at all beyond the power-of-two rounding.
+    #
+    # And the rows stay addressable with a single stride, so the builder
+    # walks the rect with an add rather than a multiply per row.
+    #
+    # Only the slot is padded, not the grid: the builder is still told the
+    # face's REAL lm_w/lm_h and reads lm_w bytes from each of lm_h rows, so
+    # the pad bytes are never read and sf$lgrid stays its old size. Padding
+    # the grid itself would have grown that DGROUP buffer four-fold.
+    slots = sorted(runs, key=lambda r: -(pot2(r[3]) * pot2(r[4])))
+    atlas = bytearray()
+    placed = {}
+    for (fid, size, lightofs, lm_w, lm_h) in slots:
+        pw, ph = pot2(lm_w), pot2(lm_h)
+        base = len(atlas)
+        assert base % (pw * ph) == 0, "slot allocation lost its alignment"
+        atlas += bytes(pw * ph)
+        for row in range(lm_h):
+            src = lightofs + row * lm_w
+            atlas[base + row*pw : base + row*pw + lm_w] = \
+                lighting[src:src+lm_w]
+        placed[fid] = (base % LM_ATLAS_W, base // LM_ATLAS_W, pw)
+
+    if len(atlas) % LM_ATLAS_W:
+        atlas += bytes(LM_ATLAS_W - (len(atlas) % LM_ATLAS_W))
+    atlas_h = max(1, len(atlas) // LM_ATLAS_W)
+
+    table = bytearray()
+    lit = unlit = 0
+    for k in range(0, len(faces), 20):
+        styles = faces[k+12:k+16]
+        (tmin, ext) = geo[k // 20]
+        lm_w = (ext[0] >> 4) + 1
+        lm_h = (ext[1] >> 4) + 1
+        fid = k // 20
+        if fid not in placed:
+            unlit += 1
+            ax, ay = 0, -1
+        else:
+            lit += 1
+            ax, ay, _pw = placed[fid]
+        # Same 16-byte record as before, but the two offset fields now carry
+        # the face's place in the atlas: the scanline, then x within it. The
+        # scanline takes the signed field so -1 still means "unlit", which is
+        # the sign test sb_build already makes.
+        table += struct.pack('<hH4h2H', ay, ax, tmin[0], tmin[1], lm_w, lm_h,
                              styles[0] | (styles[1] << 8),
                              styles[2] | (styles[3] << 8))
 
-    # raw, not BLOAD: it goes into a memAlloc'd block via mgl's fileRead, so
-    # neither BLOAD's 64K cap nor BASIC's far heap is involved.
-    out['lmdat.bin'] = bytes(blob)
-    # face id -> (i \\ LM_FACES_PER_CHUNK, i MOD LM_FACES_PER_CHUNK), so the
-    # loader needs no side table to find a record.
-    step = LM_FACES_PER_CHUNK * 16
-    tparts = [table[k:k+step] for k in range(0, max(len(table), 1), step)]
-    # Split by who reads it, not by what it describes. BASIC needs only
-    # texturemins, to shift a face's texture coordinates into its surface's
-    # own space before drawing -- 4 bytes a face, and that is all that goes
-    # in the far heap BLOAD allocates from. The rest (where the luxels are,
-    # how big, which styles) is read once per cache miss by the builder, in
-    # assembly, so it lives in the same memAlloc'd memory as the luxels.
+    # An 8-bit BMP, loaded by uglNewBMPEx straight into one EMS dc -- the
+    # same path the textures take. BMPOPT.NO332 keeps the bytes verbatim, so
+    # the palette below is never consulted; it is an identity ramp purely so
+    # the file is a valid BMP.
+    out['lm.bmp'] = bmp8_bytes(LM_ATLAS_W, atlas_h, bytes(atlas),
+                               [(i, i, i) for i in range(256)])
+    blob = atlas
+
     tmin = bytearray()
     for k in range(0, len(table), 16):
         tmin += table[k+4:k+8]
@@ -464,9 +428,10 @@ def convert_lumps(d, lumps, outdir):
     total = 0
     for name, payload in out.items():
         path = os.path.join(outdir, name)
-        if name.endswith('.bin'):
-            # raw: read by mgl's fileRead into a memAlloc'd block, so it is
-            # bound by neither BLOAD's 64K cap nor BASIC's far heap
+        if name.endswith('.bin') or name.endswith('.bmp'):
+            # raw: .bin is read by mgl's fileRead into a memAlloc'd block and
+            # .bmp by uglNewBMPEx, so neither is bound by BLOAD's 64K cap or
+            # BASIC's far heap
             open(path, 'wb').write(payload)
             total += len(payload)
         else:
