@@ -10,6 +10,7 @@
 #   TOOLCHAINS   compiler collection (default ~/work/other/d32x/toolchains)
 #   DOSBOX_BIN   dosbox-x binary     (default: first found on PATH)
 #   TIMEOUT      seconds             (default 300 build / 900 run)
+#   QFLAGS       extra qrender args  (e.g. -lm, -ticks 120)
 #
 # Artifacts land in build/<target>/ on the host side.
 
@@ -19,6 +20,8 @@ MGL="${MGL:-$HOME/work/badlogic/mgl}"
 TOOLCHAINS="${TOOLCHAINS:-$HOME/work/other/d32x/toolchains}"
 
 cmd="${1:-build}"; arg="${2:-}"
+# extra qrender arguments for the run/viz recipes, e.g. QFLAGS=-lm
+QFLAGS="${QFLAGS:-}"
 
 for d in "$MGL/inc" "$MGL/lib"; do
     [[ -d "$d" ]] || { echo "not found: $d  (set MGL)" >&2; exit 1; }
@@ -135,7 +138,7 @@ run)
     printf '%s\r\n' \
       '@echo off' \
       'if exist ran.txt del ran.txt' \
-      "qrender.exe $map > run.out" \
+      "qrender.exe $map $QFLAGS > run.out" \
       'echo DONE > ran.txt' > "$out/run.bat"
 
     conf="$out/dosbox-run.conf"
@@ -160,21 +163,24 @@ viz)
     [[ -f "$out/qrender.exe" ]] || { echo "no exe; run: tools/dosbox.sh build" >&2; exit 1; }
     cp "$ROOT/data/$map" "$out/"
     conf="$out/dosbox-viz.conf"
+    ## Every -e must precede the file operand: BSD sed (macOS) does not
+    ## permute options after it, so the trailing -e's were being opened as
+    ## filenames and none of the viz-specific edits applied.
     sed -e "s|@CDRIVE@|$out|" -e "s|@VDRIVE@|$out|" -e "s|@MDRIVE@|$out|" \
-        -e "s|@BAT@|qrender.exe $map|" -e "s|@PRE@||" "$ROOT/dosbox/template.conf" \
-            -e 's/^cycles=max$/cycles=150000/' \
-            -e 's/^output=surface$/output=opengl/' \
-            -e '/^\[sdl\]/a\
+        -e "s|@BAT@|qrender.exe $map $QFLAGS|" -e "s|@PRE@||" \
+        -e 's/^cycles=max$/cycles=150000/' \
+        -e 's/^output=surface$/output=opengl/' \
+        -e '/^\[sdl\]/a\
 fullscreen=false\
 autolock=true' \
-            -e '/^\[dosbox\]/i\
+        -e '/^\[dosbox\]/i\
 [render]\
 scaler=normal3x\
 aspect=true\
 \
 [debugger]\
 debuggerrun=normal\
-' > "$conf"
+' "$ROOT/dosbox/template.conf" > "$conf"
     echo "$conf"
     ;;
 *) sed -n '2,16p' "$0"; exit 1 ;;
