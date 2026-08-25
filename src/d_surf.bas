@@ -985,11 +985,23 @@ end function
 ''       the value is often negative -- the bits are what matter.
 ''::::::::::
 function sb_seg% ( byval p as long )
-    dim v as long
+    dim lo as long, hi as long
 
-    v = (p \ 65536&) and 65535&
-    if ( v > 32767 ) then v = v - 65536&
-    sb_seg% = cint( v )
+    ''
+    '' Take the low half off BEFORE dividing. BASIC's \ truncates toward
+    '' zero, so on a NEGATIVE pointer -- any segment at or past 8000h,
+    '' which the EMS page frame at E000h always is -- p \ 65536 rounds the
+    '' wrong way and the segment comes back one paragraph too high.
+    ''
+    '' It only bites when the offset is non-zero. memAlloc pointers are
+    '' paragraph-aligned so they never were, which is why this stood for
+    '' as long as it did; uglMapEx hands back offset 8192 for every odd
+    '' scanline of an 8192-wide dc, and those faces were reading their
+    '' luxels 16 bytes late.
+    ''
+    lo = p and 65535&
+    hi = (p - lo) / 65536&
+    sb_seg% = cint( hi )
 end function
 
 ''::::::::::
@@ -1101,16 +1113,15 @@ sub sb_build ( byval dc as long, byval tex as long, _
     '' lit by whatever was in memory.
     ''
     if ( lmy < 0 ) then
-        lseg   = clng( varseg( lm_flat(0) ) ) and 65535&
+        lseg   = clng( varseg( lm_flat(0) ) )
         lofs16 = clng( varptr( lm_flat(0) ) ) and 65535&
         lmw    = 1
         lmh    = 1
     else
         lmp    = uglMapEx&( lm_atlas, lmy, LM_SLOT )
-        lseg   = clng( sb_seg%( lmp ) ) and 65535&
+        lseg   = clng( sb_seg%( lmp ) )
         lofs16 = (lmp and 65535&) + lmx
     end if
-    if ( lseg > 32767& ) then lseg = lseg - 65536&
 
     '' atlas texels per surface texel, 16.16. wdth is 1/origW already.
     recip = mip_buff_inf(mi).wdth
