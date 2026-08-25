@@ -1063,6 +1063,83 @@ end function
 ''         identity -- it brightens -- so shading a texel that already went
 ''         through it collapses the lighting range to almost nothing.
 ''::::::::::
+'' name: sb_dump
+'' desc: Builds one face's surface and writes it to surfdump.bin, then the
+''       caller quits. tools/surfcheck.py diffs that against sbref.py.
+''
+''       This exists because every other check sits BELOW the seam that
+''       actually broke. sc_selftest checks the cache's bookkeeping; mgl's
+''       surftst checks uglBuildSurf against a BASIC reference but hands it
+''       a pointer of its own making; and the asset round-trip check reads
+''       the atlas in Python, running no target code at all. None of them
+''       touch sb_build turning a uglMapEx result into a far pointer --
+''       which is where a truncating divide put 56% of faces 16 bytes off
+''       their luxels, on real assets, with all three of those green.
+''
+''       So it drives the real sb_build on the real map, and the sizing
+''       below is d_poly's, not a paraphrase: extents from the luxel grid,
+''       floor-divided by the mip, padded up to the size class.
+''::::::::::
+sub sb_dump ( byval face as integer, byval mip as integer )
+    dim o as long
+    dim lmw as integer, lmh as integer
+    dim ew as integer, eh as integer
+    dim sw as integer, sh as integer
+    dim pw as integer, ph as integer
+    dim mi as integer, dc as long
+    dim x as integer, y as integer
+    dim fh as integer
+    dim row as string
+
+    if ( face < 0 or face > wld.tri_count - 1 ) then
+        print "dumpsurf: face"; face; "out of range 0.."; wld.tri_count - 1
+        exit sub
+    end if
+
+    def seg = sb_seg%( lm_info )
+    o   = clng(face) * 16&
+    lmw = sb_i%( o + 8& )
+    lmh = sb_i%( o + 10& )
+    def seg
+
+    '' d_poly's sizing, and sbref.py's: the padded extent is what the
+    '' builder fills, not the face's own sw by sh
+    ew = (lmw - 1) * 16
+    eh = (lmh - 1) * 16
+    sw = ew \ (2 ^ mip)
+    sh = eh \ (2 ^ mip)
+    if ( sw < 1 ) then sw = 1
+    if ( sh < 1 ) then sh = 1
+    pw = 2 ^ sc_shift%( sw )
+    ph = 2 ^ sc_shift%( sh )
+
+    mi = tex_inf_buff( tri_buffer(face).texinfoid ).miptex
+
+    dc = sc_alloc&( face, mip, sw, sh, pw, ph )
+    if ( dc = 0 ) then
+        print "dumpsurf: sc_alloc failed for face"; face; "mip"; mip
+        exit sub
+    end if
+
+    sb_build dc, h_rawtx_dc( mi*4 + mip ), face, mip, pw, ph
+
+    fh = freefile
+    open "surfdump.bin" for binary as #fh
+    put #fh, , pw
+    put #fh, , ph
+    for y = 0 to ph - 1
+        row = space$( pw )
+        for x = 0 to pw - 1
+            mid$( row, x + 1, 1 ) = chr$( uglPGet&( dc, x, y ) and 255& )
+        next x
+        put #fh, , row
+    next y
+    close #fh
+
+    print "dumpsurf: face"; face; "mip"; mip; "->"; pw; "x"; ph
+end sub
+
+''::::::::::
 sub sb_build ( byval dc as long, byval tex as long, _
                byval face as integer, byval mip as integer, _
                byval sw as integer, byval sh as integer )

@@ -142,7 +142,11 @@ dim shared lightmap as long
     '':::::
     
     host_init 
-    host_main   
+    if ( env.dump_set ) then
+        sb_dump env.dump_face, env.dump_mip
+    else
+        host_main
+    end if
     host_shutdown
     
     

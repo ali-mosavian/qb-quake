@@ -359,6 +359,14 @@ type EnvType
                                 '' still opt-in only because the mip-floor
                                 '' streaks trim edges -- see the surface
                                 '' cache knowledge note.
+    dump_set    as integer      '' -dumpsurf given at all. Face 0 is a real
+                                '' face, so dump_face alone cannot say.
+    dump_face   as integer      '' -dumpsurf F M: build face F at mip M, write
+    dump_mip    as integer      '' the composited surface to surfdump.bin and
+                                '' quit. tools/surfcheck.py diffs that against
+                                '' sbref.py -- the only check that covers
+                                '' sb_build's own pointer arithmetic, which
+                                '' every other test sits below.
     bench_secs  as integer      '' -benchsecs N: stop after N real seconds
                                 '' (scr.bench_secs, ticked by scr_count_frame),
                                 '' rather than a fixed frame/tick count -- a
@@ -455,6 +463,7 @@ declare function sb_seg% ( byval p as long )
 declare function sb_i% ( byval o as long )
 declare function sb_u& ( byval o as long )
 declare function sb_pot% ( byval v as integer )
+declare sub sb_dump ( byval face as integer, byval mip as integer )
 declare sub sb_build ( byval dc as long, byval tex as long, byval face as integer, byval mip as integer, byval sw as integer, byval sh as integer )
 declare sub mod_load_edges ( )
 declare sub mod_load_surfedges ( )

@@ -118,6 +118,12 @@ sub sys_parse_args
         if ( lcase$(argv(i)) = "-benchsecs" and i+1 <= argc-1 ) then
             env.bench_secs = val( argv(i+1) )
         end if
+        if ( lcase$(argv(i)) = "-dumpsurf" and i+2 <= argc-1 ) then
+            env.dump_set  = true
+            env.dump_face = val( argv(i+1) )
+            env.dump_mip  = val( argv(i+2) )
+            env.use_lm    = true        '' the surface cache is the point
+        end if
     next i
 
     if ( (dir$( rtrim$(env.map_name) ) = "") ) then
