@@ -132,11 +132,34 @@ def build(face, mip):
             l00, l10 = luxel(lx, ly),   luxel(lx+1, ly)
             l01, l11 = luxel(lx, ly+1), luxel(lx+1, ly+1)
 
-            lt = (l00*(65536-tx) + l10*tx) >> 16
-            lb = (l01*(65536-tx) + l11*tx) >> 16
-            light = (lt*(65536-ty) + lb*ty) >> 16
+            # Quake's shape, and the builder's: light -> t is affine, so
+            # convert at the four CORNERS and interpolate t, NOT the light
+            # level. The two are equal in exact arithmetic but not in these
+            # integers -- the intermediate truncations fall differently, and
+            # the floor at 64 applies per corner rather than once at the end.
+            # Interpolating light here disagreed with the target by one
+            # colormap row on ~3% of texels.
+            #
+            # Down the row first, then across the span: the builder's order,
+            # and uglsurf.asm's sf$tacc/sf$tstep accumulate exactly this way.
+            t00 = max(16320 - l00*66, 64)
+            t10 = max(16320 - l10*66, 64)
+            t01 = max(16320 - l01*66, 64)
+            t11 = max(16320 - l11*66, 64)
 
-            t = (65280 - light*264) // 4
+            # >> on a negative int floors in Python, which is exactly what
+            # the builder's Flr& does and what the asm's arithmetic shift
+            # does. A truncating divide here would round the wrong way.
+            tleft  = t00 + (((t01 - t00) * ty) >> 16)
+            tright = t10 + (((t11 - t10) * ty) >> 16)
+
+            kk = x - lx*stp
+            if kk >= stp:
+                # the tail: tx caps at 65536, landing exactly on tright
+                t = tright
+            else:
+                tstep = (tright - tleft) * (65536 // stp)
+                t = (tleft*65536 + kk*tstep) >> 16
             if t < 64: t = 64
             row = min(t // 256, 63)
 
