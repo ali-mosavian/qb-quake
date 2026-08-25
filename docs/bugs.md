@@ -37,6 +37,19 @@ screen on a second attempt. Both were user-observed, live.
 - **Not the mgl trim (B15/B16/B32 stub, 2DFX drop).** The first "exit
   code 1" interactive failure (glass-panels launch) predates that work.
 
+**Reproduced on dm3ish, and on a build that predates the atlas work**
+
+While A/B-benchmarking the lightmap change (2026-08-25), one headless
+`-lm -ticks 300` run of the PRE-atlas build on dm3ish hung and was killed
+at 900s. Five other runs in the same interleaved batch -- three of the new
+build, two of the old -- completed in ~5s each.
+
+This matters for three reasons. The hang is not e1m7-specific. It is not
+caused by the lightmap or EMS-slot work, since the build that hung predates
+both. And it contradicts the note below that `-ticks` runs complete
+cleanly: they usually do, but not always, so a single clean `-ticks` run is
+not evidence of anything. Roughly 1 in 6 here.
+
 **Still open / not yet tried**
 
 - A real reproduction with a *valid* check: `tools/dosbox.sh run`'s own
