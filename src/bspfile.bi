@@ -513,6 +513,7 @@ declare sub hud_panel ( dc as long, x as integer, y as integer, w as integer, h 
 declare sub hud_row ( dc as long, x as integer, w as integer, y as integer, label as string, value as string )
 declare sub hud_bar ( dc as long, x as integer, y as integer, w as integer, h as integer, percent as single )
 declare sub scr_hud_colors ( )
+declare sub hud_shade ( dc as long, x0 as integer, y0 as integer, x1 as integer, y1 as integer, rw as integer )
 declare sub hud_num ( dc as long, x as integer, y as integer, sc as integer, txt as string, col as integer )
 declare sub hud_vu ( dc as long, x as integer, y as integer, w as integer, h as integer, percent as single, ch as integer )
 declare sub hud_graph ( dc as long, x as integer, y as integer, h as integer, buf() as integer, mx as integer )

@@ -813,15 +813,42 @@ sub scr_hud_colors
 end sub
 
 
+''::::::::::
+'' name: hud_shade
+'' desc: Tinted glass: darkens the scene under a rect by pushing every
+''       pixel through a dark row of Quake's own colormap -- uglShadeRect
+''       does the walk. Falls back to the opaque slab when no colormap is
+''       loaded, so the overlay never depends on -lm's data being there.
+''::::::::::
+sub hud_shade ( dc as long, x0 as integer, y0 as integer, _
+                x1 as integer, y1 as integer, rw as integer )
+    dim sg as long, ofs as long
+
+    if ( cm_size < 16384 ) then
+        uglRectF dc, x0, y0, x1, y1, hc_slab
+        exit sub
+    end if
+    ''
+    '' Normalise the colormap pointer the way sb_build does: fold the
+    '' offset into the segment so row*256 + offset stays inside 16 bits.
+    ''
+    sg  = clng( varseg( cm_buf(0) ) ) and 65535&
+    ofs = clng( varptr( cm_buf(0) ) ) and 65535&
+    sg  = (sg + (ofs \ 16&)) and 65535&
+    ofs = ofs and 15&
+    if ( sg > 32767& ) then sg = sg - 65536&
+    uglShadeRect dc, x0, y0, x1, y1, sg * 65536& + ofs, rw
+end sub
+
+
 sub hud_panel ( dc as long, x as integer, y as integer, _
                 w as integer, h as integer, title as string )
     ''
-    '' A slab, not a box: filled with the panel brown and bevelled the way
-    '' the loading screen's plates are -- lit top and left, shadowed bottom
-    '' and right -- with a rivet in each corner. Same construction, so the
-    '' overlay reads as part of the same game.
+    '' Tinted glass, then the slab's furniture: the scene stays visible
+    '' under the panel, darkened three-quarters of the way down Quake's
+    '' colormap, with the bevel and rivets on top saying where it ends.
     ''
-    uglRectF dc, x, y, x+w, y+h, hc_slab
+    hud_shade dc, x, y, x+w, y+h, 46
     uglHLine dc, x, y, x+w, hc_slabhi
     uglVLine dc, x, y, y+h, hc_slabhi
     uglHLine dc, x, y+h, x+w, hc_slablo
