@@ -79,6 +79,10 @@ sub vid_init
     uglPalSet 0, 256, pal
     memFree pal
 
+    '' the overlay best-fits its colours against the palette that is now
+    '' live -- it has to run after the set, and exactly once
+    scr_hud_colors
+
 end sub
 
 

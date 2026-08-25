@@ -101,11 +101,29 @@ const SPIN_R    = 20
 '' videoOpen installs it. Its first sixteen entries are a grey ramp, black
 '' through white, which is all the furniture needs.
 ''
-const HUD_BG    = 0
-const HUD_EDGE  = 5
-const HUD_METER = 11
-const HUD_HIST = 8
-const HUD_PEAK  = 14             '' the tallest column, so a spike reads
+''
+'' The overlay's colours are LOOKED UP, not hardcoded: scr_hud_colors runs
+'' once after videoOpen installs Quake's palette and best-fits each of
+'' these against it. That is what lets the HUD share the game's material
+'' language -- brown slabs, ember accents, fire-ramp warnings -- without
+'' assuming anything about where Quake's ramps sit.
+''
+dim shared hc_bg as integer      '' near-black brown
+dim shared hc_slab as integer    '' the panel slab
+dim shared hc_slabhi as integer  '' its bevel, lit side
+dim shared hc_slablo as integer  '' its bevel, shadow side
+dim shared hc_hist as integer    '' graph columns
+dim shared hc_peak as integer    '' the tallest column, so a spike reads
+dim shared hc_meter as integer   '' bar fills
+dim shared hc_good as integer    '' fps thresholds
+dim shared hc_warn as integer
+dim shared hc_bad as integer
+
+'' peak-hold ticks on the VU meters, and the cache panel's warning flash
+dim shared vu_pk(1) as integer
+dim shared hud_flash as integer
+dim shared hud_pevict as long
+dim shared hud_pflush as long
 
 '' How many frames of history the overlay graphs keep. One pixel column
 '' each, so this is also their width.
@@ -763,13 +781,127 @@ end sub
 ''       ragged "label: value  label: value" this replaced -- the eye can
 ''       compare digits that line up.
 ''::::::::::
+''::::::::::
+'' name: scr_hud_colors
+'' desc: Best-fits the overlay's colours against whatever palette videoOpen
+''       just installed. Called once, after the Quake palette is live.
+''::::::::::
+sub scr_hud_colors
+    redim hpal(255) as tRGB
+
+    uglPalGetBuff 0, 256, hpal(0)
+    hc_bg     = uglPalBestFitBuff( hpal(0),  12,  10,   8 )
+    hc_slab   = uglPalBestFitBuff( hpal(0),  52,  40,  28 )
+    hc_slabhi = uglPalBestFitBuff( hpal(0), 104,  84,  60 )
+    hc_slablo = uglPalBestFitBuff( hpal(0),  18,  14,  10 )
+    hc_hist   = uglPalBestFitBuff( hpal(0), 150, 104,  56 )
+    hc_peak   = uglPalBestFitBuff( hpal(0), 252, 216, 128 )
+    hc_meter  = uglPalBestFitBuff( hpal(0), 200, 128,  56 )
+    '' gold, not green: Quake has no bright green -- a green target
+    '' best-fits onto a BLUE ramp entry -- and its own status bar numbers
+    '' are gold anyway, so this is the more Quake convention regardless
+    hc_good   = uglPalBestFitBuff( hpal(0), 244, 196,  92 )
+    hc_warn   = uglPalBestFitBuff( hpal(0), 224, 164,  48 )
+    hc_bad    = uglPalBestFitBuff( hpal(0), 216,  52,  36 )
+    erase hpal
+
+    vu_pk(0) = 0
+    vu_pk(1) = 0
+    hud_flash = 0
+    hud_pevict = 0
+    hud_pflush = 0
+end sub
+
+
 sub hud_panel ( dc as long, x as integer, y as integer, _
                 w as integer, h as integer, title as string )
-    uglRectF dc, x, y, x+w, y+h, HUD_BG
-    uglRect  dc, x, y, x+w, y+h, HUD_EDGE
+    ''
+    '' A slab, not a box: filled with the panel brown and bevelled the way
+    '' the loading screen's plates are -- lit top and left, shadowed bottom
+    '' and right -- with a rivet in each corner. Same construction, so the
+    '' overlay reads as part of the same game.
+    ''
+    uglRectF dc, x, y, x+w, y+h, hc_slab
+    uglHLine dc, x, y, x+w, hc_slabhi
+    uglVLine dc, x, y, y+h, hc_slabhi
+    uglHLine dc, x, y+h, x+w, hc_slablo
+    uglVLine dc, x+w, y, y+h, hc_slablo
+
+    uglPset dc, x+2,   y+2,   hc_slabhi
+    uglPset dc, x+3,   y+3,   hc_slablo
+    uglPset dc, x+w-3, y+2,   hc_slabhi
+    uglPset dc, x+w-2, y+3,   hc_slablo
+    uglPset dc, x+2,   y+h-3, hc_slabhi
+    uglPset dc, x+3,   y+h-2, hc_slablo
+    uglPset dc, x+w-3, y+h-3, hc_slabhi
+    uglPset dc, x+w-2, y+h-2, hc_slablo
+
     '' the title sits in the top rule, so blank the run it occupies
-    uglHLine dc, x+5, y, x+8 + len( title )*4, HUD_BG
+    uglHLine dc, x+5, y, x+8 + len( title )*4, hc_slab
     draw_string dc, x+7, y-3, title
+end sub
+
+
+''::::::::::
+'' name: hud_num
+'' desc: A number painted in a CHOSEN colour, which the baked one-colour
+''       font cannot do: the glyph mask is read back out of the font DC
+''       (set pixels carry LP_TEXT) and re-plotted block by block, with a
+''       one-pixel shadow so it sits on the slab instead of floating.
+''::::::::::
+sub hud_num ( dc as long, x as integer, y as integer, sc as integer, _
+              txt as string, col as integer )
+    dim i as integer, ch as integer, gx as integer, gy as integer
+    dim px as integer, bx as integer, by as integer, pass as integer
+
+    for pass = 0 to 1
+        px = x
+        for i = 1 to len( txt )
+            ch = asc( mid$( txt, i, 1 ) )
+            for gy = 0 to 7
+                for gx = 0 to 7
+                    if ( uglPGet( h_font_char(ch), gx, gy ) = LP_TEXT ) then
+                        bx = px + gx*sc
+                        by = y + gy*sc
+                        if ( pass = 0 ) then
+                            uglRectF dc, bx+1, by+1, bx+sc, by+sc, hc_slablo
+                        else
+                            uglRectF dc, bx, by, bx+sc-1, by+sc-1, col
+                        end if
+                    end if
+                next gx
+            next gy
+            px = px + 4*sc + 1
+        next i
+    next pass
+end sub
+
+
+''::::::::::
+'' name: hud_vu
+'' desc: A VU meter with a peak-hold tick: the tick jumps to any new peak
+''       and falls back slowly, which is what makes a meter read as an
+''       instrument rather than a flickering bar. ch picks which channel's
+''       peak this meter remembers.
+''::::::::::
+sub hud_vu ( dc as long, x as integer, y as integer, w as integer, _
+             h as integer, percent as single, ch as integer )
+    dim f as integer
+
+    if ( percent < 0 ) then percent = 0
+    if ( percent > 100 ) then percent = 100
+    f = (w * percent) / 100.0
+
+    if ( f > vu_pk(ch) ) then
+        vu_pk(ch) = f
+    elseif ( vu_pk(ch) > 0 ) then
+        vu_pk(ch) = vu_pk(ch) - 1
+    end if
+
+    uglRectF dc, x, y, x+w, y+h, hc_bg
+    uglRect  dc, x, y, x+w, y+h, hc_slablo
+    if ( f > 1 ) then uglRectF dc, x+1, y+1, x+f-1, y+h-1, hc_meter
+    if ( vu_pk(ch) > 1 ) then uglVLine dc, x+vu_pk(ch), y+1, y+h-1, hc_peak
 end sub
 
 sub hud_row ( dc as long, x as integer, w as integer, y as integer, _
@@ -791,16 +923,16 @@ sub hud_graph ( dc as long, x as integer, y as integer, h as integer, _
 
     if ( mx < 1 ) then mx = 1
 
-    uglRectF dc, x, y, x+GRAPH_N, y+h, HUD_BG
+    uglRectF dc, x, y, x+GRAPH_N, y+h, hc_bg
 
     ''
     '' Reference lines at half and full scale, dashed. Without them a flat
-    '' trace is an anonymous grey block and an idle one is an empty box --
-    '' both read as broken rather than as steady and quiet respectively.
+    '' trace is an anonymous block and an idle one is an empty box -- both
+    '' read as broken rather than as steady and quiet respectively.
     ''
     for i = 0 to GRAPH_N-1 step 3
-        uglPset dc, x+i, y+1, HUD_EDGE
-        uglPset dc, x+i, y+h\2, HUD_EDGE
+        uglPset dc, x+i, y+1, hc_slablo
+        uglPset dc, x+i, y+h\2, hc_slablo
     next i
 
     for i = 0 to GRAPH_N-1
@@ -809,11 +941,11 @@ sub hud_graph ( dc as long, x as integer, y as integer, h as integer, _
         if ( v > 0 ) then
             top = (v * h) \ mx
             if ( top > h ) then top = h
-            if ( v >= mx ) then c = HUD_PEAK else c = HUD_HIST
+            if ( v >= mx ) then c = hc_peak else c = hc_hist
             uglVLine dc, x+i, y+h-top, y+h, c
         end if
     next i
-    uglRect dc, x, y, x+GRAPH_N, y+h, HUD_EDGE
+    uglRect dc, x, y, x+GRAPH_N, y+h, hc_slablo
 end sub
 
 
@@ -825,9 +957,9 @@ sub hud_bar ( dc as long, x as integer, y as integer, w as integer, _
     if ( percent > 100 ) then percent = 100
     f = (w * percent) / 100.0
 
-    uglRectF dc, x, y, x+w, y+h, HUD_BG
-    uglRect  dc, x, y, x+w, y+h, HUD_EDGE
-    if ( f > 1 ) then uglRectF dc, x+1, y+1, x+f-1, y+h-1, HUD_METER
+    uglRectF dc, x, y, x+w, y+h, hc_bg
+    uglRect  dc, x, y, x+w, y+h, hc_slablo
+    if ( f > 1 ) then uglRectF dc, x+1, y+1, x+f-1, y+h-1, hc_meter
 end sub
 
 
@@ -844,6 +976,7 @@ sub scr_draw_hud ( h_dst_dc as long )
     dim l as integer, r as integer
     dim lx as integer, rx as integer, cw as integer
     dim yy as integer, ftr as string
+    dim fcol as integer
 
     cw = 146
     lx = 3
@@ -853,34 +986,69 @@ sub scr_draw_hud ( h_dst_dc as long )
         ''
         '' left, top: this frame
         ''
-        hud_panel h_dst_dc, lx, 6, cw, 62, "RENDER"
-        hud_row h_dst_dc, lx, cw, 12, "Frames/sec", ltrim$(str$( scr.fps ))
-        hud_row h_dst_dc, lx, cw, 20, "Polygons", ltrim$(str$( rdr.polys ))
-        hud_row h_dst_dc, lx, cw, 28, "Triangles", ltrim$(str$( rdr.tris ))
-        hud_row h_dst_dc, lx, cw, 36, "Leaves drawn/culled", _
+        hud_panel h_dst_dc, lx, 6, cw, 76, "RENDER"
+
+        ''
+        '' The frame rate is the number a player actually watches, so it
+        '' gets the commercial treatment: twice the size and coloured by
+        '' threshold -- readable from across the room in a way a fourth
+        '' right-aligned row never was.
+        ''
+        if ( scr.fps >= 30 ) then
+            fcol = hc_good
+        elseif ( scr.fps >= 15 ) then
+            fcol = hc_warn
+        else
+            fcol = hc_bad
+        end if
+        hud_num h_dst_dc, lx+6, 13, 2, ltrim$(str$( scr.fps )), fcol
+        draw_string h_dst_dc, lx+34, 18, "fps"
+
+        hud_row h_dst_dc, lx, cw, 30, "Polygons", ltrim$(str$( rdr.polys ))
+        hud_row h_dst_dc, lx, cw, 38, "Triangles", ltrim$(str$( rdr.tris ))
+        hud_row h_dst_dc, lx, cw, 46, "Leaves drawn/culled", _
                 ltrim$(str$( vis.drw_leafs )) + "/" + ltrim$(str$( vis.cul_leafs ))
-        draw_string h_dst_dc, lx+5, 46, "fps 60"
-        hud_graph h_dst_dc, lx+cw-GRAPH_N-5, 45, 17, g_fps(), 60
+        draw_string h_dst_dc, lx+5, 60, "fps 60"
+        hud_graph h_dst_dc, lx+cw-GRAPH_N-5, 59, 17, g_fps(), 60
 
         ''
         '' left, below: the surface cache. Builds-in-one-frame is what a
         '' hitch is made of, so it leads, and the worst frame is kept
         '' because an average over a run hides exactly that spike.
         ''
-        hud_panel h_dst_dc, lx, 76, cw, 78, "SURFACE CACHE"
-        hud_row h_dst_dc, lx, cw, 82, "Hit / built", _
+        hud_panel h_dst_dc, lx, 90, cw, 78, "SURFACE CACHE"
+
+        ''
+        '' Warning flash: evictions and flushes are the events being
+        '' hunted, so the panel calls attention to itself when one lands
+        '' rather than waiting to be read. Commercial HUDs surface alerts;
+        '' logs wait to be read.
+        ''
+        if ( sc_evict > hud_pevict or sc_flushes > hud_pflush ) then
+            hud_flash = 12
+        end if
+        hud_pevict = sc_evict
+        hud_pflush = sc_flushes
+        if ( hud_flash > 0 ) then
+            if ( (hud_flash and 2) <> 0 ) then
+                uglRect h_dst_dc, lx, 90, lx+cw, 90+78, hc_bad
+            end if
+            hud_flash = hud_flash - 1
+        end if
+
+        hud_row h_dst_dc, lx, cw, 96, "Hit / built", _
                 ltrim$(str$( sc_hits )) + "/" + ltrim$(str$( sc_builds ))
-        hud_row h_dst_dc, lx, cw, 90, "Worst frame", ltrim$(str$( sc_bpeak ))
-        hud_row h_dst_dc, lx, cw, 98, "Resident", ltrim$(str$( sc_live ))
-        hud_row h_dst_dc, lx, cw, 106, "Evicted", ltrim$(str$( sc_evict ))
-        hud_row h_dst_dc, lx, cw, 114, "Flushes", ltrim$(str$( sc_flushes ))
+        hud_row h_dst_dc, lx, cw, 104, "Worst frame", ltrim$(str$( sc_bpeak ))
+        hud_row h_dst_dc, lx, cw, 112, "Resident", ltrim$(str$( sc_live ))
+        hud_row h_dst_dc, lx, cw, 120, "Evicted", ltrim$(str$( sc_evict ))
+        hud_row h_dst_dc, lx, cw, 128, "Flushes", ltrim$(str$( sc_flushes ))
         '' the store as a proportion of what it can hold, which a bare
         '' kilobyte count never conveys
-        draw_string h_dst_dc, lx+5, 122, "Store"
-        hud_bar h_dst_dc, lx+cw-GRAPH_N-5, 122, GRAPH_N, 6, _
+        draw_string h_dst_dc, lx+5, 136, "Store"
+        hud_bar h_dst_dc, lx+cw-GRAPH_N-5, 136, GRAPH_N, 6, _
                 sc_peak * 100.0 / 4194304.0
-        draw_string h_dst_dc, lx+5, 132, "builds " + ltrim$(str$( sc_bpeak ))
-        hud_graph h_dst_dc, lx+cw-GRAPH_N-5, 131, 17, g_bld(), sc_bpeak
+        draw_string h_dst_dc, lx+5, 146, "builds " + ltrim$(str$( sc_bpeak ))
+        hud_graph h_dst_dc, lx+cw-GRAPH_N-5, 145, 17, g_bld(), sc_bpeak
 
         ''
         '' right: the map, which never changes while it is loaded
@@ -911,8 +1079,8 @@ sub scr_draw_hud ( h_dst_dc as long )
         ftr = ftr + "   F12 hide"
 
         yy = env.y_res - 9
-        uglRectF h_dst_dc, 0, yy-2, env.x_res, env.y_res, HUD_BG
-        uglHLine h_dst_dc, 0, yy-2, env.x_res, HUD_EDGE
+        uglRectF h_dst_dc, 0, yy-2, env.x_res, env.y_res, hc_bg
+        uglHLine h_dst_dc, 0, yy-2, env.x_res, hc_slabhi
         draw_string h_dst_dc, 4, yy, ftr
     else
         yy = env.y_res - 9
@@ -923,8 +1091,8 @@ sub scr_draw_hud ( h_dst_dc as long )
     '' VU meters, bottom right, above the footer rule
     ''
     sndMasterGetVU l, r
-    hud_bar h_dst_dc, env.x_res-76, env.y_res-24, 70, 4, l*100/255
-    hud_bar h_dst_dc, env.x_res-76, env.y_res-18, 70, 4, r*100/255
+    hud_vu h_dst_dc, env.x_res-76, env.y_res-24, 70, 4, l*100/255, 0
+    hud_vu h_dst_dc, env.x_res-76, env.y_res-18, 70, 4, r*100/255, 1
 
     draw_string_r h_dst_dc, env.x_res-4, env.y_res-9, "powered by uGL"
 end sub
