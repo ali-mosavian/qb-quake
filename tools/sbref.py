@@ -42,12 +42,16 @@ def bload(path):
 
 
 def face_record(face):
-    """One lmface.bin record: 8 signed 16-bit fields."""
+    """One lmface.bin record: 8 signed 16-bit fields.
+
+    The first two are the face's place in the luxel atlas -- scanline, then
+    byte offset within it. The scanline is signed so -1 can still mean the
+    face is unlit."""
     d = open(os.path.join(ASSETS, 'lmface.bin'), 'rb').read()
     o = face * 16
-    ofs_hi, ofs_lo, tmin_s, tmin_t, lm_w, lm_h, st01, st23 = \
+    lm_y, lm_x, tmin_s, tmin_t, lm_w, lm_h, st01, st23 = \
         struct.unpack_from('<hHhhhhHH', d, o)
-    return ofs_hi, ofs_lo, tmin_s, tmin_t, lm_w, lm_h
+    return lm_y, lm_x, tmin_s, tmin_t, lm_w, lm_h
 
 
 def miptex_of_face(face):
@@ -64,11 +68,17 @@ def miptex_of_face(face):
     return miptex, w, h
 
 
+def pot2(v):
+    p = 1
+    while p < v:
+        p <<= 1
+    return p
+
+
 def build(face, mip):
-    ofs_hi, ofs_lo, tms, tmt, lmw, lmh = face_record(face)
-    if ofs_hi < 0:
+    lm_y, lm_x, tms, tmt, lmw, lmh = face_record(face)
+    if lm_y < 0:
         raise SystemExit(f"face {face} has no lightmap")
-    lofs = (ofs_hi << 16) | ofs_lo
 
     mi, origw, origh = miptex_of_face(face)
     cell = 64 >> mip
@@ -77,13 +87,14 @@ def build(face, mip):
     tw, th, tex, _ = read_bmp8(os.path.join(ASSETS, f'r{mi:03d}m{mip}.bmp'))
     assert (tw, th) == (cell, cell), (tw, th, cell)
 
-    lm = open(os.path.join(ASSETS, 'lmdat.bin'), 'rb').read()
+    aw_, ah_, lm, _ = read_bmp8(os.path.join(ASSETS, 'lm.bmp'))
     cmap = bload(os.path.join(ASSETS, 'colmap.bld'))
 
-    # this face's 16 light levels, from the two bytes ahead of its nibbles
-    lbase, lrng = lm[lofs], lm[lofs+1]
-    ftab = [lbase + (j*lrng + 7)//15 for j in range(16)]
-    lofs += 2
+    # The face's rect inside the atlas: raw luxel bytes, rows pot(lmw)
+    # apart because the slot is padded to a power of two in each dimension
+    # for alignment. No quantization, so no per-face ramp to rebuild.
+    lofs = lm_y * aw_ + lm_x
+    lstride = pot2(lmw)
 
     # surface dims: extents >> mip, padded to the size class
     def shift(v):
@@ -116,9 +127,7 @@ def build(face, mip):
             tx = min(((x - lx*stp) << 16) // stp, 65536)
 
             def luxel(gx, gy):
-                n = gy*lmw + gx
-                b = lm[lofs + (n >> 1)]
-                return ftab[(b >> 4) & 15] if (n & 1) else ftab[b & 15]
+                return lm[lofs + gy*lstride + gx]
 
             l00, l10 = luxel(lx, ly),   luxel(lx+1, ly)
             l01, l11 = luxel(lx, ly+1), luxel(lx+1, ly+1)

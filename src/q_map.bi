@@ -61,13 +61,17 @@ common shared /map_a/ tex_inf_buff() as texinfo2, poly_flag() as integer
 common shared /map_a/ clp_buffer() as clipnode
 
 ''
-'' Lightmaps. The per-face table is small enough for BASIC, but the luxels
-'' are not: 71K on dm3ish, and asking BASIC's far heap for that failed even
-'' with 397K reportedly free. They go in a memAlloc'd block instead, which
-'' also drops BLOAD's 64K cap, so the blob is one raw file.
+'' Lightmaps. The luxels are one 8-bit atlas in a single EMS dc, loaded by
+'' uglNewBMPEx exactly as the textures are -- so they cost no conventional
+'' memory at all, where the old packed blob cost 40K on dm3ish and more on
+'' bigger maps. A face's rect is fetched with one uglMapEx into LM_SLOT,
+'' which the atlas packer guarantees is a single page.
+''
+'' The per-face table stays in a memAlloc'd block: it is read once per
+'' cache miss and is small enough not to matter.
 ''
 common shared /map_a/ lmt_buffer() as lmtmin
-common shared /map_a/ lm_base as long, lm_size as long, lm_read as long
+common shared /map_a/ lm_atlas as long, lm_size as long, lm_read as long
 common shared /map_a/ lm_info as long, lm_isize as long
 '' A BASIC array, not memAlloc: a 16K memAlloc lands in an upper memory
 '' block once low memory is tight, and merely holding that block wedges the
