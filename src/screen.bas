@@ -47,21 +47,54 @@ option explicit
 '' transparency key, so ALL text is one colour: 254 is set to the brightest
 '' neutral and the hierarchy comes from size and placement instead.
 ''
-const LP_BG0    = 1              '' 32-step background ramp
-const LP_BGN    = 32
-const LP_NEU0   = 33             '' 16-step neutral, for chrome
+'' 256 entries and only a handful were being spent, so the ramps are as
+'' long as they can usefully be: 100 background steps over 200 rows is two
+'' rows per step, which stops the vignette banding without any dithering,
+'' and 32 amber steps shade a twelve-pixel bar smoothly.
+''
+'' Quake's palette is browns: desaturated stone and warm bronze, lit by
+'' fire. None of it is saturated and none of it is clean, so the ramps here
+'' are a warm dark grey for the walls, a bronze for the plates, and an
+'' ember for anything that glows. Nothing is a pure grey -- every step
+'' carries some red, which is what stops it reading as a generic dark UI.
+''
+const LP_STN0   = 1              '' 48-step stone, near black -> mid brown
+const LP_STNN   = 48
+const LP_BRZ0   = 49             '' 32-step bronze, for the plates
+const LP_BRZN   = 32
+const LP_ACC0   = 81             '' 32-step ember, for the bars
+const LP_ACCN   = 32
+const LP_NEU0   = 113            '' 16-step warm neutral, for rules
 const LP_NEUN   = 16
-const LP_ACC0   = 49             '' 16-step amber, for the bars
-const LP_ACCN   = 16
 const LP_TEXT   = 254            '' where draw_load_font bakes the glyphs
 
-const C_PANEL   = LP_BG0  + 4
-const C_EDGE    = LP_NEU0 + 2
-const C_EDGEHI  = LP_NEU0 + 6
-const C_TROUGH  = LP_BG0  + 1
-const C_ACC     = LP_ACC0 + 8
-const C_ACCHI   = LP_ACC0 + 14
-const C_ACCLO   = LP_ACC0 + 2
+'' Bevels are what make a Quake plate look pressed out of metal: a light
+'' edge on the top and left, a dark one on the bottom and right, and the
+'' opposite pair when something is meant to look sunken instead.
+const C_PLATE   = LP_BRZ0 + 9    '' the raised bronze plate
+const C_PLATEHI = LP_BRZ0 + 22
+const C_PLATELO = LP_BRZ0 + 2
+const C_PANEL   = LP_STN0 + 6    '' the sunken well the bar sits in
+const C_EDGE    = LP_STN0 + 2
+const C_EDGEHI  = LP_STN0 + 26
+const C_TROUGH  = LP_STN0 + 1
+const C_ACC     = LP_ACC0 + 16
+const C_ACCHI   = LP_ACC0 + 29
+const C_ACCLO   = LP_ACC0 + 4
+const C_SPIN    = LP_BRZ0 + 12   '' the wireframe, bronze
+const C_SPINHI  = LP_ACC0 + 26   '' its lit edges
+const C_GRIME   = LP_STN0 + 12   '' the speckle over the walls
+const C_GRIMELO = LP_STN0 + 1
+const C_METAL   = LP_NEU0 + 4    '' the title slab: grey so the orange reads
+const C_METALHI = LP_NEU0 + 9
+const C_METALLO = LP_NEU0 + 1
+
+'' Where the wireframe lives, so the tick can repaint just that box
+'' the cube keeps to the left column, where Quake hangs its own sigil --
+'' centred it would sit inside the painted title
+const SPIN_CX   = 36
+const SPIN_CY   = 40
+const SPIN_R    = 20
 
 ''
 '' The overlay runs under QUAKE's palette, not the loading ramps above --
@@ -71,11 +104,17 @@ const C_ACCLO   = LP_ACC0 + 2
 const HUD_BG    = 0
 const HUD_EDGE  = 5
 const HUD_METER = 11
+const HUD_HIST = 8
+const HUD_PEAK  = 14             '' the tallest column, so a spike reads
+
+'' How many frames of history the overlay graphs keep. One pixel column
+'' each, so this is also their width.
+const GRAPH_N   = 64
 
 '' Panel geometry. The bars live inside it, so moving the panel moves
 '' everything -- the old constants had the arithmetic spread over the file.
 const PAN_X     = 62
-const PAN_Y     = 100
+const PAN_Y     = 124
 const PAN_W     = 196
 const PAN_H     = 48
 const LOADBAR_X = PAN_X + 10
@@ -101,7 +140,17 @@ dim shared ldr_stage as string * 28
 '' sc_lhead in d_surf.bas for what happens when something this size lands
 '' there. REDIM'd, used, and erased inside scr_load_palette.
 dim shared ldr_pal() as tRGB
+dim shared spx() as integer      '' projected wireframe vertices
+dim shared spy() as integer
+'' Ring buffers behind the overlay graphs. Builds-per-frame is the one that
+'' matters -- a hitch is several builds landing in one frame, and a number
+'' that has already scrolled past cannot show you that shape.
+dim shared g_bld() as integer
+dim shared g_fps() as integer
 '$static
+dim shared g_head as integer     '' next slot, shared by both rings
+dim shared g_fsec as integer     '' last fps value pushed
+dim shared ldr_ang as single     '' how far the wireframe has turned
 
 '' Frames within the current second; scr.fps is the last completed
 '' second's total, which is what the overlay shows.
@@ -119,6 +168,7 @@ dim shared fps1 as integer
 ''       which is why the fourteen callers reduce to a bare call.
 '' :::::::::::::
 sub scr_load_tick
+    draw_spinner
     draw_bar ldr.dc, LOADBAR_X, LOADBAR_Y, LOADBAR_W, LOADBAR_H, ldr.pct
     draw_pct ldr.dc, PAN_X + PAN_W - 10, PAN_Y + 8, ldr.pct
 end sub
@@ -142,39 +192,301 @@ sub scr_load_palette
         ldr_pal(i).blue = chr$(0)
     next i
 
-    '' background: near-black to a dark slate, cool rather than neutral so
-    '' the amber has something to sit against
-    for i = 0 to LP_BGN-1
-        f = i / (LP_BGN - 1.0)
-        ldr_pal(LP_BG0+i).red   = chr$( cint(  4 + f * 22) )
-        ldr_pal(LP_BG0+i).green = chr$( cint(  6 + f * 26) )
-        ldr_pal(LP_BG0+i).blue  = chr$( cint( 10 + f * 34) )
+    '' Stone, and it has to go MUCH darker than feels right on a monitor:
+    '' Quake's menu is nearly black except where a light falls. Red leads
+    '' green leads blue at every step, which is what keeps it grimy brown
+    '' rather than a cold grey.
+    for i = 0 to LP_STNN-1
+        f = i / (LP_STNN - 1.0)
+        ldr_pal(LP_STN0+i).red   = chr$( cint(  6 + f * 62) )
+        ldr_pal(LP_STN0+i).green = chr$( cint(  5 + f * 46) )
+        ldr_pal(LP_STN0+i).blue  = chr$( cint(  4 + f * 34) )
     next i
 
-    '' chrome
-    for i = 0 to LP_NEUN-1
-        f = i / (LP_NEUN - 1.0)
-        ldr_pal(LP_NEU0+i).red   = chr$( cint( 40 + f * 190) )
-        ldr_pal(LP_NEU0+i).green = chr$( cint( 46 + f * 188) )
-        ldr_pal(LP_NEU0+i).blue  = chr$( cint( 56 + f * 184) )
+    '' bronze, for the plates
+    for i = 0 to LP_BRZN-1
+        f = i / (LP_BRZN - 1.0)
+        ldr_pal(LP_BRZ0+i).red   = chr$( cint( 34 + f * 148) )
+        ldr_pal(LP_BRZ0+i).green = chr$( cint( 23 + f * 104) )
+        ldr_pal(LP_BRZ0+i).blue  = chr$( cint( 12 + f * 50) )
     next i
 
-    '' amber
+    '' ember, for anything that glows
     for i = 0 to LP_ACCN-1
         f = i / (LP_ACCN - 1.0)
-        ldr_pal(LP_ACC0+i).red   = chr$( cint( 70 + f * 185) )
-        ldr_pal(LP_ACC0+i).green = chr$( cint( 34 + f * 168) )
-        ldr_pal(LP_ACC0+i).blue  = chr$( cint(  8 + f * 96) )
+        ldr_pal(LP_ACC0+i).red   = chr$( cint( 62 + f * 193) )
+        ldr_pal(LP_ACC0+i).green = chr$( cint( 20 + f * 188) )
+        ldr_pal(LP_ACC0+i).blue  = chr$( cint(  6 + f * 118) )
     next i
 
-    '' the glyphs are baked at this index, so this is every character on
-    '' screen -- brightest neutral, slightly warm
-    ldr_pal(LP_TEXT).red   = chr$(238)
-    ldr_pal(LP_TEXT).green = chr$(240)
-    ldr_pal(LP_TEXT).blue  = chr$(246)
+    '' warm neutral: the title slab and the rules. Kept dim -- the metal
+    '' in the reference is barely lighter than the wall behind it.
+    for i = 0 to LP_NEUN-1
+        f = i / (LP_NEUN - 1.0)
+        ldr_pal(LP_NEU0+i).red   = chr$( cint( 30 + f * 132) )
+        ldr_pal(LP_NEU0+i).green = chr$( cint( 28 + f * 124) )
+        ldr_pal(LP_NEU0+i).blue  = chr$( cint( 25 + f * 112) )
+    next i
+
+    '' Every character on screen is this one index, and in Quake's menu
+    '' every character is burnt orange -- so that is what it becomes. It
+    '' does more for the resemblance than any amount of furniture.
+    ldr_pal(LP_TEXT).red   = chr$(222)
+    ldr_pal(LP_TEXT).green = chr$(138)
+    ldr_pal(LP_TEXT).blue  = chr$( 66)
 
     uglPalSetBuff 0, 256, ldr_pal(0)
     erase ldr_pal
+
+    redim spx(7) as integer
+    redim spy(7) as integer
+    ldr_ang = 0.0
+
+    '' the overlay's history rings, allocated here because this is the one
+    '' place in the module that runs exactly once at startup
+    redim g_bld(GRAPH_N-1) as integer
+    redim g_fps(GRAPH_N-1) as integer
+    g_head = 0
+    g_fsec = 0
+end sub
+
+
+''::::::::::
+'' name: bg_band
+'' desc: Repaints rows of the vignette. The spinner needs its box cleared
+''       every turn, and the gradient is the only thing behind it, so the
+''       backdrop had to become something that can be drawn in pieces.
+''::::::::::
+sub bg_band ( x0 as integer, x1 as integer, y0 as integer, y1 as integer )
+    dim y as integer, x as integer, k as integer, d as integer, h as integer
+    dim crs as integer, ofs as integer
+    dim dy as integer, dx as integer, att as integer
+    dim sg as integer, sx0 as integer, sx1 as integer
+
+    for y = y0 to y1
+        if ( y >= 0 and y <= 199 ) then
+            ''
+            '' A pool of light rather than a flat wash: Quake's menu is
+            '' black at the edges and warm only where something is lit.
+            '' Done in sixteen 20px columns instead of per pixel -- a true
+            '' radial needs a distance per pixel and there are 64,000.
+            ''
+            dy = y - 88
+            for sg = 0 to 15
+                sx0 = sg * 20
+                sx1 = sx0 + 19
+                if ( sx1 >= x0 and sx0 <= x1 ) then
+                    dx = (sx0 + 10) - 160
+                    att = (dx * dx) \ 900 + (dy * dy) \ 300
+                    k = LP_STN0 + 40 - att
+                    if ( k < LP_STN0 ) then k = LP_STN0
+                    if ( k > LP_STN0 + LP_STNN - 1 ) then k = LP_STN0 + LP_STNN - 1
+                    if ( sx0 < x0 ) then sx0 = x0
+                    if ( sx1 > x1 ) then sx1 = x1
+                    uglHLine ldr.dc, sx0, y, sx1, k
+                end if
+            next sg
+
+            ''
+            '' Grain. Flat fills are the one thing Quake never has -- every
+            '' surface is noisy -- so speckle each row from a hash of the
+            '' coordinates rather than a random source, so a repaint of any
+            '' box reproduces exactly what was there before.
+            ''
+            ''
+            '' The hash needs a nonlinear term. A plain (x*a + y*b) lines
+            '' the specks up on diagonals and the wall reads as tiled --
+            '' the x*y folds that away, and the prime modulus keeps it from
+            '' settling into a lattice.
+            ''
+            ''
+            '' Block courses. Grain alone reads as noise; what makes it
+            '' read as MASONRY is the seams -- a dark line every course,
+            '' and vertical joints staggered half a block on alternate
+            '' ones, the way stone is actually laid.
+            ''
+            crs = y \ 22
+            if ( (y mod 22) = 0 ) then
+                uglHLine ldr.dc, x0, y, x1, C_GRIMELO
+            end if
+            ofs = (crs and 1) * 27
+
+            for x = x0 to x1
+                h = cint( (clng(x) * 1619& + clng(y) * 7919& + _
+                          ((clng(x) * clng(y)) mod 251&)) mod 997& )
+                if ( ((x + ofs) mod 54) = 0 and (y mod 22) <> 0 ) then
+                    uglPset ldr.dc, x, y, C_GRIMELO
+                elseif ( h < 26 ) then
+                    '' the speck sits a step above ITS column's light, not
+                    '' the last column's -- k is stale here, so rederive
+                    dx = x - 160
+                    att = (dx * dx) \ 900 + (dy * dy) \ 300
+                    k = LP_STN0 + 44 - att
+                    if ( k < LP_STN0 + 2 ) then k = LP_STN0 + 2
+                    if ( k > LP_STN0 + LP_STNN - 1 ) then k = LP_STN0 + LP_STNN - 1
+                    uglPset ldr.dc, x, y, k
+                elseif ( h < 52 ) then
+                    uglPset ldr.dc, x, y, C_GRIMELO
+                end if
+            next x
+        end if
+    next y
+end sub
+
+
+''::::::::::
+'' name: bevel
+'' desc: A Quake plate: light along the top and left, dark along the bottom
+''       and right, which reads as pressed out of metal. Pass raised = 0 to
+''       swap them and have it read as sunken instead.
+''::::::::::
+''::::::::::
+'' name: draw_logo
+'' desc: The title, drawn the way Quake paints its menu lettering rather
+''       than the way a system font sets it: each glyph pixel becomes a
+''       chunky block with an ember gradient down the glyph (lit from
+''       above), a hard drop shadow, and edges nibbled by the coordinate
+''       hash so the outline reads as hand-cut rather than geometric.
+''
+''       The glyphs are read back out of the font DCs with uglPGet -- set
+''       pixels carry LP_TEXT, clear ones the transparency key -- which is
+''       what frees the lettering from the one-colour rule everything else
+''       on screen lives under.
+''::::::::::
+sub draw_logo ( text as string, x as integer, y as integer, sc as integer )
+    dim i as integer, ch as integer, gx as integer, gy as integer
+    dim px as integer, bx as integer, by as integer, col as integer
+    dim pass as integer, h as integer
+
+    '' shadow first, then body, so the body always sits on top
+    for pass = 0 to 1
+        px = x
+        for i = 1 to len( text )
+            ch = asc( mid$( text, i, 1 ) )
+            for gy = 0 to 7
+                for gx = 0 to 7
+                    if ( uglPGet( h_font_char(ch), gx, gy ) = LP_TEXT ) then
+                        bx = px + gx*sc
+                        by = y + gy*sc
+                        if ( pass = 0 ) then
+                            uglRectF ldr.dc, bx+2, by+3, bx+sc+1, by+sc+2, C_GRIMELO
+                        else
+                            '' lit from above: bright ember at the top of
+                            '' the glyph falling to a dark red base
+                            '' compressed: a full-steepness fade lost
+                            '' the bottom third of every letter into the
+                            '' wall. The base stays a readable ember.
+                            col = LP_ACC0 + 29 - gy*3
+                            if ( col < LP_ACC0 + 12 ) then col = LP_ACC0 + 12
+                            uglRectF ldr.dc, bx, by, bx+sc-1, by+sc-1, col
+                            '' nibble the block's corner from the hash, so
+                            '' the outline stops being ruler-straight
+                            h = cint( (clng(bx) * 1619& + clng(by) * 7919&) mod 11& )
+                            if ( h < 3 ) then
+                                uglPset ldr.dc, bx, by, col - 2
+                                uglPset ldr.dc, bx+sc-1, by+sc-1, col - 3
+                            end if
+                        end if
+                    end if
+                next gx
+            next gy
+            px = px + 4*sc + sc\2
+        next i
+    next pass
+end sub
+
+
+''::::::::::
+'' name: rivet
+'' desc: Four pixels and a shadow. Corner hardware is half of what makes a
+''       Quake plate read as bolted to the wall.
+''::::::::::
+sub rivet ( x as integer, y as integer )
+    uglPset ldr.dc, x,   y,   C_METALHI
+    uglPset ldr.dc, x+1, y,   C_METAL
+    uglPset ldr.dc, x,   y+1, C_METAL
+    uglPset ldr.dc, x+1, y+1, C_METALLO
+end sub
+
+
+sub bevel ( x0 as integer, y0 as integer, x1 as integer, y1 as integer, _
+            hi as integer, lo as integer, raised as integer )
+    dim a as integer, b as integer
+
+    if ( raised ) then
+        a = hi : b = lo
+    else
+        a = lo : b = hi
+    end if
+    uglHLine ldr.dc, x0, y0, x1, a
+    uglVLine ldr.dc, x0, y0, y1, a
+    uglHLine ldr.dc, x0, y1, x1, b
+    uglVLine ldr.dc, x1, y0, y1, b
+end sub
+
+
+''::::::::::
+'' name: draw_spinner
+'' desc: A wireframe cube, turned a little further every tick. This is a
+''       renderer, so the loading screen may as well render something --
+''       and it doubles as proof of life during the long silent stretches
+''       where a bar creeps a pixel every few seconds.
+''
+''       Twelve edges from eight vertices with no edge table: number the
+''       corners so each bit is an axis, and two corners share an edge
+''       exactly when they differ in one bit. Drawing only j > i visits
+''       each edge once.
+''::::::::::
+sub draw_spinner
+    dim i as integer, b as integer, j as integer
+    dim ca as single, sa as single, cb as single, sb as single
+    dim x as single, y as single, z as single
+    dim x2 as single, y2 as single, z2 as single
+    dim sc as single, col as integer
+
+    '' only the spinner's own box -- clearing the full width here wiped the
+    '' top corner brackets on every tick
+    bg_band SPIN_CX - SPIN_R - 3, SPIN_CX + SPIN_R + 3, _
+            SPIN_CY - SPIN_R - 3, SPIN_CY + SPIN_R + 3
+
+    ca = cos( ldr_ang )
+    sa = sin( ldr_ang )
+    cb = cos( ldr_ang * 0.6 )
+    sb = sin( ldr_ang * 0.6 )
+
+    for i = 0 to 7
+        '' bit per axis, so -1 or +1 on each
+        if ( (i and 1) = 0 ) then x = -1.0 else x = 1.0
+        if ( (i and 2) = 0 ) then y = -1.0 else y = 1.0
+        if ( (i and 4) = 0 ) then z = -1.0 else z = 1.0
+
+        x2 = x * ca - z * sa            '' yaw
+        z2 = x * sa + z * ca
+        y2 = y * cb - z2 * sb           '' then pitch
+        z   = y * sb + z2 * cb
+
+        sc = SPIN_R * 2.2 / (z + 4.0)   '' a little perspective
+        spx(i) = SPIN_CX + cint( x2 * sc )
+        spy(i) = SPIN_CY + cint( y2 * sc )
+    next i
+
+    for i = 0 to 7
+        for b = 0 to 2
+            j = i xor (2 ^ b)
+            if ( j > i ) then
+                '' the two corners nearest the front get the amber
+                if ( (i and 4) <> 0 and (j and 4) <> 0 ) then
+                    col = C_SPINHI
+                else
+                    col = C_SPIN
+                end if
+                uglLine ldr.dc, spx(i), spy(i), spx(j), spy(j), col
+            end if
+        next b
+    next i
+
+    ldr_ang = ldr_ang + 0.19
+    if ( ldr_ang > 6.2831853 ) then ldr_ang = ldr_ang - 6.2831853
 end sub
 
 
@@ -289,8 +601,8 @@ end sub
 ''       what keeps ~200 ticks cheap.
 ''::::::::::
 sub scr_load_chrome
-    dim y as integer, k as integer, d as integer
     dim ttl as string, sub1 as string, ftr as string
+    dim plate_x as integer, plate_w as integer
 
     ''
     '' A soft vertical vignette: brightest across the middle where the panel
@@ -298,39 +610,51 @@ sub scr_load_chrome
     '' rows is fine here because the range is narrow -- it reads as a
     '' backdrop rather than as banding.
     ''
-    for y = 0 to 199
-        d = y - 100
-        if ( d < 0 ) then d = -d
-        k = LP_BG0 + LP_BGN - 1 - (d * (LP_BGN-1)) \ 100
-        if ( k < LP_BG0 ) then k = LP_BG0
-        uglHLine ldr.dc, 0, y, 319, k
-    next y
+    bg_band 0, 319, 0, 199
 
-    '' title, three times size, centred on its own advance
+    ''
+    '' A heavy frame around the whole screen, sunken, so the wall reads as
+    '' a recess rather than as a picture.
+    ''
+    bevel 3, 3, 316, 196, C_EDGEHI, C_EDGE, 0
+    bevel 5, 5, 314, 194, C_EDGEHI, C_EDGE, -1
+
+    ''
+    '' The title floats straight on the wall the way SINGLE PLAYER does in
+    '' Quake's menu -- big painted letters, no box around them. The plate
+    '' treatment goes to the small MAIN-style banner below instead.
+    ''
     ttl = "QRENDER"
-    draw_string_scl ldr.dc, (320 - len(ttl)*12) \ 2, 38, 3.0, ttl
+    draw_logo ttl, (320 - (len(ttl)*18 + 9)) \ 2, 48, 4
 
     sub1 = "a quake bsp renderer in quickbasic"
-    draw_string ldr.dc, (320 - len(sub1)*4) \ 2, 72, sub1
+    draw_string ldr.dc, (320 - len(sub1)*4) \ 2, 92, sub1
 
-    '' the map, since loading one is the whole reason this screen exists
+    ''
+    '' The map on a MAIN-style banner: grey riveted metal, so the orange
+    '' name carries against it.
+    ''
     sub1 = rtrim$( env.map_name )
-    draw_string ldr.dc, (320 - len(sub1)*4) \ 2, PAN_Y - 12, sub1
+    plate_w = len(sub1)*4 + 26
+    plate_x = (320 - plate_w) \ 2
+    uglRectF ldr.dc, plate_x, PAN_Y-19, plate_x+plate_w, PAN_Y-4, C_METAL
+    bevel plate_x, PAN_Y-19, plate_x+plate_w, PAN_Y-4, C_METALHI, C_METALLO, -1
+    bevel plate_x+2, PAN_Y-17, plate_x+plate_w-2, PAN_Y-6, C_METALHI, C_METALLO, 0
+    rivet plate_x+4, PAN_Y-16
+    rivet plate_x+plate_w-5, PAN_Y-16
+    rivet plate_x+4, PAN_Y-9
+    rivet plate_x+plate_w-5, PAN_Y-9
+    draw_string ldr.dc, (320 - len(sub1)*4) \ 2, PAN_Y-14, sub1
 
-    '' a rule, bevelled: the dark line above the light one reads as incised
-    uglHLine ldr.dc, 70, 86, 250, C_EDGE
-    uglHLine ldr.dc, 70, 87, 250, C_EDGEHI
-
-    '' the panel the bars sit in
+    '' the well the bar sits in, sunken into the wall
     uglRectF ldr.dc, PAN_X, PAN_Y, PAN_X+PAN_W, PAN_Y+PAN_H, C_PANEL
-    uglHLine ldr.dc, PAN_X, PAN_Y, PAN_X+PAN_W, C_EDGEHI
-    uglVLine ldr.dc, PAN_X, PAN_Y, PAN_Y+PAN_H, C_EDGEHI
-    uglHLine ldr.dc, PAN_X, PAN_Y+PAN_H, PAN_X+PAN_W, C_EDGE
-    uglVLine ldr.dc, PAN_X+PAN_W, PAN_Y, PAN_Y+PAN_H, C_EDGE
+    bevel PAN_X, PAN_Y, PAN_X+PAN_W, PAN_Y+PAN_H, C_EDGEHI, C_EDGE, 0
 
     ftr = "powered by uGL"
-    draw_string ldr.dc, 320 - len(ftr)*4 - 8, 188, ftr
+    draw_string ldr.dc, 320 - len(ftr)*4 - 12, 186, ftr
 end sub
+
+
 
 
 
@@ -454,6 +778,45 @@ sub hud_row ( dc as long, x as integer, w as integer, y as integer, _
     draw_string_r dc, x+w-5, y, value
 end sub
 
+''::::::::::
+'' name: hud_graph
+'' desc: One pixel column per remembered frame, oldest at the left. The
+''       scale is passed in rather than derived from the window, so the
+''       bars keep their meaning as the view changes -- and the tallest
+''       column is picked out, because the spike is the whole point.
+''::::::::::
+sub hud_graph ( dc as long, x as integer, y as integer, h as integer, _
+                buf() as integer, mx as integer )
+    dim i as integer, k as integer, v as integer, c as integer, top as integer
+
+    if ( mx < 1 ) then mx = 1
+
+    uglRectF dc, x, y, x+GRAPH_N, y+h, HUD_BG
+
+    ''
+    '' Reference lines at half and full scale, dashed. Without them a flat
+    '' trace is an anonymous grey block and an idle one is an empty box --
+    '' both read as broken rather than as steady and quiet respectively.
+    ''
+    for i = 0 to GRAPH_N-1 step 3
+        uglPset dc, x+i, y+1, HUD_EDGE
+        uglPset dc, x+i, y+h\2, HUD_EDGE
+    next i
+
+    for i = 0 to GRAPH_N-1
+        k = (g_head + i) mod GRAPH_N        '' oldest first, so it scrolls left
+        v = buf(k)
+        if ( v > 0 ) then
+            top = (v * h) \ mx
+            if ( top > h ) then top = h
+            if ( v >= mx ) then c = HUD_PEAK else c = HUD_HIST
+            uglVLine dc, x+i, y+h-top, y+h, c
+        end if
+    next i
+    uglRect dc, x, y, x+GRAPH_N, y+h, HUD_EDGE
+end sub
+
+
 sub hud_bar ( dc as long, x as integer, y as integer, w as integer, _
               h as integer, percent as single )
     dim f as integer
@@ -490,27 +853,34 @@ sub scr_draw_hud ( h_dst_dc as long )
         ''
         '' left, top: this frame
         ''
-        hud_panel h_dst_dc, lx, 6, cw, 40, "RENDER"
+        hud_panel h_dst_dc, lx, 6, cw, 62, "RENDER"
         hud_row h_dst_dc, lx, cw, 12, "Frames/sec", ltrim$(str$( scr.fps ))
         hud_row h_dst_dc, lx, cw, 20, "Polygons", ltrim$(str$( rdr.polys ))
         hud_row h_dst_dc, lx, cw, 28, "Triangles", ltrim$(str$( rdr.tris ))
         hud_row h_dst_dc, lx, cw, 36, "Leaves drawn/culled", _
                 ltrim$(str$( vis.drw_leafs )) + "/" + ltrim$(str$( vis.cul_leafs ))
+        draw_string h_dst_dc, lx+5, 46, "fps 60"
+        hud_graph h_dst_dc, lx+cw-GRAPH_N-5, 45, 17, g_fps(), 60
 
         ''
         '' left, below: the surface cache. Builds-in-one-frame is what a
         '' hitch is made of, so it leads, and the worst frame is kept
         '' because an average over a run hides exactly that spike.
         ''
-        hud_panel h_dst_dc, lx, 54, cw, 56, "SURFACE CACHE"
-        hud_row h_dst_dc, lx, cw, 60, "Hit / built", _
+        hud_panel h_dst_dc, lx, 76, cw, 78, "SURFACE CACHE"
+        hud_row h_dst_dc, lx, cw, 82, "Hit / built", _
                 ltrim$(str$( sc_hits )) + "/" + ltrim$(str$( sc_builds ))
-        hud_row h_dst_dc, lx, cw, 68, "Worst frame", ltrim$(str$( sc_bpeak ))
-        hud_row h_dst_dc, lx, cw, 76, "Resident", ltrim$(str$( sc_live ))
-        hud_row h_dst_dc, lx, cw, 84, "Evicted", ltrim$(str$( sc_evict ))
-        hud_row h_dst_dc, lx, cw, 92, "Flushes", ltrim$(str$( sc_flushes ))
-        hud_row h_dst_dc, lx, cw, 100, "Peak store", _
-                ltrim$(str$( sc_peak \ 1024& )) + "K"
+        hud_row h_dst_dc, lx, cw, 90, "Worst frame", ltrim$(str$( sc_bpeak ))
+        hud_row h_dst_dc, lx, cw, 98, "Resident", ltrim$(str$( sc_live ))
+        hud_row h_dst_dc, lx, cw, 106, "Evicted", ltrim$(str$( sc_evict ))
+        hud_row h_dst_dc, lx, cw, 114, "Flushes", ltrim$(str$( sc_flushes ))
+        '' the store as a proportion of what it can hold, which a bare
+        '' kilobyte count never conveys
+        draw_string h_dst_dc, lx+5, 122, "Store"
+        hud_bar h_dst_dc, lx+cw-GRAPH_N-5, 122, GRAPH_N, 6, _
+                sc_peak * 100.0 / 4194304.0
+        draw_string h_dst_dc, lx+5, 132, "builds " + ltrim$(str$( sc_bpeak ))
+        hud_graph h_dst_dc, lx+cw-GRAPH_N-5, 131, 17, g_bld(), sc_bpeak
 
         ''
         '' right: the map, which never changes while it is loaded
@@ -668,6 +1038,7 @@ sub scr_count_frame
 
     if env.sec_timer.counter > 0 then
         scr.fps = fps1
+        g_fsec = fps1
         fps1 = 0
         env.sec_timer.counter = 0
         scr.bench_secs = scr.bench_secs + 1
@@ -679,6 +1050,12 @@ sub scr_count_frame
     '' Per-frame cache counters. The peak is kept before the reset because a
     '' hitch is one bad frame, and an average over the run hides it.
     if ( sc_builds > sc_bpeak ) then sc_bpeak = sc_builds
+
+    '' history, before the counters are cleared
+    g_bld(g_head) = sc_builds
+    g_fps(g_head) = g_fsec
+    g_head = (g_head + 1) mod GRAPH_N
+
     sc_hits = 0
     sc_builds = 0
 
