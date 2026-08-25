@@ -126,6 +126,22 @@ DIR_2DFX  := 2dfx
 MODS_2DFX := tfxmain tfxblt tfxbltsc tfxUnpk tfxPack tfxSolid tfxLut \
              tfxblend tfxinvt tfxscale tfxmono tfxcol2
 
+# ── header dependencies ───────────────────────────────────────────────
+# Neither bcc (DOS-hosted, driven through bcc.sh) nor jwasm emits any
+# dependency information, so without this every object depends only on its
+# own source file. That is not a cosmetic gap: editing a struct in a shared
+# header rebuilds just the .c files that changed and silently re-archives
+# every other object still compiled against the previous layout. Inserting
+# three uint32 counters into the middle of XS_CTX did exactly that -- the
+# rebuilt sndmixer/sndint/sndmain/sndctrl saw the new layout while
+# sndnew.obj and sndplay.obj kept addressing every field past voices_lock
+# 12 bytes off, and modNew wedged with no error from bcc, jwlib or LINK.
+#
+# Tracked coarsely -- every object depends on every header in the tree.
+# Over-broad by design: a full rebuild costs minutes, a stale object costs
+# a day of bisecting an emulator.
+HDRS := $(shell find $(MGL)/inc $(SRC) \( -name '*.h' -o -name '*.inc' \) 2>/dev/null)
+
 # ── rules ─────────────────────────────────────────────────────────────
 
 .PHONY: all clean
@@ -140,7 +156,7 @@ define BUILD_LIB
 $(BUILD)/$(1):
 	mkdir -p $$@
 
-$(BUILD)/$(1)/%.obj: $(SRC)/$(DIR_$(1))/%.asm | $(BUILD)/$(1)
+$(BUILD)/$(1)/%.obj: $(SRC)/$(DIR_$(1))/%.asm $(HDRS) | $(BUILD)/$(1)
 	@# jwasm embeds whatever filename string it's given into the object's
 	@# THEADR record verbatim. Passing the full absolute path makes for a
 	@# ~50-byte THEADR that jwlib's OMF reader rejects outright as
@@ -148,7 +164,7 @@ $(BUILD)/$(1)/%.obj: $(SRC)/$(DIR_$(1))/%.asm | $(BUILD)/$(1)
 	@# matching every DOS-hosted build (dmake, mkswp.bat) doing the same.
 	cd $(SRC)/$(DIR_$(1)) && $(JWASM) $(JWASMFLAGS) -Fo$$@ $$(notdir $$<)
 
-$(BUILD)/$(1)/%.obj: $(SRC)/$(DIR_$(1))/%.c | $(BUILD)/$(1)
+$(BUILD)/$(1)/%.obj: $(SRC)/$(DIR_$(1))/%.c $(HDRS) | $(BUILD)/$(1)
 	MGL=$(MGL) $(BCC) src/$(DIR_$(1))/$$(notdir $$<) $$@
 
 $(BUILD)/$(1).LIB: $$(addprefix $(BUILD)/$(1)/,$$(addsuffix .obj,$$(MODS_$(1)) $$(CMODS_$(1))))
