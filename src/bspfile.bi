@@ -346,6 +346,7 @@ type EnvType
                                 '' uglPolyTP instead of fanning each face
                                 '' into triangles. A/B against the proven
                                 '' uglTriTP path.
+    no_z        as integer      '' -noz: skip the depth buffer entirely
     no_stats    as integer      '' -nostats: the overlay covers a third of the
                                 '' frame, which is a third of what a screenshot
                                 '' was taken to look at.

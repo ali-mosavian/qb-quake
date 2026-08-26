@@ -356,7 +356,8 @@ sub host_main
     '' range; anything closer would saturate, and nothing is, because the
     '' clipper drops it first.
     ''
-    z_dc = uglNewZ&( h_dst_dc, UGL.EMS% )
+    z_dc = 0
+    if ( env.no_z = 0 ) then z_dc = uglNewZ&( h_dst_dc, UGL.EMS% )
     if ( z_dc <> 0 ) then
         uglSetZ z_dc
         zz = uglZScale&( 65535.0 * env.z_near )
