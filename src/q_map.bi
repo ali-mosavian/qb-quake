@@ -72,6 +72,14 @@ common shared /map_a/ clp_buffer() as clipnode
 ''
 common shared /map_a/ lmt_buffer() as lmtmin
 common shared /map_a/ lm_atlas as long, lm_size as long, lm_read as long
+''
+'' The depth buffer. World faces write through it without testing -- the
+'' BSP walk already hands them over front to back, so a test would only
+'' ever agree with the order they arrive in. Brush entities (doors, plats)
+'' come afterwards and DO test, because nothing about their order relates
+'' to the world they move through.
+''
+common shared /map_a/ z_dc as long
 common shared /map_a/ lm_info as long, lm_isize as long
 '' A BASIC array, not memAlloc: a 16K memAlloc lands in an upper memory
 '' block once low memory is tight, and merely holding that block wedges the

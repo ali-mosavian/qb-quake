@@ -57,7 +57,12 @@ build)
     ## in the one we assemble ourselves, and mixing a stale shipped lib with
     ## current headers is the trap mgl-lib-stale-vs-headers describes.
     ##
-    NATIVE_UGL="$ROOT/build/native-mgl/UGLV.LIB"
+    ## NATIVE_UGL can point elsewhere. Two sessions building mgl into the
+    ## same build/native-mgl overwrite each other's objects mid-archive,
+    ## which shows up as symbols missing from a library whose sources
+    ## plainly define them -- and as tests that pass and fail from
+    ## identical source minutes apart.
+    NATIVE_UGL="${NATIVE_UGL:-$ROOT/build/native-mgl/UGLV.LIB}"
     [[ -f "$NATIVE_UGL" ]] || {
         echo "no $NATIVE_UGL -- run: make -f tools/native/Makefile" >&2; exit 1; }
     cp "$NATIVE_UGL" "$out/UGLV.LIB"

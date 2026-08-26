@@ -308,6 +308,8 @@ sub host_main
     
     
     
+    dim zz as long                  '' soaks up uglZScale/uglZMode's
+                                    '' return; the call is the point
     hz = tmrMs2Freq&( 1000 )
     tmrNew env.sec_timer, TMR.AUTOINIT, hz    
     
@@ -318,6 +320,21 @@ sub host_main
     end if        
     
     u3dMtrxPersp mtx_prj, env.camfov, 320.0/240.0, env.z_near, env.z_far
+
+    ''
+    '' Depth buffer, matching the destination. EMS: 320x200 of depth is
+    '' 128,000 bytes and conventional memory has nothing like that spare.
+    ''
+    '' The scale maps 1/z into 16 bits. 1/z is largest at the near plane,
+    '' so 65535 * z_near puts the nearest thing drawn at the top of the
+    '' range; anything closer would saturate, and nothing is, because the
+    '' clipper drops it first.
+    ''
+    z_dc = uglNewZ&( h_dst_dc, UGL.EMS% )
+    if ( z_dc <> 0 ) then
+        uglSetZ z_dc
+        zz = uglZScale&( 65535.0 * env.z_near )
+    end if
     
     rdr.usemips = -1
     rdr.rendmode = 0
@@ -503,6 +520,8 @@ end sub
 sub host_render ( byval h_dst_dc as long, mtx_prj as u3dMtrx, _
                   byval xresh as single, byval yresh as single )
     dim mtx_mdl as u3dMtrx
+    dim zz as long                  '' soaks up uglZMode's return;
+                                    '' the call is the point
     dim mtx_fin as u3dMtrx
     dim cam_pos_b as u3dVector3f
     dim bm as integer
@@ -548,7 +567,18 @@ sub host_render ( byval h_dst_dc as long, mtx_prj as u3dMtrx, _
 
     
     
+    ''
+    '' Clear to the far plane before the frame. Depth is 1/z and larger is
+    '' nearer, so zero is infinitely distant and the first surface to
+    '' cover a pixel always wins.
+    ''
+    if ( z_dc <> 0 ) then uglClearZ z_dc, 0
+
     d_draw_faces h_dst_dc, mtx_fin, xresh, yresh
+
+    '' leave depth off for the overlay, which is 2D and would otherwise
+    '' test itself against the scene it is drawn on top of
+    if ( z_dc <> 0 ) then zz = uglZMode%( UGL.Z.OFF% )
 
 
     
