@@ -98,7 +98,7 @@ MODS_UGL  := uglbez uglbmp uglelip uglelipf uglclear uglcolor uglconv \
              uglpage uglpixel uglpoly uglpolyf uglput uglputm uglputb \
              uglputs uglblit uglblits uglblitr uglrect uglrectf uglrow \
              uglsel uglvline uglplxf uglplxg uglplxt uglplxtp uglplxtg \
-             uglpltpg uglrtscl uglpal ugllut uglpalfx uglview uglsurf uglshade uglwin uglz
+             uglpltpg uglrtscl uglpal ugllut uglpalfx uglview uglsurf uglshade uglwin uglz uglarr
 
 DIR_UGLU  := uglu
 MODS_UGLU := glubez glubez3d glucpuft gludcsav
@@ -226,3 +226,15 @@ clean:
 #
 # UGLV.LIB above covers the same module set mglbuild.sh's --all does
 # minus DCT -- not the full 16 sub-libraries the DOS dmake build produces.
+
+# ── tests ───────────────────────────────────────────────────────────────
+# `make check` builds the libs, then runs every mgl test against THIS
+# build rather than a prebuilt lib -- same rule the rest of this file
+# follows, and for the same reason: a shipped lib predates whatever is
+# being tested, so a green run against one proves nothing.
+#
+# Not wired into `all`. Each test boots DOSBox, so the suite costs
+# minutes; a build that ran it by default would stop being a build.
+.PHONY: check
+check: $(UGLV)
+	UGLLIB=$(UGLV) $(MGL)/src/test/runall.sh
