@@ -79,6 +79,22 @@ common shared /map_a/ lm_atlas as long, lm_size as long, lm_read as long
 '' come afterwards and DO test, because nothing about their order relates
 '' to the world they move through.
 ''
+''
+'' A memory trace, for working out where conventional memory goes. Each
+'' entry is a named point in startup with two numbers: memAvail, which is
+'' the largest free DOS block, and FRE(-1), the largest free block in
+'' BASIC's far heap. Both are needed. The heap is taken from DOS in one
+'' bite at startup, so a REDIM costs FRE and memAvail does not move --
+'' which is exactly what makes the BSP arrays invisible to a DOS-side
+'' measurement. The bench report dumps both as deltas. Costs 21 longs and is worth having permanently: the
+'' answer changes every time a buffer moves in or out of EMS, and
+'' reasoning about it from struct sizes gets the answer wrong.
+''
+const MEM_MARKS = 20
+common shared /map_a/ mem_val() as long, mem_tag() as string * 12
+common shared /map_a/ mem_fre() as long
+common shared /map_a/ mem_n as integer
+
 common shared /map_a/ z_dc as long
 common shared /map_a/ lm_info as long, lm_isize as long
 '' A BASIC array, not memAlloc: a 16K memAlloc lands in an upper memory

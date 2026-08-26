@@ -186,20 +186,25 @@ sub host_init
     '' arguments and subsystems
     sys_parse_args
     sys_init_tables
+    sys_mem_mark "start"
     d_init_turb
     vid_init_ugl
+    sys_mem_mark "ugl"
     s_init
     s_start_music
     draw_init_font
+    sys_mem_mark "font"
 
     '' map file and the loading screen
     t_sub = timer
 
     mod_open
+    sys_mem_mark "mapopen"
     scr_begin_loading
     mod_find_spawn
     pl_init
     mod_alloc
+    sys_mem_mark "bsparrays"
 
     t_map = timer
 
@@ -208,6 +213,7 @@ sub host_init
     mod_load_vertexes
     mod_load_faces
     mod_load_lightmaps
+    sys_mem_mark "lmtable"
     mod_load_edges
     mod_load_surfedges
     mod_load_leafs
@@ -217,6 +223,7 @@ sub host_init
     mod_load_submodels
     mod_load_visibility
     mod_load_clipnodes
+    sys_mem_mark "clipnodes"
     ent_load_teleports
 
     t_lump = timer
@@ -224,14 +231,18 @@ sub host_init
     '' textures and palette
     mod_load_texinfo
     mod_load_textures
+    sys_mem_mark "textures"
     mod_close
+    sys_mem_mark "mapclose"
 
     sc_ok = sc_init%
+    sys_mem_mark "surfcache"
 
     t_tex = timer
 
     '' hand over to the real video mode
     vid_init
+    sys_mem_mark "backbuf"
     in_init
     s_stop_music
 
@@ -241,6 +252,7 @@ sub host_init
     '' having got all the way through loading. Nothing needs the table
     '' until the first surface is built.
     if ( env.use_lm ) then mod_load_colormap
+    sys_mem_mark "colormap"
 
     t_vid = timer
 
@@ -598,6 +610,7 @@ end sub
 ''       the finished image.
 ''::::::::::
 sub host_bench_report ( frame_no as long, h_dst_dc as long )
+    dim mi as integer
     dim benchf as integer
 
     scr_screenshot "bench.bmp", h_dst_dc
@@ -636,6 +649,18 @@ sub host_bench_report ( frame_no as long, h_dst_dc as long )
     print #benchf, "sctest " + ltrim$(str$( sc_selftest% ))
     print #benchf, "peakz " + ltrim$(str$( pl.peak_z ))
     print #benchf, "ticks " + ltrim$(str$( host_ticks ))
+    ''
+    '' Where conventional memory went. Deltas, not absolutes: what matters
+    '' is which stage took the bite, and a running total drifts with DOS's
+    '' own overhead between the marks.
+    ''
+    for mi = 0 to mem_n-1
+        if ( mi = 0 ) then
+            print #benchf, "mem " + rtrim$(mem_tag(mi)) + " " + ltrim$(str$( mem_val(mi) )) + " 0 " + ltrim$(str$( mem_fre(mi) )) + " 0"
+        else
+            print #benchf, "mem " + rtrim$(mem_tag(mi)) + " " + ltrim$(str$( mem_val(mi) )) + " " + ltrim$(str$( mem_val(mi-1) - mem_val(mi) )) + " " + ltrim$(str$( mem_fre(mi) )) + " " + ltrim$(str$( mem_fre(mi-1) - mem_fre(mi) ))
+        end if
+    next mi
     print #benchf, "clprec " + ltrim$(str$( len( clp_buffer(0) ) ))
     print #benchf, "clpcnt " + ltrim$(str$( wld.clp_count ))
     print #benchf, "waterlevel " + ltrim$(str$( pl.water_level ))
