@@ -22,7 +22,13 @@ JWLIB    := $(NATIVE)/jwlib
 # under DOSBox-X can, one process per file so -j still parallelises.
 BCC      := $(CURDIR)/tools/bcc.sh
 
-BUILD    := $(CURDIR)/build/native-mgl
+# Overridable so concurrent builds do not share one output tree. Two
+# processes running this Makefile against the same BUILD each do
+# `rm -f X.LIB && jwlib X.LIB +objs`, so the loser's library comes out
+# missing whatever the winner was mid-write on -- which presents as an
+# unresolved external in a DIFFERENT module each time, not as a build
+# error. Set BUILD per worktree/session to avoid it.
+BUILD    ?= $(CURDIR)/build/native-mgl
 UGLV     := $(BUILD)/UGLV.LIB
 
 # -Zg (Masm-compatible code generation) is required, not cosmetic: without

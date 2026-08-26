@@ -132,6 +132,26 @@ Note `B$HARY` is documented as the HUGE array helper, yet `/D` routes an
 ordinary dynamic array through it. `/Ah` may therefore give the same
 guard without `/D`'s other costs; unverified.
 
+## What an array parameter actually pushes
+
+`foo(a())` declared `a() As Any` pushes the descriptor's DGROUP OFFSET,
+two bytes. Not a far pointer, and not the data address.
+
+Verified twice, by different means. `src/test/arrdesc.bas` compares what
+BASIC pushed against the runtime's own descriptor for two different
+arrays (58 and 86, both matching). And declaring the asm parameter as a
+`dword` instead produces a specific, diagnostic failure: every parameter
+shifts by two, and since the offset is the low word of the pair, the
+array, the counts, the element size and the slot ALL still read
+correctly. Only the first-pushed parameter -- the one furthest from bp --
+falls off the end of the frame.
+
+So the symptom of getting this wrong is ONE wrong argument out of five,
+which reads like a logic bug anywhere but the calling convention. In
+uGL's case a `UA_MEM` array took the EMS path because only its type
+selector was garbage. The `/A` listing settles it in one step: check the
+`[bp+nn]` the callee reads against what the caller pushes.
+
 ## Compiler switches, by version
 
 Captured from each compiler's own `/?` screen under DOSBox, except QB 4.5
