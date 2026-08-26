@@ -300,3 +300,24 @@ end function
 function sys_tick_hz ( ) as single
     sys_tick_hz = tick_hz
 end function
+
+
+''::::::::::
+'' name: sys_mem_mark
+'' desc: Records memAvail under a name. Called at each point in startup
+''       that takes a bite out of conventional memory, so the bench report
+''       can show what each one actually cost rather than what its struct
+''       sizes suggest it should have.
+''::::::::::
+sub sys_mem_mark ( tag as string )
+    if ( mem_n = 0 ) then
+        redim mem_val( MEM_MARKS ) as long
+        redim mem_fre( MEM_MARKS ) as long
+        redim mem_tag( MEM_MARKS ) as string * 12
+    end if
+    if ( mem_n > MEM_MARKS ) then exit sub
+    mem_tag( mem_n ) = tag
+    mem_val( mem_n ) = memAvail&
+    mem_fre( mem_n ) = fre( -1 )
+    mem_n = mem_n + 1
+end sub

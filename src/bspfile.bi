@@ -432,6 +432,7 @@ declare sub in_screenshot_key ( h_dst_dc as long )
 '' which is the whole reason they are separate routines.
 declare sub sys_parse_args ( )
 declare sub sys_init_tables ( )
+declare sub sys_mem_mark ( tag as string )
 declare sub vid_init_ugl ( )
 declare sub s_init ( )
 declare sub s_start_music ( )
