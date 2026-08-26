@@ -194,6 +194,7 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
     dim lm_mip as integer, lm_floor as integer
     dim lm_sw as integer, lm_sh as integer
     dim lm_fw as integer, lm_fh as integer
+    dim z_want as integer, z_have as integer
     dim lm_cm as integer
     dim lm_dc as long, src_dc as long
     dim lm_su as single, lm_sv as single
@@ -201,7 +202,10 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
    ''
    '' Draw nodes
    ''       
-    turbph = rdr.anim_time * TURB_RATE#
+    '' -1 is no mode at all, so the first face always installs one rather
+    '' than trusting whatever the previous frame or the overlay left set.
+    z_have = -1
+    turbph = rdr.anim_time * TURB_RATE#
 
     ''
     '' The per-face lightmap table lives in a memAlloc'd block, so it is
@@ -273,6 +277,31 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
 
             liquid = mip_buff_inf(mipidx).liquid
             zofs   = mdl_zofs( face_mdl(i) )
+
+            ''
+            '' Depth mode follows what this face belongs to. face_mdl is 0
+            '' for the world and the submodel index for a brush entity.
+            ''
+            '' The world only writes: r_draw_world hands its faces over
+            '' front to back, so a test could never reject anything the
+            '' order had not already settled, and rejecting costs a
+            '' compare per pixel for nothing. Brush entities test, because
+            '' a door swinging through a doorway has no such guarantee.
+            ''
+            '' Only switched when it actually changes -- faces arrive in
+            '' large runs from the same model, so this is a handful of
+            '' calls a frame rather than one per face.
+            ''
+            if ( z_dc <> 0 ) then
+                if ( face_mdl(i) = 0 ) then
+                    z_want = UGL.Z.WRITE%
+                else
+                    z_want = UGL.Z.TEST%
+                end if
+                if ( z_want <> z_have ) then
+                    z_have = uglZMode%( z_want )
+                end if
+            end if
                     
             ''
             '' Texture axes, scaled by the texture size once per
