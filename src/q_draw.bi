@@ -31,6 +31,11 @@ const TURB_RATE#     = 40.74
 type RenderState
     backface    as integer      '' cull toggle
     usemips     as integer      '' mip toggle
+    lightmap    as integer      '' lightmap toggle. Only the per-frame gate
+                                '' in d_poly reads it, so switching it off
+                                '' costs nothing and leaves every built
+                                '' surface resident -- switching back on is
+                                '' instant, with no rebuild
     rendmode    as integer      '' 0 perspective, 1 affine, 2 wireframe
     polys       as integer      '' per-frame counters, cleared by scr_count_frame
     tris        as integer

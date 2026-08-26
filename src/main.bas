@@ -364,6 +364,8 @@ sub host_main
     end if
     
     rdr.usemips = -1
+    '' follows -lm: with no lightmap data loaded there is nothing to toggle
+    rdr.lightmap = env.use_lm
     rdr.rendmode = 0
     cam.fpsview = -1
     ''

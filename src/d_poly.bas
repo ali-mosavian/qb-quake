@@ -223,8 +223,12 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
     '' reached by DEF SEG and an offset rather than as an array. The segment
     '' is fixed for the whole frame; only the offset moves.
     ''
+    '' rdr.lightmap as well as env.use_lm: the flag says whether the data
+    '' was loaded at all, the toggle says whether to use it right now.
+    '' Clearing lm_iseg turns every face below into a plain textured one,
+    '' which is exactly what an unlit face already does.
     lm_iseg = 0
-    if ( env.use_lm and sc_ok <> 0 and lm_info <> 0 ) then
+    if ( env.use_lm and rdr.lightmap and sc_ok <> 0 and lm_info <> 0 ) then
         lm_iseg = sb_seg%( lm_info )
     end if
 
