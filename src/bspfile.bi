@@ -116,8 +116,12 @@ end type
 type face2
     planeid     as integer
     side        as integer
-    ledgeid     as integer
-    ledgenum    as integer
+    geom_row    as integer      '' this face's record in the geometry
+    geom_ofs    as integer      '' store: the row uglMapEx maps, and the
+                                '' byte offset of the record inside it.
+                                '' Replaces the old ledgeid/ledgenum pair
+                                '' in the same ten bytes -- and needs no
+                                '' unwrapping on read, which ledgeid did
     texinfoid   as integer
 end type
 
@@ -429,7 +433,7 @@ declare sub in_screenshot_key ( h_dst_dc as long )
 '' which is the whole reason they are separate routines.
 declare sub sys_parse_args ( )
 declare sub sys_init_tables ( )
-declare sub sys_mem_mark ( tag as string )
+declare sub sys_mem_mark ( tag as string )
 declare sub vid_init_ugl ( )
 declare sub s_init ( )
 declare sub s_start_music ( )
@@ -438,7 +442,7 @@ declare sub mod_open ( )
 declare sub scr_begin_loading ( )
 declare sub mod_find_spawn ( )
 declare sub mod_alloc ( )
-declare sub mod_load_vertexes ( )
+
 declare sub mod_load_faces ( )
 declare sub mod_load_lightmaps ( )
 declare sub mod_load_colormap ( )

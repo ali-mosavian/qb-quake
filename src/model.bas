@@ -133,8 +133,7 @@ end sub
 ''::::::::::
 sub mod_alloc
     redim tri_buffer(wld.tri_count-1) as face2
-    redim fvtx_buffer(ledg_count-1) as integer
-    redim vtx_buffer(wld.vtx_count-1) as vertex2
+
     redim lef_buffer(wld.lef_count-1) as leaf2
     redim lfc_buffer(lfc_count-1) as integer
     redim pln_buffer(pln_count-1) as plane2
@@ -159,18 +158,7 @@ end sub
 
 
 
-''::::::::::
-'' name: mod_load_vertexes
-''::::::::::
-sub mod_load_vertexes
-    scr_load_stage "geometry"
-    def seg = varseg( vtx_buffer(0) )
-    bload "verts.bld", varptr( vtx_buffer(0) )
-    def seg
 
-    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
-    scr_load_tick
-end sub
 
 
 
@@ -286,11 +274,37 @@ end sub
 ''::::::::::
 '' name: mod_load_facevtx
 ''::::::::::
+''
+'' Read straight into the mapped window, a row at a time. There is no
+'' conventional-memory staging buffer anywhere in here: the point of the
+'' store is that the geometry never lands in low memory, and a loader
+'' that read it into an array first would defeat that at the worst
+'' possible moment -- while every other buffer is also allocated.
+''
 sub mod_load_facevtx
+    dim f as FILE
+    dim y as integer
+    dim p as long
+
     scr_load_stage "face vertices"
-    def seg = varseg( fvtx_buffer(0) )
-    bload "fvtx.bld", varptr( fvtx_buffer(0) )
-    def seg
+
+    if ( fileOpen( f, "fgeom.bin", F4READ ) = 0 ) then
+        sys_error "0x0011, fgeom.bin missing"
+    end if
+
+    geom_rows = cint( (fileSize&( f ) + GEOM_W - 1) \ GEOM_W )
+    geom_dc = uglNew&( UGL.EMS, UGL.8BIT, GEOM_W, geom_rows )
+    if ( geom_dc = 0 ) then sys_error "0x0010, no EMS for the geometry store"
+
+    for y = 0 to geom_rows-1
+        p = uglMapEx&( geom_dc, y, GEOM_SLOT )
+        if ( p = 0 ) then sys_error "0x0012, geometry store will not map"
+        if ( fileReadH( f, p, GEOM_W ) <> GEOM_W ) then
+            sys_error "0x0013, fgeom.bin short read"
+        end if
+    next y
+
+    fileClose f
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     scr_load_tick

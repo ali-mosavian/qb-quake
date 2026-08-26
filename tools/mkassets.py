@@ -14,6 +14,13 @@ game palette, which uGL's own assembly BMP loader can pull in directly.
 """
 import struct, sys, os, math
 
+# The geometry store's row width, and the corner count d_poly.bas's
+# polyb()/uvbuffb() can hold. GEOM_W must match GEOM_W in q_map.bi: it is
+# the unit uglMapEx maps, and a record that straddled it would be read
+# half from the wrong EMS page.
+GEOM_W = 8192
+GEOM_MAXVTX = 33
+
 MIPS   = 4
 SIZES  = [64, 32, 16, 8]        # what the renderer wants, per mip level
 
@@ -315,25 +322,74 @@ def convert_lumps(d, lumps, outdir):
         o, n = lumps[i]
         return d[o:o+n]
 
-    # vertices: vertex(12, 3 floats) -> vertex2(6, Q13.3 fixed point).
-    # scale by 8 and round to the nearest 1/8 unit; bspfile.bi's vertex2
-    # comment has the range/precision reasoning. A coordinate whose scaled
-    # value doesn't fit a signed 16-bit integer would silently wrap in
-    # BASIC's overflow-unchecked build, corrupting geometry with no error --
-    # so this fails loudly at asset-build time instead.
+    # The per-face geometry store, fgeom.bin -- which replaces BOTH the
+    # vertex array and the surfedge list.
+    #
+    # The renderer's inner loop wants one thing from the mesh: this face's
+    # corner positions, in order. An indexed mesh cannot answer that
+    # without both tables resident, which is why they cost 43K of
+    # conventional memory on dm3ish and 151K on e1m1. Written out flat,
+    # per face, the answer streams from EMS with a working set of ONE
+    # face -- so the arrays leave low memory entirely and nothing has to
+    # be cached, evicted or prefetched.
+    #
+    # The price is duplication: a vertex shared by four faces is stored
+    # four times, 3.6x overall on e1m1. In EMS, against 4MB, that is not
+    # a price.
+    #
+    # Layout. Rows of GEOM_W bytes, because a row is what uglMapEx maps
+    # and a record must not straddle one -- the same constraint, and the
+    # same solution, as the luxel atlas. A record is
+    #
+    #     word nvtx, then nvtx * { int16 x, y, z }      Q13.3 as before
+    #
+    # and a face carries (row, offset) instead of (ledgeid, ledgenum).
     raw = lump(3)
-    buf = bytearray()
+    verts = []
     for k in range(0, len(raw), 12):
         vidx = k // 12
-        x, y, z = struct.unpack_from('<fff', raw, k)
-        for axis, coord in (('x', x), ('y', y), ('z', z)):
+        xyz = []
+        for axis, coord in zip('xyz', struct.unpack_from('<fff', raw, k)):
             scaled = round(coord * 8)
+            # BASIC's build is overflow-unchecked, so a coordinate that
+            # did not fit would silently wrap and corrupt geometry with
+            # no error. Fail here instead.
             if not (-32768 <= scaled <= 32767):
                 raise SystemExit(
-                    f"verts.bld: vertex {vidx} {axis}={coord} scales to "
+                    f"fgeom.bin: vertex {vidx} {axis}={coord} scales to "
                     f"{scaled}, outside signed 16-bit Q13.3 range")
-            buf += struct.pack('<h', scaled)
-    out['verts.bld'] = bytes(buf)
+            xyz.append(scaled)
+        verts.append(xyz)
+
+    raw = lump(12)
+    edges = [struct.unpack_from('<2H', raw, k) for k in range(0, len(raw), 4)]
+    raw = lump(13)
+    surfedges = [struct.unpack_from('<i', raw, k)[0]
+                 for k in range(0, len(raw), 4)]
+
+    rows = [bytearray()]
+    fgeom = []                                  # (row, offset) per face
+    raw = lump(7)
+    for k in range(0, len(raw), 20):
+        firstedge, = struct.unpack_from('<i', raw, k + 4)
+        nvtx, = struct.unpack_from('<h', raw, k + 8)
+        # d_poly.bas indexes polyb(32)/uvbuffb(32), so 33 corners is the
+        # standing contract; a face past it would run off the end of both.
+        if not (0 < nvtx <= GEOM_MAXVTX):
+            raise SystemExit(
+                f"fgeom.bin: face {k // 20} has {nvtx} corners, and "
+                f"d_poly.bas's polyb() holds {GEOM_MAXVTX}")
+        rec = bytearray(struct.pack('<h', nvtx))
+        for e in range(nvtx):
+            se = surfedges[firstedge + e]
+            rec += struct.pack('<3h', *verts[edges[abs(se)][0 if se >= 0 else 1]])
+        if len(rows[-1]) + len(rec) > GEOM_W:
+            rows[-1].extend(b'\0' * (GEOM_W - len(rows[-1])))
+            rows.append(bytearray())
+        fgeom.append((len(rows) - 1, len(rows[-1])))
+        rows[-1] += rec
+    rows[-1].extend(b'\0' * (GEOM_W - len(rows[-1])))
+    out['fgeom.bin'] = b''.join(bytes(r) for r in rows)
 
     # marksurfaces, models: identical either side
     out['lface.bld'] = lump(11)
@@ -362,47 +418,21 @@ def convert_lumps(d, lumps, outdir):
         struct.pack('<hhh', struct.unpack_from('<i', raw, k)[0], *struct.unpack_from('<hh', raw, k+4))
         for k in range(0, len(raw), 8))
 
-    # fvtx: the surfedge list with the edge indirection already resolved.
-    #
-    # A surfedge is a signed edge index; its sign picks which end of a
-    # shared edge this face walks toward. That is a build-time fact --
-    # nothing at runtime ever changes it -- so the answer is written out
-    # here and the edge lump is not shipped at all. It costs the renderer
-    # a compare, a branch, a negate and one indirection per vertex, and
-    # costs the far heap the whole of edg_buffer: 23K on dm3ish, 54K on
-    # e1m1.
-    raw = lump(12)
-    edges = [struct.unpack_from('<2H', raw, k) for k in range(0, len(raw), 4)]
-    raw = lump(13)
-    buf = bytearray()
-    for k in range(0, len(raw), 4):
-        se = struct.unpack_from('<i', raw, k)[0]
-        v = edges[abs(se)][0 if se >= 0 else 1]
-        # vtx_buffer() is indexed by a BASIC Integer, so anything past
-        # 32,767 needs a Long index and a different fix. Refuse to build
-        # rather than wrap: geometry that is subtly wrong is far worse to
-        # chase than a build that stops.
-        if v > 32767:
-            raise SystemExit(
-                f"fvtx.bld: surfedge {k // 4} resolves to vertex {v}, "
-                f"past what a signed Integer can index")
-        buf += struct.pack('<h', v)
-    out['fvtx.bld'] = bytes(buf)
-
     # faces: face(20) -> face2(10), dropping the two flag words and the
-    # LIGHTING-lump offset (unused: d_surf.bas's lm_info replaced it),
-    # and narrowing ledgeid to an integer -- it is an unsigned ledges.bld
-    # index (max 32,880 on e3m6), so values over 32,767 are packed as their
-    # two's-complement bit pattern; the BASIC side undoes the wrap on read.
+    # LIGHTING-lump offset (unused: d_surf.bas's lm_info replaced it).
+    #
+    # firstedge/numedges are replaced by the face's address in fgeom.bin:
+    # the row uglMapEx maps, and the byte offset of its record inside it.
+    # Same ten bytes, and no ledges.bld index to unwrap on read.
     raw = lump(7)
     buf = bytearray()
     for k in range(0, len(raw), 20):
-        planeid, side, ledgeid, ledgenum, texinfoid, _f1, _f2, _lightmap = \
+        planeid, side, _le, _ln, texinfoid, _f1, _f2, _lightmap = \
             struct.unpack_from('<hhihhhhi', raw, k)
-        if ledgeid >= 32768:
-            ledgeid -= 65536
-        buf += struct.pack('<hhhhh', planeid, side, ledgeid,
-                           ledgenum, texinfoid)
+        grow, gofs = fgeom[k // 20]
+        # gofs is 0..GEOM_W-1 so it always fits; grow is a row count and a
+        # map big enough to pass 32,767 rows would be 256MB of geometry
+        buf += struct.pack('<hhhhh', planeid, side, grow, gofs, texinfoid)
     out['faces.bld'] = bytes(buf)
 
     # leaves: leaf(28) -> leaf2(22), dropping the trailing 4 bytes and
@@ -444,9 +474,10 @@ def convert_lumps(d, lumps, outdir):
     for name, payload in out.items():
         path = os.path.join(outdir, name)
         if name.endswith('.bin') or name.endswith('.bmp'):
-            # raw: .bin is read by mgl's fileRead into a memAlloc'd block and
-            # .bmp by uglNewBMPEx, so neither is bound by BLOAD's 64K cap or
-            # BASIC's far heap
+            # raw: .bin is read by mgl's fileRead -- into a memAlloc'd
+            # block for lmface, straight into a mapped EMS window for
+            # fgeom -- and .bmp by uglNewBMPEx, so none of them is bound
+            # by BLOAD's 64K cap or by BASIC's far heap
             open(path, 'wb').write(payload)
             total += len(payload)
         else:
