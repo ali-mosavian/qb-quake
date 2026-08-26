@@ -179,7 +179,22 @@ VBDOS specifically.
 a handler continue past it -- so a test can enumerate violations rather
 than dying on the first.
 
-QB 4.5's full option list is in QB45QCK.HLP, which is QuickHelp
-compressed behind an `LN` magic. mini-qb's tools/view_help.py reads
-already-extracted markdown, not .hlp, and no extractor for that format
-was found in the tree.
+The PDS column's wording above comes from the "BC Command Line" topic
+in pds71/HELP/BAS7QCK.HLP, decoded with tools/hlpextract.py (QuickHelp
+`LN` format: Huffman, then keyphrase + run-length, then line records).
+No extractor for that format existed in the tree; mini-qb's
+tools/view_help.py reads already-extracted markdown, not .hlp.
+
+QB 4.5's own help files do NOT document BC's switches -- QB45QCK.HLP,
+QB45ADVR.HLP and QB45ENER.HLP have no such topic, confirmed by running
+the real HELPMAKE 1.04 `/DU` over them. The QB 4.5 Advisor covers
+QB.EXE's command line, not BC.EXE's. Hence the probing above.
+
+That probe and the PDS documentation agree exactly: every switch QB 4.5
+rejected is one BAS7QCK.HLP describes as a PDS 7.1 feature (ISAM, far
+strings, protected mode, 286 codegen, expanded-memory sharing). The
+accept/reject split is the 4.5/7.1 product boundary, not an artifact of
+how the switches were fed to BC.
+
+PDS also has `/Help`, which prints the option screen; QB 4.5 has no
+equivalent.
