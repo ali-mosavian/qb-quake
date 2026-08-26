@@ -60,10 +60,6 @@ option explicit
 '' at once.
 ''
 
-'' BSAVE's own header, still on the front of colmap.bld: a type byte, then
-'' the segment and offset it was saved from, then the length.
-const CM_HDR    = 7
-
 const SC_MINSH  = 4             '' 16, the smallest class
 const SC_MAXSH  = 8             '' 256 on one axis, if the other stays small
 const SC_MAXSUM = 14            '' 2^a * 2^b <= 16384: one EMS page, which is
@@ -1148,8 +1144,7 @@ sub sb_build ( byval dc as long, byval tex as long, _
     dim lmw as integer, lmh as integer
     dim lmx as long, lmy as integer, lmp as long
     dim tms as integer, tmt as integer
-    dim o as long, iseg as integer, cmsg as integer
-    dim cmofs as long
+    dim o as long, iseg as integer
     dim mi as integer, recip as single
     dim sbp as SBPARM
     dim lseg as long, lofs16 as long
@@ -1159,13 +1154,6 @@ sub sb_build ( byval dc as long, byval tex as long, _
     mi = tex_inf_buff( tri_buffer(face).texinfoid ).miptex
 
     iseg = sb_seg%( lm_info )
-    cmsg  = varseg( cm_buf(0) )
-    ''
-    '' VARPTR is signed, so an offset past 32767 comes back negative; mask
-    '' it to the unsigned offset the bits actually mean. Hoisted out of the
-    '' texel loop while we are here.
-    ''
-    cmofs = clng( varptr( cm_buf(0) ) ) and 65535&
 
     def seg = iseg
     o = clng(face) * 16&
@@ -1216,7 +1204,9 @@ sub sb_build ( byval dc as long, byval tex as long, _
     '' though only lmw of each is ours.
     ''
     sbp.lmstride = clng( sb_pot%( lmw ) )
-    sbp.cmapptr = clng( cmsg ) * 65536& + cmofs
+    '' Mapped per build, not held: the slot is the depth buffer's, and
+    '' anything that touched depth in between would have taken it back
+    sbp.cmapptr = uglMapEx&( cm_dc, 0, CM_SLOT )
     sbp.au0 = au
     sbp.av0 = av
     sbp.du  = du

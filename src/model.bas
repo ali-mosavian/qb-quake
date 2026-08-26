@@ -140,7 +140,6 @@ sub mod_alloc
     redim nds_buffer(wld.nds_count-1) as nodeb
     redim mdl_buffer(wld.mdl_count-1) as model
     redim order_list(wld.nds_count-1) as integer
-    redim pvs_buffer_a( (wld.head.vislist.size+1)\2 ) as integer
     '' Sized to the map like every buffer above it, not a fixed 4096: r_bsp.bas
     '' indexes pvs_buffer_b 0..wld.lef_count-1 and poly_flag by face index
     '' 0..wld.tri_count-1 (see its own comment: "a run can carry past the last
@@ -191,14 +190,30 @@ end sub
 ''       memAlloc's paragraph alignment: the builder only PEEKs the table.
 ''::::::::::
 sub mod_load_colormap
+    dim f as FILE
+
     scr_load_stage "colormap"
-    redim cm_buf(8191) as integer
 
-    def seg = varseg( cm_buf(0) )
-    bload "colmap.bld", varptr( cm_buf(0) )
-    def seg
+    dim p as long
 
-    cm_size = 16384
+    cm_dc = 0
+    cm_size = 0
+
+    if ( fileOpen( f, "colmap.bin", F4READ ) = 0 ) then exit sub
+
+    cm_dc = uglNew&( UGL.EMS, UGL.8BIT, 16384, 1 )
+    if ( cm_dc <> 0 ) then
+        p = uglMapEx&( cm_dc, 0, CM_SLOT )
+        if ( p <> 0 ) then
+            if ( fileReadH( f, p, 16384 ) = 16384 ) then
+                cm_size = 16384
+            end if
+        end if
+    end if
+
+    fileClose f
+
+    if ( cm_size = 0 ) then sys_error "0x0015, colormap would not load"
 end sub
 
 
@@ -425,10 +440,31 @@ end sub
 '' name: mod_load_visibility
 ''::::::::::
 sub mod_load_visibility
+    dim f as FILE
+
     scr_load_stage "visibility"
-    def seg = varseg( pvs_buffer_a(0) )
-    bload "pvs.bld", varptr( pvs_buffer_a(0) )
-    def seg
+
+    pvs_ptr = 0
+    pvs_size = 0
+
+    if ( fileOpen( f, "pvs.bin", F4READ ) <> 0 ) then
+        pvs_size = fileSize&( f )
+        if ( pvs_size > 0 ) then
+            pvs_ptr = memAlloc( pvs_size )
+            if ( pvs_ptr <> 0 ) then
+                if ( fileReadH( f, pvs_ptr, pvs_size ) <> pvs_size ) then
+                    memFree pvs_ptr
+                    pvs_ptr = 0
+                    pvs_size = 0
+                end if
+            else
+                pvs_size = 0
+            end if
+        end if
+        fileClose f
+    end if
+
+    if ( pvs_ptr = 0 ) then sys_error "0x0014, visibility lump would not load"
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     scr_load_tick
