@@ -137,8 +137,15 @@ run)
     ## the benchmark. A blanket *.bmp takes the staged texture assets with
     ## it (build copies them into this very directory), which is the trap
     ## docs/bugs.md records.
+    ## bench.txt and the error logs go too. A run that dies before writing
+    ## its report leaves the PREVIOUS run's file sitting there, and reading
+    ## it back reports the last map's numbers for this one -- which has
+    ## already caused a stale figure to be quoted for a build that never
+    ## produced it.
     rm -f "$out"/scrn*.bmp "$out"/SCRN*.BMP "$out"/bench.bmp "$out"/BENCH.BMP \
-          "$out"/ran.txt "$out"/RAN.TXT
+          "$out"/ran.txt "$out"/RAN.TXT "$out"/bench.txt "$out"/BENCH.TXT \
+          "$out"/errmem.txt "$out"/ERRMEM.TXT "$out"/error.log "$out"/ERROR.LOG \
+          "$out"/run.out "$out"/RUN.OUT
 
     printf '%s\r\n' \
       '@echo off' \
