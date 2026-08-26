@@ -257,6 +257,62 @@ of the `.mk` ASMLIST declarations.
   the cause.
 - `lib16` blocks on a prompt without a trailing `;`, the same as LINK.
 
+## Build directories: never share one
+
+**Always point a build at a path unique to your worktree/session.** More
+than one agent works in these trees at once, and every library rule is
+
+    rm -f X.LIB && jwlib X.LIB +objs...
+
+so two processes building the same `BUILD` produce a library that is
+missing whatever the other was mid-write on. It does NOT fail as a build
+error. It surfaces later as
+
+    error L2029: 'SOMESYMBOL' : unresolved external
+
+naming a DIFFERENT module each time -- `uglarr`, then `emsmapex`, then
+`uglz`. And because LINK still emits an EXE with `int 3` at the
+unresolved call site, a test then "compiles clean and prints nothing",
+which reads like a hang in the code under test. Hours went into that.
+
+Three knobs, all defaulting to the old shared paths so nothing breaks:
+
+    BUILD=$PWD/build/native-mgl-<tag>     uGL libraries (tools/native/Makefile)
+    VBD_OUT=$PWD/build/vbd-<tag>          renderer objs, BENCH.BMP, bench.txt
+    BUILD_TAG=<tag>                       mgl test dirs (src/test/runtest.sh)
+
+`BUILD_TAG` defaults to a hash of `(mgl checkout, UGLLIB path)`, so a
+unique `BUILD` gives unique test directories for free. Pick a tag once
+per session and keep using it -- a tag containing `$$` changes every
+command and forces a full rebuild each time.
+
+`VBD_OUT` matters for a subtler reason: `check.sh` compares `BENCH.BMP`
+against the reference and reads ticks from `bench.txt`. Two runs sharing
+that directory can have the picture from one run and the timing from the
+other, and the comparison still "passes".
+
+## Building and testing in parallel
+
+Both parallelise well once the output trees are separate:
+
+    make -f tools/native/Makefile -j8 BUILD="$BUILD"     # ~11s from clean
+    UGLLIB="$BUILD/UGLV.LIB" JOBS=8 src/test/runall.sh   # ~7s, 12 tests
+
+`-j8` is safe: `UGLV.LIB` depends on the component libraries and each of
+those on its objects, so make orders them. The unsafe thing is two
+separate `make` PROCESSES, not one parallel make.
+
+Tests parallelise because each gets its own `build/test/<tag>/<name>` and
+only reads the shared library. `JOBS` defaults to half the cores -- every
+test is a DOSBox at `cycles=max`, so oversubscribing makes each slower
+rather than the set faster.
+
+**Use the dynamic core.** `runtest.sh` and `runall.sh` default to
+`CORE=dynamic`; `uarrtst` runs in ~2s under it against ~10min on
+`core=normal`. Anything reporting TIMINGS must set `CORE=normal`
+explicitly, because the recompiler throws away translations when mgl
+patches immediates into its own inner loops.
+
 ## Harness: benchmark mode
 
     qrender.exe dm3ish.bsp -bench 500

@@ -116,6 +116,42 @@ def bmp8_bytes(w, h, pixels, pal):
     info = struct.pack('<IiiHHIIiiII', 40, w, h, 1, 8, 0, len(px), 2835, 2835, 256, 256)
     return hdr + info + palb + px
 
+UA_WIN = 16384          # uglArr's page size (UA_WIN in src/ugl/uglarr.asm)
+
+# Element sizes for the paged lumps, so the padding lands where uGL puts it.
+PAGED_ELEM = {
+    'nodes.pag': 22,    # nodeb: planeid child0 child1 lfaceid lfacenum + 12
+}
+
+
+def write_paged(path, payload, elem, win=UA_WIN):
+    """Lay a lump out the way uglArr's store is laid out.
+
+    Page p starts at byte p*win and holds (win // elem) elements, with the
+    page's tail padded -- INCLUDING the last page. uglArrLoad can then read
+    whole pages straight into the mapped EMS window, with no partial page to
+    special-case and no element arithmetic: the two layouts are identical by
+    construction.
+
+    Page padding, not element padding, is deliberate. At 22 bytes it wastes
+    16 bytes per page rather than 10 bytes per element -- 64 bytes against
+    27,500 on e1m1's node tree.
+
+    Unlike BLOAD there is no 64K cap here, which is the other reason the
+    paged lumps are not .bld: e1m1's node tree does not fit in one.
+    """
+    perpg = win // elem
+    if perpg < 1:
+        raise SystemExit(f"{path}: element {elem} is larger than a {win}-byte page")
+    n = len(payload) // elem
+    out = bytearray()
+    for start in range(0, n, perpg):
+        chunk = payload[start * elem:min(start + perpg, n) * elem]
+        out += chunk + b'\x00' * (win - len(chunk))
+    open(path, 'wb').write(out)
+    return len(out)
+
+
 def write_bload(path, payload):
     """BSAVE-format file: 0xFD, segment, offset, length, then the bytes.
 
@@ -482,12 +518,16 @@ def convert_lumps(d, lumps, outdir):
         bound = raw[k+8:k+20]
         lfaceid, lfacenum = struct.unpack_from('<hh', raw, k+20)
         buf += struct.pack('<hhhhh', planeid, child0, child1, lfaceid, lfacenum) + bound
-    out['nodes.bld'] = bytes(buf)
+    out['nodes.pag'] = bytes(buf)
 
     total = 0
     for name, payload in out.items():
         path = os.path.join(outdir, name)
-        if name.endswith('.bin') or name.endswith('.bmp'):
+        if name.endswith('.pag'):
+            # page-padded, raw: read by uglArrLoad straight into EMS, so it
+            # never occupies conventional memory at all
+            total += write_paged(path, payload, PAGED_ELEM[name])
+        elif name.endswith('.bin') or name.endswith('.bmp'):
             # raw: .bin is read by mgl's fileRead -- into a memAlloc'd
             # block for lmface, straight into a mapped EMS window for
             # fgeom -- and .bmp by uglNewBMPEx, so none of them is bound

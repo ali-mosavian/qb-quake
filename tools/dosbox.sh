@@ -49,6 +49,9 @@ build)
       *) echo "unknown target: $tc (want vbd, pds or qb45)" >&2; exit 1 ;;
     esac
     out="$ROOT/build/$tc"
+    ## VBD_OUT relocates the vbd tree only -- it is what check.sh isolates
+    ## so two sessions do not share BENCH.BMP and bench.txt.
+    [ "$tc" = vbd ] && out="${VBD_OUT:-$out}"
     mkdir -p "$out"
     cp "$ROOT"/src/*.bas "$ROOT"/src/*.bi "$ROOT"/data/stuff.ini "$ROOT"/data/base.dat "$out/"
     ##
@@ -130,7 +133,7 @@ build)
     ;;
 run)
     map="${arg:-dm3ish.bsp}"
-    out="$ROOT/build/vbd"
+    out="${VBD_OUT:-$ROOT/build/vbd}"
     [[ -f "$out/qrender.exe" ]] || { echo "no exe; run: tools/dosbox.sh build" >&2; exit 1; }
     cp "$ROOT/data/$map" "$out/"
     ## Screenshot names only -- scrn*.bmp from the 's' key, bench.bmp from
@@ -171,7 +174,7 @@ viz)
     # mgl's fillers are self-modifying, so the dynamic core is out.
     # starves the debug socket; use dosbox.sh debug for a controllable one.
     map="${arg:-dm3ish.bsp}"
-    out="$ROOT/build/vbd"
+    out="${VBD_OUT:-$ROOT/build/vbd}"
     [[ -f "$out/qrender.exe" ]] || { echo "no exe; run: tools/dosbox.sh build" >&2; exit 1; }
     cp "$ROOT/data/$map" "$out/"
     conf="$out/dosbox-viz.conf"
