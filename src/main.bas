@@ -136,6 +136,8 @@ dim shared lightmap as long
     '' never worked. OPTION EXPLICIT turns that same typo into a hard compile
     '' error instead of a silent no-op, which is what actually surfaced it.
     ''
+    dim ef as integer, mi as integer
+
     on error goto HandleErr
     
         
@@ -151,7 +153,21 @@ dim shared lightmap as long
     
     
 HandleErr:
-    sys_error "0x1000, Unknown runtime error..."
+    ''
+    '' ERR and ERL, not just "something went wrong". ERR names the fault --
+    '' 7 is out of memory, 9 subscript out of range, 5 illegal call -- and
+    '' with the memory trace beside it that is usually enough to say which
+    '' buffer would not fit, without a debugger and without another build.
+    ''
+    ef = freefile
+    open "errmem.txt" for output as #ef
+    print #ef, "err " + ltrim$(str$( err )) + " erl " + ltrim$(str$( erl ))
+    for mi = 0 to mem_n-1
+        print #ef, "mem " + rtrim$(mem_tag(mi)) + " " + ltrim$(str$( mem_fre(mi) ))
+    next mi
+    close #ef
+
+    sys_error "0x1000, runtime error" + str$( err ) + " at line" + str$( erl )
 
 
 
