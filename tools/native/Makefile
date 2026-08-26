@@ -62,7 +62,7 @@ DIR_DOS   := dos
 MODS_DOS  := dosfile dosmem dosbfile
 
 DIR_EMS   := ems
-MODS_EMS  := emsalloc emsavail emsblock emsfill emsfree emsheap emsmap emssave
+MODS_EMS  := emsalloc emsavail emsblock emsfill emsfree emsheap emsmap emssave emsmapex
 
 DIR_XMS   := xms
 MODS_XMS  := xmsalloc xmsavail xmsblock xmsfill xmsfree xmsheap xmsmap
