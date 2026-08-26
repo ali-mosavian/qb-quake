@@ -1102,6 +1102,8 @@ sub scr_draw_hud ( h_dst_dc as long )
         end if
         ftr = ftr + "   B cull "
         if ( rdr.backface ) then ftr = ftr + "ON " else ftr = ftr + "off"
+        ftr = ftr + "   L lm "
+        if ( rdr.lightmap ) then ftr = ftr + "ON " else ftr = ftr + "off"
         ftr = ftr + "   F12 hide"
 
         yy = env.y_res - 9

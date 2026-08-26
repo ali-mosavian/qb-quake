@@ -99,6 +99,7 @@ sub in_handle_toggles
     if ( in_keystroke( env.keyboard.f3  ) ) then cam.fpsview  = not cam.fpsview
     if ( in_keystroke( env.keyboard.f12 ) ) then scr.stats    = not scr.stats
     if ( in_keystroke( env.keyboard.b   ) ) then rdr.backface = not rdr.backface
+    if ( in_keystroke( env.keyboard.l   ) ) then rdr.lightmap = not rdr.lightmap
     if ( in_keystroke( env.keyboard.f4  ) ) then pl.noclip    = not pl.noclip
 
 end sub
