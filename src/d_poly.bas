@@ -40,6 +40,16 @@ option explicit
 dim shared turbsin( 255 ) as single
 dim shared poly(64) as u3dVector4f
 dim shared polyb(32) as u3dVector4f
+''
+'' One face's record, copied out of the mapped EMS window. A whole record
+'' at a time by memCopy rather than a PEEK per component: PEEK is a call
+'' per byte from BASIC, and the inner loop reads three coordinates for
+'' every corner of every drawn face.
+''
+'' 100 as a literal, not GEOM_MAXREC \ 2: an expression bound can make
+'' the array dynamic, and a dynamic array with no REDIM is zero length --
+'' which memCopy would happily write 200 bytes into
+dim shared gv_buf(100) as integer
 dim shared prj_u(32) as single
 dim shared prj_v(32) as single
 dim shared prj_w(32) as single
@@ -178,8 +188,9 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
     dim polycnt as integer
     dim mi as integer, m as integer
     dim leaf_indx as integer, leaf_end as integer, ti as integer, i as integer
-    dim pid as integer, lid as long, tex as integer, j as integer
-    dim edge_idx as integer, v0 as integer
+    dim pid as integer, tex as integer, j as integer
+    dim v0 as integer, gn as integer
+    dim gp as long, gv_dst as long
     dim zl as single
     dim miplevel as integer, tex_indx as integer
     dim p2 as integer, p3 as integer
@@ -216,6 +227,14 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
     if ( env.use_lm and sc_ok <> 0 and lm_info <> 0 ) then
         lm_iseg = sb_seg%( lm_info )
     end if
+
+    ''
+    '' Where memCopy puts a face's record. Hoisted: VARSEG/VARPTR on a
+    '' DIM SHARED array cannot move, and working it out per face is a
+    '' cost per drawn face for an answer that never changes.
+    ''
+    gv_dst = clng( varseg( gv_buf(0) ) ) * 65536& + _
+             (clng( varptr( gv_buf(0) ) ) and 65535&)
 
     for mi = 0 to vis.ord_count-1
         m = order_list(mi)
@@ -269,11 +288,27 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
 		''
 		'' Build polygon
 		''
-            lid = tri_buffer(i).ledgeid
-            if ( lid < 0 ) then lid = lid + 65536
+            ''
+            '' This face's corners, out of the geometry store. Copy up to
+            '' the end of the row and no further: the builder keeps a
+            '' record inside one row, so the row end is also the end of
+            '' the mapped EMS window, and a fixed-size copy from a record
+            '' near it would read off the page.
+            ''
+            '' GEOM_SLOT is shared with the luxel atlas. Safe because the
+            '' record is copied out here and the atlas is not mapped until
+            '' sb_build, several hundred lines below.
+            ''
+            gp = uglMapEx&( geom_dc, tri_buffer(i).geom_row, GEOM_SLOT )
+            gn = GEOM_MAXREC
+            if ( tri_buffer(i).geom_ofs + gn > GEOM_W ) then
+                gn = GEOM_W - tri_buffer(i).geom_ofs
+            end if
+            memCopy gv_dst, gp + clng( tri_buffer(i).geom_ofs ), clng( gn )
+
+            vcnt = gv_buf(0)
             tex = tri_buffer(i).texinfoid
             mipidx = tex_inf_buff(tex).miptex
-            vcnt = tri_buffer(i).ledgenum
 
             liquid = mip_buff_inf(mipidx).liquid
             zofs   = mdl_zofs( face_mdl(i) )
@@ -378,18 +413,15 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
             end if
                     
             for  j = 0 to vcnt-1
-                '' the sign test and the edge lookup happened in
-                '' mkassets.py; this is the vertex it resolved to
-                v0 = fvtx_buffer(lid+j)
-
                 ''
-                '' One fetch per component. The vertex was read
-                '' nine times before: three for the position and
-                '' three for each texture axis.
+                '' Straight out of the copied record -- no vertex
+                '' index, no edge, no indirection at all. j*3+1
+                '' because gv_buf(0) is the corner count.
                 ''
-                vx = vtx_buffer(v0).x * VTX_UNSCALE#
-                vy = vtx_buffer(v0).y * VTX_UNSCALE#
-                vz = vtx_buffer(v0).z * VTX_UNSCALE#
+                v0 = j*3 + 1
+                vx = gv_buf(v0    ) * VTX_UNSCALE#
+                vy = gv_buf(v0 + 1) * VTX_UNSCALE#
+                vz = gv_buf(v0 + 2) * VTX_UNSCALE#
 
                 polyb(j).x = vx
                 polyb(j).y = vz + zofs

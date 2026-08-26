@@ -210,7 +210,6 @@ sub host_init
 
 
     '' level lumps
-    mod_load_vertexes
     mod_load_faces
     mod_load_lightmaps
     sys_mem_mark "lmtable"

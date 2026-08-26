@@ -14,10 +14,11 @@
 '' texture passes. Fourteen sites used to spell the divisor as a literal 14.0
 '' and had to agree with each other by hand.
 ''
-'' 15 since the edge and surfedge readers became one: mkassets.py resolves
-'' the indirection, so there is a single lump to load.
+'' 14 since the vertex, edge and surfedge readers became one: mkassets.py
+'' resolves the whole mesh into per-face corner lists, so there is a single
+'' lump, and it is read into EMS rather than into an array.
 ''
-const LOAD_STEPS = 15
+const LOAD_STEPS = 14
 
 type MapState
     head        as header       '' the on-disk lump directory
@@ -50,14 +51,30 @@ common shared /map_s/ ldr as LoadState
 '' Written by model.bas, walked by the renderer. A TYPE cannot contain an
 '' array, so these stay loose.
 ''
+common shared /map_a/ tri_buffer() as face2
+common shared /map_a/ lef_buffer() as leaf2, lfc_buffer() as integer
+
 ''
-'' fvtx_buffer is the surfedge list with the edge indirection resolved at
-'' build time: entry n is the vertex index for corner n, sign already
-'' applied. The edge lump is not loaded at all -- see mkassets.py's
-'' fvtx.bld note.
+'' The geometry store. Every face's corner positions written out flat, in
+'' order, in one EMS dc -- so the vertex array and the surfedge list are
+'' not in conventional memory at all, and neither is the edge table that
+'' used to join them.
 ''
-common shared /map_a/ tri_buffer() as face2, fvtx_buffer() as integer
-common shared /map_a/ vtx_buffer() as vertex2, lef_buffer() as leaf2, lfc_buffer() as integer
+'' The renderer's inner loop only ever asked the mesh one question: what
+'' are this face's corners? An indexed mesh cannot answer without both
+'' tables resident. Flat, it streams: one uglMapEx and one memCopy per
+'' DRAWN face, and the working set is a single face -- no cache, no
+'' eviction, no prefetch, and no cliff when the view opens out.
+''
+'' GEOM_W must match mkassets.py's: it is the row uglMapEx maps, and the
+'' builder guarantees no record straddles one.
+''
+const GEOM_W = 8192
+const GEOM_SLOT = 2
+const GEOM_MAXVTX = 33
+const GEOM_MAXREC = 2 + GEOM_MAXVTX * 6
+
+common shared /map_a/ geom_dc as long, geom_rows as integer
 common shared /map_a/ mdl_buffer() as model, pln_buffer() as plane2, nds_buffer() as nodeb
 common shared /map_a/ order_list() as integer, pvs_buffer_a() as integer, pvs_buffer_b() as integer
 common shared /map_a/ tex_inf_buff() as texinfo2, poly_flag() as integer
