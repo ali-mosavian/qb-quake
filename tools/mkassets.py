@@ -335,8 +335,7 @@ def convert_lumps(d, lumps, outdir):
             buf += struct.pack('<h', scaled)
     out['verts.bld'] = bytes(buf)
 
-    # edges, marksurfaces, models: identical either side
-    out['edges.bld'] = lump(12)
+    # marksurfaces, models: identical either side
     out['lface.bld'] = lump(11)
     out['models.bld'] = lump(14)
     out['pvs.bld'] = lump(4)
@@ -363,12 +362,32 @@ def convert_lumps(d, lumps, outdir):
         struct.pack('<hhh', struct.unpack_from('<i', raw, k)[0], *struct.unpack_from('<hh', raw, k+4))
         for k in range(0, len(raw), 8))
 
-    # ledges: long on disk, integer in memory. bspLoadEdgeIndex read a long
-    # into a temporary and assigned it down, so the truncation is deliberate.
+    # fvtx: the surfedge list with the edge indirection already resolved.
+    #
+    # A surfedge is a signed edge index; its sign picks which end of a
+    # shared edge this face walks toward. That is a build-time fact --
+    # nothing at runtime ever changes it -- so the answer is written out
+    # here and the edge lump is not shipped at all. It costs the renderer
+    # a compare, a branch, a negate and one indirection per vertex, and
+    # costs the far heap the whole of edg_buffer: 23K on dm3ish, 54K on
+    # e1m1.
+    raw = lump(12)
+    edges = [struct.unpack_from('<2H', raw, k) for k in range(0, len(raw), 4)]
     raw = lump(13)
-    out['ledges.bld'] = b''.join(
-        struct.pack('<h', struct.unpack_from('<i', raw, k)[0])
-        for k in range(0, len(raw), 4))
+    buf = bytearray()
+    for k in range(0, len(raw), 4):
+        se = struct.unpack_from('<i', raw, k)[0]
+        v = edges[abs(se)][0 if se >= 0 else 1]
+        # vtx_buffer() is indexed by a BASIC Integer, so anything past
+        # 32,767 needs a Long index and a different fix. Refuse to build
+        # rather than wrap: geometry that is subtly wrong is far worse to
+        # chase than a build that stops.
+        if v > 32767:
+            raise SystemExit(
+                f"fvtx.bld: surfedge {k // 4} resolves to vertex {v}, "
+                f"past what a signed Integer can index")
+        buf += struct.pack('<h', v)
+    out['fvtx.bld'] = bytes(buf)
 
     # faces: face(20) -> face2(10), dropping the two flag words and the
     # LIGHTING-lump offset (unused: d_surf.bas's lm_info replaced it),

@@ -54,7 +54,7 @@ sub mod_open
     
     wld.tri_count = wld.head.faces.size \ len( fce )
     wld.vtx_count = wld.head.vertices.size \ len( vtxtmp )
-    wld.edg_count = wld.head.edges.size \ len( edg_buffer(0) )
+    wld.edg_count = wld.head.edges.size \ 4
     ledg_count = wld.head.ledges.size \ 4
     wld.lef_count = wld.head.leaves.size \ len( leaftmp )
     lfc_count = wld.head.lface.size \ len( lfc_buffer(0) )
@@ -133,8 +133,7 @@ end sub
 ''::::::::::
 sub mod_alloc
     redim tri_buffer(wld.tri_count-1) as face2
-    redim edg_buffer(wld.edg_count-1) as edge    
-    redim ledg_buffer(ledg_count-1) as integer
+    redim fvtx_buffer(ledg_count-1) as integer
     redim vtx_buffer(wld.vtx_count-1) as vertex2
     redim lef_buffer(wld.lef_count-1) as leaf2
     redim lfc_buffer(lfc_count-1) as integer
@@ -285,12 +284,12 @@ end sub
 
 
 ''::::::::::
-'' name: mod_load_edges
+'' name: mod_load_facevtx
 ''::::::::::
-sub mod_load_edges
-    scr_load_stage "edges"
-    def seg = varseg( edg_buffer(0) )
-    bload "edges.bld", varptr( edg_buffer(0) )
+sub mod_load_facevtx
+    scr_load_stage "face vertices"
+    def seg = varseg( fvtx_buffer(0) )
+    bload "fvtx.bld", varptr( fvtx_buffer(0) )
     def seg
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
@@ -300,17 +299,7 @@ end sub
 
 
 
-''::::::::::
-'' name: mod_load_surfedges
-''::::::::::
-sub mod_load_surfedges
-    def seg = varseg( ledg_buffer(0) )
-    bload "ledges.bld", varptr( ledg_buffer(0) )
-    def seg
 
-    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
-    scr_load_tick
-end sub
 
 
 

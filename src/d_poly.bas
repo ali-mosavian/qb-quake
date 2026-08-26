@@ -378,13 +378,9 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
             end if
                     
             for  j = 0 to vcnt-1
-                edge_idx = ledg_buffer(lid+j)
-                        
-                if ( edge_idx >= 0 ) then
-                    v0 = edg_buffer(edge_idx).v0
-                else                        
-                    v0 = edg_buffer(-edge_idx).v1
-                end if
+                '' the sign test and the edge lookup happened in
+                '' mkassets.py; this is the vertex it resolved to
+                v0 = fvtx_buffer(lid+j)
 
                 ''
                 '' One fetch per component. The vertex was read
