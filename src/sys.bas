@@ -102,6 +102,9 @@ sub sys_parse_args
         if ( lcase$(argv(i)) = "-polytp" ) then
             env.poly_tp = true
         end if
+        if ( lcase$(argv(i)) = "-noz" ) then
+            env.no_z = true
+        end if
         if ( lcase$(argv(i)) = "-nostats" ) then
             env.no_stats = true
         end if
