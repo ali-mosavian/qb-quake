@@ -394,7 +394,10 @@ def convert_lumps(d, lumps, outdir):
     # marksurfaces, models: identical either side
     out['lface.bld'] = lump(11)
     out['models.bld'] = lump(14)
-    out['pvs.bld'] = lump(4)
+    # raw, not BLOAD: read by fileReadH into a memAlloc block, which puts
+    # it in upper memory rather than the far heap. It is walked by a PEEK
+    # loop over a byte offset and nothing indexes it as an array.
+    out['pvs.bin'] = lump(4)
 
     # texinfo: texinfo(40) -> texinfo2(34). flags is dropped (nothing reads
     # it -- see bspfile.bi's texinfo2 comment) and miptex narrows to an
@@ -505,12 +508,14 @@ def main():
     shade0 = cmap[:256]
     # The whole table, not just its first row, for the surface builder:
     # uglSetLUT wants [shade][index] with 64 shades, which is exactly what
-    # colormap.lmp already is. Raw, and read into paragraph-aligned memAlloc
-    # storage -- uglSetLUT requires an offset of zero.
+    # colormap.lmp already is. Raw rather than BLOAD: it is read by
+    # fileReadH into a paragraph-aligned memAlloc block, both because
+    # uglSetLUT requires an offset of zero and because that block lands in
+    # upper memory rather than in the far heap.
     if len(cmap) < 64*256:
         raise SystemExit(f"colormap is {len(cmap)} bytes, need >= {64*256}")
-    write_bload(os.path.join(outdir, 'colmap.bld'), cmap[:64*256])
-    print(f"  colmap.bld    {64*256:7,} bytes  (64 shades x 256)")
+    open(os.path.join(outdir, 'colmap.bin'), 'wb').write(cmap[:64*256])
+    print(f"  colmap.bin    {64*256:7,} bytes  (64 shades x 256)")
     print("building inverse palette cube ...", flush=True)
     cube, bits = inverse_palette(pal)
 

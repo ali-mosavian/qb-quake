@@ -76,7 +76,15 @@ const GEOM_MAXREC = 2 + GEOM_MAXVTX * 6
 
 common shared /map_a/ geom_dc as long, geom_rows as integer
 common shared /map_a/ mdl_buffer() as model, pln_buffer() as plane2, nds_buffer() as nodeb
-common shared /map_a/ order_list() as integer, pvs_buffer_a() as integer, pvs_buffer_b() as integer
+common shared /map_a/ order_list() as integer, pvs_buffer_b() as integer
+''
+'' The compressed visibility lump, in a memAlloc'd block rather than an
+'' array. It is walked once per frame -- and only when the camera changes
+'' leaf -- by a PEEK loop over a byte offset, so it never wanted to be an
+'' array of integers in the first place; nothing indexes it. 8K on dm3ish
+'' and 40K on e1m1, which is the largest single item on that map.
+''
+common shared /map_a/ pvs_ptr as long, pvs_size as long
 common shared /map_a/ tex_inf_buff() as texinfo2, poly_flag() as integer
 
 ''
@@ -122,11 +130,37 @@ common shared /map_a/ mem_n as integer
 
 common shared /map_a/ z_dc as long
 common shared /map_a/ lm_info as long, lm_isize as long
-'' A BASIC array, not memAlloc: a 16K memAlloc lands in an upper memory
-'' block once low memory is tight, and merely holding that block wedges the
-'' program -- tried, and it wedges inside vid_init with no error. See the
-'' OKF memory map. Only PEEK ever touches it.
-common shared /map_a/ cm_buf() as integer, cm_size as long
+''
+'' The colormap: 64 light levels x 256 colours, in a memAlloc'd block.
+''
+'' It used to be a BASIC array on the grounds that a 16K memAlloc lands in
+'' an upper memory block once low memory is tight, and that merely holding
+'' that block wedged the program inside vid_init. That is no longer where
+'' the evidence points: lm_info takes 36,688 bytes at segment 0D09Eh --
+'' sixteen paragraphs BELOW the address that note records -- on every run,
+'' and nothing wedges. The difference was when the block was taken, not
+'' where it landed: this one is allocated AFTER the mode switch, which is
+'' what vid_init was short of memory for.
+''
+'' Nothing here needs an array. BASIC never indexes it; both readers want
+'' a far pointer, one for uglBuildSurf and one for uglShadeRect.
+''
+'' It lives in EMS rather than in a memAlloc'd block. memAlloc DOES place
+'' a block in upper memory -- lm_info's 36,688 bytes and the visibility
+'' lump both land there -- but there is only so much of it, and by the
+'' time the colormap loads the 16K no longer fits: measured, it came back
+'' out of conventional memory and cost exactly what the array had.
+''
+'' One row of 16,384, which is one EMS page, so a single uglMapEx reaches
+'' the whole table and the rows the builder indexes flat really are
+'' contiguous. CM_SLOT borrows the depth buffer's: a surface build is not
+'' a scanline, nothing writes depth during one, and the depth publish
+'' remaps its slot on every scanline anyway, so it repairs itself with no
+'' explicit restore.
+''
+const CM_SLOT = 3
+
+common shared /map_a/ cm_dc as long, cm_size as long
 ''
 '' Surface cache state. In COMMON rather than d_surf.bas's own DIM SHARED
 '' because DIM SHARED is scoped to the module that writes it, and the

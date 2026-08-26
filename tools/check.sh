@@ -23,8 +23,16 @@ fi
 
 "$ROOT/tools/dosbox.sh" build > /tmp/check-build.log 2>&1 || {
     echo "BUILD FAILED"; tail -20 /tmp/check-build.log; exit 1; }
-grep -qi "Severe.*[1-9]" /tmp/check-build.log && {
-    echo "COMPILE ERRORS"; grep -i severe /tmp/check-build.log; exit 1; }
+grep -qiE "^ *[1-9][0-9]* Severe" /tmp/check-build.log && {
+    echo "COMPILE ERRORS"; grep -iB4 -E "^ *[1-9][0-9]* Severe" /tmp/check-build.log | grep -E "\^|Severe"; exit 1; }
+
+# LINK emits an EXE even with an unresolved external, patching the call to
+# int 3 -- and a failed link leaves the PREVIOUS exe in place, which runs
+# fine and reports numbers for code that is not in it. dosbox.sh records
+# the verdict; without this the harness cheerfully measures a stale build.
+res=$(tr -d '\r' < "$ROOT/build/vbd/RESULT.TXT" 2>/dev/null)
+[[ "$res" == "PASS" ]] || {
+    echo "LINK FAILED ($res)"; grep -i error "$ROOT/build/vbd/LINK.OUT" | head -5; exit 1; }
 
 ticks=()
 for ((i=0; i<PASSES; i++)); do

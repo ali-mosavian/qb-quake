@@ -822,7 +822,6 @@ end sub
 ''::::::::::
 sub hud_shade ( dc as long, x0 as integer, y0 as integer, _
                 x1 as integer, y1 as integer, rw as integer )
-    dim sg as long, ofs as long
 
     if ( cm_size < 16384 ) then
         uglRectF dc, x0, y0, x1, y1, hc_slab
@@ -832,12 +831,12 @@ sub hud_shade ( dc as long, x0 as integer, y0 as integer, _
     '' Normalise the colormap pointer the way sb_build does: fold the
     '' offset into the segment so row*256 + offset stays inside 16 bits.
     ''
-    sg  = clng( varseg( cm_buf(0) ) ) and 65535&
-    ofs = clng( varptr( cm_buf(0) ) ) and 65535&
-    sg  = (sg + (ofs \ 16&)) and 65535&
-    ofs = ofs and 15&
-    if ( sg > 32767& ) then sg = sg - 65536&
-    uglShadeRect dc, x0, y0, x1, y1, sg * 65536& + ofs, rw
+    '' The overlay runs after the world with depth off, so CM_SLOT is
+    '' nobody else's at this point. Hoisted into a variable because BASIC
+    '' will not take a Function call in a Sub's argument list here.
+    dim cmp as long
+    cmp = uglMapEx&( cm_dc, 0, CM_SLOT )
+    uglShadeRect dc, x0, y0, x1, y1, cmp, rw
 end sub
 
 
