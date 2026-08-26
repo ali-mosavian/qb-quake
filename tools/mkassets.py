@@ -298,10 +298,6 @@ def convert_lightmaps(d, lumps, out):
                                [(i, i, i) for i in range(256)])
     blob = atlas
 
-    tmin = bytearray()
-    for k in range(0, len(table), 16):
-        tmin += table[k+4:k+8]
-    out['lmtmin.bld'] = bytes(tmin)
     out['lmface.bin'] = bytes(table)
     return lit, unlit, 1, len(blob), 1
 
@@ -375,7 +371,7 @@ def convert_lumps(d, lumps, outdir):
         for k in range(0, len(raw), 4))
 
     # faces: face(20) -> face2(10), dropping the two flag words and the
-    # LIGHTING-lump offset (unused: d_surf.bas's lmtmin/lm_info replaced it),
+    # LIGHTING-lump offset (unused: d_surf.bas's lm_info replaced it),
     # and narrowing ledgeid to an integer -- it is an unsigned ledges.bld
     # index (max 32,880 on e3m6), so values over 32,767 are packed as their
     # two's-complement bit pattern; the BASIC side undoes the wrap on read.

@@ -70,7 +70,6 @@ common shared /map_a/ clp_buffer() as clipnode
 '' The per-face table stays in a memAlloc'd block: it is read once per
 '' cache miss and is small enough not to matter.
 ''
-common shared /map_a/ lmt_buffer() as lmtmin
 common shared /map_a/ lm_atlas as long, lm_size as long, lm_read as long
 ''
 '' The depth buffer. World faces write through it without testing -- the

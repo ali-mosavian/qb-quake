@@ -104,7 +104,7 @@ type face
 end type 
 
 '' lightmap (the LIGHTING-lump byte offset) is dropped: nothing reads it --
-'' d_surf.bas's lmtmin/lm_info replaced it entirely, and nobody removed the
+'' d_surf.bas's lm_info replaced it entirely, and nobody removed the
 '' field when that landed. Confirmed by grep: no `.lightmap` read anywhere
 '' in src/*.bas.
 ''
@@ -183,10 +183,7 @@ type scslot
     cls         as integer      '' size class of the block, fixed per face
 end type
 
-type lmtmin
-    tmin_s      as integer
-    tmin_t      as integer
-end type
+
 
 type leaf
     cont        as long

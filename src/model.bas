@@ -236,12 +236,6 @@ sub mod_load_lightmaps
     dim f as FILE
     dim got as long
 
-    redim lmt_buffer(wld.tri_count-1) as lmtmin
-
-    def seg = varseg( lmt_buffer(0) )
-    bload "lmtmin.bld", varptr( lmt_buffer(0) )
-    def seg
-
     lm_atlas = 0
     lm_size = 0
 
