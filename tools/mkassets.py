@@ -305,8 +305,10 @@ def convert_lightmaps(d, lumps, out):
                                [(i, i, i) for i in range(256)])
     blob = atlas
 
-    out['lmface.bin'] = bytes(table)
-    return lit, unlit, 1, len(blob), 1
+    # The table is not written out on its own any more: convert_lumps folds
+    # it into each face's geometry record, so one mapping and one copy per
+    # drawn face fetch the corners and the lightmap placement together.
+    return lit, unlit, 1, len(blob), 1, bytes(table)
 
 
 def convert_lumps(d, lumps, outdir):
@@ -321,6 +323,12 @@ def convert_lumps(d, lumps, outdir):
     def lump(i):
         o, n = lumps[i]
         return d[o:o+n]
+
+    # Lightmaps first: their per-face table goes into the geometry records
+    # below, so it has to exist before they are built.
+    lit, unlit, nchunks, lmbytes, ntab, lmtab = convert_lightmaps(d, lumps, out)
+    print(f"  lightmaps    {lit:,} lit faces, {unlit:,} unlit, "
+          f"{lmbytes:,} bytes in {nchunks} chunk(s), table in {ntab}")
 
     # The per-face geometry store, fgeom.bin -- which replaces BOTH the
     # vertex array and the surfedge list.
@@ -341,9 +349,14 @@ def convert_lumps(d, lumps, outdir):
     # and a record must not straddle one -- the same constraint, and the
     # same solution, as the luxel atlas. A record is
     #
-    #     word nvtx, then nvtx * { int16 x, y, z }      Q13.3 as before
+    #     word nvtx
+    #     16 bytes of lightmap placement, as convert_lightmaps built it
+    #     nvtx * { int16 x, y, z }                        Q13.3 as before
     #
-    # and a face carries (row, offset) instead of (ledgeid, ledgenum).
+    # and a face carries (row, offset) instead of (ledgeid, ledgenum). The
+    # lightmap header rides along because both are wanted at the same
+    # moment, by the same face, and shipping them apart cost a second
+    # 36K-to-88K block that had to be resident all frame.
     raw = lump(3)
     verts = []
     for k in range(0, len(raw), 12):
@@ -379,7 +392,9 @@ def convert_lumps(d, lumps, outdir):
             raise SystemExit(
                 f"fgeom.bin: face {k // 20} has {nvtx} corners, and "
                 f"d_poly.bas's polyb() holds {GEOM_MAXVTX}")
+        fi = k // 20
         rec = bytearray(struct.pack('<h', nvtx))
+        rec += lmtab[fi * 16:(fi + 1) * 16]
         for e in range(nvtx):
             se = surfedges[firstedge + e]
             rec += struct.pack('<3h', *verts[edges[abs(se)][0 if se >= 0 else 1]])
@@ -468,10 +483,6 @@ def convert_lumps(d, lumps, outdir):
         lfaceid, lfacenum = struct.unpack_from('<hh', raw, k+20)
         buf += struct.pack('<hhhhh', planeid, child0, child1, lfaceid, lfacenum) + bound
     out['nodes.bld'] = bytes(buf)
-
-    lit, unlit, nchunks, lmbytes, ntab = convert_lightmaps(d, lumps, out)
-    print(f"  lightmaps    {lit:,} lit faces, {unlit:,} unlit, "
-          f"{lmbytes:,} bytes in {nchunks} chunk(s), table in {ntab}")
 
     total = 0
     for name, payload in out.items():

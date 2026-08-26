@@ -241,24 +241,6 @@ sub mod_load_lightmaps
     lm_atlas = 0
     lm_size = 0
 
-    lm_info = 0
-    lm_isize = 0
-
-    if ( fileOpen( f, "lmface.bin", F4READ ) <> 0 ) then
-        lm_isize = fileSize( f )
-        lm_info = memAlloc( lm_isize )
-        if ( lm_info <> 0 ) then
-            if ( fileReadH( f, lm_info, lm_isize ) <> lm_isize ) then
-                memFree lm_info
-                lm_info = 0
-                lm_isize = 0
-            end if
-        else
-            lm_isize = 0
-        end if
-        fileClose f
-    end if
-
     ''
     '' Every luxel in the map, as one 8-bit EMS dc built straight from a
     '' BMP -- the same path mod_tex.bas takes for the textures, and
@@ -306,6 +288,11 @@ sub mod_load_facevtx
     if ( fileOpen( f, "fgeom.bin", F4READ ) = 0 ) then
         sys_error "0x0011, fgeom.bin missing"
     end if
+
+    '' 108 as a literal, not GEOM_MAXREC \ 2: an expression bound makes the
+    '' array dynamic and therefore zero length until a REDIM, and memCopy
+    '' would write a whole record past it
+    redim gv_buf(108) as integer
 
     geom_rows = cint( (fileSize&( f ) + GEOM_W - 1) \ GEOM_W )
     geom_dc = uglNew&( UGL.EMS, UGL.8BIT, GEOM_W, geom_rows )
