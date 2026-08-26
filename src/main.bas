@@ -214,8 +214,7 @@ sub host_init
     mod_load_faces
     mod_load_lightmaps
     sys_mem_mark "lmtable"
-    mod_load_edges
-    mod_load_surfedges
+    mod_load_facevtx
     mod_load_leafs
     mod_load_marksurfaces
     mod_load_nodes

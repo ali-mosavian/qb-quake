@@ -14,7 +14,10 @@
 '' texture passes. Fourteen sites used to spell the divisor as a literal 14.0
 '' and had to agree with each other by hand.
 ''
-const LOAD_STEPS = 16
+'' 15 since the edge and surfedge readers became one: mkassets.py resolves
+'' the indirection, so there is a single lump to load.
+''
+const LOAD_STEPS = 15
 
 type MapState
     head        as header       '' the on-disk lump directory
@@ -47,7 +50,13 @@ common shared /map_s/ ldr as LoadState
 '' Written by model.bas, walked by the renderer. A TYPE cannot contain an
 '' array, so these stay loose.
 ''
-common shared /map_a/ tri_buffer() as face2, edg_buffer() as edge, ledg_buffer() as integer
+''
+'' fvtx_buffer is the surfedge list with the edge indirection resolved at
+'' build time: entry n is the vertex index for corner n, sign already
+'' applied. The edge lump is not loaded at all -- see mkassets.py's
+'' fvtx.bld note.
+''
+common shared /map_a/ tri_buffer() as face2, fvtx_buffer() as integer
 common shared /map_a/ vtx_buffer() as vertex2, lef_buffer() as leaf2, lfc_buffer() as integer
 common shared /map_a/ mdl_buffer() as model, pln_buffer() as plane2, nds_buffer() as nodeb
 common shared /map_a/ order_list() as integer, pvs_buffer_a() as integer, pvs_buffer_b() as integer
