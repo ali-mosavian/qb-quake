@@ -41,15 +41,8 @@ dim shared turbsin( 255 ) as single
 dim shared poly(64) as u3dVector4f
 dim shared polyb(32) as u3dVector4f
 ''
-'' One face's record, copied out of the mapped EMS window. A whole record
-'' at a time by memCopy rather than a PEEK per component: PEEK is a call
-'' per byte from BASIC, and the inner loop reads three coordinates for
-'' every corner of every drawn face.
-''
-'' 100 as a literal, not GEOM_MAXREC \ 2: an expression bound can make
-'' the array dynamic, and a dynamic array with no REDIM is zero length --
-'' which memCopy would happily write 200 bytes into
-dim shared gv_buf(100) as integer
+'' gv_buf lives in COMMON (q_map.bi) so sb_build can read the lightmap
+'' header from the copy instead of from the window it came from.
 dim shared prj_u(32) as single
 dim shared prj_v(32) as single
 dim shared prj_w(32) as single
@@ -60,7 +53,7 @@ dim shared sv0 as single, sv1 as single, sv2 as single, sv3 as single
 dim shared tw as single, th as single
 dim shared uvbuff(64) as uv
 dim shared uvbuffb(32) as uv
-dim shared vcnt as integer, mipidx as integer
+dim shared vcnt as integer, mipidx as integer
 dim shared vtx(31) as tritype
 ''
 '' Whole-face vertex buffer for uglPolyTP. The clipper caps a polygon at
@@ -199,7 +192,7 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
     dim tqi as long, tqj as long
     dim turbph as single
     dim zofs as single
-    dim lm_on as integer, lm_iseg as integer, o_lm as long
+    dim lm_on as integer, lm_use as integer
     dim lm_tms as integer, lm_tmt as integer
     dim lm_extw as integer, lm_exth as integer
     dim lm_mip as integer, lm_floor as integer
@@ -225,12 +218,10 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
     ''
     '' rdr.lightmap as well as env.use_lm: the flag says whether the data
     '' was loaded at all, the toggle says whether to use it right now.
-    '' Clearing lm_iseg turns every face below into a plain textured one,
+    '' Clearing this turns every face below into a plain textured one,
     '' which is exactly what an unlit face already does.
-    lm_iseg = 0
-    if ( env.use_lm and rdr.lightmap and sc_ok <> 0 and lm_info <> 0 ) then
-        lm_iseg = sb_seg%( lm_info )
-    end if
+    lm_use = 0
+    if ( env.use_lm and rdr.lightmap and sc_ok <> 0 ) then lm_use = -1
 
     ''
     '' Where memCopy puts a face's record. Hoisted: VARSEG/VARPTR on a
@@ -363,19 +354,20 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
             '' vertex -- or animated, which would rebuild the surface every
             '' time the frame index moved.
             ''
+            '' Straight out of the record copied above -- the lightmap
+            '' header rides with the corners, so there is no second block
+            '' to map and no DEF SEG here at all. gv_buf(GEOM_LMOFS) is
+            '' the atlas scanline, -1 on an unlit face.
             lm_on = 0
-            if ( lm_iseg <> 0 and liquid = 0 and _
+            if ( lm_use and liquid = 0 and _
                  mip_buff_inf(mipidx).anim_count <= 1 ) then
-                def seg = lm_iseg
-                o_lm = clng(i) * 16&
-                if ( sb_i%( o_lm ) >= 0 ) then
-                    lm_tms  = sb_i%( o_lm + 4& )
-                    lm_tmt  = sb_i%( o_lm + 6& )
-                    lm_extw = (sb_i%( o_lm + 8& ) - 1) * 16
-                    lm_exth = (sb_i%( o_lm + 10& ) - 1) * 16
+                if ( gv_buf(GEOM_LMOFS) >= 0 ) then
+                    lm_tms  = gv_buf(GEOM_LMOFS + 2)
+                    lm_tmt  = gv_buf(GEOM_LMOFS + 3)
+                    lm_extw = (gv_buf(GEOM_LMOFS + 4) - 1) * 16
+                    lm_exth = (gv_buf(GEOM_LMOFS + 5) - 1) * 16
                     if ( lm_extw > 0 and lm_exth > 0 ) then lm_on = -1
                 end if
-                def seg
             end if
 
             ''
@@ -419,10 +411,9 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
             for  j = 0 to vcnt-1
                 ''
                 '' Straight out of the copied record -- no vertex
-                '' index, no edge, no indirection at all. j*3+1
-                '' because gv_buf(0) is the corner count.
+                '' index, no edge, no indirection at all.
                 ''
-                v0 = j*3 + 1
+                v0 = j*3 + GEOM_VTX0
                 vx = gv_buf(v0    ) * VTX_UNSCALE#
                 vy = gv_buf(v0 + 1) * VTX_UNSCALE#
                 vz = gv_buf(v0 + 2) * VTX_UNSCALE#
@@ -452,7 +443,7 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
                     uvbuffb(j).v = tv + turbsin(tqj)
                 end if
             next j
-                    
+
             ''
             '' The lightmap extent that used to be computed here
             '' -- the min/max of u and v over the face, the 16

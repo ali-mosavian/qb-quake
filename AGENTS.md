@@ -201,6 +201,20 @@ The debug socket is for inspecting a program you deliberately stopped.
 - The debug socket needs `core=normal` and a *fixed* cycle count. Under
   `cycles=max` the guest starves it and `break`/`text_screen` time out.
 
+**Look at the screen before theorising.** When a headless run does not
+return, take a screenshot or read the text console *first*. The picture says
+in one glance what a timeout cannot say at all: whether the program reached
+the loading screen, which load stage it stopped on, whether it is showing an
+error, or whether it rendered a frame and then stopped. Everything below
+about failed-vs-slow is downstream of that one check, and skipping it has
+repeatedly cost hours here — most recently a first-frame hang that was
+diagnosed in seconds from a single screenshot of the loading bar sitting on
+its last stage, after a long detour through timeouts, load averages and
+blaming a concurrent session for contention.
+
+Note the loading screen stays up until the first frame is presented, so
+"frozen on the last load stage" means the first FRAME hung, not the loader.
+
 **A failed run looks exactly like a slow one.** `ExitError` ends in `sleep`,
 so the program sits there; the message is drawn as *pixels* if `uglRestore`
 left a graphics mode (invisible to `text_screen`), BASIC's `PRINT` targets the

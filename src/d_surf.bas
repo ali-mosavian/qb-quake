@@ -1092,11 +1092,15 @@ sub sb_dump ( byval face as integer, byval mip as integer )
         exit sub
     end if
 
-    def seg = sb_seg%( lm_info )
-    o   = clng(face) * 16&
-    lmw = sb_i%( o + 8& )
-    lmh = sb_i%( o + 10& )
-    def seg
+    ''
+    '' -dumpsurf runs outside the face loop, so nothing has fetched this
+    '' face's record yet. Fetch it here, into the same shared buffer the
+    '' renderer uses, so the sb_build call below reads exactly what it
+    '' would have read mid-frame.
+    ''
+    sb_fetch face
+    lmw = gv_buf(GEOM_LMOFS + 4)
+    lmh = gv_buf(GEOM_LMOFS + 5)
 
     '' d_poly's sizing, and sbref.py's: the padded extent is what the
     '' builder fills, not the face's own sw by sh
@@ -1144,7 +1148,7 @@ sub sb_build ( byval dc as long, byval tex as long, _
     dim lmw as integer, lmh as integer
     dim lmx as long, lmy as integer, lmp as long
     dim tms as integer, tmt as integer
-    dim o as long, iseg as integer
+    dim o as long
     dim mi as integer, recip as single
     dim sbp as SBPARM
     dim lseg as long, lofs16 as long
@@ -1153,17 +1157,19 @@ sub sb_build ( byval dc as long, byval tex as long, _
     msk = aw - 1
     mi = tex_inf_buff( tri_buffer(face).texinfoid ).miptex
 
-    iseg = sb_seg%( lm_info )
-
-    def seg = iseg
-    o = clng(face) * 16&
-    lmy = sb_i%( o )                    '' atlas scanline, -1 if unlit
-    lmx = sb_u&( o + 2& )               '' byte offset within that scanline
-    tms = sb_i%( o + 4& )
-    tmt = sb_i%( o + 6& )
-    lmw = sb_i%( o + 8& )
-    lmh = sb_i%( o + 10& )
-    def seg
+    ''
+    '' Out of the record d_draw_faces already fetched, NOT out of the
+    '' window it came from. GEOM_SLOT does not still hold that page by the
+    '' time a build runs -- something between the fetch and here remaps it,
+    '' and the header read back as zeros, which hangs uglBuildSurf on a 0x0
+    '' luxel grid. The copy is the only safe source, and it is free.
+    ''
+    lmy = gv_buf(GEOM_LMOFS)            '' atlas scanline, -1 if unlit
+    lmx = clng( gv_buf(GEOM_LMOFS + 1) ) and 65535&
+    tms = gv_buf(GEOM_LMOFS + 2)
+    tmt = gv_buf(GEOM_LMOFS + 3)
+    lmw = gv_buf(GEOM_LMOFS + 4)
+    lmh = gv_buf(GEOM_LMOFS + 5)
 
     ''
     '' The luxels live in one EMS atlas dc. Map the face's scanline into
@@ -1227,3 +1233,26 @@ sub sb_build ( byval dc as long, byval tex as long, _
     end if
 end sub
 
+
+
+''::::::::::
+'' name: sb_fetch
+'' desc: Copies one face's geometry record into gv_buf.
+''
+''       The renderer does this inline, per face, because it is on the hot
+''       path; this is for callers that are not in the face loop and still
+''       need the record -- currently just -dumpsurf.
+''::::::::::
+sub sb_fetch ( byval face as integer )
+    dim gp as long, gn as integer, dst as long
+
+    gn = GEOM_MAXREC
+    if ( tri_buffer(face).geom_ofs + gn > GEOM_W ) then
+        gn = GEOM_W - tri_buffer(face).geom_ofs
+    end if
+
+    gp = uglMapEx&( geom_dc, tri_buffer(face).geom_row, GEOM_SLOT )
+    dst = clng( varseg( gv_buf(0) ) ) * 65536& + _
+          (clng( varptr( gv_buf(0) ) ) and 65535&)
+    memCopy dst, gp + clng( tri_buffer(face).geom_ofs ), clng( gn )
+end sub

@@ -104,7 +104,7 @@ type face
 end type 
 
 '' lightmap (the LIGHTING-lump byte offset) is dropped: nothing reads it --
-'' d_surf.bas's lm_info replaced it entirely, and nobody removed the
+'' the per-face lightmap header replaced it entirely, and nobody removed the
 '' field when that landed. Confirmed by grep: no `.lightmap` read anywhere
 '' in src/*.bas.
 ''
@@ -129,7 +129,7 @@ end type
 '' What BASIC needs per face, and nothing more: texturemins, to shift a
 '' face's texture coordinates into its own surface's space before drawing.
 '' Where the luxels are, how big they are and which styles they use is read
-'' once per cache miss by the builder, out of lm_info -- keeping it out of
+'' once per cache miss by the builder, out of the face's geometry record -- keeping it out of
 '' the far heap BLOAD allocates from, which turned out to run out first.
 ''
 ''
@@ -462,7 +462,8 @@ declare sub sc_lru_touch ( byval b as integer )
 declare sub sc_reset ( )
 declare sub sc_shutdown ( )
 declare function sc_selftest% ( )
-declare function sb_seg% ( byval p as long )
+declare function sb_seg% ( byval p as long )
+declare sub sb_fetch ( byval face as integer )
 declare function sb_i% ( byval o as long )
 declare function sb_u& ( byval o as long )
 declare function sb_pot% ( byval v as integer )

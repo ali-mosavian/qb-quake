@@ -69,12 +69,27 @@ common shared /map_a/ lef_buffer() as leaf2, lfc_buffer() as integer
 '' GEOM_W must match mkassets.py's: it is the row uglMapEx maps, and the
 '' builder guarantees no record straddles one.
 ''
+'' A record is a corner count, then the 16-byte lightmap header, then the
+'' corners -- so gv_buf(0) is nvtx, gv_buf(1..8) the header, and the
+'' positions start at gv_buf(9).
+''
 const GEOM_W = 8192
 const GEOM_SLOT = 2
 const GEOM_MAXVTX = 33
-const GEOM_MAXREC = 2 + GEOM_MAXVTX * 6
+const GEOM_LMOFS = 1            '' gv_buf index of the lightmap header
+const GEOM_VTX0  = 9            '' gv_buf index of the first corner
+const GEOM_MAXREC = 18 + GEOM_MAXVTX * 6
 
 common shared /map_a/ geom_dc as long, geom_rows as integer
+
+''
+'' The face record most recently fetched by d_draw_faces. Shared because
+'' sb_build wants the lightmap header out of it and must NOT go back to
+'' the window it came from: GEOM_SLOT is not still holding that page by
+'' the time a build runs -- measured, it reads zeros -- and a 0x0 luxel
+'' grid hangs the builder. One fetch per face, one reader of the copy.
+''
+common shared /map_a/ gv_buf() as integer
 common shared /map_a/ mdl_buffer() as model, pln_buffer() as plane2, nds_buffer() as nodeb
 common shared /map_a/ order_list() as integer, pvs_buffer_b() as integer
 ''
@@ -101,8 +116,12 @@ common shared /map_a/ clp_buffer() as clipnode
 '' bigger maps. A face's rect is fetched with one uglMapEx into LM_SLOT,
 '' which the atlas packer guarantees is a single page.
 ''
-'' The per-face table stays in a memAlloc'd block: it is read once per
-'' cache miss and is small enough not to matter.
+'' The per-face placement table is not a block of its own: it rides in
+'' each face's geometry record, so one mapping and one copy fetch the
+'' corners and the lightmap placement together. It used to be 36,688 bytes
+'' of upper memory on dm3ish -- and 88,256 on e1m1, where it does not fit
+'' up there and took conventional memory instead, which is what stopped
+'' that map loading.
 ''
 common shared /map_a/ lm_atlas as long, lm_size as long, lm_read as long
 ''
@@ -129,27 +148,25 @@ common shared /map_a/ mem_fre() as long
 common shared /map_a/ mem_n as integer
 
 common shared /map_a/ z_dc as long
-common shared /map_a/ lm_info as long, lm_isize as long
 ''
 '' The colormap: 64 light levels x 256 colours, in a memAlloc'd block.
 ''
 '' It used to be a BASIC array on the grounds that a 16K memAlloc lands in
 '' an upper memory block once low memory is tight, and that merely holding
 '' that block wedged the program inside vid_init. That is no longer where
-'' the evidence points: lm_info takes 36,688 bytes at segment 0D09Eh --
-'' sixteen paragraphs BELOW the address that note records -- on every run,
-'' and nothing wedges. The difference was when the block was taken, not
-'' where it landed: this one is allocated AFTER the mode switch, which is
-'' what vid_init was short of memory for.
+'' the evidence points: the visibility lump lands in upper memory on every
+'' run and nothing wedges. The difference was when the block was taken,
+'' not where it landed -- this one is allocated AFTER the mode switch,
+'' which is what vid_init was short of memory for.
 ''
 '' Nothing here needs an array. BASIC never indexes it; both readers want
 '' a far pointer, one for uglBuildSurf and one for uglShadeRect.
 ''
 '' It lives in EMS rather than in a memAlloc'd block. memAlloc DOES place
-'' a block in upper memory -- lm_info's 36,688 bytes and the visibility
-'' lump both land there -- but there is only so much of it, and by the
-'' time the colormap loads the 16K no longer fits: measured, it came back
-'' out of conventional memory and cost exactly what the array had.
+'' a block in upper memory -- the visibility lump lands there -- but there
+'' is only so much of it, and by the time the colormap loads the 16K no
+'' longer fits: measured, it came back out of conventional memory and cost
+'' exactly what the array had.
 ''
 '' One row of 16,384, which is one EMS page, so a single uglMapEx reaches
 '' the whole table and the rows the builder indexes flat really are

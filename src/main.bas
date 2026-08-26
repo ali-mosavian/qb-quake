@@ -266,7 +266,7 @@ sub host_init
     '' having got all the way through loading. Nothing needs the table
     '' until the first surface is built.
     if ( env.use_lm ) then mod_load_colormap
-    sys_mem_mark "colormap"
+    sys_mem_mark "colormap"
 
     t_vid = timer
 
@@ -649,8 +649,7 @@ sub host_bench_report ( frame_no as long, h_dst_dc as long )
     print #benchf, "memavail " + ltrim$(str$( memAvail& ))
     print #benchf, "lmsize " + ltrim$(str$( lm_size ))
     print #benchf, "lmread " + ltrim$(str$( lm_read ))
-    print #benchf, "lminfo " + ltrim$(str$( lm_isize ))
-    print #benchf, "lmiseg " + ltrim$(str$( sb_seg%( lm_info ) ))
+    print #benchf, "geomrows " + ltrim$(str$( geom_rows ))
     print #benchf, "cmsize " + ltrim$(str$( cm_size ))
     print #benchf, "scmade " + ltrim$(str$( sc_made ))
     print #benchf, "scems " + ltrim$(str$( sc_peak ))
