@@ -22,8 +22,12 @@ option explicit
 
 
 
-sub com_tokenize ( strm() as string, strm_cnt as integer, _
-             tokenlist as string, stream as string )
+sub com_tokenize ( _
+    strm() as string, _
+    strm_cnt as integer, _
+    tokenlist as string, _
+    stream as string _
+)
              
     dim char as string * 1
     dim i as integer, j as integer    
@@ -254,8 +258,11 @@ end sub
 ''       its default AND its flag unset, so the failure surfaced later as
 ''       'Incorrect ini file' with no line number. This reports the line.
 ''::::::::::
-function com_yesno ( strm() as string, strm_cnt as integer, _
-                     linenum as integer ) as integer
+function com_yesno ( _
+    strm() as string, _
+    strm_cnt as integer, _
+    linenum as integer _
+) as integer
     dim v as string
 
     v = com_arg( strm(), strm_cnt, linenum )
@@ -282,7 +289,11 @@ end function
 ''       SELECT instead would have applied it to comment lines and to
 ''       unknown keys, which report a different error on purpose.
 ''::::::::::
-function com_arg ( strm() as string, strm_cnt as integer, linenum as integer ) as string
+function com_arg ( _
+    strm() as string, _
+    strm_cnt as integer, _
+    linenum as integer _
+) as string
     com_check_args strm(), strm_cnt, 3, linenum
     com_arg = strm(2)
 end function
@@ -298,8 +309,12 @@ end function
 ''
 '' Cold: one call per line of a small text file at startup.
 ''::::::::::
-sub com_check_args ( strm() as string, strm_cnt as integer, _
-               byval want as integer, byval linenum as integer )
+sub com_check_args ( _
+    strm() as string, _
+    strm_cnt as integer, _
+    byval want as integer, _
+    byval linenum as integer _
+)
 
     ''
     '' A trailing // comment makes the count larger than want, with the

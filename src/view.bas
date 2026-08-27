@@ -23,7 +23,7 @@ option explicit
 '$include: 'q_scr.bi'
 '$include: 'q_cam.bi'
 '$include: 'q_pl.bi'
-Declare Sub cp_advance ()
+Declare Sub cp_advance ( )
 
 ''
 '' Camera-script playback state. These were eight parameters threaded from

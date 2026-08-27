@@ -381,7 +381,7 @@ end sub
 '' name: sys_mem_count
 '' desc: How many marks have been taken.
 ''::::::::::
-function sys_mem_count () as integer
+function sys_mem_count ( ) as integer
     sys_mem_count = mem_n
 end function
 

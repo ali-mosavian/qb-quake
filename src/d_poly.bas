@@ -73,8 +73,14 @@ const VTX_UNSCALE# = 1.0 / 8.0
 
 
 '':::::::
-sub d_clip_z ( ot_vtx() as u3dVector4f, ot_uv() as uv, ot_cnt as integer, _
-                     in_vtx() as u3dVector4f, in_uv() as uv, in_cnt as integer )
+sub d_clip_z ( _
+    ot_vtx() as u3dVector4f, _
+    ot_uv() as uv, _
+    ot_cnt as integer, _
+    in_vtx() as u3dVector4f, _
+    in_uv() as uv, _
+    in_cnt as integer _
+)
 
     dim n as integer
     dim scl as single
@@ -176,8 +182,12 @@ end sub
 '' ==========================================================================
 ''  RASTER
 '' ==========================================================================
-sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
-                   xresh as single, yresh as single )
+sub d_draw_faces ( _
+    h_dst_dc as long, _
+    mtx_fin as u3dMtrx, _
+    xresh as single, _
+    yresh as single _
+)
     dim dp as single
     dim polycnt as integer
     dim mi as integer, m as integer

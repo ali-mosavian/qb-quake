@@ -34,8 +34,12 @@ dim shared loadmod as UGMMOD
 '' desc: Parse the BLASTER enviroment variable
 ''
 '' :::::::::::
-sub s_get_blaster  ( port as integer, irq as integer, ldma as integer, _    
-                     hdma as integer )
+sub s_get_blaster ( _
+    port as integer, _
+    irq as integer, _
+    ldma as integer, _
+    hdma as integer _
+)
     
     dim tmpstr as string
     dim sbvstr as string

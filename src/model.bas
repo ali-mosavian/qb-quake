@@ -598,7 +598,7 @@ end sub
 ''       held: CM_SLOT is the depth buffer's, so anything that touched
 ''       depth in between has already taken it back.
 ''::::::::::
-function mod_cm_map () as long
+function mod_cm_map ( ) as long
     mod_cm_map = uglMapEx&( cm_dc, 0, CM_SLOT )
 end function
 
@@ -607,7 +607,7 @@ end function
 '' desc: Whether a full table actually loaded. Callers that can fall back
 ''       -- hud_shade draws an opaque slab instead -- ask this first.
 ''::::::::::
-function mod_cm_ready () as integer
+function mod_cm_ready ( ) as integer
     mod_cm_ready = ( cm_size >= 16384 )
 end function
 
@@ -615,7 +615,7 @@ end function
 '' name: cm_bytes
 '' desc: Table size, for the bench report.
 ''::::::::::
-function mod_cm_bytes () as long
+function mod_cm_bytes ( ) as long
     mod_cm_bytes = cm_size
 end function
 
@@ -634,11 +634,11 @@ end function
 '' desc: Atlas size on disk, and how much of it actually loaded, for the
 ''       bench report.
 ''::::::::::
-function mod_lm_bytes () as long
+function mod_lm_bytes ( ) as long
     mod_lm_bytes = lm_size
 end function
 
-function mod_lm_got () as long
+function mod_lm_got ( ) as long
     mod_lm_got = lm_read
 end function
 
@@ -656,7 +656,7 @@ end function
 '' name: geom_nrows
 '' desc: How many rows the store has, for the bench report.
 ''::::::::::
-function mod_geom_rows () as integer
+function mod_geom_rows ( ) as integer
     mod_geom_rows = geom_rows
 end function
 
@@ -665,6 +665,6 @@ end function
 '' desc: Far pointer to the visibility lump. Fixed for the whole run, so
 ''       callers hoist it rather than asking per leaf.
 ''::::::::::
-function mod_pvs_base () as long
+function mod_pvs_base ( ) as long
     mod_pvs_base = pvs_ptr
 end function
