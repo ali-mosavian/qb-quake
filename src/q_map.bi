@@ -51,7 +51,20 @@ common shared /map_s/ ldr as LoadState
 '' Written by model.bas, walked by the renderer. A TYPE cannot contain an
 '' array, so these stay loose.
 ''
-common shared /map_a/ tri_buffer() as face2
+''
+'' ===================================================================
+'' /surf/ -- THE RASTERISER'S PIPELINE
+''
+'' Read by d_poly and d_surf, plus one line in main. Those two modules
+'' are one pipeline split across two files and this block is the seam
+'' between them.
+''
+'' gv_buf is the one entry that could still leave: it is not map data
+'' but a staging row holding the face currently being drawn, which
+'' d_poly fills and d_surf reads. That is a handoff, not shared state.
+'' ===================================================================
+''
+common shared /surf/ tri_buffer() as face2
 '' The leaves are NOT here any more -- r_bsp.bas owns them and loads
 '' them; pl_move asks rb_leaf_contents for the one field it wants.
 
@@ -74,32 +87,50 @@ common shared /map_a/ tri_buffer() as face2
 '' corners -- so gv_buf(0) is nvtx, gv_buf(1..8) the header, and the
 '' positions start at gv_buf(9).
 ''
+''
+'' THE SHARED PAGING WINDOW.
+''
+'' EMS gives four physical slots. uglBuildSurf takes 0 and 1 for its own
+'' source and destination, the colormap holds 3 for the whole run, and
+'' everything else that needs a window takes turns in 2.
+''
+'' "Takes turns" is safe because every user maps it immediately before
+'' reading and copies what it wants straight out: the geometry row is
+'' memCopy'd into gv_buf, the luxel scanline is read inside sb_build, and
+'' the node/clip/leaf stores only touch it on the EMS fallback path that
+'' runs when conventional memory was too small to hold them. Nothing
+'' holds the window across a call that could remap it.
+''
+'' This was four constants -- GEOM_SLOT, LM_SLOT, NODE_SLOT, CLIP_SLOT --
+'' in three files, all equal to 2. Four names for one physical slot hid
+'' exactly the property that has to be reasoned about.
+''
+const PAGE_SLOT = 2
+
 const GEOM_W = 8192
 ''
-'' The BSP nodes share GEOM_SLOT's physical page. emsMapEx consults the
+'' The BSP nodes take turns in PAGE_SLOT too. emsMapEx consults the
 '' EMS layer's record of what a slot holds before remapping, so the
 '' alternation costs a compare when the page has not moved. The walk
 '' finishes before drawing starts, so it is one remap per ordered node.
 ''
-const NODE_SLOT = 2
 '' only used if MEM refuses; shares the same physical page
-const CLIP_SLOT = 2
 const GEOM_MAXVTX = 33
 const GEOM_LMOFS = 1            '' gv_buf index of the lightmap header
 const GEOM_VTX0  = 9            '' gv_buf index of the first corner
 const GEOM_MAXREC = 18 + GEOM_MAXVTX * 6
 
 '' The geometry store is NOT here any more -- model.bas owns it and
-'' GEOM_SLOT with it; d_poly and d_surf ask for a row through geom_map.
+'' PAGE_SLOT with it; d_poly and d_surf ask for a row through geom_map.
 
 ''
 '' The face record most recently fetched by d_draw_faces. Shared because
 '' sb_build wants the lightmap header out of it and must NOT go back to
-'' the window it came from: GEOM_SLOT is not still holding that page by
+'' the window it came from: PAGE_SLOT is not still holding that page by
 '' the time a build runs -- measured, it reads zeros -- and a 0x0 luxel
 '' grid hangs the builder. One fetch per face, one reader of the copy.
 ''
-common shared /map_a/ gv_buf() as integer
+common shared /surf/ gv_buf() as integer
 ''
 '' The BSP nodes live in EMS, not in BASIC's heap. nds_buffer is a ONE
 '' ELEMENT stub whose descriptor uglArrNew1D takes over; nodes.pag streams
@@ -111,21 +142,35 @@ common shared /map_a/ gv_buf() as integer
 '' per node visit covers all of its fields: the store pads pages, so a
 '' record never straddles one.
 ''
-'' NODE_SLOT shares GEOM_SLOT's physical page. That is safe because
+'' The node store's EMS fallback takes PAGE_SLOT as well. Safe because
 '' emsMapEx consults the EMS layer's own record of what a slot holds
 '' before it remaps -- so alternating between node pages and geometry
 '' pages costs a compare when the page is already there, and a real remap
 '' only when it genuinely differs. The walk finishes before drawing
 '' starts, so the alternation is one per ordered node, not per face.
 ''
-common shared /map_a/ h_nds as long
-common shared /map_a/ mdl_buffer() as model, pln_buffer() as plane2, nds_buffer() as nodeb
+''
+'' ===================================================================
+'' /world/ -- THE BSP ITSELF
+''
+'' Read by r_bsp, ent, pl_move and d_poly: rendering, physics and
+'' entities all ask the same geometry the same questions, and all of it
+'' is subscripted inside loops. An accessor would give up the native
+'' subscript that is the whole reason these are flat stores, and
+'' ownership needs a single reader, which none of them has.
+''
+'' This is the residue of the de-globalization, not a leftover of it:
+'' shared because the data genuinely is.
+'' ===================================================================
+''
+common shared /world/ h_nds as long
+common shared /world/ mdl_buffer() as model, pln_buffer() as plane2, nds_buffer() as nodeb
 ''
 '' lfc_buffer and pvs_buffer_b are NOT here any more. r_bsp.bas is their
 '' only run-time reader; they looked shared only because model.bas loaded
 '' them, so r_bsp loads them itself now.
 ''
-common shared /map_a/ order_list() as integer
+common shared /surf/ order_list() as integer
 ''
 '' The compressed visibility lump, in a memAlloc'd block rather than an
 '' array. It is walked once per frame -- and only when the camera changes
@@ -136,7 +181,7 @@ common shared /map_a/ order_list() as integer
 '' The visibility lump is NOT here any more. model.bas allocates it and
 '' hands out its base through pvs_base; pvs_size never left that module
 '' at all, so it needs no accessor.
-common shared /map_a/ tex_inf_buff() as texinfo2, poly_flag() as integer
+common shared /surf/ tex_inf_buff() as texinfo2, poly_flag() as integer
 
 ''
 '' The collision hulls. Separate trees from the render nodes: same planes,
@@ -158,13 +203,13 @@ common shared /map_a/ tex_inf_buff() as texinfo2, poly_flag() as integer
 '' is what actually fails first.
 ''
 '' The faces. 55,160 bytes on e1m1, the largest single item left.
-common shared /map_a/ h_tri as long
+common shared /surf/ h_tri as long
 
 ''
 '' Lightmaps. The luxels are one 8-bit atlas in a single EMS dc, loaded by
 '' uglNewBMPEx exactly as the textures are -- so they cost no conventional
 '' memory at all, where the old packed blob cost 40K on dm3ish and more on
-'' bigger maps. A face's rect is fetched with one uglMapEx into LM_SLOT,
+'' bigger maps. A face's rect is fetched with one uglMapEx into PAGE_SLOT,
 '' which the atlas packer guarantees is a single page.
 ''
 '' The per-face placement table is not a block of its own: it rides in
@@ -175,7 +220,7 @@ common shared /map_a/ h_tri as long
 '' that map loading.
 ''
 '' The atlas handle is NOT here any more. model.bas loads it and owns
-'' LM_SLOT with it; sb_build asks for a scanline through lm_map rather
+'' PAGE_SLOT with it; sb_build asks for a scanline through lm_map rather
 '' than mapping a slot it does not own.
 ''
 '' The depth buffer. World faces write through it without testing -- the
