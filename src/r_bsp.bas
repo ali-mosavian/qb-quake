@@ -23,6 +23,7 @@ option explicit
 '$include: 'q_map.bi'
 '$include: 'q_vis.bi'
 '$include: 'q_cam.bi'
+'$include: 'q_pl.bi'
 '$include: 'q_ent.bi'
 
 '$static
@@ -73,14 +74,43 @@ declare sub r_recursive_world_node ( _
 '' ==========================================================================
 ''  BSP WALK
 '' ==========================================================================
-'' Renderer space is Y-up, the BSP is Z-up, so y pairs with norm.z.
+'' Takes a RENDERER point: Y-up there, Z-up in the BSP, so y pairs with norm.z.
 '' Single, not double: returning double moved two edge-on faces onto the
 '' other side of their plane.
 function r_plane_dist ( _
+    p as Vec3, _
+    pl as Plane _
+) as single
+    r_plane_dist = p.x*pl.norm.x + _
+                   p.y*pl.norm.y + _
+                   p.z*pl.norm.z - pl.dist
+end function
+
+'' The leaf holding p, walking hull 0. Bit 15 marks a leaf; NOT is its index.
+function r_point_leaf ( _
+    p as Vec3, _
+    nodes() as Node, _
+    planes() as Plane _
+) as integer
+    dim nodenr as integer
+
+    nodenr = 0
+    do while ( (nodenr and &h8000) = 0 )
+        if ( r_plane_dist( p, planes( nodes(nodenr).planeid ) ) >= 0.0 ) then
+            nodenr = nodes(nodenr).child0
+        else
+            nodenr = nodes(nodenr).child1
+        end if
+    loop
+
+    r_point_leaf = not nodenr
+end function
+
+function r_cam_plane_dist ( _
     pt as u3dVector3f, _
     pl as Plane _
 ) as single
-    r_plane_dist = pt.x*pl.norm.x + _
+    r_cam_plane_dist = pt.x*pl.norm.x + _
                    pt.y*pl.norm.z + _
                    pt.z*pl.norm.y - pl.dist
 end function
@@ -92,7 +122,7 @@ function r_node_side ( _
     nodes() as Node, _
     planes() as Plane _
 )
-    if ( r_plane_dist( pt, planes( nodes(node_idx).planeid ) ) > 0.0 ) then
+    if ( r_cam_plane_dist( pt, planes( nodes(node_idx).planeid ) ) > 0.0 ) then
         r_node_side = -1
         exit function
     end if
@@ -206,7 +236,7 @@ sub r_recursive_world_node ( _
         exit sub
     end if
     
-    if ( r_plane_dist( cpos, pln( nds(nodenr).planeid ) ) >= 0.0 ) then
+    if ( r_cam_plane_dist( cpos, pln( nds(nodenr).planeid ) ) >= 0.0 ) then
         side = 1
     else
         side = 0

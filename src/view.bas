@@ -24,6 +24,7 @@ option explicit
 '$include: 'q_map.bi'
 '$include: 'q_cam.bi'
 '$include: 'q_pl.bi'
+'$include: 'q_ent.bi'
 Declare Sub cp_advance ( )
 
 ''
@@ -251,7 +252,8 @@ sub v_update_camera ( byval dt as single )
             end if
 
             pl_move fwd, strafe, dir_x, dir_y, jump, dt, _
-                    pl, cam, wld.mdl_count, mdl_buffer(), nds_buffer(), pln_buffer()
+                    pl, cam, wld.mdl_count, mdl_buffer(), mdl_solid(), mdl_zofs(), _
+                    nds_buffer(), pln_buffer()
         end if
         
         if ( env.keyboard.n and env.cammode = 2 ) then

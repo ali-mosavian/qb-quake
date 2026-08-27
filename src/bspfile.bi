@@ -544,24 +544,6 @@ declare sub mod_load_clipnodes ( )
 ''
 '' ent.bas -- entities
 ''
-declare function ent_value ( _
-    strm() as string, _
-    byval strm_cnt as integer, _
-    kname as string _
-) as string
-declare sub ent_vec ( _
-    strm() as string, _
-    byval strm_cnt as integer, _
-    kname as string, _
-    v as Vec3 _
-)
-declare sub ent_load_teleports ( )
-declare sub ent_check_teleport ( )
-declare function ent_plat_touched ( byval p as integer ) as integer
-declare sub ent_move_plats ( byval dt as single )
-declare function ent_point_leaf ( p as Vec3 ) as integer
-declare sub ent_place_models ( )
-declare function ent_find_node ( byval m as integer ) as integer
 
 declare sub mod_load_texinfo ( )
 declare sub mod_load_textures ( )
@@ -569,6 +551,7 @@ declare sub mod_link_anims ( )
 declare sub vid_init ( )
 declare sub in_init ( )
 declare sub s_stop_music ( )
+
 declare sub pl_clip_velocity ( _
     v as Vec3, _
     norm as Vec3 _
@@ -588,6 +571,15 @@ declare function pl_point_contents ( _
 ) as integer
 
 declare function r_plane_dist ( _
+    p as Vec3, _
+    pl as Plane _
+) as single
+declare function r_point_leaf ( _
+    p as Vec3, _
+    nodes() as Node, _
+    planes() as Plane _
+) as integer
+declare function r_cam_plane_dist ( _
     pt as u3dVector3f, _
     pl as Plane _
 ) as single
