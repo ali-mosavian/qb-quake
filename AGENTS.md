@@ -2,6 +2,45 @@
 
 Hard-won things, mostly the kind that cost an hour before they cost a minute.
 
+## House rules
+
+These are not suggestions. Apply them to anything you touch, and do not
+introduce new violations even where the surrounding code still has them.
+
+**No function reads a global.** Everything a procedure uses is a parameter
+or a local. This is the rule the rest follow from. A module-level
+`DIM SHARED` counts as a global to the procedures in that module -- owning
+state in the right module is an improvement, not compliance.
+
+**State goes in UDTs, and UDTs of UDTs.** Group related scalars into a type
+and pass the type, so a call site says what it is handing over instead of
+listing eight things. Nested types work (`Leaf.bound as BoundBox` already
+relies on it), so compose rather than flatten.
+
+**Arrays cannot be UDT members**, so they are passed as parameters:
+`sub walk ( n as integer, nodes() as BspNode )`. That is the compromise the
+language forces, and it is the only reason an array appears in a signature.
+
+**Measured, not assumed: parameters are cheap.** Converting
+`r_recursive_world_node` -- the hottest recursion in the renderer -- from
+eleven globals to twelve parameters cost **+0.15ms of an 81.5ms frame,
++0.2%**, six runs interleaved per arm. An array passes as a 2-byte
+descriptor offset and a UDT as a far pointer. "It would be too slow in QB"
+is not a reason; measure it the way that number was measured.
+
+**Names.** `snake_case` for procedures, parameters and variables.
+`PascalCase` for UDTs. Descriptive but short -- `Leaf`, not `leaf2`; a name
+carrying a `2` or a `b` suffix means the distinction it is drawing was never
+given a word.
+
+**A procedure does what its name says, on what it is given.** If it is
+called `classify_point` it takes a point -- not a camera it reaches into for
+one. And the name has to answer "against what?": `point_side_of_plane` says
+what `classify_point` only gestures at.
+
+**Bail early; do not nest.** Guard clauses and `exit sub` beat an `if` that
+wraps the body. Keep procedures tight and small enough to read whole.
+
 ## Layout
 
     src/main.bas      host_init / host_main / host_shutdown   (Quake host.c)
