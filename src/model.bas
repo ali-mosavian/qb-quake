@@ -181,10 +181,17 @@ sub mod_load_faces
     '' cost an INT 67h each time. A MEM-backed store needs no slot at all,
     '' so it also cannot collide with the geometry window d_poly maps
     '' between these reads.
-    h_tri = uglArrNew1D&( UGL.MEM, tri_buffer(), wld.tri_count, 0 )
+    h_tri = uglArrNew&( UGL.MEM, len( tri_buffer(0) ), wld.tri_count, 0 )
     if ( h_tri = 0 ) then sys_error "0x0039, no room for the faces"
 
+    '' Hands the descriptor over. NOT ceremony: this is what takes
+    '' it out of the far heap's chain, and only BASIC can do that
+    '' correctly. Left in, B$FHCompact walks into a descriptor
+    '' aimed at memory it does not own and moves it -- the far
+    '' heap is then corrupt. The variable still exists afterwards,
+    '' which is what uglArrMap binds to.
     erase tri_buffer
+
 
     if ( fileOpen%( f, "faces.pag", F4READ ) = 0 ) then
         sys_error "0x003A, faces.pag missing"
@@ -200,7 +207,7 @@ sub mod_load_faces
     '' the descriptor at the entire block and every subscript works from
     '' here on with no further calls.
     ''
-    mapped = uglArrMap&( h_tri, 0 )
+    mapped = uglArrMap&( h_tri, tri_buffer(), 0 )
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     scr_load_tick
@@ -363,13 +370,20 @@ sub mod_load_leafs
     '' MEM first: the far heap is the fragmented pool, and taking a 34K
     '' array out of it leaves a larger contiguous hole behind even when the
     '' total free does not change.
-    h_lef = uglArrNew1D&( UGL.MEM, lef_buffer(), wld.lef_count, 0 )
+    h_lef = uglArrNew&( UGL.MEM, len( lef_buffer(0) ), wld.lef_count, 0 )
     if ( h_lef = 0 ) then
-        h_lef = uglArrNew1D&( UGL.EMS, lef_buffer(), wld.lef_count, CLIP_SLOT )
+        h_lef = uglArrNew&( UGL.EMS, len( lef_buffer(0) ), wld.lef_count, CLIP_SLOT )
     end if
     if ( h_lef = 0 ) then sys_error "0x0036, no room for the leaves"
 
+    '' Hands the descriptor over. NOT ceremony: this is what takes
+    '' it out of the far heap's chain, and only BASIC can do that
+    '' correctly. Left in, B$FHCompact walks into a descriptor
+    '' aimed at memory it does not own and moves it -- the far
+    '' heap is then corrupt. The variable still exists afterwards,
+    '' which is what uglArrMap binds to.
     erase lef_buffer
+
 
     if ( fileOpen%( f, "leaves.pag", F4READ ) = 0 ) then
         sys_error "0x0037, leaves.pag missing"
@@ -385,7 +399,7 @@ sub mod_load_leafs
     '' the descriptor at the entire block and every subscript works from
     '' here on with no further calls.
     ''
-    mapped = uglArrMap&( h_lef, 0 )
+    mapped = uglArrMap&( h_lef, lef_buffer(), 0 )
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     scr_load_tick
@@ -433,15 +447,22 @@ sub mod_load_nodes
     '' It still gets the tree out of BASIC's far heap, which is what FRE(-1)
     '' measures; memAlloc takes it from DOS (upper memory when there is
     '' room), not from the heap the BSP arrays compete for.
-    h_nds = uglArrNew1D&( UGL.MEM, nds_buffer(), wld.nds_count, 0 )
+    h_nds = uglArrNew&( UGL.MEM, len( nds_buffer(0) ), wld.nds_count, 0 )
     if ( h_nds = 0 ) then
-        h_nds = uglArrNew1D&( UGL.EMS, nds_buffer(), wld.nds_count, NODE_SLOT )
+        h_nds = uglArrNew&( UGL.EMS, len( nds_buffer(0) ), wld.nds_count, NODE_SLOT )
     end if
     if ( h_nds = 0 ) then sys_error "0x0030, no room for the node tree"
 
+    '' Hands the descriptor over. NOT ceremony: this is what takes
+    '' it out of the far heap's chain, and only BASIC can do that
+    '' correctly. Left in, B$FHCompact walks into a descriptor
+    '' aimed at memory it does not own and moves it -- the far
+    '' heap is then corrupt. The variable still exists afterwards,
+    '' which is what uglArrMap binds to.
+    erase nds_buffer
+
     '' Hands the descriptor over: this is what takes it out of the far
     '' heap's chain, and only BASIC can do it correctly.
-    erase nds_buffer
 
     if ( fileOpen%( f, "nodes.pag", F4READ ) = 0 ) then
         sys_error "0x0031, nodes.pag missing"
@@ -457,7 +478,7 @@ sub mod_load_nodes
     '' the descriptor at the entire block and every subscript works from
     '' here on with no further calls.
     ''
-    mapped = uglArrMap&( h_nds, 0 )
+    mapped = uglArrMap&( h_nds, nds_buffer(), 0 )
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     scr_load_tick
@@ -527,13 +548,20 @@ sub mod_load_clipnodes
     '' hole for the allocations that come after. The far heap is the
     '' fragmented pool; DOS memory is not.
     ''
-    h_clp = uglArrNew1D&( UGL.MEM, clp_buffer(), wld.clp_count, 0 )
+    h_clp = uglArrNew&( UGL.MEM, len( clp_buffer(0) ), wld.clp_count, 0 )
     if ( h_clp = 0 ) then
-        h_clp = uglArrNew1D&( UGL.EMS, clp_buffer(), wld.clp_count, CLIP_SLOT )
+        h_clp = uglArrNew&( UGL.EMS, len( clp_buffer(0) ), wld.clp_count, CLIP_SLOT )
     end if
     if ( h_clp = 0 ) then sys_error "0x0033, no room for the clip hulls"
 
+    '' Hands the descriptor over. NOT ceremony: this is what takes
+    '' it out of the far heap's chain, and only BASIC can do that
+    '' correctly. Left in, B$FHCompact walks into a descriptor
+    '' aimed at memory it does not own and moves it -- the far
+    '' heap is then corrupt. The variable still exists afterwards,
+    '' which is what uglArrMap binds to.
     erase clp_buffer
+
 
     if ( fileOpen%( f, "clip.pag", F4READ ) = 0 ) then
         sys_error "0x0034, clip.pag missing"
@@ -549,7 +577,7 @@ sub mod_load_clipnodes
     '' the descriptor at the entire block and every subscript works from
     '' here on with no further calls.
     ''
-    mapped = uglArrMap&( h_clp, 0 )
+    mapped = uglArrMap&( h_clp, clp_buffer(), 0 )
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     scr_load_tick
