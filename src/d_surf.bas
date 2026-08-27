@@ -1220,7 +1220,7 @@ sub sb_build ( _
     lmh = gv_buf(GEOM_LMOFS + 5)
 
     ''
-    '' The luxels live in one EMS atlas dc. lm_map hands back the face's
+    '' The luxels live in one EMS atlas dc. mod_lm_map hands back the face's
     '' scanline and this points at the rect inside it; uglBuildSurf's own
     '' texture and destination go to slots 0 and 1 without disturbing it.
     ''
@@ -1336,11 +1336,7 @@ function sc_frame_end ( ) as integer
     sc_builds = 0
 end function
 
-''::::::::::
-'' name: sc_ready
-'' desc: Whether there is a cache at all. Zero after a failed init, and
-''       every caller treats that as "draw it plain".
-''::::::::::
+'' Whether there is a surface cache at all.
 function sc_ready ( ) as integer
     sc_ready = sc_ok
 end function

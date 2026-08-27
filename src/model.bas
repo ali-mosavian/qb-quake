@@ -38,7 +38,7 @@ dim shared texinfotmp as DiskTexInfo       '' tex_inf_buff dropped flags and
 ''
 '' THE COLORMAP. Owned here -- mod_load_colormap is what creates it, and
 '' the two readers (sb_build, hud_shade) want the same thing from it: a
-'' pointer to the mapped table. They get that from cm_map, so CM_SLOT
+'' pointer to the mapped table. They get that from mod_cm_map, so CM_SLOT
 '' stops being a constant three modules have to agree about.
 ''
 '' One row of 16,384, which is one EMS page, so a single uglMapEx reaches
@@ -593,7 +593,7 @@ sub mod_close
 end sub
 
 ''::::::::::
-'' name: cm_map
+'' name: mod_cm_map
 '' desc: The colormap, mapped, as a far pointer. Mapped per call and never
 ''       held: CM_SLOT is the depth buffer's, so anything that touched
 ''       depth in between has already taken it back.
@@ -603,7 +603,7 @@ function mod_cm_map ( ) as long
 end function
 
 ''::::::::::
-'' name: cm_ready
+'' name: mod_cm_ready
 '' desc: Whether a full table actually loaded. Callers that can fall back
 ''       -- hud_shade draws an opaque slab instead -- ask this first.
 ''::::::::::
@@ -612,7 +612,7 @@ function mod_cm_ready ( ) as integer
 end function
 
 ''::::::::::
-'' name: cm_bytes
+'' name: mod_cm_bytes
 '' desc: Table size, for the bench report.
 ''::::::::::
 function mod_cm_bytes ( ) as long
@@ -620,7 +620,7 @@ function mod_cm_bytes ( ) as long
 end function
 
 ''::::::::::
-'' name: lm_map
+'' name: mod_lm_map
 '' desc: One scanline of the luxel atlas, mapped, as a far pointer. The
 ''       packer keeps a face's whole rect inside one scanline, so a single
 ''       mapping reaches all of it.
@@ -630,7 +630,7 @@ function mod_lm_map ( byval row as integer ) as long
 end function
 
 ''::::::::::
-'' name: lm_bytes / lm_got
+'' name: mod_lm_bytes / mod_lm_got
 '' desc: Atlas size on disk, and how much of it actually loaded, for the
 ''       bench report.
 ''::::::::::
@@ -643,7 +643,7 @@ function mod_lm_got ( ) as long
 end function
 
 ''::::::::::
-'' name: geom_map
+'' name: mod_geom_map
 '' desc: One row of the geometry store, mapped, as a far pointer. The
 ''       builder keeps a face's whole record inside one row, so the row
 ''       end is also the end of the mapped window.
@@ -653,7 +653,7 @@ function mod_geom_map ( byval row as integer ) as long
 end function
 
 ''::::::::::
-'' name: geom_nrows
+'' name: mod_geom_rows
 '' desc: How many rows the store has, for the bench report.
 ''::::::::::
 function mod_geom_rows ( ) as integer
@@ -661,7 +661,7 @@ function mod_geom_rows ( ) as integer
 end function
 
 ''::::::::::
-'' name: pvs_base
+'' name: mod_pvs_base
 '' desc: Far pointer to the visibility lump. Fixed for the whole run, so
 ''       callers hoist it rather than asking per leaf.
 ''::::::::::
