@@ -40,6 +40,13 @@ from the others, which nobody could have guessed) -- never said which was
 which. `DiskLeaf` loads, `Leaf` is what the renderer walks. This is Quake's
 own `dleaf_t`/`mleaf_t` split with words instead of letters.
 
+**Never delete with a `sed` line range.** `sed '/^declare sub foo ( _/,/^)$/d'`
+was meant to remove one forward declaration. The declaration ends `)`, the
+definition ends `) static`, so the range ran past its target to the next
+bare `)` in the file and took 640 lines with it. Use a script that finds
+both ends of the construct, and diff against a copy before writing to
+`src/`.
+
 **Renaming a type is not renaming an identifier.** A type appears only as
 `type X` or `as X`, and `tools/qbtype.py` rewrites exactly those.
 `model` was simultaneously a type, a parameter of `r_draw_world` and a

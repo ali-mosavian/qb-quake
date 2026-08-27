@@ -439,13 +439,6 @@ declare sub sys_error ( msg as string )
 declare sub sys_time_init ( )
 declare function sys_frame_time ( ) as single
 declare function sys_tick_hz ( ) as single
-declare sub r_mark_leaves ( byval nodenr as integer )
-declare sub r_load_leaves ( byval cnt as long )
-declare function r_leaf_contents ( byval leafnr as integer ) as integer
-declare sub r_load_lfaces ( byval lumpbytes as long )
-declare sub r_alloc_pvs ( byval nleafs as long )
-declare sub r_draw_world ( model as integer )
-declare sub r_draw_brush_model ( byval m as integer )
 declare sub v_update_camera ( byval dt as single )
 declare sub in_handle_toggles ( )
 ''
@@ -606,33 +599,6 @@ declare function sc_shift ( byval v as integer ) as integer
 declare sub sc_stats ( s as CacheStats )
 declare function sc_store_open ( ) as integer
 
-declare function r_plane_dist ( _
-    p as Vec3, _
-    pl as Plane _
-) as single
-declare function r_point_leaf ( _
-    p as Vec3, _
-    nodes() as Node, _
-    planes() as Plane _
-) as integer
-declare function r_cam_plane_dist ( _
-    pt as u3dVector3f, _
-    pl as Plane _
-) as single
-declare function r_node_side ( _
-    byval node_idx as integer, _
-    pt as u3dVector3f, _
-    nodes() as Node, _
-    planes() as Plane _
-) as integer
-declare function r_cull_box ( _
-    bbox as Bounds, _
-    frustum() as DiskPlane _
-) as integer
-declare sub r_set_frustum ( _
-    frustum() as DiskPlane, _
-    mtx as u3dMtrx _
-)
 declare sub com_parse_config ( filename as string )
 declare function com_arg ( _
     strm() as string, _
@@ -794,3 +760,47 @@ declare sub scr_screenshot ( _
 
                          
                                                     
+
+''
+'' r_bsp.bas
+''
+declare sub r_alloc_pvs ( byval nleafs as long )
+declare function r_cam_plane_dist ( _
+    pt as u3dVector3f, _
+    pl as Plane _
+) as single
+declare function r_cull_box ( _
+    bbox as Bounds, _
+    frustum() as DiskPlane _
+) as integer
+declare function r_leaf_contents ( byval leafnr as integer ) as integer
+declare sub r_load_leaves ( byval cnt as long )
+declare sub r_load_lfaces ( byval lumpbytes as long )
+declare sub r_mark_leaves ( _
+    byval nodenr as integer, _
+    byval nleafs as long, _
+    campos as u3dVector3f, _
+    nodes() as Node, _
+    planes() as Plane, _
+    bitarray() as integer, _
+    pvsb() as integer _
+)
+declare function r_node_side ( _
+    byval node_idx as integer, _
+    pt as u3dVector3f, _
+    nodes() as Node, _
+    planes() as Plane _
+)
+declare function r_plane_dist ( _
+    p as Vec3, _
+    pl as Plane _
+) as single
+declare function r_point_leaf ( _
+    p as Vec3, _
+    nodes() as Node, _
+    planes() as Plane _
+) as integer
+declare sub r_set_frustum ( _
+    frustum() as DiskPlane, _
+    mtx as u3dMtrx _
+)

@@ -55,6 +55,9 @@ dim shared pvs_leaf as integer
 ''
 declare sub r_recursive_world_node ( _
     byval nodenr as integer, _
+    byval nmodels as long, _
+    models() as Submodel, _
+    brush() as BrushModel, _
     cpos as u3dVector3f, _
     vs as VisState, _
     byval ign as integer, _
@@ -146,20 +149,35 @@ end function
 ''       A separate SUB gets a frame of its own. r_ignore_pvs still has to
 ''       stop the nested walk re-entering here, which would not terminate.
 ''::::::::::
-sub r_emit_entities ( byval nodenr as integer )
+sub r_emit_entities ( _
+    byval nodenr as integer, _
+    byval nmodels as long, _
+    campos as u3dVector3f, _
+    vis as VisState, _
+    ign as integer, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    nodes() as Node, _
+    planes() as Plane, _
+    pvsb() as integer, _
+    pflag() as integer, _
+    ord() as integer, _
+    fru() as DiskPlane _
+)
     dim m as integer
 
-    if ( r_ignore_pvs or vis.bad_order or vis.no_ents ) then exit sub
+    if ( ign or vis.bad_order or vis.no_ents ) then exit sub
 
-    for  m = 1 to wld.mdl_count-1
+    for  m = 1 to nmodels-1
         if ( brush(m).draw and brush(m).node = nodenr ) then
             vis.ent_left = vis.ent_left - 1
-            r_ignore_pvs = true
-            r_recursive_world_node int( mdl_buffer(m).headnode0 ), _
-                              cam.pos, vis, r_ignore_pvs, _
-                              nds_buffer(), pln_buffer(), lef_buffer(), lfc_buffer(), _
-                              pvs_buffer_b(), poly_flag(), order_list(), frustum()
-            r_ignore_pvs = false
+            ign = true
+            r_recursive_world_node int( models(m).headnode0 ), _
+                              nmodels, models(), brush(), _
+                              campos, vis, ign, _
+                              nodes(), planes(), lef_buffer(), lfc_buffer(), _
+                              pvsb(), pflag(), ord(), fru()
+            ign = false
         end if
     next m
 
@@ -169,6 +187,9 @@ end sub
 
 sub r_recursive_world_node ( _
     byval nodenr as integer, _
+    byval nmodels as long, _
+    models() as Submodel, _
+    brush() as BrushModel, _
     cpos as u3dVector3f, _
     vs as VisState, _
     byval ign as integer, _
@@ -219,7 +240,9 @@ sub r_recursive_world_node ( _
     	    '' on arrival at that leaf. Anything larger straddles a plane
     	    '' and is emitted at a node instead, further down.
     	    ''
-    	    if ( vs.ent_left ) then r_emit_entities nodenr
+    	    if ( vs.ent_left ) then r_emit_entities nodenr, nmodels, cpos, vs, ign, _
+                                        models(), brush(), nds(), pln(), _
+                                        pvsb(), pflag(), ord(), fru()
 
     	    vs.drw_leafs = vs.drw_leafs + 1
         else 
@@ -250,11 +273,13 @@ sub r_recursive_world_node ( _
     		
         '' No map here: the one at the top of the sub still holds -- the
         '' cull and the plane maths between them do not touch the slot.
-        r_recursive_world_node nds(nodenr).child1, cpos, vs, ign, nds(), pln(), lef(), lfc(), pvsb(), pflag(), ord(), fru()
-        if ( vs.ent_left ) then r_emit_entities nodenr
+        r_recursive_world_node nds(nodenr).child1, nmodels, models(), brush(), cpos, vs, ign, nds(), pln(), lef(), lfc(), pvsb(), pflag(), ord(), fru()
+        if ( vs.ent_left ) then r_emit_entities nodenr, nmodels, cpos, vs, ign, _
+                                        models(), brush(), nds(), pln(), _
+                                        pvsb(), pflag(), ord(), fru()
 	    ord(vs.ord_count) = nodenr
 	    vs.ord_count = vs.ord_count + 1
-        r_recursive_world_node nds(nodenr).child0, cpos, vs, ign, nds(), pln(), lef(), lfc(), pvsb(), pflag(), ord(), fru()
+        r_recursive_world_node nds(nodenr).child0, nmodels, models(), brush(), cpos, vs, ign, nds(), pln(), lef(), lfc(), pvsb(), pflag(), ord(), fru()
         
     else
         ''
@@ -263,11 +288,13 @@ sub r_recursive_world_node ( _
 	    ''
     		
         '' likewise: still covered by the map at the top of the sub
-        r_recursive_world_node nds(nodenr).child0, cpos, vs, ign, nds(), pln(), lef(), lfc(), pvsb(), pflag(), ord(), fru()        
-        if ( vs.ent_left ) then r_emit_entities nodenr
+        r_recursive_world_node nds(nodenr).child0, nmodels, models(), brush(), cpos, vs, ign, nds(), pln(), lef(), lfc(), pvsb(), pflag(), ord(), fru()        
+        if ( vs.ent_left ) then r_emit_entities nodenr, nmodels, cpos, vs, ign, _
+                                        models(), brush(), nds(), pln(), _
+                                        pvsb(), pflag(), ord(), fru()
 	    ord(vs.ord_count) = nodenr
 	    vs.ord_count = vs.ord_count + 1        
-        r_recursive_world_node nds(nodenr).child1, cpos, vs, ign, nds(), pln(), lef(), lfc(), pvsb(), pflag(), ord(), fru()
+        r_recursive_world_node nds(nodenr).child1, nmodels, models(), brush(), cpos, vs, ign, nds(), pln(), lef(), lfc(), pvsb(), pflag(), ord(), fru()
     end if
     
 
@@ -276,7 +303,22 @@ end sub
 
 
 '':::::::::
-sub r_draw_world ( model as integer )
+sub r_draw_world ( _
+    byval model as integer, _
+    byval nmodels as long, _
+    byval nleafs as long, _
+    byval nfaces as long, _
+    campos as u3dVector3f, _
+    vis as VisState, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    nodes() as Node, _
+    planes() as Plane, _
+    pflag() as integer, _
+    ord() as integer, _
+    fru() as DiskPlane, _
+    bitarray() as integer _
+)
     dim i as integer
     ''
     '' Reset tree state
@@ -296,8 +338,8 @@ sub r_draw_world ( model as integer )
     '' QuickBASIC traps integer overflow at run time rather than wrapping.
     ''
     if ( vis.frame_stamp = 32767 ) then
-        for  i = 0 to wld.tri_count-1
-            poly_flag(i) = 0
+        for  i = 0 to nfaces-1
+            pflag(i) = 0
         next i
         vis.frame_stamp = 0
     end if
@@ -306,24 +348,25 @@ sub r_draw_world ( model as integer )
     ''
     '' Extract pvs
     ''
-    r_mark_leaves int(mdl_buffer(model).headnode0)
+    r_mark_leaves int(models(model).headnode0), nleafs, campos, _
+                  nodes(), planes(), bitarray(), pvs_buffer_b()
     
     ''
     '' How many brush entities the walk still has to place. Once it is zero
     '' the per-node test below costs nothing.
     ''
     vis.ent_left = 0
-    for  i = 1 to wld.mdl_count-1
+    for  i = 1 to nmodels-1
         if ( brush(i).draw ) then vis.ent_left = vis.ent_left + 1
     next i
 
     ''
     '' Traverse tree
     ''
-    r_recursive_world_node int( mdl_buffer(model).headnode0 ), _
-                              cam.pos, vis, r_ignore_pvs, _
-                              nds_buffer(), pln_buffer(), lef_buffer(), lfc_buffer(), _
-                              pvs_buffer_b(), poly_flag(), order_list(), frustum()
+    r_recursive_world_node int( models(model).headnode0 ), _
+                              nmodels, models(), brush(), campos, vis, r_ignore_pvs, _
+                              nodes(), planes(), lef_buffer(), lfc_buffer(), _
+                              pvs_buffer_b(), pflag(), ord(), fru()
 
     ''
     '' -badorder reproduces what this used to do: every brush entity appended
@@ -331,13 +374,13 @@ sub r_draw_world ( model as integer )
     '' so the fix can be shown rather than asserted.
     ''
     if ( vis.bad_order and vis.no_ents = false ) then
-        for  i = 1 to wld.mdl_count-1
+        for  i = 1 to nmodels-1
             if ( brush(i).draw ) then
                 r_ignore_pvs = true
-                r_recursive_world_node int( mdl_buffer(i).headnode0 ), _
-                              cam.pos, vis, r_ignore_pvs, _
-                              nds_buffer(), pln_buffer(), lef_buffer(), lfc_buffer(), _
-                              pvs_buffer_b(), poly_flag(), order_list(), frustum()
+                r_recursive_world_node int( models(i).headnode0 ), _
+                              nmodels, models(), brush(), campos, vis, r_ignore_pvs, _
+                              nodes(), planes(), lef_buffer(), lfc_buffer(), _
+                              pvs_buffer_b(), pflag(), ord(), fru()
                 r_ignore_pvs = false
             end if
         next i
@@ -499,7 +542,15 @@ end function
 
 
 ''::::::::::
-sub r_mark_leaves ( byval nodenr as integer )
+sub r_mark_leaves ( _
+    byval nodenr as integer, _
+    byval nleafs as long, _
+    campos as u3dVector3f, _
+    nodes() as Node, _
+    planes() as Plane, _
+    bitarray() as integer, _
+    pvsb() as integer _
+)
     dim mp as long
     dim v as long
     dim l as long
@@ -514,10 +565,10 @@ sub r_mark_leaves ( byval nodenr as integer )
     while not ( nodenr and &h8000 )
         '' r_node_side maps nodenr itself and nothing since has
         '' remapped, so the children are readable without a second call
-        if ( r_node_side( nodenr, cam.pos, nds_buffer(), pln_buffer() ) ) then
-            nodenr = nds_buffer(nodenr).child0
+        if ( r_node_side( nodenr, campos, nodes(), planes() ) ) then
+            nodenr = nodes(nodenr).child0
         else
-            nodenr = nds_buffer(nodenr).child1
+            nodenr = nodes(nodenr).child1
         end if            
     wend
 
@@ -542,8 +593,8 @@ sub r_mark_leaves ( byval nodenr as integer )
     def seg = sb_seg( mod_pvs_base )
     
     if ( lef_buffer( not nodenr ).vislist = -1 ) then
-        for  i = 0 to wld.lef_count-1
-            pvs_buffer_b(i) = -1
+        for  i = 0 to nleafs-1
+            pvsb(i) = -1
         next i           
 
         exit sub
@@ -553,15 +604,15 @@ sub r_mark_leaves ( byval nodenr as integer )
     '' Extract the pvs data
     ''
     l = 1
-    while ( l < wld.lef_count )
+    while ( l < nleafs )
         
         if ( peek( v ) = 0 ) then
             j = l
             l = l + 8& * peek( v+1 ) 
-            if ( l > wld.lef_count ) then l = wld.lef_count
+            if ( l > nleafs ) then l = nleafs
             
             for  j = j to l-1
-                pvs_buffer_b(j) = 0
+                pvsb(j) = 0
             next j
             
             v = v + 1
@@ -573,13 +624,13 @@ sub r_mark_leaves ( byval nodenr as integer )
                 '' A run can carry past the last leaf; in real mode that
                 '' writes over whatever follows the array.
                 ''
-                if ( l >= wld.lef_count ) then exit for
+                if ( l >= nleafs ) then exit for
                 
                         
                 if ( byte and bitarray(bit) ) then
-                    pvs_buffer_b(l) = 1
+                    pvsb(l) = 1
                 else                 
-                    pvs_buffer_b(l) = 0
+                    pvsb(l) = 0
                 end if
                 
                 l = l + 1
@@ -593,23 +644,6 @@ sub r_mark_leaves ( byval nodenr as integer )
 end sub 
 
 
-
-''::::::::::
-'' name: r_draw_brush_model
-'' desc: Adds a brush entity's faces to the frame, after r_draw_world has
-''       done the world. Deliberately does not reset ord_count or the frame
-''       stamp: it is adding to the draw order, not starting a new one.
-''::::::::::
-sub r_draw_brush_model ( byval m as integer )
-
-    r_ignore_pvs = true
-    r_recursive_world_node int( mdl_buffer(m).headnode0 ), _
-                              cam.pos, vis, r_ignore_pvs, _
-                              nds_buffer(), pln_buffer(), lef_buffer(), lfc_buffer(), _
-                              pvs_buffer_b(), poly_flag(), order_list(), frustum()
-    r_ignore_pvs = false
-
-end sub
 
 ''::::::::::
 '' name: r_load_lfaces
