@@ -202,7 +202,10 @@ dim shared sc_desc() as long
 ''       page. The renderer takes the coarser of this and its own
 ''       distance-based choice.
 ''::::::::::
-function sc_mipfloor ( byval extw as integer, byval exth as integer ) as integer
+function sc_mipfloor ( _
+    byval extw as integer, _
+    byval exth as integer _
+) as integer
     dim m as integer
     dim w as integer, h as integer
 
@@ -286,7 +289,10 @@ function sc_fpop ( byval ord as integer ) as integer
     sc_fpop = b
 end function
 
-function sc_ftake ( byval ord as integer, byval gran as integer ) as integer
+function sc_ftake ( _
+    byval ord as integer, _
+    byval gran as integer _
+) as integer
     dim b as integer, p as integer
 
     b = sc_fhead(ord)
@@ -575,8 +581,12 @@ end sub
 '' desc: The DC holding this face's surface, or 0 if it has to be built.
 ''       A mip other than the cached one counts as a miss.
 ''::::::::::
-function sc_find ( byval face as integer, byval mip as integer, _
-                    byval w as integer, byval h as integer )
+function sc_find ( _
+    byval face as integer, _
+    byval mip as integer, _
+    byval w as integer, _
+    byval h as integer _
+)
     dim dc as long
     dim a as integer, b as integer, vcls as integer
 
@@ -621,9 +631,14 @@ end function
 '' desc: A DC big enough for w by h, remembered against the face. Returns 0
 ''       if the surface is larger than the filler can address or EMS is out.
 ''::::::::::
-function sc_alloc ( byval face as integer, byval mip as integer, _
-                     byval w as integer, byval h as integer, _
-                     byval fw as integer, byval fh as integer )
+function sc_alloc ( _
+    byval face as integer, _
+    byval mip as integer, _
+    byval w as integer, _
+    byval h as integer, _
+    byval fw as integer, _
+    byval fh as integer _
+)
     dim a as integer, b as integer, cidx as integer, bord as integer
     dim dc as long
     dim vic as integer, blk as integer, j as integer, b2 as integer
@@ -1092,7 +1107,10 @@ end function
 ''       below is d_poly's, not a paraphrase: extents from the luxel grid,
 ''       floor-divided by the mip, padded up to the size class.
 ''::::::::::
-sub sb_dump ( byval face as integer, byval mip as integer )
+sub sb_dump ( _
+    byval face as integer, _
+    byval mip as integer _
+)
     dim mt as long
     dim o as long
     dim lmw as integer, lmh as integer
@@ -1157,9 +1175,14 @@ sub sb_dump ( byval face as integer, byval mip as integer )
 end sub
 
 ''::::::::::
-sub sb_build ( byval dc as long, byval tex as long, _
-               byval face as integer, byval mip as integer, _
-               byval sw as integer, byval sh as integer )
+sub sb_build ( _
+    byval dc as long, _
+    byval tex as long, _
+    byval face as integer, _
+    byval mip as integer, _
+    byval sw as integer, _
+    byval sh as integer _
+)
     dim mt as long
 
     '' Counted here rather than at the call site: this IS the build, so the
@@ -1306,7 +1329,7 @@ end sub
 ''       was doing the cache's bookkeeping -- and doing it only when the
 ''       overlay was compiled in.
 ''::::::::::
-function sc_frame_end () as integer
+function sc_frame_end ( ) as integer
     sc_frame_end = sc_builds
     if ( sc_builds > sc_bpeak ) then sc_bpeak = sc_builds
     sc_hits   = 0
@@ -1318,7 +1341,7 @@ end function
 '' desc: Whether there is a cache at all. Zero after a failed init, and
 ''       every caller treats that as "draw it plain".
 ''::::::::::
-function sc_ready () as integer
+function sc_ready ( ) as integer
     sc_ready = sc_ok
 end function
 

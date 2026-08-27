@@ -40,6 +40,22 @@ subsystem, not the file -- `d_surf.bas` carries both `sc_` (the cache) and
 An unprefixed name like `point_side_of_node` does not say whose it is;
 `r_node_side` does.
 
+**Multi-parameter signatures are one parameter per line**, declare and
+definition alike. Single-parameter and no-parameter procedures stay on one
+line -- three lines to say `( byval cnt as long )` reads worse, not better.
+
+    declare function r_node_side ( _
+        byval node_idx as integer, _
+        pt as u3dVector3f, _
+        nodes() as nodeb, _
+        planes() as plane2 _
+    ) as integer
+
+`tools/qbsig.py` does this to whole files. It joins continuations ONLY for
+lines that begin a signature: an earlier version joined every `_`-continued
+line and re-split just the signatures, which flattened multi-line
+expressions into single ones and ran at BC's 255-character limit.
+
 **No type sigils. Declare the type.**
 
     function r_plane_dist ( pt as u3dVector3f, pl as plane2 ) as single

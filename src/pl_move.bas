@@ -62,7 +62,10 @@ dim shared tr as TraceResult
 '' desc: Walks the hull tree to find what is at a point. A negative child is
 ''       not a node index but a contents code, which is the terminator.
 ''::::::::::
-function pl_hull_contents ( byval node as integer, p as vec3 ) as integer
+function pl_hull_contents ( _
+    byval node as integer, _
+    p as vec3 _
+) as integer
     dim mc as long
     dim d as single
     dim pid as integer
@@ -174,8 +177,13 @@ end sub
 ''
 ''       Returns true while the sweep is still clear.
 ''::::::::::
-function pl_hull_check ( byval node as integer, byval p1f as single, byval p2f as single, _
-                         p1 as vec3, p2 as vec3 ) as integer
+function pl_hull_check ( _
+    byval node as integer, _
+    byval p1f as single, _
+    byval p2f as single, _
+    p1 as vec3, _
+    p2 as vec3 _
+) as integer
     dim pid as integer
     dim t1 as single, t2 as single
     dim frac as single, midf as single
@@ -297,7 +305,10 @@ end function
 ''       it beats tr.frac -- so the hulls can be walked in any order. all_solid
 ''       is the exception: each walk sets it, so it is gathered by hand.
 ''::::::::::
-sub pl_trace ( start as vec3, fin as vec3 )
+sub pl_trace ( _
+    start as vec3, _
+    fin as vec3 _
+)
     dim dummy as integer
     dim i as integer
     dim any_solid as integer
@@ -345,7 +356,10 @@ end sub
 '' desc: Removes the component of v that points into the plane, which is what
 ''       turns a head-on stop into a slide along the wall.
 ''::::::::::
-sub pl_clip_velocity ( v as vec3, norm as vec3 )
+sub pl_clip_velocity ( _
+    v as vec3, _
+    norm as vec3 _
+)
     dim backoff as single
 
     backoff = v.x*norm.x + v.y*norm.y + v.z*norm.z
@@ -369,7 +383,11 @@ end sub
 ''       remaining time is retried, so an inside corner resolves in two bumps
 ''       and a dead end stops.
 ''::::::::::
-sub pl_slide_move ( org as vec3, vel as vec3, byval dt as single )
+sub pl_slide_move ( _
+    org as vec3, _
+    vel as vec3, _
+    byval dt as single _
+)
     dim bump as integer
     dim time_left as single
     dim fin as vec3
@@ -418,7 +436,11 @@ end sub
 ''       Without this the player is stopped by every step and every doorframe
 ''       lip, because a 16 unit stair and a wall are the same thing to a trace.
 ''::::::::::
-sub pl_step_move ( org as vec3, vel as vec3, byval dt as single )
+sub pl_step_move ( _
+    org as vec3, _
+    vel as vec3, _
+    byval dt as single _
+)
     dim flat_pos as vec3, flat_vel as vec3
     dim up_pos as vec3, down_pos as vec3
     dim climbed as single
@@ -562,9 +584,14 @@ end sub
 ''
 ''       fwd and strafe are -1, 0 or 1.
 ''::::::::::
-sub pl_move ( byval fwd as single, byval strafe as single, _
-              byval dir_x as single, byval dir_y as single, _
-              byval jump as integer, byval dt as single )
+sub pl_move ( _
+    byval fwd as single, _
+    byval strafe as single, _
+    byval dir_x as single, _
+    byval dir_y as single, _
+    byval jump as integer, _
+    byval dt as single _
+)
     dim speed as single, drop as single, newspeed as single
 
     ''
@@ -721,6 +748,6 @@ end sub
 '' desc: Record size, for the bench report -- so main.bas can quote it
 ''       without reaching into this module's array.
 ''::::::::::
-function pl_hull_rec () as integer
+function pl_hull_rec ( ) as integer
     pl_hull_rec = len( clp_buffer(0) )
 end function

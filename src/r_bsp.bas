@@ -52,11 +52,20 @@ dim shared pvs_leaf as integer
 '' file needs declaring first. Module-local, so this does not belong in
 '' bspfile.bi with the cross-module declarations.
 ''
-declare sub r_recursive_world_node ( byval nodenr as integer, cpos as u3dVector3f, _
-                                     vs as VisState, byval ign as integer, _
-                                     nds() as nodeb, pln() as plane2, lef() as leaf2, _
-                                     lfc() as integer, pvsb() as integer, _
-                                     pflag() as integer, ord() as integer, fru() as plane )
+declare sub r_recursive_world_node ( _
+    byval nodenr as integer, _
+    cpos as u3dVector3f, _
+    vs as VisState, _
+    byval ign as integer, _
+    nds() as nodeb, _
+    pln() as plane2, _
+    lef() as leaf2, _
+    lfc() as integer, _
+    pvsb() as integer, _
+    pflag() as integer, _
+    ord() as integer, _
+    fru() as plane _
+)
 
 
 
@@ -79,7 +88,10 @@ declare sub r_recursive_world_node ( byval nodenr as integer, cpos as u3dVector3
 ''       where every previous run drew 299. The callers hold the result in
 ''       a single, so the extra precision only moved the boundary.
 ''::::::::::
-function r_plane_dist ( pt as u3dVector3f, pl as plane2 ) as single
+function r_plane_dist ( _
+    pt as u3dVector3f, _
+    pl as plane2 _
+) as single
     r_plane_dist = pt.x*pl.norm.x + _
                            pt.y*pl.norm.z + _
                            pt.z*pl.norm.y - pl.dist
@@ -91,8 +103,12 @@ end function
 ''       -1 in front, 0 behind. Takes the point it is classifying and the
 ''       tables it needs, so it says what it does on what it is given.
 ''::::::::::
-function r_node_side ( byval node_idx as integer, pt as u3dVector3f, _
-                               nodes() as nodeb, planes() as plane2 )
+function r_node_side ( _
+    byval node_idx as integer, _
+    pt as u3dVector3f, _
+    nodes() as nodeb, _
+    planes() as plane2 _
+)
     if ( r_plane_dist( pt, planes( nodes(node_idx).planeid ) ) > 0.0 ) then
         r_node_side = -1
         exit function
@@ -138,10 +154,20 @@ end sub
 
 
 
-sub r_recursive_world_node ( byval nodenr as integer, cpos as u3dVector3f, vs as VisState, _
-                             byval ign as integer, nds() as nodeb, pln() as plane2, _
-                             lef() as leaf2, lfc() as integer, pvsb() as integer, _
-                             pflag() as integer, ord() as integer, fru() as plane ) static
+sub r_recursive_world_node ( _
+    byval nodenr as integer, _
+    cpos as u3dVector3f, _
+    vs as VisState, _
+    byval ign as integer, _
+    nds() as nodeb, _
+    pln() as plane2, _
+    lef() as leaf2, _
+    lfc() as integer, _
+    pvsb() as integer, _
+    pflag() as integer, _
+    ord() as integer, _
+    fru() as plane _
+) static
     dim dp as single
     dim frst as integer, last as integer, i as integer
     dim pid as integer, side as integer
@@ -311,7 +337,10 @@ end sub
 
 
 '':::::::::
-sub r_set_frustum ( frustum() as plane, mtx as u3dMtrx )
+sub r_set_frustum ( _
+    frustum() as plane, _
+    mtx as u3dMtrx _
+)
     dim i as integer
     dim d as single
 
@@ -385,7 +414,10 @@ end sub
 
 
 '':::::::::
-function r_cull_box ( bbox as bboundbox, frustum() as plane ) as integer
+function r_cull_box ( _
+    bbox as bboundbox, _
+    frustum() as plane _
+) as integer
     dim dp as single
     dim near_point as vertex
     dim i as integer

@@ -411,19 +411,32 @@ const DEG2RAD# = 3.14159265359 / 180.0
 
 '' defined in main.bas, called from model.bas -- within one module
 '' BASIC auto-declares, across modules it needs this.
-declare sub draw_bar ( h_dc as long, x as integer, y as integer, wdt as integer, _
-                            hgt as integer, percent as single )
+declare sub draw_bar ( _
+    h_dc as long, _
+    x as integer, _
+    y as integer, _
+    wdt as integer, _
+    hgt as integer, _
+    percent as single _
+)
 declare sub scr_load_tick ( )
 declare sub mod_close ( )
-declare sub scr_mip_tick  ( percent as single )
-declare sub host_init    ( )
-declare sub host_main    ( )
-declare sub host_shutdown     ( )
+declare sub scr_mip_tick ( percent as single )
+declare sub host_init ( )
+declare sub host_main ( )
+declare sub host_shutdown ( )
 declare sub host_tick ( byval dt as single )
 declare sub host_advance ( byval real_dt as single )
-declare sub host_render ( byval h_dst_dc as long, mtx_prj as u3dMtrx, _
-                         byval xresh as single, byval yresh as single )
-declare sub host_bench_report ( frame_no as long, h_dst_dc as long )
+declare sub host_render ( _
+    byval h_dst_dc as long, _
+    mtx_prj as u3dMtrx, _
+    byval xresh as single, _
+    byval yresh as single _
+)
+declare sub host_bench_report ( _
+    frame_no as long, _
+    h_dst_dc as long _
+)
 declare sub sys_error ( msg as string )
 declare sub sys_time_init ( )
 declare function sys_frame_time ( ) as single
@@ -442,28 +455,62 @@ declare sub in_handle_toggles ( )
 ''
 declare sub pl_load_hulls ( byval cnt as long )
 declare function pl_hull_rec ( ) as integer
-declare function pl_hull_contents ( byval node as integer, p as vec3 ) as integer
-declare function pl_hull_check ( byval node as integer, byval p1f as single, _
-                                 byval p2f as single, p1 as vec3, p2 as vec3 ) as integer
-declare sub pl_trace ( start as vec3, fin as vec3 )
-declare sub pl_clip_velocity ( v as vec3, norm as vec3 )
-declare sub pl_slide_move ( org as vec3, vel as vec3, byval dt as single )
-declare sub pl_step_move ( org as vec3, vel as vec3, byval dt as single )
+declare function pl_hull_contents ( _
+    byval node as integer, _
+    p as vec3 _
+) as integer
+declare function pl_hull_check ( _
+    byval node as integer, _
+    byval p1f as single, _
+    byval p2f as single, _
+    p1 as vec3, _
+    p2 as vec3 _
+) as integer
+declare sub pl_trace ( _
+    start as vec3, _
+    fin as vec3 _
+)
+declare sub pl_clip_velocity ( _
+    v as vec3, _
+    norm as vec3 _
+)
+declare sub pl_slide_move ( _
+    org as vec3, _
+    vel as vec3, _
+    byval dt as single _
+)
+declare sub pl_step_move ( _
+    org as vec3, _
+    vel as vec3, _
+    byval dt as single _
+)
 declare function pl_point_contents ( p as vec3 ) as integer
 declare sub pl_water_level ( )
 declare sub pl_gravity ( byval dt as single )
 declare sub pl_init ( )
-declare sub pl_move ( byval fwd as single, byval strafe as single, _
-                     byval dir_x as single, byval dir_y as single, _
-                     byval jump as integer, byval dt as single )
+declare sub pl_move ( _
+    byval fwd as single, _
+    byval strafe as single, _
+    byval dir_x as single, _
+    byval dir_y as single, _
+    byval jump as integer, _
+    byval dt as single _
+)
 
 declare sub v_open_script ( )
 declare function in_keystroke ( key_down as integer ) as integer
 declare sub d_init_turb ( )
-declare sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
-                           xresh as single, yresh as single )
+declare sub d_draw_faces ( _
+    h_dst_dc as long, _
+    mtx_fin as u3dMtrx, _
+    xresh as single, _
+    yresh as single _
+)
 declare sub scr_draw_hud ( h_dst_dc as long )
-declare sub vid_update ( h_dst_dc as long, page as integer )
+declare sub vid_update ( _
+    h_dst_dc as long, _
+    page as integer _
+)
 declare sub scr_count_frame ( )
 declare sub in_screenshot_key ( h_dst_dc as long )
 
@@ -504,13 +551,32 @@ declare sub sc_init ( )
 declare function sc_ready ( ) as integer
 declare function sc_held ( byval face as integer ) as integer
 declare function sc_store_open ( ) as integer
-declare sub sc_point ( byval dc as long, byval ofs as long, byval rows as integer )
+declare sub sc_point ( _
+    byval dc as long, _
+    byval ofs as long, _
+    byval rows as integer _
+)
 declare function sc_grab ( byval sz as long ) as long
 declare function sc_shift ( byval v as integer ) as integer
-declare function sc_mipfloor ( byval extw as integer, byval exth as integer ) as integer
+declare function sc_mipfloor ( _
+    byval extw as integer, _
+    byval exth as integer _
+) as integer
 declare sub sc_flush ( )
-declare function sc_find ( byval face as integer, byval mip as integer, byval w as integer, byval h as integer ) as long
-declare function sc_alloc ( byval face as integer, byval mip as integer, byval w as integer, byval h as integer, byval fw as integer, byval fh as integer ) as long
+declare function sc_find ( _
+    byval face as integer, _
+    byval mip as integer, _
+    byval w as integer, _
+    byval h as integer _
+) as long
+declare function sc_alloc ( _
+    byval face as integer, _
+    byval mip as integer, _
+    byval w as integer, _
+    byval h as integer, _
+    byval fw as integer, _
+    byval fh as integer _
+) as long
 declare sub sc_lru_unlink ( byval b as integer )
 declare sub sc_lru_touch ( byval b as integer )
 declare sub sc_reset ( )
@@ -521,8 +587,18 @@ declare sub sb_fetch ( byval face as integer )
 declare function sb_i ( byval o as long ) as integer
 declare function sb_u ( byval o as long ) as long
 declare function sb_pot ( byval v as integer ) as integer
-declare sub sb_dump ( byval face as integer, byval mip as integer )
-declare sub sb_build ( byval dc as long, byval tex as long, byval face as integer, byval mip as integer, byval sw as integer, byval sh as integer )
+declare sub sb_dump ( _
+    byval face as integer, _
+    byval mip as integer _
+)
+declare sub sb_build ( _
+    byval dc as long, _
+    byval tex as long, _
+    byval face as integer, _
+    byval mip as integer, _
+    byval sw as integer, _
+    byval sh as integer _
+)
 declare sub mod_load_facevtx ( )
 declare sub mod_load_leafs ( )
 declare sub mod_load_marksurfaces ( )
@@ -535,8 +611,17 @@ declare sub mod_load_clipnodes ( )
 ''
 '' ent.bas -- entities
 ''
-declare function ent_value ( strm() as string, byval strm_cnt as integer, kname as string ) as string
-declare sub ent_vec ( strm() as string, byval strm_cnt as integer, kname as string, v as vec3 )
+declare function ent_value ( _
+    strm() as string, _
+    byval strm_cnt as integer, _
+    kname as string _
+) as string
+declare sub ent_vec ( _
+    strm() as string, _
+    byval strm_cnt as integer, _
+    kname as string, _
+    v as vec3 _
+)
 declare sub ent_load_teleports ( )
 declare sub ent_check_teleport ( )
 declare function ent_plat_touched ( byval p as integer ) as integer
@@ -551,19 +636,47 @@ declare sub mod_link_anims ( )
 declare sub vid_init ( )
 declare sub in_init ( )
 declare sub s_stop_music ( )
-declare function r_plane_dist ( pt as u3dVector3f, pl as plane2 ) as single
-declare function r_node_side ( byval node_idx as integer, pt as u3dVector3f, _
-                              nodes() as nodeb, planes() as plane2 ) as integer
-declare function r_cull_box ( bbox as bboundbox, frustum() as plane ) as integer
-declare sub r_set_frustum ( frustum() as plane, mtx as u3dMtrx )
+declare function r_plane_dist ( _
+    pt as u3dVector3f, _
+    pl as plane2 _
+) as single
+declare function r_node_side ( _
+    byval node_idx as integer, _
+    pt as u3dVector3f, _
+    nodes() as nodeb, _
+    planes() as plane2 _
+) as integer
+declare function r_cull_box ( _
+    bbox as bboundbox, _
+    frustum() as plane _
+) as integer
+declare sub r_set_frustum ( _
+    frustum() as plane, _
+    mtx as u3dMtrx _
+)
 declare sub com_parse_config ( filename as string )
-declare function com_arg ( strm() as string, strm_cnt as integer, linenum as integer ) as string
-declare function com_yesno ( strm() as string, strm_cnt as integer, _
-                            linenum as integer ) as integer
-declare sub com_check_args ( strm() as string, strm_cnt as integer, _
-                       byval want as integer, byval linenum as integer )
-declare sub com_tokenize ( strm() as string, strm_cnt as integer, _
-                     tokenlist as string, stream as string )
+declare function com_arg ( _
+    strm() as string, _
+    strm_cnt as integer, _
+    linenum as integer _
+) as string
+declare function com_yesno ( _
+    strm() as string, _
+    strm_cnt as integer, _
+    linenum as integer _
+) as integer
+declare sub com_check_args ( _
+    strm() as string, _
+    strm_cnt as integer, _
+    byval want as integer, _
+    byval linenum as integer _
+)
+declare sub com_tokenize ( _
+    strm() as string, _
+    strm_cnt as integer, _
+    tokenlist as string, _
+    stream as string _
+)
                         
                         
 type uv
@@ -572,34 +685,141 @@ type uv
 end type
 
 
-declare sub com_tokenize ( strm() as string, strm_cnt as integer, _
-             tokenlist as string, stream as string )
-declare function draw_load_font ( flname as string, col as long ) as integer
+declare sub com_tokenize ( _
+    strm() as string, _
+    strm_cnt as integer, _
+    tokenlist as string, _
+    stream as string _
+)
+declare function draw_load_font ( _
+    flname as string, _
+    col as long _
+) as integer
 declare sub scr_load_palette ( )
-declare sub bg_band ( x0 as integer, x1 as integer, y0 as integer, y1 as integer )
+declare sub bg_band ( _
+    x0 as integer, _
+    x1 as integer, _
+    y0 as integer, _
+    y1 as integer _
+)
 declare sub draw_spinner ( )
-declare sub bevel ( x0 as integer, y0 as integer, x1 as integer, y1 as integer, hi as integer, lo as integer, raised as integer )
-declare sub rivet ( x as integer, y as integer )
-declare sub draw_logo ( text as string, x as integer, y as integer, sc as integer )
-declare sub hud_panel ( dc as long, x as integer, y as integer, w as integer, h as integer, title as string )
-declare sub hud_row ( dc as long, x as integer, w as integer, y as integer, label as string, value as string )
-declare sub hud_bar ( dc as long, x as integer, y as integer, w as integer, h as integer, percent as single )
+declare sub bevel ( _
+    x0 as integer, _
+    y0 as integer, _
+    x1 as integer, _
+    y1 as integer, _
+    hi as integer, _
+    lo as integer, _
+    raised as integer _
+)
+declare sub rivet ( _
+    x as integer, _
+    y as integer _
+)
+declare sub draw_logo ( _
+    text as string, _
+    x as integer, _
+    y as integer, _
+    sc as integer _
+)
+declare sub hud_panel ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    w as integer, _
+    h as integer, _
+    title as string _
+)
+declare sub hud_row ( _
+    dc as long, _
+    x as integer, _
+    w as integer, _
+    y as integer, _
+    label as string, _
+    value as string _
+)
+declare sub hud_bar ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    w as integer, _
+    h as integer, _
+    percent as single _
+)
 declare sub scr_hud_colors ( )
-declare sub hud_shade ( dc as long, x0 as integer, y0 as integer, x1 as integer, y1 as integer, rw as integer )
-declare sub hud_num ( dc as long, x as integer, y as integer, sc as integer, txt as string, col as integer )
-declare sub hud_vu ( dc as long, x as integer, y as integer, w as integer, h as integer, percent as single, ch as integer )
-declare sub hud_graph ( dc as long, x as integer, y as integer, h as integer, buf() as integer, mx as integer )
+declare sub hud_shade ( _
+    dc as long, _
+    x0 as integer, _
+    y0 as integer, _
+    x1 as integer, _
+    y1 as integer, _
+    rw as integer _
+)
+declare sub hud_num ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    sc as integer, _
+    txt as string, _
+    col as integer _
+)
+declare sub hud_vu ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    w as integer, _
+    h as integer, _
+    percent as single, _
+    ch as integer _
+)
+declare sub hud_graph ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    h as integer, _
+    buf() as integer, _
+    mx as integer _
+)
 declare sub scr_load_chrome ( )
 declare sub scr_load_stage ( msg as string )
-declare sub draw_string_scl ( dc as long, x as integer, y as integer, scale as single, text as string )
-declare sub draw_string_r ( dc as long, xright as integer, y as integer, text as string )
-declare sub draw_pct ( dc as long, xright as integer, y as integer, percent as single )
-declare sub draw_string ( dc as long, x as integer, y as integer, _
-                            text as string ) 
+declare sub draw_string_scl ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    scale as single, _
+    text as string _
+)
+declare sub draw_string_r ( _
+    dc as long, _
+    xright as integer, _
+    y as integer, _
+    text as string _
+)
+declare sub draw_pct ( _
+    dc as long, _
+    xright as integer, _
+    y as integer, _
+    percent as single _
+)
+declare sub draw_string ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    text as string _
+)
                             
-declare sub scr_screenshot ( flname as string, byval dc as long )
+declare sub scr_screenshot ( _
+    flname as string, _
+    byval dc as long _
+)
 
                          
-declare sub d_clip_z ( ot_vtx() as u3dVector4f, ot_uv() as uv, ot_cnt as integer, _
-                         in_vtx() as u3dVector4f, in_uv() as uv, in_cnt as integer )
+declare sub d_clip_z ( _
+    ot_vtx() as u3dVector4f, _
+    ot_uv() as uv, _
+    ot_cnt as integer, _
+    in_vtx() as u3dVector4f, _
+    in_uv() as uv, _
+    in_cnt as integer _
+)
                                                     

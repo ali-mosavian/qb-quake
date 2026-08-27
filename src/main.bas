@@ -55,8 +55,8 @@ option explicit
 '$include: 'q_pl.bi'
 '$include: 'q_map.bi'
 '$include: 'q_ent.bi'
-Declare Sub cp_load ()
-Declare Sub cp_advance ()
+Declare Sub cp_load ( )
+Declare Sub cp_advance ( )
 
 ''
 '' Simulation time owed but not yet run. Frames deliver time in whatever
@@ -739,8 +739,12 @@ end sub
 '' desc: One frame's drawing. Reads the world, changes none of it -- the
 ''       counterpart to host_tick, which changes it and draws none of it.
 ''::::::::::
-sub host_render ( byval h_dst_dc as long, mtx_prj as u3dMtrx, _
-                  byval xresh as single, byval yresh as single )
+sub host_render ( _
+    byval h_dst_dc as long, _
+    mtx_prj as u3dMtrx, _
+    byval xresh as single, _
+    byval yresh as single _
+)
     dim mtx_mdl as u3dMtrx
     dim zz as long                  '' soaks up uglZMode's return;
                                     '' the call is the point
@@ -824,7 +828,10 @@ end sub
 ''       own -- scr_count_frame clears them -- and h_dst_dc still holds
 ''       the finished image.
 ''::::::::::
-sub host_bench_report ( frame_no as long, h_dst_dc as long )
+sub host_bench_report ( _
+    frame_no as long, _
+    h_dst_dc as long _
+)
     dim scs as scstat
     dim dv as long
     dim df as long
@@ -927,6 +934,6 @@ end sub
 ''       for it; d_poly hoists this once a frame rather than testing a
 ''       shared handle per face.
 ''::::::::::
-function host_z_on () as integer
+function host_z_on ( ) as integer
     host_z_on = ( z_dc <> 0 )
 end function

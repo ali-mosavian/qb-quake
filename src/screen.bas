@@ -275,7 +275,12 @@ end sub
 ''       every turn, and the gradient is the only thing behind it, so the
 ''       backdrop had to become something that can be drawn in pieces.
 ''::::::::::
-sub bg_band ( x0 as integer, x1 as integer, y0 as integer, y1 as integer )
+sub bg_band ( _
+    x0 as integer, _
+    x1 as integer, _
+    y0 as integer, _
+    y1 as integer _
+)
     dim y as integer, x as integer, k as integer, d as integer, h as integer
     dim crs as integer, ofs as integer
     dim dy as integer, dx as integer, att as integer
@@ -371,7 +376,12 @@ end sub
 ''       what frees the lettering from the one-colour rule everything else
 ''       on screen lives under.
 ''::::::::::
-sub draw_logo ( text as string, x as integer, y as integer, sc as integer )
+sub draw_logo ( _
+    text as string, _
+    x as integer, _
+    y as integer, _
+    sc as integer _
+)
     dim i as integer, ch as integer, gx as integer, gy as integer
     dim px as integer, bx as integer, by as integer, col as integer
     dim pass as integer, h as integer
@@ -419,7 +429,10 @@ end sub
 '' desc: Four pixels and a shadow. Corner hardware is half of what makes a
 ''       Quake plate read as bolted to the wall.
 ''::::::::::
-sub rivet ( x as integer, y as integer )
+sub rivet ( _
+    x as integer, _
+    y as integer _
+)
     uglPset ldr.dc, x,   y,   C_METALHI
     uglPset ldr.dc, x+1, y,   C_METAL
     uglPset ldr.dc, x,   y+1, C_METAL
@@ -427,8 +440,15 @@ sub rivet ( x as integer, y as integer )
 end sub
 
 
-sub bevel ( x0 as integer, y0 as integer, x1 as integer, y1 as integer, _
-            hi as integer, lo as integer, raised as integer )
+sub bevel ( _
+    x0 as integer, _
+    y0 as integer, _
+    x1 as integer, _
+    y1 as integer, _
+    hi as integer, _
+    lo as integer, _
+    raised as integer _
+)
     dim a as integer, b as integer
 
     if ( raised ) then
@@ -514,8 +534,13 @@ end sub
 ''       scaling one is a masked blit; the advance is 4 because that is
 ''       what draw_string uses, the font being 4x6 inside an 8x8 cell.
 ''::::::::::
-sub draw_string_scl ( dc as long, x as integer, y as integer, _
-                      scale as single, text as string )
+sub draw_string_scl ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    scale as single, _
+    text as string _
+)
     dim i as integer, char as integer, posx as integer
 
     posx = x
@@ -526,8 +551,12 @@ sub draw_string_scl ( dc as long, x as integer, y as integer, _
     next i
 end sub
 
-sub draw_string_r ( dc as long, xright as integer, y as integer, _
-                    text as string )
+sub draw_string_r ( _
+    dc as long, _
+    xright as integer, _
+    y as integer, _
+    text as string _
+)
     draw_string dc, xright - 4*len( text ), y, text
 end sub
 
@@ -537,7 +566,12 @@ end sub
 '' desc: The percentage, right-aligned and blanked first so a shorter
 ''       number cannot leave the tail of a longer one behind.
 ''::::::::::
-sub draw_pct ( dc as long, xright as integer, y as integer, percent as single )
+sub draw_pct ( _
+    dc as long, _
+    xright as integer, _
+    y as integer, _
+    percent as single _
+)
     dim p as integer
 
     p = cint( percent )
@@ -578,8 +612,14 @@ end sub
 '' desc: Draws a loading bar
 ''
 '' :::::::::::::
-sub draw_bar ( h_dc as long, x as integer, y as integer, wdt as integer, _
-                    hgt as integer, percent as single )
+sub draw_bar ( _
+    h_dc as long, _
+    x as integer, _
+    y as integer, _
+    wdt as integer, _
+    hgt as integer, _
+    percent as single _
+)
     dim w as integer, i as integer, k as integer
 
     if ( percent < 0   ) then percent = 0
@@ -678,7 +718,10 @@ end sub
 
 
 '':::::::::
-function draw_load_font ( flname as string, colb as long ) as integer
+function draw_load_font ( _
+    flname as string, _
+    colb as long _
+) as integer
     dim col as long
     dim trn as long
     dim f_hndl as integer
@@ -748,8 +791,12 @@ end function
 
 
 '':::::::::
-sub draw_string ( dc as long, x as integer, y as integer, _
-                    text as string )
+sub draw_string ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    text as string _
+)
     dim posx as integer
     dim i as integer, char as integer
     
@@ -820,8 +867,14 @@ end sub
 ''       does the walk. Falls back to the opaque slab when no colormap is
 ''       loaded, so the overlay never depends on -lm's data being there.
 ''::::::::::
-sub hud_shade ( dc as long, x0 as integer, y0 as integer, _
-                x1 as integer, y1 as integer, rw as integer )
+sub hud_shade ( _
+    dc as long, _
+    x0 as integer, _
+    y0 as integer, _
+    x1 as integer, _
+    y1 as integer, _
+    rw as integer _
+)
 
     if ( mod_cm_ready = 0 ) then
         uglRectF dc, x0, y0, x1, y1, hc_slab
@@ -839,8 +892,14 @@ sub hud_shade ( dc as long, x0 as integer, y0 as integer, _
 end sub
 
 
-sub hud_panel ( dc as long, x as integer, y as integer, _
-                w as integer, h as integer, title as string )
+sub hud_panel ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    w as integer, _
+    h as integer, _
+    title as string _
+)
     ''
     '' Tinted glass, then the slab's furniture: the scene stays visible
     '' under the panel, darkened three-quarters of the way down Quake's
@@ -874,8 +933,14 @@ end sub
 ''       (set pixels carry LP_TEXT) and re-plotted block by block, with a
 ''       one-pixel shadow so it sits on the slab instead of floating.
 ''::::::::::
-sub hud_num ( dc as long, x as integer, y as integer, sc as integer, _
-              txt as string, col as integer )
+sub hud_num ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    sc as integer, _
+    txt as string, _
+    col as integer _
+)
     dim i as integer, ch as integer, gx as integer, gy as integer
     dim px as integer, bx as integer, by as integer, pass as integer
 
@@ -909,8 +974,15 @@ end sub
 ''       instrument rather than a flickering bar. ch picks which channel's
 ''       peak this meter remembers.
 ''::::::::::
-sub hud_vu ( dc as long, x as integer, y as integer, w as integer, _
-             h as integer, percent as single, ch as integer )
+sub hud_vu ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    w as integer, _
+    h as integer, _
+    percent as single, _
+    ch as integer _
+)
     dim f as integer
 
     if ( percent < 0 ) then percent = 0
@@ -929,8 +1001,14 @@ sub hud_vu ( dc as long, x as integer, y as integer, w as integer, _
     if ( vu_pk(ch) > 1 ) then uglVLine dc, x+vu_pk(ch), y+1, y+h-1, hc_peak
 end sub
 
-sub hud_row ( dc as long, x as integer, w as integer, y as integer, _
-              label as string, value as string )
+sub hud_row ( _
+    dc as long, _
+    x as integer, _
+    w as integer, _
+    y as integer, _
+    label as string, _
+    value as string _
+)
     draw_string dc, x+5, y, label
     draw_string_r dc, x+w-5, y, value
 end sub
@@ -942,8 +1020,14 @@ end sub
 ''       bars keep their meaning as the view changes -- and the tallest
 ''       column is picked out, because the spike is the whole point.
 ''::::::::::
-sub hud_graph ( dc as long, x as integer, y as integer, h as integer, _
-                buf() as integer, mx as integer )
+sub hud_graph ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    h as integer, _
+    buf() as integer, _
+    mx as integer _
+)
     dim i as integer, k as integer, v as integer, c as integer, top as integer
 
     if ( mx < 1 ) then mx = 1
@@ -974,8 +1058,14 @@ sub hud_graph ( dc as long, x as integer, y as integer, h as integer, _
 end sub
 
 
-sub hud_bar ( dc as long, x as integer, y as integer, w as integer, _
-              h as integer, percent as single )
+sub hud_bar ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    w as integer, _
+    h as integer, _
+    percent as single _
+)
     dim f as integer
 
     if ( percent < 0 ) then percent = 0
@@ -1130,7 +1220,10 @@ end sub
 
 
 ''::::::::::
-sub scr_screenshot ( flname as string, byval dc as long )
+sub scr_screenshot ( _
+    flname as string, _
+    byval dc as long _
+)
     dim f as integer
     dim x as integer
     dim y as integer

@@ -50,7 +50,11 @@ dim shared trig_count as integer
 '' name: ent_value
 '' desc: The value following key in a tokenised entity block, or "" if absent.
 ''::::::::::
-function ent_value ( strm() as string, byval strm_cnt as integer, kname as string ) as string
+function ent_value ( _
+    strm() as string, _
+    byval strm_cnt as integer, _
+    kname as string _
+) as string
     dim j as integer
 
     ent_value = ""
@@ -73,7 +77,12 @@ end function
 ''       "448 416 176" arrives already split, because space is one of the
 ''       separators the block was tokenised with.
 ''::::::::::
-sub ent_vec ( strm() as string, byval strm_cnt as integer, kname as string, v as vec3 )
+sub ent_vec ( _
+    strm() as string, _
+    byval strm_cnt as integer, _
+    kname as string, _
+    v as vec3 _
+)
     dim j as integer
 
     v.x = 0.0

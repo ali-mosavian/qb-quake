@@ -93,7 +93,10 @@ end sub
 ''
 '' Once per frame, at the end of it.
 ''::::::::::
-sub vid_update ( h_dst_dc as long, page as integer )
+sub vid_update ( _
+    h_dst_dc as long, _
+    page as integer _
+)
     ''
     '' Present only. This used to also poll the screenshot key, tally frames
     '' per second, and zero the per-frame counters -- four unrelated jobs, and
