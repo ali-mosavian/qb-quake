@@ -1077,6 +1077,7 @@ end function
 ''       floor-divided by the mip, padded up to the size class.
 ''::::::::::
 sub sb_dump ( byval face as integer, byval mip as integer )
+    dim mt as long
     dim o as long
     dim lmw as integer, lmh as integer
     dim ew as integer, eh as integer
@@ -1143,6 +1144,9 @@ end sub
 sub sb_build ( byval dc as long, byval tex as long, _
                byval face as integer, byval mip as integer, _
                byval sw as integer, byval sh as integer )
+    dim mt as long
+
+
     dim au as long, av as long, du as long, dv as long
     dim aw as integer, msk as integer
     dim lmw as integer, lmh as integer
@@ -1244,6 +1248,7 @@ end sub
 ''       need the record -- currently just -dumpsurf.
 ''::::::::::
 sub sb_fetch ( byval face as integer )
+    dim mt as long
     dim gp as long, gn as integer, dst as long
 
     gn = GEOM_MAXREC

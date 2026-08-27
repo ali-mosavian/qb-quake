@@ -75,6 +75,15 @@ common shared /map_a/ lef_buffer() as leaf2, lfc_buffer() as integer
 ''
 const GEOM_W = 8192
 const GEOM_SLOT = 2
+''
+'' The BSP nodes share GEOM_SLOT's physical page. emsMapEx consults the
+'' EMS layer's record of what a slot holds before remapping, so the
+'' alternation costs a compare when the page has not moved. The walk
+'' finishes before drawing starts, so it is one remap per ordered node.
+''
+const NODE_SLOT = 2
+'' only used if MEM refuses; shares the same physical page
+const CLIP_SLOT = 2
 const GEOM_MAXVTX = 33
 const GEOM_LMOFS = 1            '' gv_buf index of the lightmap header
 const GEOM_VTX0  = 9            '' gv_buf index of the first corner
@@ -90,6 +99,25 @@ common shared /map_a/ geom_dc as long, geom_rows as integer
 '' grid hangs the builder. One fetch per face, one reader of the copy.
 ''
 common shared /map_a/ gv_buf() as integer
+''
+'' The BSP nodes live in EMS, not in BASIC's heap. nds_buffer is a ONE
+'' ELEMENT stub whose descriptor uglArrNew1D takes over; nodes.pag streams
+'' in through uglArrLoad, 16k at a time, straight into the mapped window,
+'' so the tree never occupies conventional memory at any point -- not even
+'' while loading. 60,500 bytes of it on e1m1.
+''
+'' Every nds_buffer(i) must be preceded by uglArrMap for that i. One map
+'' per node visit covers all of its fields: the store pads pages, so a
+'' record never straddles one.
+''
+'' NODE_SLOT shares GEOM_SLOT's physical page. That is safe because
+'' emsMapEx consults the EMS layer's own record of what a slot holds
+'' before it remaps -- so alternating between node pages and geometry
+'' pages costs a compare when the page is already there, and a real remap
+'' only when it genuinely differs. The walk finishes before drawing
+'' starts, so the alternation is one per ordered node, not per face.
+''
+common shared /map_a/ h_nds as long
 common shared /map_a/ mdl_buffer() as model, pln_buffer() as plane2, nds_buffer() as nodeb
 common shared /map_a/ order_list() as integer, pvs_buffer_b() as integer
 ''
@@ -107,6 +135,27 @@ common shared /map_a/ tex_inf_buff() as texinfo2, poly_flag() as integer
 '' different topology, expanded by the player's bounding box so a point trace
 '' through them is equivalent to a box trace through the world.
 ''
+''
+'' The collision hulls, paged like the node tree. 65,760 bytes on e1m1 --
+'' the single largest item left in the far heap after the nodes moved out,
+'' and it was costing conventional memory as well.
+''
+'' Backed by UGL.MEM, not EMS: the store is windowed either way, but the
+'' MEM path computes a segment where EMS issues an INT 67h, and pl_move
+'' walks these hulls several times a frame. It still comes off BASIC's
+'' heap, which is what blocks e1m1.
+''
+common shared /map_a/ h_clp as long
+''
+'' The leaves, paged out of the far heap. That heap is the FRAGMENTED one
+'' -- FRE(-1) reports the largest free block, not the total -- so moving a
+'' 34K array out of it is worth more than the byte count suggests: what it
+'' buys is a bigger contiguous hole for the allocations that follow, which
+'' is what actually fails first.
+''
+common shared /map_a/ h_lef as long
+'' The faces. 55,160 bytes on e1m1, the largest single item left.
+common shared /map_a/ h_tri as long
 common shared /map_a/ clp_buffer() as clipnode
 
 ''

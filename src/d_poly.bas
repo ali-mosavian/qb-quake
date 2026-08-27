@@ -53,7 +53,8 @@ dim shared sv0 as single, sv1 as single, sv2 as single, sv3 as single
 dim shared tw as single, th as single
 dim shared uvbuff(64) as uv
 dim shared uvbuffb(32) as uv
-dim shared vcnt as integer, mipidx as integer
+dim shared vcnt as integer, mipidx as integer
+
 dim shared vtx(31) as tritype
 ''
 '' Whole-face vertex buffer for uglPolyTP. The clipper caps a polygon at
@@ -182,7 +183,10 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
     dim mi as integer, m as integer
     dim leaf_indx as integer, leaf_end as integer, ti as integer, i as integer
     dim pid as integer, tex as integer, j as integer
-    dim v0 as integer, gn as integer
+    dim mt as long
+    dim mp as long
+    dim v0 as integer, gn as integer
+
     dim gp as long, gv_dst as long
     dim zl as single
     dim miplevel as integer, tex_indx as integer
@@ -209,7 +213,8 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
     '' -1 is no mode at all, so the first face always installs one rather
     '' than trusting whatever the previous frame or the overlay left set.
     z_have = -1
-    turbph = rdr.anim_time * TURB_RATE#
+    turbph = rdr.anim_time * TURB_RATE#
+
 
     ''
     '' The per-face lightmap table lives in a memAlloc'd block, so it is
@@ -234,6 +239,11 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
     for mi = 0 to vis.ord_count-1
         m = order_list(mi)
             
+        '' One map per ordered node, then the face loop below maps
+        '' geometry through the SAME physical slot. The alternation costs
+        '' a real remap each way, but only once per node rather than once
+        '' per face -- and emsMapEx skips it entirely when the page has
+        '' not moved.
         leaf_indx = nds_buffer(m).lfaceid
         leaf_end = leaf_indx + nds_buffer(m).lfacenum-1
         
@@ -269,6 +279,9 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
             '' "backface culling: enabled" was reporting a switch that
             '' did nothing.
             ''
+            '' one map per face: it covers planeid, side, geom_row,
+            '' geom_ofs and texinfoid, and nothing between them remaps this
+            '' array (the geometry window is a different store entirely).
             pid = tri_buffer(i).planeid
             dp  = cam.pos.x*pln_buffer(pid).norm.x + _
                   cam.pos.y*pln_buffer(pid).norm.z + _

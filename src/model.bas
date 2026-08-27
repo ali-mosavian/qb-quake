@@ -132,12 +132,16 @@ end sub
 '' desc: Sizes every level buffer from the counts bspOpen derived.
 ''::::::::::
 sub mod_alloc
-    redim tri_buffer(wld.tri_count-1) as face2
+    '' ONE element; uglArrNew1D takes it over in mod_load_faces
+    redim tri_buffer(0) as face2
 
-    redim lef_buffer(wld.lef_count-1) as leaf2
+    '' ONE element; uglArrNew1D takes it over in mod_load_leafs
+    redim lef_buffer(0) as leaf2
     redim lfc_buffer(lfc_count-1) as integer
     redim pln_buffer(pln_count-1) as plane2
-    redim nds_buffer(wld.nds_count-1) as nodeb
+    '' ONE element. uglArrNew1D takes the descriptor over in
+    '' mod_load_nodes and the tree lives in EMS -- see q_map.bi.
+    redim nds_buffer(0) as nodeb
     redim mdl_buffer(wld.mdl_count-1) as model
     redim order_list(wld.nds_count-1) as integer
     '' Sized to the map like every buffer above it, not a fixed 4096: r_bsp.bas
@@ -150,7 +154,9 @@ sub mod_alloc
     redim pvs_buffer_b( wld.lef_count-1 ) as integer
     redim poly_flag( wld.tri_count-1 ) as integer
     redim tex_inf_buff(wld.texi_count-1) as texinfo2
-    redim clp_buffer(wld.clp_count-1) as clipnode
+    '' ONE element -- uglArrNew1D takes the descriptor over in
+    '' mod_load_clipnodes. See q_map.bi.
+    redim clp_buffer(0) as clipnode
 
 end sub
 
@@ -166,10 +172,35 @@ end sub
 '' name: mod_load_faces
 ''::::::::::
 sub mod_load_faces
+    dim f as FILE
+    dim mapped as long
+
     scr_load_stage "faces"
-    def seg = varseg( tri_buffer(0) )
-    bload "faces.bld", varptr( tri_buffer(0) )
-    def seg
+
+    '' MEM: the draw path reads a face for every face drawn, and EMS would
+    '' cost an INT 67h each time. A MEM-backed store needs no slot at all,
+    '' so it also cannot collide with the geometry window d_poly maps
+    '' between these reads.
+    h_tri = uglArrNew1D&( UGL.MEM, tri_buffer(), wld.tri_count, 0 )
+    if ( h_tri = 0 ) then sys_error "0x0039, no room for the faces"
+
+    erase tri_buffer
+
+    if ( fileOpen%( f, "faces.pag", F4READ ) = 0 ) then
+        sys_error "0x003A, faces.pag missing"
+    end if
+    if ( uglArrLoad%( f, h_tri ) = 0 ) then
+        fileClose f
+        sys_error "0x003B, faces.pag short or unreadable"
+    end if
+    fileClose f
+
+    ''
+    '' ONE map, for the whole array. A MEM store is flat, so this points
+    '' the descriptor at the entire block and every subscript works from
+    '' here on with no further calls.
+    ''
+    mapped = uglArrMap&( h_tri, 0 )
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     scr_load_tick
@@ -324,10 +355,37 @@ end sub
 '' name: mod_load_leafs
 ''::::::::::
 sub mod_load_leafs
+    dim f as FILE
+    dim mapped as long
+
     scr_load_stage "bsp leaves"
-    def seg = varseg( lef_buffer(0) )
-    bload "leaves.bld", varptr( lef_buffer(0) )
-    def seg
+
+    '' MEM first: the far heap is the fragmented pool, and taking a 34K
+    '' array out of it leaves a larger contiguous hole behind even when the
+    '' total free does not change.
+    h_lef = uglArrNew1D&( UGL.MEM, lef_buffer(), wld.lef_count, 0 )
+    if ( h_lef = 0 ) then
+        h_lef = uglArrNew1D&( UGL.EMS, lef_buffer(), wld.lef_count, CLIP_SLOT )
+    end if
+    if ( h_lef = 0 ) then sys_error "0x0036, no room for the leaves"
+
+    erase lef_buffer
+
+    if ( fileOpen%( f, "leaves.pag", F4READ ) = 0 ) then
+        sys_error "0x0037, leaves.pag missing"
+    end if
+    if ( uglArrLoad%( f, h_lef ) = 0 ) then
+        fileClose f
+        sys_error "0x0038, leaves.pag short or unreadable"
+    end if
+    fileClose f
+
+    ''
+    '' ONE map, for the whole array. A MEM store is flat, so this points
+    '' the descriptor at the entire block and every subscript works from
+    '' here on with no further calls.
+    ''
+    mapped = uglArrMap&( h_lef, 0 )
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     scr_load_tick
@@ -355,10 +413,51 @@ end sub
 '' name: mod_load_nodes
 ''::::::::::
 sub mod_load_nodes
+    dim f as FILE
+    dim mapped as long
+
     scr_load_stage "bsp nodes"
-    def seg = varseg( nds_buffer(0) )
-    bload "nodes.bld", varptr( nds_buffer(0) )
-    def seg
+
+    ''
+    '' EMS first, conventional only as a fallback. uglArrLoad streams
+    '' nodes.pag a page at a time into the mapped window, so the tree is
+    '' never resident -- which is the whole point, and why this is not a
+    '' BLOAD followed by a copy.
+    ''
+    '' UGL.MEM, not UGL.EMS, deliberately. The store is windowed either
+    '' way -- the same uglArrMap, the same page arithmetic -- but the MEM
+    '' path computes a segment where the EMS path issues an INT 67h. That
+    '' isolates the two costs: if MEM is fast, what the walk cannot afford
+    '' is the remap, not the far call.
+    ''
+    '' It still gets the tree out of BASIC's far heap, which is what FRE(-1)
+    '' measures; memAlloc takes it from DOS (upper memory when there is
+    '' room), not from the heap the BSP arrays compete for.
+    h_nds = uglArrNew1D&( UGL.MEM, nds_buffer(), wld.nds_count, 0 )
+    if ( h_nds = 0 ) then
+        h_nds = uglArrNew1D&( UGL.EMS, nds_buffer(), wld.nds_count, NODE_SLOT )
+    end if
+    if ( h_nds = 0 ) then sys_error "0x0030, no room for the node tree"
+
+    '' Hands the descriptor over: this is what takes it out of the far
+    '' heap's chain, and only BASIC can do it correctly.
+    erase nds_buffer
+
+    if ( fileOpen%( f, "nodes.pag", F4READ ) = 0 ) then
+        sys_error "0x0031, nodes.pag missing"
+    end if
+    if ( uglArrLoad%( f, h_nds ) = 0 ) then
+        fileClose f
+        sys_error "0x0032, nodes.pag short or unreadable"
+    end if
+    fileClose f
+
+    ''
+    '' ONE map, for the whole array. A MEM store is flat, so this points
+    '' the descriptor at the entire block and every subscript works from
+    '' here on with no further calls.
+    ''
+    mapped = uglArrMap&( h_nds, 0 )
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     scr_load_tick
@@ -411,10 +510,46 @@ end sub
 ''       first cleanup commit of this refactor.
 ''::::::::::
 sub mod_load_clipnodes
+    dim f as FILE
+    dim mapped as long
+
     scr_load_stage "clip hulls"
-    def seg = varseg( clp_buffer(0) )
-    bload "clip.bld", varptr( clp_buffer(0) )
-    def seg
+
+    ''
+    '' MEM, not EMS. These hulls are walked several times a frame by
+    '' pl_move, and EMS costs an INT 67h per access where MEM costs a
+    '' segment calculation -- the same difference that made the EMS-backed
+    '' node tree unusable. Hot data does not go in EMS.
+    ''
+    '' EMS would show a better FRE at this mark, but the number is
+    '' misleading: FRE(-1) is the LARGEST FREE BLOCK, and what taking a
+    '' large array out of the far heap really buys is a bigger contiguous
+    '' hole for the allocations that come after. The far heap is the
+    '' fragmented pool; DOS memory is not.
+    ''
+    h_clp = uglArrNew1D&( UGL.MEM, clp_buffer(), wld.clp_count, 0 )
+    if ( h_clp = 0 ) then
+        h_clp = uglArrNew1D&( UGL.EMS, clp_buffer(), wld.clp_count, CLIP_SLOT )
+    end if
+    if ( h_clp = 0 ) then sys_error "0x0033, no room for the clip hulls"
+
+    erase clp_buffer
+
+    if ( fileOpen%( f, "clip.pag", F4READ ) = 0 ) then
+        sys_error "0x0034, clip.pag missing"
+    end if
+    if ( uglArrLoad%( f, h_clp ) = 0 ) then
+        fileClose f
+        sys_error "0x0035, clip.pag short or unreadable"
+    end if
+    fileClose f
+
+    ''
+    '' ONE map, for the whole array. A MEM store is flat, so this points
+    '' the descriptor at the entire block and every subscript works from
+    '' here on with no further calls.
+    ''
+    mapped = uglArrMap&( h_clp, 0 )
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     scr_load_tick

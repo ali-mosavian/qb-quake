@@ -51,12 +51,16 @@ declare sub r_recursive_world_node ( byval nodenr as integer )
 '' ==========================================================================
 function r_classify_point ( nodenr as integer ) as integer
     dim dp as single
-  
-    dp = cam.pos.x*pln_buffer(nds_buffer(nodenr).planeid).norm.x + _
-          cam.pos.y*pln_buffer(nds_buffer(nodenr).planeid).norm.z + _
-          cam.pos.z*pln_buffer(nds_buffer(nodenr).planeid).norm.y
+    dim pid as integer
+    dim mp as long
+
+    pid = nds_buffer(nodenr).planeid
+
+    dp = cam.pos.x*pln_buffer(pid).norm.x + _
+          cam.pos.y*pln_buffer(pid).norm.z + _
+          cam.pos.z*pln_buffer(pid).norm.y
           
-    if ( (dp-pln_buffer(nds_buffer(nodenr).planeid).dist) > 0.0 ) then
+    if ( (dp-pln_buffer(pid).dist) > 0.0 ) then
         r_classify_point = -1
     else
         r_classify_point = 0
@@ -103,6 +107,7 @@ sub r_recursive_world_node ( byval nodenr as integer ) static
     dim dp as single
     dim frst as integer, last as integer, i as integer
     dim pid as integer, side as integer
+    dim mp as long
 
     
     ''
@@ -111,6 +116,9 @@ sub r_recursive_world_node ( byval nodenr as integer ) static
 	''
 	
 	if ( nodenr and &h8000 ) then
+	    '' leaf: `not nodenr` is its index. One map covers bound,
+	    '' lfaceid and lfacenum -- the store pads pages, so a record
+	    '' never straddles one.
 	    
 	    ''
 	    '' Check pvs and bounding volume
@@ -144,6 +152,9 @@ sub r_recursive_world_node ( byval nodenr as integer ) static
 	    exit sub
     end if    
     
+
+    '' .bound goes in BY REFERENCE, so r_cull_box reads it straight out of
+    '' the EMS window. That holds only because r_cull_box maps nothing.
     if ( not r_cull_box( nds_buffer(nodenr).bound, frustum() ) ) then
         exit sub
     end if
@@ -165,6 +176,8 @@ sub r_recursive_world_node ( byval nodenr as integer ) static
     	'' back nodes, then the front nodes.
     	''
     		
+        '' No map here: the one at the top of the sub still holds -- the
+        '' cull and the plane maths between them do not touch the slot.
         r_recursive_world_node nds_buffer(nodenr).child1
         if ( vis.ent_left ) then r_emit_entities nodenr
 	    order_list(vis.ord_count) = nodenr
@@ -177,6 +190,7 @@ sub r_recursive_world_node ( byval nodenr as integer ) static
 	    '' front nodes, then the back nodes.
 	    ''
     		
+        '' likewise: still covered by the map at the top of the sub
         r_recursive_world_node nds_buffer(nodenr).child0        
         if ( vis.ent_left ) then r_emit_entities nodenr
 	    order_list(vis.ord_count) = nodenr
@@ -402,6 +416,7 @@ end function
 
 ''::::::::::
 sub r_mark_leaves ( byval nodenr as integer )
+    dim mp as long
     dim v as long
     dim l as long
     dim j as long
@@ -413,6 +428,8 @@ sub r_mark_leaves ( byval nodenr as integer )
     '' Find the node that the camera is in
     ''
     while not ( nodenr and &h8000 )
+        '' r_classify_point maps nodenr itself and nothing since has
+        '' remapped, so the children are readable without a second call
         if ( r_classify_point( nodenr ) ) then
             nodenr = nds_buffer(nodenr).child0
         else

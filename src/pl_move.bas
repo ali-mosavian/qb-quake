@@ -48,6 +48,7 @@ dim shared tr as TraceResult
 ''       not a node index but a contents code, which is the terminator.
 ''::::::::::
 function pl_hull_contents ( byval node as integer, p as vec3 ) as integer
+    dim mc as long
     dim d as single
     dim pid as integer
 
@@ -86,6 +87,7 @@ end function
 ''       r_recursive_world_node walks.
 ''::::::::::
 function pl_point_contents ( p as vec3 ) as integer
+    dim mp as long
     dim nodenr as integer
     dim pid as integer
     dim d as single
@@ -164,6 +166,7 @@ function pl_hull_check ( byval node as integer, byval p1f as single, byval p2f a
     dim frac as single, midf as single
     dim midp as vec3
     dim side as integer, other as integer
+    dim mc as long
 
     ''
     '' A leaf: solid stops the sweep, anything else lets it through.
@@ -220,6 +223,7 @@ function pl_hull_check ( byval node as integer, byval p1f as single, byval p2f a
             pl_hull_check = false
             exit function
         end if
+        '' the recursion above moved the window; map before reading again
         other = clp_buffer(node).back
     else
         if ( pl_hull_check( clp_buffer(node).back, p1f, midf, p1, midp ) = false ) then

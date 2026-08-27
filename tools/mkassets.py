@@ -121,7 +121,24 @@ UA_WIN = 16384          # uglArr's page size (UA_WIN in src/ugl/uglarr.asm)
 # Element sizes for the paged lumps, so the padding lands where uGL puts it.
 PAGED_ELEM = {
     'nodes.pag': 22,    # nodeb: planeid child0 child1 lfaceid lfacenum + 12
+    'clip.pag':   6,    # clipnode: planenum front back
+    'leaves.pag':22,    # leaf2: cont vislist bound[12] lfaceid lfacenum
+    'faces.pag': 10,    # face2: planeid side geom_row geom_ofs texinfoid
 }
+
+
+# Arrays the renderer backs with CONVENTIONAL memory are laid out FLAT --
+# no page padding. uglArr maps such a store once, whole, and the renderer
+# then indexes arr(i) natively, so element i must be at exactly i*elem.
+# Page padding would break that at every page boundary.
+#
+# EMS-backed arrays still need padding: a 16k frame really is a window.
+FLAT = {'nodes.pag', 'clip.pag', 'leaves.pag', 'faces.pag'}
+
+
+def write_flat(path, payload):
+    open(path, 'wb').write(payload)
+    return len(payload)
 
 
 def write_paged(path, payload, elem, win=UA_WIN):
@@ -468,7 +485,7 @@ def convert_lumps(d, lumps, outdir):
     # clipnodes: the collision hulls. planenum narrowed long->integer (see
     # bspfile.bi's clipnode/cliptmp comment): 8 bytes on disk, 6 in memory.
     raw = lump(9)
-    out['clip.bld'] = b''.join(
+    out['clip.pag'] = b''.join(
         struct.pack('<hhh', struct.unpack_from('<i', raw, k)[0], *struct.unpack_from('<hh', raw, k+4))
         for k in range(0, len(raw), 8))
 
@@ -487,7 +504,7 @@ def convert_lumps(d, lumps, outdir):
         # gofs is 0..GEOM_W-1 so it always fits; grow is a row count and a
         # map big enough to pass 32,767 rows would be 256MB of geometry
         buf += struct.pack('<hhhhh', planeid, side, grow, gofs, texinfoid)
-    out['faces.bld'] = bytes(buf)
+    out['faces.pag'] = bytes(buf)
 
     # leaves: leaf(28) -> leaf2(22), dropping the trailing 4 bytes and
     # narrowing cont to an integer (always one of six small CONTENTS_*
@@ -499,7 +516,7 @@ def convert_lumps(d, lumps, outdir):
         bound = raw[k+8:k+20]                       # 6 int16, copied whole
         lfaceid, lfacenum = struct.unpack_from('<hh', raw, k+20)
         buf += struct.pack('<h', cont) + struct.pack('<i', vislist) + bound + struct.pack('<hh', lfaceid, lfacenum)
-    out['leaves.bld'] = bytes(buf)
+    out['leaves.pag'] = bytes(buf)
 
     # planes: plane(20) -> plane2(18), ptype narrows to an integer
     raw = lump(1)
@@ -519,14 +536,17 @@ def convert_lumps(d, lumps, outdir):
         lfaceid, lfacenum = struct.unpack_from('<hh', raw, k+20)
         buf += struct.pack('<hhhhh', planeid, child0, child1, lfaceid, lfacenum) + bound
     out['nodes.pag'] = bytes(buf)
+    out['nodes.bld'] = bytes(buf)   # kept so the pre-paging path still runs
 
     total = 0
     for name, payload in out.items():
         path = os.path.join(outdir, name)
         if name.endswith('.pag'):
-            # page-padded, raw: read by uglArrLoad straight into EMS, so it
-            # never occupies conventional memory at all
-            total += write_paged(path, payload, PAGED_ELEM[name])
+            if name in FLAT:
+                total += write_flat(path, payload)
+            else:
+                # page-padded: read a page at a time into an EMS window
+                total += write_paged(path, payload, PAGED_ELEM[name])
         elif name.endswith('.bin') or name.endswith('.bmp'):
             # raw: .bin is read by mgl's fileRead -- into a memAlloc'd
             # block for lmface, straight into a mapped EMS window for
