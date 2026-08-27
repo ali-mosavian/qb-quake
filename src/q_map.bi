@@ -136,16 +136,12 @@ common shared /map_a/ tex_inf_buff() as texinfo2, poly_flag() as integer
 '' through them is equivalent to a box trace through the world.
 ''
 ''
-'' The collision hulls, paged like the node tree. 65,760 bytes on e1m1 --
-'' the single largest item left in the far heap after the nodes moved out,
-'' and it was costing conventional memory as well.
+'' The collision hulls are NOT here any more. pl_move.bas owns them:
+'' it is the only code that reads them, so it declares the array, the
+'' handle, and the loader. They were global for one reason -- an array
+'' has to be visible where it is indexed and REDIM forces module level
+'' -- and uglArr's split of create-from-bind removes it.
 ''
-'' Backed by UGL.MEM, not EMS: the store is windowed either way, but the
-'' MEM path computes a segment where EMS issues an INT 67h, and pl_move
-'' walks these hulls several times a frame. It still comes off BASIC's
-'' heap, which is what blocks e1m1.
-''
-common shared /map_a/ h_clp as long
 ''
 '' The leaves, paged out of the far heap. That heap is the FRAGMENTED one
 '' -- FRE(-1) reports the largest free block, not the total -- so moving a
@@ -156,7 +152,6 @@ common shared /map_a/ h_clp as long
 common shared /map_a/ h_lef as long
 '' The faces. 55,160 bytes on e1m1, the largest single item left.
 common shared /map_a/ h_tri as long
-common shared /map_a/ clp_buffer() as clipnode
 
 ''
 '' Lightmaps. The luxels are one 8-bit atlas in a single EMS dc, loaded by

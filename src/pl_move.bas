@@ -31,6 +31,21 @@ option explicit
 '$include: 'q_pl.bi'
 
 ''
+'' THE COLLISION HULLS. Owned here, not in COMMON: this module is the only
+'' reader, so the array, its store and its loader all live together.
+''
+'' They were global because an array must be visible where it is indexed
+'' and REDIM forces module level -- so every array the renderer touched
+'' had to be declared once, globally, whatever used it. Splitting uglArr's
+'' create from its bind removes that: pl_load_hulls makes the store and
+'' binds this stub, and nothing outside needs to see either.
+''
+dim shared clp_buffer() as clipnode
+dim shared h_clp as long
+
+
+
+''
 '' Recursion scratch. pl_hull_check calls itself once per plane it straddles,
 '' so its depth is the hull tree's depth -- tens, not thousands. The trace it
 '' fills is module state rather than a parameter because BASIC has no pointers
@@ -645,3 +660,67 @@ sub pl_move ( byval fwd as single, byval strafe as single, _
     cam.pos.z = pl.pos.y
 
 end sub
+
+
+''::::::::::
+'' name: pl_load_hulls
+'' desc: Builds the clip-hull store and binds it. Called by the map loader,
+''       which passes the count and nothing else -- it does not need to
+''       know where the hulls live.
+''::::::::::
+sub pl_load_hulls ( byval cnt as long )
+    dim f as FILE
+    dim mapped as long
+
+    redim clp_buffer(0) as clipnode
+
+    ''
+    '' MEM, not EMS. These hulls are walked several times a frame, and EMS
+    '' costs an INT 67h per access where MEM costs a segment calculation --
+    '' the same difference that made the EMS-backed node tree unusable. Hot
+    '' data does not go in EMS.
+    ''
+    '' EMS would show a better FRE at this mark, but the number is
+    '' misleading: FRE(-1) is the LARGEST FREE BLOCK, and what taking a
+    '' large array out of the far heap really buys is a bigger contiguous
+    '' hole for the allocations that come after. The far heap is the
+    '' fragmented pool; DOS memory is not.
+    ''
+    h_clp = uglArrNew&( UGL.MEM, len( clp_buffer(0) ), cnt, 0 )
+    if ( h_clp = 0 ) then
+        h_clp = uglArrNew&( UGL.EMS, len( clp_buffer(0) ), cnt, CLIP_SLOT )
+    end if
+    if ( h_clp = 0 ) then sys_error "0x0033, no room for the clip hulls"
+
+    '' Hands the descriptor over. NOT ceremony: this is what takes it out
+    '' of the far heap's chain, and only BASIC can do that correctly. Left
+    '' in, B$FHCompact walks into a descriptor aimed at memory it does not
+    '' own and moves it -- the far heap is then corrupt. The variable still
+    '' exists afterwards, which is what uglArrMap binds to.
+    erase clp_buffer
+
+    if ( fileOpen%( f, "clip.pag", F4READ ) = 0 ) then
+        sys_error "0x0034, clip.pag missing"
+    end if
+    if ( uglArrLoad%( f, h_clp ) = 0 ) then
+        fileClose f
+        sys_error "0x0035, clip.pag short or unreadable"
+    end if
+    fileClose f
+
+    ''
+    '' ONE map, for the whole array. A MEM store is flat, so this points
+    '' the descriptor at the entire block and every subscript works from
+    '' here on with no further calls.
+    ''
+    mapped = uglArrMap&( h_clp, clp_buffer(), 0 )
+end sub
+
+''::::::::::
+'' name: pl_hull_rec
+'' desc: Record size, for the bench report -- so main.bas can quote it
+''       without reaching into this module's array.
+''::::::::::
+function pl_hull_rec% ()
+    pl_hull_rec% = len( clp_buffer(0) )
+end function

@@ -888,7 +888,7 @@ sub host_bench_report ( frame_no as long, h_dst_dc as long )
             print #benchf, "mem " + rtrim$(mem_tag(mi)) + " " + ltrim$(str$( mem_val(mi) )) + " " + ltrim$(str$( mem_val(mi-1) - mem_val(mi) )) + " " + ltrim$(str$( mem_fre(mi) )) + " " + ltrim$(str$( mem_fre(mi-1) - mem_fre(mi) ))
         end if
     next mi
-    print #benchf, "clprec " + ltrim$(str$( len( clp_buffer(0) ) ))
+    print #benchf, "clprec " + ltrim$(str$( pl_hull_rec% ))
     print #benchf, "clpcnt " + ltrim$(str$( wld.clp_count ))
     print #benchf, "waterlevel " + ltrim$(str$( pl.water_level ))
     print #benchf, "watertype " + ltrim$(str$( pl.water_type ))
