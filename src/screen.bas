@@ -29,6 +29,42 @@ option explicit
 '$include: 'q_scr.bi'
 
 ''
+'' This module's own procedures.
+''
+declare sub scr_load_part ( _
+    byval frac as single, _
+    byval redraw as integer _
+)
+declare sub scr_draw_hud ( _
+    h_dst_dc as long, _
+    env as Env, _
+    scr as ScreenState, _
+    rdr as RenderState, _
+    vis as VisState, _
+    wld as World _
+)
+declare sub draw_init_font ( _
+    env as Env, _
+    bit_array() as integer _
+)
+declare sub scr_count_frame ( _
+    env as Env, _
+    scr as ScreenState, _
+    rdr as RenderState _
+)
+declare sub scr_mip_tick ( percent as single )
+declare sub scr_hud_colors ( )
+declare sub scr_begin_loading ( env as Env )
+
+''
+'' Declared here, not in a header: this module is the only caller, and a
+'' header would hand these to modules that never use them -- BC's symbol
+'' table is finite, and it ran out when they all got everything.
+''
+declare function sc_frame_end ( ) as integer
+declare function mod_cm_ready ( wld as World ) as integer
+
+''
 '' Loading screen geometry. Private to this module on purpose: the bar is
 '' drawn through drwLoadTick/drwMipTick below, so no caller needs to know
 '' where it sits. Sixteen call sites used to carry the arithmetic inline.

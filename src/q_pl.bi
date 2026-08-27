@@ -88,16 +88,14 @@ common shared /pl_s/ pl as PlayerState
 ''
 '' pl_move.bas. Declared here: these name PlayerState and TraceResult.
 ''
-declare sub pl_gravity ( _
-    byval dt as single, _
-    pl as PlayerState, _
-    tr as TraceResult, _
-    byval model_count as integer, _
-    models() as Submodel, _
-    brush() as BrushModel, _
-    clip() as ClipNode, _
-    planes() as Plane _
-)
+
+''
+'' Procedures whose signatures can be read from here.
+''
+declare function ent_plat_touched ( _
+    byval p as integer, _
+    pl as PlayerState _
+) as integer
 declare function pl_hull_check ( _
     byval node as integer, _
     byval p1f as single, _
@@ -108,24 +106,14 @@ declare function pl_hull_check ( _
     clip() as ClipNode, _
     planes() as Plane _
 ) as integer
-declare sub pl_init ( _
-    pl as PlayerState, _
-    cam as CamState, _
-    env as Env _
-)
-declare sub pl_move ( _
-    byval fwd as single, _
-    byval strafe as single, _
-    byval dir_x as single, _
-    byval dir_y as single, _
-    byval jump as integer, _
+declare sub pl_gravity ( _
     byval dt as single, _
     pl as PlayerState, _
-    cam as CamState, _
+    tr as TraceResult, _
     byval model_count as integer, _
     models() as Submodel, _
     brush() as BrushModel, _
-    nodes() as Node, _
+    clip() as ClipNode, _
     planes() as Plane _
 )
 declare sub pl_slide_move ( _

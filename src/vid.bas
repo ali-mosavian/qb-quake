@@ -27,6 +27,24 @@ option explicit
 '$include: 'q_scr.bi'
 '$include: 'q_snd.bi'
 
+''
+'' This module's own procedures.
+''
+declare sub vid_update ( _
+    h_dst_dc as long, _
+    page as integer, _
+    env as Env _
+)
+declare sub vid_init_ugl ( )
+declare sub vid_init ( env as Env )
+
+''
+'' Declared here, not in a header: this module is the only caller, and a
+'' header would hand these to modules that never use them -- BC's symbol
+'' table is finite, and it ran out when they all got everything.
+''
+declare sub scr_hud_colors ( )
+
 '$static
 
 
@@ -49,7 +67,7 @@ end sub
 '' name: vid_init
 '' desc: Final video mode, backbuffer and the Quake palette.
 ''::::::::::
-sub vid_init
+sub vid_init ( env as Env )
     dim pages as integer
 
     if ( env.use_paging = true ) then
@@ -97,7 +115,8 @@ end sub
 ''::::::::::
 sub vid_update ( _
     h_dst_dc as long, _
-    page as integer _
+    page as integer, _
+    env as Env _
 )
     ''
     '' Present only. This used to also poll the screenshot key, tally frames

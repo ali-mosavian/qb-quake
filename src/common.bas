@@ -20,6 +20,14 @@ option explicit
 '$include: 'mod.bi'
 '$include: 'q_env.bi'
 
+''
+'' This module's own procedures.
+''
+declare sub com_parse_config ( _
+    filename as string, _
+    env as Env _
+)
+
 
 
 sub com_tokenize ( _
@@ -124,7 +132,10 @@ end sub
 
 
 
-sub com_parse_config ( filename as string )
+sub com_parse_config ( _
+    filename as string, _
+    env as Env _
+)
 
     const xres_flag = 1
     const yres_flag = 2

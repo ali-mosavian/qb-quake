@@ -31,6 +31,39 @@ option explicit
 '$include: 'q_ent.bi'
 
 ''
+'' This module's own procedures.
+''
+declare sub pl_init ( _
+    pl as PlayerState, _
+    cam as CamState, _
+    env as Env _
+)
+declare sub pl_move ( _
+    byval fwd as single, _
+    byval strafe as single, _
+    byval dir_x as single, _
+    byval dir_y as single, _
+    byval jump as integer, _
+    byval dt as single, _
+    pl as PlayerState, _
+    cam as CamState, _
+    byval model_count as integer, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    nodes() as Node, _
+    planes() as Plane _
+)
+declare sub pl_load_hulls ( wld as World )
+declare function pl_hull_rec ( ) as integer
+
+''
+'' Declared here, not in a header: this module is the only caller, and a
+'' header would hand these to modules that never use them -- BC's symbol
+'' table is finite, and it ran out when they all got everything.
+''
+declare function r_leaf_contents ( byval leafnr as integer ) as integer
+
+''
 '' THE COLLISION HULLS. Owned here, not in COMMON: this module is the only
 '' reader, so the array, its store and its loader all live together.
 ''

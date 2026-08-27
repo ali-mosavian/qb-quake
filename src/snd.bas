@@ -19,6 +19,19 @@ option explicit
 '$include: 'q_env.bi'
 '$include: 'q_snd.bi'
 
+''
+'' This module's own procedures.
+''
+declare sub s_get_blaster ( _
+    port as integer, _
+    irq as integer, _
+    ldma as integer, _
+    hdma as integer _
+)
+declare sub s_init ( env as Env )
+declare sub s_start_music ( env as Env )
+declare sub s_stop_music ( env as Env )
+
 
 '' The loading screen's MOD, private to this module: s_start_music opens
 '' it and s_stop_music frees it. The one that plays during the walkthrough
@@ -103,7 +116,7 @@ end sub
 '' name: s_init
 '' desc: Autodetects an SB16, falls back to the BLASTER variable.
 ''::::::::::
-sub s_init
+sub s_init ( env as Env )
     dim port as integer
     dim irq as integer
     dim ldma as integer
@@ -153,7 +166,7 @@ end sub
 '' name: s_start_music
 '' desc: Starts the module that plays over the loading screen.
 ''::::::::::
-sub s_start_music
+sub s_start_music ( env as Env )
     if ( env.sound = true ) then
         if ( modInit = false ) then
             sys_error "0x1004, Could not init mod module..."
@@ -187,7 +200,7 @@ end sub
 ''::::::::::
 '' name: s_stop_music
 ''::::::::::
-sub s_stop_music
+sub s_stop_music ( env as Env )
     if ( env.sound = true ) then
         modStop
         modDel load_mod

@@ -26,6 +26,47 @@ option explicit
 '$include: 'q_cam.bi'
 '$include: 'q_pl.bi'
 '$include: 'q_ent.bi'
+
+''
+'' This module's own procedures.
+''
+declare sub v_update_camera ( _
+    byval dt as single, _
+    wld as World, _
+    env as Env, _
+    pl as PlayerState, _
+    cam as CamState, _
+    cp as CamPath, _
+    brush() as BrushModel, _
+    models() as Submodel, _
+    planes() as Plane, _
+    nodes() as Node _
+)
+declare sub v_open_script ( _
+    env as Env, _
+    cam as CamState _
+)
+
+''
+'' Declared here, not in a header: this module is the only caller, and a
+'' header would hand these to modules that never use them -- BC's symbol
+'' table is finite, and it ran out when they all got everything.
+''
+declare sub pl_move ( _
+    byval fwd as single, _
+    byval strafe as single, _
+    byval dir_x as single, _
+    byval dir_y as single, _
+    byval jump as integer, _
+    byval dt as single, _
+    pl as PlayerState, _
+    cam as CamState, _
+    byval model_count as integer, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    nodes() as Node, _
+    planes() as Plane _
+)
 Declare Sub cp_advance ( )
 
 ''
@@ -65,6 +106,12 @@ dim shared last_point as integer
 ''::::::::::
 sub v_update_camera ( _
     byval dt as single, _
+    wld as World, _
+    env as Env, _
+    pl as PlayerState, _
+    cam as CamState, _
+    cp as CamPath, _
+    brush() as BrushModel, _
     models() as Submodel, _
     planes() as Plane, _
     nodes() as Node _
@@ -290,7 +337,10 @@ end sub
 ''       also terminated on eof(1), a hardcoded handle, while the file was
 ''       opened on one from freefile -- the same bug the ini parser had.
 ''::::::::::
-sub v_open_script ( )
+sub v_open_script ( _
+    env as Env, _
+    cam as CamState _
+)
     dim i as integer
 
     redim ppos( env.cam_interp ) as PNT3D

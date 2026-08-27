@@ -338,6 +338,29 @@ const MEM_MARKS = 20
 ''
 '' model.bas. Declared here: these name World.
 ''
+
+''
+'' Procedures that name World. Declared here, not in bspfile.bi:
+'' that header is included first, before this type exists.
+''
+
+''
+'' Procedures whose signatures can be read from here.
+''
+declare function mod_cm_map ( wld as World ) as long
+declare function mod_geom_map ( _
+    wld as World, _
+    byval row as integer _
+) as long
+declare sub hud_shade ( _
+    wld as World, _
+    dc as long, _
+    x0 as integer, _
+    y0 as integer, _
+    x1 as integer, _
+    y1 as integer, _
+    rw as integer _
+)
 declare sub mod_alloc ( _
     wld as World, _
     faces() as Face, _
@@ -348,50 +371,24 @@ declare sub mod_alloc ( _
     ord() as integer, _
     pflag() as integer _
 )
-declare sub mod_close ( wld as World )
+declare sub mod_link_anims ( wld as World )
 declare sub mod_load_clipnodes ( wld as World )
 declare sub mod_load_faces ( _
     wld as World, _
     faces() as Face _
 )
+declare sub mod_load_facevtx ( _
+    wld as World, _
+    gv_buf() as integer _
+)
 declare sub mod_load_leafs ( wld as World )
+declare sub mod_load_lightmaps ( wld as World )
 declare sub mod_load_marksurfaces ( wld as World )
 declare sub mod_load_nodes ( _
     wld as World, _
     nodes() as Node _
 )
-declare sub mod_open ( _
-    wld as World, _
-    env as Env, _
-    models() as Submodel _
-)
-
-''
-'' Procedures that name World. Declared here, not in bspfile.bi:
-'' that header is included first, before this type exists.
-''
-declare sub sb_build ( _
-    byval dc as long, _
-    byval tex as long, _
-    byval face as integer, _
-    byval mip as integer, _
-    byval sw as integer, _
-    byval sh as integer, _
-    wld as World, _
-    tri_buffer() as Face, _
-    tex_inf_buff() as TexInfo, _
-    gv_buf() as integer, _
-    mip_buff_inf() as MipTex _
-)
-declare function sc_alloc ( _
-    byval face as integer, _
-    byval mip as integer, _
-    byval w as integer, _
-    byval h as integer, _
-    byval fw as integer, _
-    byval fh as integer, _
-    wld as World _
-)
+declare sub mod_load_visibility ( wld as World )
 declare sub r_mark_leaves ( _
     byval nodenr as integer, _
     wld as World, _
@@ -401,66 +398,5 @@ declare sub r_mark_leaves ( _
     bit_array() as integer, _
     pvsb() as integer _
 )
-declare function mod_geom_map ( _
-    wld as World, _
-    byval row as integer _
-) as long
-declare function mod_lm_map ( _
-    wld as World, _
-    byval row as integer _
-) as long
-declare sub mod_load_facevtx ( _
-    wld as World, _
-    gv_buf() as integer _
-)
-declare sub hud_shade ( _
-    wld as World, _
-    dc as long, _
-    x0 as integer, _
-    y0 as integer, _
-    x1 as integer, _
-    y1 as integer, _
-    rw as integer _
-)
-declare sub pl_load_hulls ( wld as World )
 declare sub sc_flush ( wld as World )
-declare sub sc_init ( wld as World )
 declare sub sc_reset ( wld as World )
-declare function sc_selftest ( wld as World ) as integer
-declare sub r_load_leaves ( wld as World )
-declare sub mod_load_texinfo ( _
-    wld as World, _
-    tex_info() as TexInfo _
-)
-declare sub mod_load_textures ( wld as World )
-declare sub mod_link_anims ( wld as World )
-declare function mod_cm_bytes ( wld as World ) as long
-declare function mod_cm_map ( wld as World ) as long
-declare function mod_cm_ready ( wld as World ) as integer
-declare function mod_geom_rows ( wld as World ) as integer
-declare function mod_lm_bytes ( wld as World ) as long
-declare function mod_lm_got ( wld as World ) as long
-declare sub mod_load_colormap ( wld as World )
-declare sub mod_load_lightmaps ( wld as World )
-declare sub mod_load_visibility ( wld as World )
-declare function mod_pvs_base ( wld as World ) as long
-declare sub sb_dump ( _
-    byval face as integer, _
-    byval mip as integer, _
-    wld as World, _
-    tri_buffer() as Face, _
-    tex_inf_buff() as TexInfo, _
-    gv_buf() as integer, _
-    h_rawtx_dc() as long _
-)
-declare sub mod_load_world ( _
-    wld as World, _
-    faces() as Face, _
-    tex_info() as TexInfo, _
-    planes() as Plane, _
-    nodes() as Node, _
-    models() as Submodel, _
-    ord() as integer, _
-    pflag() as integer, _
-    gv() as integer _
-)

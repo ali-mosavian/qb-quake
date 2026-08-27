@@ -31,6 +31,26 @@ option explicit
 '$include: 'q_draw.bi'
 '$include: 'q_snd.bi'
 
+''
+'' This module's own procedures.
+''
+declare sub mod_load_texinfo ( _
+    wld as World, _
+    tex_info() as TexInfo _
+)
+declare sub mod_load_textures ( wld as World )
+
+''
+'' Declared here, not in a header: this module is the only caller, and a
+'' header would hand these to modules that never use them -- BC's symbol
+'' table is finite, and it ran out when they all got everything.
+''
+declare sub scr_load_part ( _
+    byval frac as single, _
+    byval redraw as integer _
+)
+declare sub scr_mip_tick ( percent as single )
+
 '$static
 dim shared tex_offs( 256 ) as long
 

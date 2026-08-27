@@ -56,6 +56,172 @@ option explicit
 '$include: 'q_pl.bi'
 '$include: 'q_ent.bi'
 '$include: 'q_snd.bi'
+
+''
+'' This module's own procedures.
+''
+declare sub host_shutdown ( )
+declare function host_z_on ( ) as integer
+
+''
+'' Declared here, not in a header: this module is the only caller, and a
+'' header would hand these to modules that never use them -- BC's symbol
+'' table is finite, and it ran out when they all got everything.
+''
+declare sub draw_init_font ( _
+    env as Env, _
+    bit_array() as integer _
+)
+declare sub ent_place_models ( _
+    byval model_count as integer, _
+    models() as Submodel, _
+    nodes() as Node, _
+    planes() as Plane _
+)
+declare sub in_screenshot_key ( _
+    byval h_dst_dc as long, _
+    env as Env _
+)
+declare sub r_set_frustum ( _
+    frustum() as DiskPlane, _
+    mtx as u3dMtrx _
+)
+declare sub vid_update ( _
+    h_dst_dc as long, _
+    page as integer, _
+    env as Env _
+)
+declare function pl_hull_rec ( ) as integer
+declare function sys_mem_count ( ) as integer
+declare function sys_mem_fre ( byval i as integer ) as long
+declare function sys_mem_tag ( byval i as integer ) as string
+declare function sys_mem_val ( byval i as integer ) as long
+declare function sys_tick_hz ( ) as single
+declare sub d_init_turb ( )
+declare sub in_init ( env as Env )
+declare sub s_init ( env as Env )
+declare sub s_start_music ( env as Env )
+declare sub s_stop_music ( env as Env )
+declare sub scr_begin_loading ( env as Env )
+declare sub sys_init_tables ( )
+declare sub sys_parse_args ( env as Env )
+declare sub sys_time_init ( )
+declare sub vid_init ( env as Env )
+declare sub vid_init_ugl ( )
+declare sub mod_load_texinfo ( _
+    wld as World, _
+    tex_info() as TexInfo _
+)
+declare sub mod_load_world ( _
+    wld as World, _
+    faces() as Face, _
+    tex_info() as TexInfo, _
+    planes() as Plane, _
+    nodes() as Node, _
+    models() as Submodel, _
+    ord() as integer, _
+    pflag() as integer, _
+    gv() as integer _
+)
+declare sub mod_open ( _
+    wld as World, _
+    env as Env, _
+    models() as Submodel _
+)
+declare sub sb_dump ( _
+    byval face as integer, _
+    byval mip as integer, _
+    wld as World, _
+    tri_buffer() as Face, _
+    tex_inf_buff() as TexInfo, _
+    gv_buf() as integer, _
+    h_rawtx_dc() as long _
+)
+declare function mod_cm_bytes ( wld as World ) as long
+declare function mod_geom_rows ( wld as World ) as integer
+declare function mod_lm_bytes ( wld as World ) as long
+declare function mod_lm_got ( wld as World ) as long
+declare function sc_selftest ( wld as World ) as integer
+declare sub mod_close ( wld as World )
+declare sub mod_load_colormap ( wld as World )
+declare sub mod_load_textures ( wld as World )
+declare sub sc_init ( wld as World )
+declare sub r_draw_world ( _
+    byval model as integer, _
+    wld as World, _
+    campos as u3dVector3f, _
+    vis as VisState, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    nodes() as Node, _
+    planes() as Plane, _
+    pflag() as integer, _
+    ord() as integer, _
+    fru() as DiskPlane, _
+    bit_array() as integer _
+)
+declare sub d_draw_faces ( _
+    h_dst_dc as long, _
+    mtx_fin as u3dMtrx, _
+    xresh as single, _
+    yresh as single, _
+    wld as World, _
+    campos as u3dVector3f, _
+    rdr as RenderState, _
+    env as Env, _
+    byval frame_stamp as integer, _
+    byval ord_count as integer, _
+    tri_buffer() as Face, _
+    tex_inf_buff() as TexInfo, _
+    gv_buf() as integer, _
+    face_mdl() as integer, _
+    brush() as BrushModel, _
+    pln_buffer() as Plane, _
+    nds_buffer() as Node, _
+    mip_buff_inf() as MipTex, _
+    h_rawtx_dc() as long, _
+    h_textr_dc() as long, _
+    order_list() as integer, _
+    poly_flag() as integer _
+)
+declare sub scr_count_frame ( _
+    env as Env, _
+    scr as ScreenState, _
+    rdr as RenderState _
+)
+declare sub scr_draw_hud ( _
+    h_dst_dc as long, _
+    env as Env, _
+    scr as ScreenState, _
+    rdr as RenderState, _
+    vis as VisState, _
+    wld as World _
+)
+declare function sys_frame_time ( ft as FrameTimes ) as single
+declare sub mod_find_spawn ( _
+    wld as World, _
+    cam as CamState _
+)
+declare sub ent_check_teleport ( _
+    pl as PlayerState, _
+    env as Env _
+)
+declare sub ent_move_plats ( _
+    byval dt as single, _
+    pl as PlayerState _
+)
+declare sub in_handle_toggles ( _
+    env as Env, _
+    pl as PlayerState, _
+    cam as CamState, _
+    rdr as RenderState, _
+    scr as ScreenState _
+)
+declare sub pl_init ( _
+    pl as PlayerState, _
+    cam as CamState, _
+    env as Env _
+)
 Declare Sub cp_load ( )
 Declare Sub cp_advance ( )
 
@@ -100,6 +266,27 @@ dim shared mdl_buffer() as Submodel
 dim shared order_list() as integer
 dim shared poly_flag() as integer
 dim shared gv_buf() as integer
+
+''
+'' view.bas. Declared here rather than in a header: main is the only
+'' caller, and a header would hand them to modules that never call them.
+''
+declare sub v_update_camera ( _
+    byval dt as single, _
+    wld as World, _
+    env as Env, _
+    pl as PlayerState, _
+    cam as CamState, _
+    cp as CamPath, _
+    brush() as BrushModel, _
+    models() as Submodel, _
+    planes() as Plane, _
+    nodes() as Node _
+)
+declare sub v_open_script ( _
+    env as Env, _
+    cam as CamState _
+)
 
 dim shared z_dc as long
 
@@ -226,14 +413,14 @@ sub host_init
     t_start = timer
 
     '' arguments and subsystems
-    sys_parse_args
+    sys_parse_args env
     sys_init_tables
     sys_mem_mark "start"
     d_init_turb
     vid_init_ugl
     sys_mem_mark "ugl"
-    s_init
-    s_start_music
+    s_init env
+    s_start_music env
     draw_init_font env, bit_array()
     sys_mem_mark "font"
 
@@ -268,10 +455,10 @@ sub host_init
     t_tex = timer
 
     '' hand over to the real video mode
-    vid_init
+    vid_init env
     sys_mem_mark "backbuf"
-    in_init
-    s_stop_music
+    in_init env
+    s_stop_music env
 
     '' After the mode switch, deliberately. vid_init needs a sizeable
     '' block for the video DC, and holding the colormap's 16K across it
@@ -342,7 +529,7 @@ sub host_main
     
 
     
-    v_open_script
+    v_open_script env, cam
     
     
     
@@ -420,7 +607,7 @@ sub host_main
         '' moves. Every such update multiplies by it, so the game plays the
         '' same whether it runs at 15 fps or 60.
         ''
-        scr.frame_time = sys_frame_time
+        scr.frame_time = sys_frame_time( ft )
 
         '' Skip the first few frames: they carry the tail of loading and
         '' the first surface builds, which no later frame repeats.
@@ -470,8 +657,8 @@ sub host_main
             exit do
         end if
 
-        in_screenshot_key h_dst_dc
-        vid_update h_dst_dc, page
+        in_screenshot_key h_dst_dc, env
+        vid_update h_dst_dc, page, env
         scr_count_frame env, scr, rdr
 
         ''
@@ -716,10 +903,11 @@ end sub
 sub host_tick ( byval dt as single )
 
     '' what the player asked for
-    in_handle_toggles
+    in_handle_toggles env, pl, cam, rdr, scr
 
     '' and what the world does about it: camera, and the physics under it
-    v_update_camera dt, mdl_buffer(), pln_buffer(), nds_buffer()
+    v_update_camera dt, wld, env, pl, cam, cp, brush(), _
+                    mdl_buffer(), pln_buffer(), nds_buffer()
 
     '' and anything the world does to the player as a result of moving
     ent_check_teleport pl, env

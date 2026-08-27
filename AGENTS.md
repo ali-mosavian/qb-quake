@@ -105,6 +105,21 @@ and the global was untouched. So a signature may reuse the global's name and
 the body needs no edit -- which is what made converting `pl_move` and `ent`
 a change to signatures and call sites only.
 
+**A declare belongs in the narrowest place that can see it.** Not every
+procedure needs a shared header. If one module calls it, declare it there;
+if a module calls its own, declare it locally. Headers carry only what is
+genuinely cross-module.
+
+This is not tidiness. Forcing every module to include the whole header
+chain -- which is what a shared header full of declares eventually demands,
+since a declare may only name types the includer has seen -- ends in
+
+    BC : Out of memory
+
+BC's symbol table is finite and every module got every type. Narrow
+declares keep it under the limit. `tools/qbplace.py` places by the latest
+type a declare names; the single-caller ones do not go in a header at all.
+
 **Includes have a canonical order.** A declare may only name types the
 including module has already seen, so `q_*.bi` go in dependency order:
 

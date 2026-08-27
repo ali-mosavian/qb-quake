@@ -33,6 +33,81 @@ option explicit
 '$include: 'q_pl.bi'
 '$include: 'q_ent.bi'
 
+''
+'' This module's own procedures.
+''
+declare sub d_draw_faces ( _
+    h_dst_dc as long, _
+    mtx_fin as u3dMtrx, _
+    xresh as single, _
+    yresh as single, _
+    wld as World, _
+    campos as u3dVector3f, _
+    rdr as RenderState, _
+    env as Env, _
+    byval frame_stamp as integer, _
+    byval ord_count as integer, _
+    tri_buffer() as Face, _
+    tex_inf_buff() as TexInfo, _
+    gv_buf() as integer, _
+    face_mdl() as integer, _
+    brush() as BrushModel, _
+    pln_buffer() as Plane, _
+    nds_buffer() as Node, _
+    mip_buff_inf() as MipTex, _
+    h_rawtx_dc() as long, _
+    h_textr_dc() as long, _
+    order_list() as integer, _
+    poly_flag() as integer _
+)
+declare sub d_init_turb ( )
+
+''
+'' Declared here, not in a header: this module is the only caller, and a
+'' header would hand these to modules that never use them -- BC's symbol
+'' table is finite, and it ran out when they all got everything.
+''
+declare function r_cam_plane_dist ( _
+    pt as u3dVector3f, _
+    pl as Plane _
+) as single
+declare function sc_find ( _
+    byval face as integer, _
+    byval mip as integer, _
+    byval w as integer, _
+    byval h as integer _
+)
+declare function sc_mipfloor ( _
+    byval extw as integer, _
+    byval exth as integer _
+) as integer
+declare function host_z_on ( ) as integer
+declare function sc_held ( byval face as integer ) as integer
+declare function sc_ready ( ) as integer
+declare function sc_shift ( byval v as integer ) as integer
+declare function sc_alloc ( _
+    byval face as integer, _
+    byval mip as integer, _
+    byval w as integer, _
+    byval h as integer, _
+    byval fw as integer, _
+    byval fh as integer, _
+    wld as World _
+)
+declare sub sb_build ( _
+    byval dc as long, _
+    byval tex as long, _
+    byval face as integer, _
+    byval mip as integer, _
+    byval sw as integer, _
+    byval sh as integer, _
+    wld as World, _
+    tri_buffer() as Face, _
+    tex_inf_buff() as TexInfo, _
+    gv_buf() as integer, _
+    mip_buff_inf() as MipTex _
+)
+
 '$static
 ''
 '' Quake's turbsin. A table because two sines per vertex of every
