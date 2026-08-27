@@ -44,7 +44,10 @@ dim shared t_mip_inf( 1 ) as DiskMipTex
 '' name: mod_load_texinfo
 '' desc: Reads the miptex directory and sizes the texture tables.
 ''::::::::::
-sub mod_load_texinfo ( wld as World )
+sub mod_load_texinfo ( _
+    wld as World, _
+    tex_info() as TexInfo _
+)
     scr_load_stage "texture info"
     ''
     '' hTextrDC is COMMON now, and COMMON can only declare it as hTextrDC()
@@ -57,8 +60,8 @@ sub mod_load_texinfo ( wld as World )
 
     dim i as integer
 
-    def seg = varseg( tex_inf_buff(0) )
-    bload "texinf.bld", varptr( tex_inf_buff(0) )
+    def seg = varseg( tex_info(0) )
+    bload "texinf.bld", varptr( tex_info(0) )
     def seg
 
     scr_load_step

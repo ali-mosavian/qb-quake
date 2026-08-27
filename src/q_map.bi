@@ -118,7 +118,6 @@ common shared /map_s/ wld as World
 '' d_poly fills and d_surf reads. That is a handoff, not shared state.
 '' ===================================================================
 ''
-common shared /surf/ tri_buffer() as Face
 '' The leaves are NOT here any more -- r_bsp.bas owns them and loads
 '' them; pl_move asks r_leaf_contents for the one field it wants.
 
@@ -184,7 +183,6 @@ const GEOM_MAXREC = 18 + GEOM_MAXVTX * 6
 '' the time a build runs -- measured, it reads zeros -- and a 0x0 luxel
 '' grid hangs the builder. One fetch per face, one reader of the copy.
 ''
-common shared /surf/ gv_buf() as integer
 ''
 '' The BSP nodes live in EMS, not in BASIC's heap. nds_buffer is a ONE
 '' ELEMENT stub whose descriptor uglArrNew1D takes over; nodes.pag streams
@@ -204,8 +202,7 @@ common shared /surf/ gv_buf() as integer
 '' starts, so the alternation is one per ordered node, not per face.
 ''
 ''
-'' ===================================================================
-'' /world/ -- THE BSP ITSELF
+'' THE BSP ARRAYS
 ''
 '' Read by r_bsp, ent, pl_move and d_poly: rendering, physics and
 '' entities all ask the same geometry the same questions, and all of it
@@ -217,13 +214,11 @@ common shared /surf/ gv_buf() as integer
 '' shared because the data genuinely is.
 '' ===================================================================
 ''
-common shared /world/ mdl_buffer() as Submodel, pln_buffer() as Plane, nds_buffer() as Node
 ''
 '' lfc_buffer and pvs_buffer_b are NOT here any more. r_bsp.bas is their
 '' only run-time reader; they looked shared only because model.bas loaded
 '' them, so r_bsp loads them itself now.
 ''
-common shared /surf/ order_list() as integer
 ''
 '' The compressed visibility lump, in a memAlloc'd block rather than an
 '' array. It is walked once per frame -- and only when the camera changes
@@ -234,7 +229,6 @@ common shared /surf/ order_list() as integer
 '' The visibility lump is NOT here any more. model.bas allocates it and
 '' hands out its base through mod_pvs_base; pvs_size never left that module
 '' at all, so it needs no accessor.
-common shared /surf/ tex_inf_buff() as TexInfo, poly_flag() as integer
 
 ''
 '' The collision hulls. Separate trees from the render nodes: same planes,
@@ -434,7 +428,10 @@ declare sub sc_init ( wld as World )
 declare sub sc_reset ( wld as World )
 declare function sc_selftest ( wld as World ) as integer
 declare sub r_load_leaves ( wld as World )
-declare sub mod_load_texinfo ( wld as World )
+declare sub mod_load_texinfo ( _
+    wld as World, _
+    tex_info() as TexInfo _
+)
 declare sub mod_load_textures ( wld as World )
 declare sub mod_link_anims ( wld as World )
 declare function mod_cm_bytes ( wld as World ) as long
@@ -455,4 +452,15 @@ declare sub sb_dump ( _
     tex_inf_buff() as TexInfo, _
     gv_buf() as integer, _
     h_rawtx_dc() as long _
+)
+declare sub mod_load_world ( _
+    wld as World, _
+    faces() as Face, _
+    tex_info() as TexInfo, _
+    planes() as Plane, _
+    nodes() as Node, _
+    models() as Submodel, _
+    ord() as integer, _
+    pflag() as integer, _
+    gv() as integer _
 )

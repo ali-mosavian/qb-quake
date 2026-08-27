@@ -428,7 +428,12 @@ declare sub sys_error ( msg as string )
 declare sub sys_time_init ( )
 declare function sys_frame_time ( ) as single
 declare function sys_tick_hz ( ) as single
-declare sub v_update_camera ( byval dt as single )
+declare sub v_update_camera ( _
+    byval dt as single, _
+    models() as Submodel, _
+    planes() as Plane, _
+    nodes() as Node _
+)
 declare sub in_handle_toggles ( )
 ''
 '' pl_move.bas -- player physics

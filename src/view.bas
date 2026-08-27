@@ -63,7 +63,12 @@ dim shared last_point as integer
 '' Once per frame, so the call is free. See the note by the shared
 '' renderer state for why the draw loop is not carved up the same way.
 ''::::::::::
-sub v_update_camera ( byval dt as single )
+sub v_update_camera ( _
+    byval dt as single, _
+    models() as Submodel, _
+    planes() as Plane, _
+    nodes() as Node _
+)
     dim cam_pos_c as u3dVector3f
     dim tmx as integer, tmy as integer
     dim theta as single, phi as single
@@ -253,8 +258,8 @@ sub v_update_camera ( byval dt as single )
             end if
 
             pl_move fwd, strafe, dir_x, dir_y, jump, dt, _
-                    pl, cam, wld.count.models, mdl_buffer(), brush(), _
-                    nds_buffer(), pln_buffer()
+                    pl, cam, wld.count.models, models(), brush(), _
+                    nodes(), planes()
         end if
         
         if ( env.keyboard.n and env.cam_mode = 2 ) then
