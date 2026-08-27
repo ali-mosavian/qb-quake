@@ -7,6 +7,12 @@ Hard-won things, mostly the kind that cost an hour before they cost a minute.
 These are not suggestions. Apply them to anything you touch, and do not
 introduce new violations even where the surrounding code still has them.
 
+**There is no `COMMON` any more.** Every array is declared once in
+`main.bas` with `dim`, and travels as a parameter. The blocks that used to
+hold them -- `/map_a/`, `/world/`, `/surf/`, `/ent_s/`, `/drw_a/`,
+`/vis_a/`, `/scr_s/`, and the rest -- are gone. If you find yourself adding
+one back, the thing you want is a parameter.
+
 **The compiler can prove it.** `main.bas` declares the application state
 with `dim`, not `dim shared` -- module-level code sees it, procedures do
 not. Anything that reaches gets `Variable not declared` at the build. That

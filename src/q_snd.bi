@@ -13,4 +13,3 @@
 '' Two unrelated handles that need no struct of their own: the loading MOD
 '' track, and the palette mod_load_textures reads and vid_init installs.
 ''
-common shared /snd_s/ mymod as UGMMOD

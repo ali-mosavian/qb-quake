@@ -77,7 +77,8 @@ declare sub host_bench_report ( _
     cp as CamPath, _
     ft as FrameTimes, _
     brush() as BrushModel, _
-    plat() as PlatEnt _
+    plat() as PlatEnt, _
+    byval plat_count as integer _
 )
 declare sub host_render ( _
     byval h_dst_dc as long, _
@@ -121,7 +122,11 @@ declare sub host_tick ( _
     nodes() as Node, _
     cp_x() as integer, _
     cp_y() as integer, _
-    cp_z() as integer _
+    cp_z() as integer, _
+    tele() as Teleporter, _
+    plat() as PlatEnt, _
+    byval tele_count as integer, _
+    byval plat_count as integer _
 )
 declare sub host_advance ( _
     byval real_dt as single, _
@@ -138,7 +143,11 @@ declare sub host_advance ( _
     nodes() as Node, _
     cp_x() as integer, _
     cp_y() as integer, _
-    cp_z() as integer _
+    cp_z() as integer, _
+    tele() as Teleporter, _
+    plat() as PlatEnt, _
+    byval tele_count as integer, _
+    byval plat_count as integer _
 )
 declare sub host_init ( _
     wld as World, _
@@ -159,7 +168,18 @@ declare sub host_init ( _
     cp_y() as integer, _
     cp_z() as integer, _
     cp as CamPath, _
-    vis as VisState _
+    vis as VisState, _
+    h_textr_dc() as long, _
+    mip_buff_inf() as MipTex, _
+    h_rawtx_dc() as long, _
+    frustum() as DiskPlane, _
+    brush() as BrushModel, _
+    tele() as Teleporter, _
+    face_mdl() as integer, _
+    plat() as PlatEnt, _
+    tele_count as integer, _
+    plat_count as integer, _
+    mymod as UGMMOD _
 )
 declare sub host_main ( _
     env as Env, _
@@ -189,7 +209,11 @@ declare sub host_main ( _
     h_textr_dc() as long, _
     mip_buff_inf() as MipTex, _
     face_mdl() as integer, _
-    plat() as PlatEnt _
+    plat() as PlatEnt, _
+    tele() as Teleporter, _
+    mymod as UGMMOD, _
+    plat_count as integer, _
+    byval tele_count as integer _
 )
 
 ''
@@ -211,7 +235,8 @@ declare sub ent_place_models ( _
     byval model_count as integer, _
     models() as Submodel, _
     nodes() as Node, _
-    planes() as Plane _
+    planes() as Plane, _
+    brush() as BrushModel _
 )
 declare sub in_screenshot_key ( _
     byval h_dst_dc as long, _
@@ -235,10 +260,17 @@ declare function sys_tick_hz ( ) as single
 declare sub d_init_turb ( )
 declare sub in_init ( env as Env )
 declare sub s_init ( env as Env )
-declare sub s_start_music ( env as Env )
+declare sub s_start_music ( _
+    env as Env, _
+    mymod as UGMMOD _
+)
 declare sub s_stop_music ( env as Env )
 declare sub scr_begin_loading ( env as Env )
-declare sub sys_init_tables ( env as Env )
+declare sub sys_init_tables ( _
+    env as Env, _
+    bit_array() as integer, _
+    frustum() as DiskPlane _
+)
 declare sub sys_parse_args ( env as Env )
 declare sub sys_time_init ( )
 declare sub vid_init ( _
@@ -249,7 +281,10 @@ declare sub vid_init_ugl ( )
 declare sub mod_load_texinfo ( _
     wld as World, _
     env as Env, _
-    tex_info() as TexInfo _
+    tex_info() as TexInfo, _
+    h_textr_dc() as long, _
+    mip_buff_inf() as MipTex, _
+    h_rawtx_dc() as long _
 )
 declare sub mod_load_world ( _
     wld as World, _
@@ -260,7 +295,13 @@ declare sub mod_load_world ( _
     models() as Submodel, _
     ord() as integer, _
     pflag() as integer, _
-    gv() as integer _
+    gv() as integer, _
+    brush() as BrushModel, _
+    tele() as Teleporter, _
+    face_mdl() as integer, _
+    plat() as PlatEnt, _
+    tele_count as integer, _
+    plat_count as integer _
 )
 declare sub mod_open ( _
     wld as World, _
@@ -274,7 +315,8 @@ declare sub sb_dump ( _
     tri_buffer() as Face, _
     tex_inf_buff() as TexInfo, _
     gv_buf() as integer, _
-    h_rawtx_dc() as long _
+    h_rawtx_dc() as long, _
+    mip_buff_inf() as MipTex _
 )
 declare function mod_cm_bytes ( wld as World ) as long
 declare function mod_geom_rows ( wld as World ) as integer
@@ -286,7 +328,10 @@ declare sub mod_load_colormap ( wld as World )
 declare sub mod_load_textures ( _
     wld as World, _
     env as Env, _
-    pal as long _
+    pal as long, _
+    h_textr_dc() as long, _
+    mip_buff_inf() as MipTex, _
+    h_rawtx_dc() as long _
 )
 declare sub sc_init ( wld as World )
 declare sub r_draw_world ( _
@@ -348,11 +393,16 @@ declare sub mod_find_spawn ( _
 )
 declare sub ent_check_teleport ( _
     pl as PlayerState, _
-    env as Env _
+    env as Env, _
+    tele() as Teleporter, _
+    byval tele_count as integer _
 )
 declare sub ent_move_plats ( _
     byval dt as single, _
-    pl as PlayerState _
+    pl as PlayerState, _
+    brush() as BrushModel, _
+    plat() as PlatEnt, _
+    byval plat_count as integer _
 )
 declare sub in_handle_toggles ( _
     env as Env, _
@@ -410,20 +460,40 @@ dim cp as CamPath
 dim ft as FrameTimes
 
 ''
+'' What is left of the shared arrays. REDIM forces them to module level,
+'' so they live with the map arrays below and travel as parameters.
+''
+dim brush() as BrushModel
+dim tele() as Teleporter
+dim tele_count as integer
+dim face_mdl() as integer
+dim plat() as PlatEnt
+dim plat_count as integer
+dim mymod as UGMMOD
+dim bit_array() as integer
+dim frustum() as DiskPlane
+dim h_textr_dc() as long
+dim mip_buff_inf() as MipTex
+dim h_rawtx_dc() as long
+dim cp_x() as integer
+dim cp_y() as integer
+dim cp_z() as integer
+
+''
 '' THE MAP ARRAYS. Declared here because REDIM forces an array to module
 '' level and something has to hold them -- this is the module that runs
 '' the load and the frame, so nothing else needs to name them. World
 '' describes them; the loaders bind them; everything below takes them as
 '' parameters.
 ''
-dim shared tri_buffer() as Face
-dim shared tex_inf_buff() as TexInfo
-dim shared pln_buffer() as Plane
-dim shared nds_buffer() as Node
-dim shared mdl_buffer() as Submodel
-dim shared order_list() as integer
-dim shared poly_flag() as integer
-dim shared gv_buf() as integer
+dim tri_buffer() as Face
+dim tex_inf_buff() as TexInfo
+dim pln_buffer() as Plane
+dim nds_buffer() as Node
+dim mdl_buffer() as Submodel
+dim order_list() as integer
+dim poly_flag() as integer
+dim gv_buf() as integer
 
 ''
 '' view.bas. Declared here rather than in a header: main is the only
@@ -519,16 +589,20 @@ dim shared z_dc as long
     host_init wld, pal, env, pl, cam, _
               tri_buffer(), tex_inf_buff(), pln_buffer(), nds_buffer(), mdl_buffer(), _
               order_list(), poly_flag(), gv_buf(), bit_array(), _
-              cp_x(), cp_y(), cp_z(), cp, vis
+              cp_x(), cp_y(), cp_z(), cp, vis, _
+              h_textr_dc(), mip_buff_inf(), h_rawtx_dc(), frustum(), _
+              brush(), tele(), face_mdl(), plat(), tele_count, plat_count, _
+              mymod
     if ( env.dump_set ) then
         sb_dump env.dump_face, env.dump_mip, wld, _
-                tri_buffer(), tex_inf_buff(), gv_buf(), h_rawtx_dc()
+                tri_buffer(), tex_inf_buff(), gv_buf(), h_rawtx_dc(), mip_buff_inf()
     else
         host_main env, cam, rdr, vis, scr, cp, ft, wld, pl, _
               cp_x(), cp_y(), cp_z(), _
               tri_buffer(), tex_inf_buff(), pln_buffer(), nds_buffer(), mdl_buffer(), _
               order_list(), poly_flag(), gv_buf(), brush(), frustum(), bit_array(), _
-              h_rawtx_dc(), h_textr_dc(), mip_buff_inf(), face_mdl(), plat()
+              h_rawtx_dc(), h_textr_dc(), mip_buff_inf(), face_mdl(), plat(), tele(), _
+              mymod, tele_count, plat_count
     end if
     host_shutdown
     
@@ -582,7 +656,18 @@ sub host_init ( _
     cp_y() as integer, _
     cp_z() as integer, _
     cp as CamPath, _
-    vis as VisState _
+    vis as VisState, _
+    h_textr_dc() as long, _
+    mip_buff_inf() as MipTex, _
+    h_rawtx_dc() as long, _
+    frustum() as DiskPlane, _
+    brush() as BrushModel, _
+    tele() as Teleporter, _
+    face_mdl() as integer, _
+    plat() as PlatEnt, _
+    tele_count as integer, _
+    plat_count as integer, _
+    mymod as UGMMOD _
 )
     ''
     '' Load profiling. A 1 kHz AUTOINIT timer counts milliseconds, and the
@@ -602,13 +687,13 @@ sub host_init ( _
 
     '' arguments and subsystems
     sys_parse_args env
-    sys_init_tables env
+    sys_init_tables env, bit_array(), frustum()
     sys_mem_mark "start"
     d_init_turb
     vid_init_ugl
     sys_mem_mark "ugl"
     s_init env
-    s_start_music env
+    s_start_music env, mymod
     draw_init_font env, bit_array()
     sys_mem_mark "font"
 
@@ -626,13 +711,14 @@ sub host_init ( _
     '' level lumps
     mod_load_world wld, tri_buffer(), tex_inf_buff(), pln_buffer(), _
                    nds_buffer(), mdl_buffer(), order_list(), poly_flag(), _
-                   gv_buf()
+                   gv_buf(), brush(), tele(), face_mdl(), plat(), _
+                   tele_count, plat_count
 
     t_lump = timer
 
     '' textures and palette
-    mod_load_texinfo wld, env, tex_inf_buff()
-    mod_load_textures wld, env, pal
+    mod_load_texinfo wld, env, tex_inf_buff(), h_textr_dc(), mip_buff_inf(), h_rawtx_dc()
+    mod_load_textures wld, env, pal, h_textr_dc(), mip_buff_inf(), h_rawtx_dc()
     sys_mem_mark "textures"
     mod_close wld
     sys_mem_mark "mapclose"
@@ -705,7 +791,11 @@ sub host_main ( _
     h_textr_dc() as long, _
     mip_buff_inf() as MipTex, _
     face_mdl() as integer, _
-    plat() as PlatEnt _
+    plat() as PlatEnt, _
+    tele() as Teleporter, _
+    mymod as UGMMOD, _
+    plat_count as integer, _
+    byval tele_count as integer _
 )
     dim mtx_prj as u3dMtrx
     
@@ -842,7 +932,7 @@ sub host_main ( _
 
         host_advance scr.frame_time, wld, scr, env, pl, rdr, cam, cp, brush(), _
                      mdl_buffer(), pln_buffer(), nds_buffer(), _
-                     cp_x(), cp_y(), cp_z()
+                     cp_x(), cp_y(), cp_z(), tele(), plat(), tele_count, plat_count
 
         '' cp_advance is called from view.bas now, where the movement
         '' input is assembled -- it steers the player rather than placing
@@ -869,17 +959,17 @@ sub host_main ( _
         '' -campath ends when the route does, whatever -bench says
         if ( env.cam_path and cp.done ) then
             host_bench_report frame_no, h_dst_dc, wld, env, pl, rdr, scr, cp, ft, _
-                              brush(), plat()
+                              brush(), plat(), plat_count
             exit do
         end if
         if ( env.bench_ticks > 0 and host_ticks >= env.bench_ticks ) then
             host_bench_report frame_no, h_dst_dc, wld, env, pl, rdr, scr, cp, ft, _
-                              brush(), plat()
+                              brush(), plat(), plat_count
             exit do
         end if
         if ( env.bench_frames > 0 and frame_no >= env.bench_frames ) then
             host_bench_report frame_no, h_dst_dc, wld, env, pl, rdr, scr, cp, ft, _
-                              brush(), plat()
+                              brush(), plat(), plat_count
             exit do
         end if
 
@@ -894,7 +984,7 @@ sub host_main ( _
         ''
         if ( env.bench_secs > 0 and scr.bench_secs >= env.bench_secs ) then
             host_bench_report frame_no, h_dst_dc, wld, env, pl, rdr, scr, cp, ft, _
-                              brush(), plat()
+                              brush(), plat(), plat_count
             exit do
         end if
 
@@ -1119,7 +1209,11 @@ sub host_advance ( _
     nodes() as Node, _
     cp_x() as integer, _
     cp_y() as integer, _
-    cp_z() as integer _
+    cp_z() as integer, _
+    tele() as Teleporter, _
+    plat() as PlatEnt, _
+    byval tele_count as integer, _
+    byval plat_count as integer _
 )
     dim steps as integer
 
@@ -1128,8 +1222,8 @@ sub host_advance ( _
     steps = 0
     do while ( host_accum >= HOST_DT# and steps < HOST_MAXSTEPS )
         host_tick HOST_DT#, wld, scr, env, pl, rdr, cam, cp, brush(), _
-                  mdl_buffer(), pln_buffer(), nds_buffer(), _
-                  cp_x(), cp_y(), cp_z()
+                  models(), planes(), nodes(), _
+                  cp_x(), cp_y(), cp_z(), tele(), plat(), tele_count, plat_count
         host_accum = host_accum - HOST_DT#
         host_ticks = host_ticks + 1
         steps = steps + 1
@@ -1172,7 +1266,11 @@ sub host_tick ( _
     nodes() as Node, _
     cp_x() as integer, _
     cp_y() as integer, _
-    cp_z() as integer _
+    cp_z() as integer, _
+    tele() as Teleporter, _
+    plat() as PlatEnt, _
+    byval tele_count as integer, _
+    byval plat_count as integer _
 )
 
     '' what the player asked for
@@ -1180,16 +1278,16 @@ sub host_tick ( _
 
     '' and what the world does about it: camera, and the physics under it
     v_update_camera dt, wld, env, pl, cam, cp, cp_x(), cp_y(), cp_z(), brush(), _
-                    mdl_buffer(), pln_buffer(), nds_buffer()
+                    models(), planes(), nodes()
 
     '' and anything the world does to the player as a result of moving
-    ent_check_teleport pl, env
+    ent_check_teleport pl, env, tele(), tele_count
 
     '' movers, after the player has moved and before anything is drawn
-    ent_move_plats dt, pl
+    ent_move_plats dt, pl, brush(), plat(), plat_count
 
     '' where each mover ended up, so the draw order can place it
-    ent_place_models wld.count.models, mdl_buffer(), nds_buffer(), pln_buffer()
+    ent_place_models wld.count.models, models(), nodes(), planes(), brush()
 
     '' map time, which drives every texture animation
     rdr.anim_time = rdr.anim_time + dt
@@ -1331,7 +1429,8 @@ sub host_bench_report ( _
     cp as CamPath, _
     ft as FrameTimes, _
     brush() as BrushModel, _
-    plat() as PlatEnt _
+    plat() as PlatEnt, _
+    byval plat_count as integer _
 )
     dim scs as CacheStats
     dim dv as long

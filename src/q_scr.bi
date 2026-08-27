@@ -41,7 +41,6 @@ type ScreenState
                                 '' is coarser than a frame.
 end type
 
-
 ''
 '' The benchmark flight path (tools/campath.py, A* over the map's EMPTY
 '' leaves -- water, slime and lava excluded). cp_n = 0 means no path.
@@ -132,7 +131,6 @@ type FrameTimes
 end type
 
 '' The path itself stays loose: arrays cannot be TYPE members.
-common shared /scr_s/ cp_x() as integer, cp_y() as integer, cp_z() as integer
 
 ''
 '' screen.bas. Declared here: these name ScreenState and friends.

@@ -76,7 +76,8 @@ declare sub sb_dump ( _
     tri_buffer() as Face, _
     tex_inf_buff() as TexInfo, _
     gv_buf() as integer, _
-    h_rawtx_dc() as long _
+    h_rawtx_dc() as long, _
+    mip_buff_inf() as MipTex _
 )
 declare sub sb_build ( _
     byval dc as long, _
@@ -1207,7 +1208,8 @@ sub sb_dump ( _
     tri_buffer() as Face, _
     tex_inf_buff() as TexInfo, _
     gv_buf() as integer, _
-    h_rawtx_dc() as long _
+    h_rawtx_dc() as long, _
+    mip_buff_inf() as MipTex _
 )
     dim mt as long
     dim o as long

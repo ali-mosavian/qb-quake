@@ -34,7 +34,10 @@ option explicit
 ''
 '' This module's own procedures.
 ''
-declare sub mod_link_anims ( wld as World )
+declare sub mod_link_anims ( _
+    wld as World, _
+    mip_buff_inf() as MipTex _
+)
 
 ''
 '' This module's own procedures.
@@ -42,12 +45,18 @@ declare sub mod_link_anims ( wld as World )
 declare sub mod_load_texinfo ( _
     wld as World, _
     env as Env, _
-    tex_info() as TexInfo _
+    tex_info() as TexInfo, _
+    h_textr_dc() as long, _
+    mip_buff_inf() as MipTex, _
+    h_rawtx_dc() as long _
 )
 declare sub mod_load_textures ( _
     wld as World, _
     env as Env, _
-    pal as long _
+    pal as long, _
+    h_textr_dc() as long, _
+    mip_buff_inf() as MipTex, _
+    h_rawtx_dc() as long _
 )
 
 ''
@@ -77,7 +86,10 @@ dim shared t_mip_inf( 1 ) as DiskMipTex
 sub mod_load_texinfo ( _
     wld as World, _
     env as Env, _
-    tex_info() as TexInfo _
+    tex_info() as TexInfo, _
+    h_textr_dc() as long, _
+    mip_buff_inf() as MipTex, _
+    h_rawtx_dc() as long _
 )
     scr_load_stage "texture info"
     ''
@@ -126,7 +138,10 @@ end sub
 sub mod_load_textures ( _
     wld as World, _
     env as Env, _
-    pal as long _
+    pal as long, _
+    h_textr_dc() as long, _
+    mip_buff_inf() as MipTex, _
+    h_rawtx_dc() as long _
 )
     dim i as integer, j as integer
     dim bmp_file as string
@@ -212,7 +227,7 @@ sub mod_load_textures ( _
         scr_load_part 1.0/wld.count.textures, ((i and 15) = 0)
     next i
 
-    mod_link_anims wld
+    mod_link_anims wld, mip_buff_inf()
 
 
     uglRestore
@@ -236,7 +251,10 @@ end sub
 ''       is how qbsp writes them. dm3ish has no animated textures at all, so
 ''       this is exercised only by maps that do.
 ''::::::::::
-sub mod_link_anims ( wld as World )
+sub mod_link_anims ( _
+    wld as World, _
+    mip_buff_inf() as MipTex _
+)
     dim i as integer, j as integer
     dim chain0 as integer, n as integer
     dim suffix as string
