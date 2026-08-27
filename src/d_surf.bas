@@ -1271,7 +1271,7 @@ sub sb_fetch ( byval face as integer )
         gn = GEOM_W - tri_buffer(face).geom_ofs
     end if
 
-    gp = uglMapEx&( geom_dc, tri_buffer(face).geom_row, GEOM_SLOT )
+    gp = geom_map&( tri_buffer(face).geom_row )
     dst = clng( varseg( gv_buf(0) ) ) * 65536& + _
           (clng( varptr( gv_buf(0) ) ) and 65535&)
     memCopy dst, gp + clng( tri_buffer(face).geom_ofs ), clng( gn )

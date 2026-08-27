@@ -463,8 +463,8 @@ sub r_mark_leaves ( byval nodenr as integer )
         
     '' memAlloc is paragraph-aligned, so the block's own offset is zero
     '' and v is the offset within it exactly as the lump stores it
-    v = v + (pvs_ptr and 65535&)
-    def seg = sb_seg%( pvs_ptr )
+    v = v + (pvs_base& and 65535&)
+    def seg = sb_seg%( pvs_base& )
     
     if ( lef_buffer( not nodenr ).vislist = -1 ) then
         for  i = 0 to wld.lef_count-1

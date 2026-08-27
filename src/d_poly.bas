@@ -202,7 +202,7 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
     dim lm_mip as integer, lm_floor as integer
     dim lm_sw as integer, lm_sh as integer
     dim lm_fw as integer, lm_fh as integer
-    dim z_want as integer, z_have as integer
+    dim z_want as integer, z_have as integer, z_avail as integer
     dim lm_cm as integer
     dim lm_dc as long, src_dc as long
     dim lm_su as single, lm_sv as single
@@ -213,6 +213,10 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
     '' -1 is no mode at all, so the first face always installs one rather
     '' than trusting whatever the previous frame or the overlay left set.
     z_have = -1
+
+    '' Asked once, not per face: whether a depth buffer exists cannot change
+    '' inside a frame.
+    z_avail = z_on%
     turbph = rdr.anim_time * TURB_RATE#
 
 
@@ -303,11 +307,7 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
             '' the mapped EMS window, and a fixed-size copy from a record
             '' near it would read off the page.
             ''
-            '' GEOM_SLOT is shared with the luxel atlas. Safe because the
-            '' record is copied out here and the atlas is not mapped until
-            '' sb_build, several hundred lines below.
-            ''
-            gp = uglMapEx&( geom_dc, tri_buffer(i).geom_row, GEOM_SLOT )
+            gp = geom_map&( tri_buffer(i).geom_row )
             gn = GEOM_MAXREC
             if ( tri_buffer(i).geom_ofs + gn > GEOM_W ) then
                 gn = GEOM_W - tri_buffer(i).geom_ofs
@@ -335,7 +335,7 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
             '' large runs from the same model, so this is a handful of
             '' calls a frame rather than one per face.
             ''
-            if ( z_dc <> 0 ) then
+            if ( z_avail <> 0 ) then
                 if ( face_mdl(i) = 0 ) then
                     z_want = UGL.Z.WRITE%
                 else
