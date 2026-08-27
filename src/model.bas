@@ -181,7 +181,6 @@ sub mod_alloc
     redim tri_buffer(0) as face2
 
     '' ONE element; uglArrNew1D takes it over in mod_load_leafs
-    redim lef_buffer(0) as leaf2
     redim pln_buffer(pln_count-1) as plane2
     '' ONE element. uglArrNew1D takes the descriptor over in
     '' mod_load_nodes and the tree lives in EMS -- see q_map.bi.
@@ -402,44 +401,11 @@ end sub
 '' name: mod_load_leafs
 ''::::::::::
 sub mod_load_leafs
-    dim f as FILE
-    dim mapped as long
-
     scr_load_stage "bsp leaves"
 
-    '' MEM first: the far heap is the fragmented pool, and taking a 34K
-    '' array out of it leaves a larger contiguous hole behind even when the
-    '' total free does not change.
-    h_lef = uglArrNew&( UGL.MEM, len( lef_buffer(0) ), wld.lef_count, 0 )
-    if ( h_lef = 0 ) then
-        h_lef = uglArrNew&( UGL.EMS, len( lef_buffer(0) ), wld.lef_count, CLIP_SLOT )
-    end if
-    if ( h_lef = 0 ) then sys_error "0x0036, no room for the leaves"
-
-    '' Hands the descriptor over. NOT ceremony: this is what takes
-    '' it out of the far heap's chain, and only BASIC can do that
-    '' correctly. Left in, B$FHCompact walks into a descriptor
-    '' aimed at memory it does not own and moves it -- the far
-    '' heap is then corrupt. The variable still exists afterwards,
-    '' which is what uglArrMap binds to.
-    erase lef_buffer
-
-
-    if ( fileOpen%( f, "leaves.pag", F4READ ) = 0 ) then
-        sys_error "0x0037, leaves.pag missing"
-    end if
-    if ( uglArrLoad%( f, h_lef ) = 0 ) then
-        fileClose f
-        sys_error "0x0038, leaves.pag short or unreadable"
-    end if
-    fileClose f
-
-    ''
-    '' ONE map, for the whole array. A MEM store is flat, so this points
-    '' the descriptor at the entire block and every subscript works from
-    '' here on with no further calls.
-    ''
-    mapped = uglArrMap&( h_lef, lef_buffer(), 0 )
+    '' r_bsp owns the leaves -- it is the heaviest reader and the only one
+    '' that needs the array itself. All the loader passes is the count.
+    rb_load_leaves wld.lef_count
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     scr_load_tick

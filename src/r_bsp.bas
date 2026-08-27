@@ -38,6 +38,8 @@ option explicit
 '' model.bas allocated and BLOADed them, which is a load-time write, not
 '' a share -- so the loader hands over the sizes and r_bsp does the rest.
 ''
+dim shared lef_buffer() as leaf2
+dim shared h_lef as long
 dim shared lfc_buffer() as integer
 dim shared pvs_buffer_b() as integer
 
@@ -561,3 +563,61 @@ end sub
 sub rb_alloc_pvs ( byval nleafs as long )
     redim pvs_buffer_b( nleafs-1 ) as integer
 end sub
+
+''::::::::::
+'' name: rb_load_leaves
+'' desc: Builds the leaf store and binds it. The loader passes the count
+''       and nothing else -- where the leaves live is this module's.
+''::::::::::
+sub rb_load_leaves ( byval cnt as long )
+    dim f as FILE
+    dim mapped as long
+
+    redim lef_buffer(0) as leaf2
+
+    '' MEM first: the far heap is the fragmented pool, and taking a 34K
+    '' array out of it leaves a larger contiguous hole behind even when the
+    '' total free does not change.
+    ''
+    '' CLIP_SLOT for the EMS fallback is the name the original used. It is
+    '' 2, the same page as GEOM_SLOT, NODE_SLOT and LM_SLOT -- four names
+    '' for one slot, which is its own commit.
+    h_lef = uglArrNew&( UGL.MEM, len( lef_buffer(0) ), cnt, 0 )
+    if ( h_lef = 0 ) then
+        h_lef = uglArrNew&( UGL.EMS, len( lef_buffer(0) ), cnt, CLIP_SLOT )
+    end if
+    if ( h_lef = 0 ) then sys_error "0x0036, no room for the leaves"
+
+    '' Hands the descriptor over. NOT ceremony: this is what takes it out
+    '' of the far heap's chain, and only BASIC can do that correctly. Left
+    '' in, B$FHCompact walks into a descriptor aimed at memory it does not
+    '' own and moves it -- the far heap is then corrupt. The variable still
+    '' exists afterwards, which is what uglArrMap binds to.
+    erase lef_buffer
+
+    if ( fileOpen%( f, "leaves.pag", F4READ ) = 0 ) then
+        sys_error "0x0037, leaves.pag missing"
+    end if
+    if ( uglArrLoad%( f, h_lef ) = 0 ) then
+        fileClose f
+        sys_error "0x0038, leaves.pag short or unreadable"
+    end if
+    fileClose f
+
+    ''
+    '' ONE map, for the whole array. A MEM store is flat, so this points
+    '' the descriptor at the entire block and every subscript works from
+    '' here on with no further calls.
+    ''
+    mapped = uglArrMap&( h_lef, lef_buffer(), 0 )
+end sub
+
+''::::::::::
+'' name: rb_leaf_contents
+'' desc: The contents field of one leaf. pl_move's point test walks the
+''       node tree itself and needs exactly this at the end of it, which
+''       is not reason enough for the whole array to be shared.
+''::::::::::
+function rb_leaf_contents% ( byval leafnr as integer )
+    rb_leaf_contents% = lef_buffer( leafnr ).cont
+end function
