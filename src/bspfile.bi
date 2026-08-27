@@ -418,6 +418,8 @@ declare sub in_handle_toggles ( )
 ''
 '' pl_move.bas -- player physics
 ''
+declare sub pl_load_hulls ( byval cnt as long )
+declare function pl_hull_rec% ( )
 declare function pl_hull_contents ( byval node as integer, p as vec3 ) as integer
 declare function pl_hull_check ( byval node as integer, byval p1f as single, _
                                  byval p2f as single, p1 as vec3, p2 as vec3 ) as integer

@@ -154,9 +154,6 @@ sub mod_alloc
     redim pvs_buffer_b( wld.lef_count-1 ) as integer
     redim poly_flag( wld.tri_count-1 ) as integer
     redim tex_inf_buff(wld.texi_count-1) as texinfo2
-    '' ONE element -- uglArrNew1D takes the descriptor over in
-    '' mod_load_clipnodes. See q_map.bi.
-    redim clp_buffer(0) as clipnode
 
 end sub
 
@@ -531,53 +528,12 @@ end sub
 ''       first cleanup commit of this refactor.
 ''::::::::::
 sub mod_load_clipnodes
-    dim f as FILE
-    dim mapped as long
-
     scr_load_stage "clip hulls"
 
-    ''
-    '' MEM, not EMS. These hulls are walked several times a frame by
-    '' pl_move, and EMS costs an INT 67h per access where MEM costs a
-    '' segment calculation -- the same difference that made the EMS-backed
-    '' node tree unusable. Hot data does not go in EMS.
-    ''
-    '' EMS would show a better FRE at this mark, but the number is
-    '' misleading: FRE(-1) is the LARGEST FREE BLOCK, and what taking a
-    '' large array out of the far heap really buys is a bigger contiguous
-    '' hole for the allocations that come after. The far heap is the
-    '' fragmented pool; DOS memory is not.
-    ''
-    h_clp = uglArrNew&( UGL.MEM, len( clp_buffer(0) ), wld.clp_count, 0 )
-    if ( h_clp = 0 ) then
-        h_clp = uglArrNew&( UGL.EMS, len( clp_buffer(0) ), wld.clp_count, CLIP_SLOT )
-    end if
-    if ( h_clp = 0 ) then sys_error "0x0033, no room for the clip hulls"
-
-    '' Hands the descriptor over. NOT ceremony: this is what takes
-    '' it out of the far heap's chain, and only BASIC can do that
-    '' correctly. Left in, B$FHCompact walks into a descriptor
-    '' aimed at memory it does not own and moves it -- the far
-    '' heap is then corrupt. The variable still exists afterwards,
-    '' which is what uglArrMap binds to.
-    erase clp_buffer
-
-
-    if ( fileOpen%( f, "clip.pag", F4READ ) = 0 ) then
-        sys_error "0x0034, clip.pag missing"
-    end if
-    if ( uglArrLoad%( f, h_clp ) = 0 ) then
-        fileClose f
-        sys_error "0x0035, clip.pag short or unreadable"
-    end if
-    fileClose f
-
-    ''
-    '' ONE map, for the whole array. A MEM store is flat, so this points
-    '' the descriptor at the entire block and every subscript works from
-    '' here on with no further calls.
-    ''
-    mapped = uglArrMap&( h_clp, clp_buffer(), 0 )
+    '' pl_move owns the hulls -- it is the only reader -- so it makes the
+    '' store and binds its own array. All the loader still knows is how
+    '' many there are.
+    pl_load_hulls wld.clp_count
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     scr_load_tick
