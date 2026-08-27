@@ -186,10 +186,12 @@ common shared /map_a/ lm_atlas as long, lm_size as long, lm_read as long
 '' answer changes every time a buffer moves in or out of EMS, and
 '' reasoning about it from struct sizes gets the answer wrong.
 ''
+'' The marks themselves live in sys.bas -- it is the only writer, and the
+'' only other module that wants them is main.bas, which reads them back
+'' through sys_mem_count/tag/val/fre to format its two reports. Keeping the
+'' formatting there and the storage here is the split that matters; a shared
+'' array was never needed for it.
 const MEM_MARKS = 20
-common shared /map_a/ mem_val() as long, mem_tag() as string * 12
-common shared /map_a/ mem_fre() as long
-common shared /map_a/ mem_n as integer
 
 common shared /map_a/ z_dc as long
 ''

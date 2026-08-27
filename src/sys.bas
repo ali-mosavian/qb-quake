@@ -34,6 +34,16 @@ option explicit
 '' use TIMER instead.
 ''
 '$static
+''
+'' THE MEMORY TRACE. Owned here: sys_mem_mark is the only writer, and
+'' main.bas reads it back through the four accessors below rather than
+'' indexing the arrays itself. See MEM_MARKS in q_map.bi.
+''
+dim shared mem_val() as long
+dim shared mem_fre() as long
+dim shared mem_tag() as string * 12
+dim shared mem_n as integer
+
 dim shared frame_tmr as TMR
 dim shared last_tick as long
 dim shared timing_on as integer
@@ -365,3 +375,37 @@ sub sys_mem_mark ( tag as string )
                " " + ltrim$(str$( mem_fre( mem_n-1 ) ))
     close #mf
 end sub
+
+
+''::::::::::
+'' name: sys_mem_count
+'' desc: How many marks have been taken.
+''::::::::::
+function sys_mem_count% ()
+    sys_mem_count% = mem_n
+end function
+
+''::::::::::
+'' name: sys_mem_tag
+'' desc: The label of mark i, trailing blanks trimmed.
+''::::::::::
+function sys_mem_tag$ ( byval i as integer )
+    sys_mem_tag$ = rtrim$( mem_tag( i ) )
+end function
+
+''::::::::::
+'' name: sys_mem_val
+'' desc: memAvail at mark i -- the largest free DOS block.
+''::::::::::
+function sys_mem_val& ( byval i as integer )
+    sys_mem_val& = mem_val( i )
+end function
+
+''::::::::::
+'' name: sys_mem_fre
+'' desc: FRE(-1) at mark i -- the largest free block in BASIC's far heap,
+''       which is the fragmented pool and so the one that fails first.
+''::::::::::
+function sys_mem_fre& ( byval i as integer )
+    sys_mem_fre& = mem_fre( i )
+end function
