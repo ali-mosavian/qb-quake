@@ -381,24 +381,24 @@ end sub
 '' name: sys_mem_count
 '' desc: How many marks have been taken.
 ''::::::::::
-function sys_mem_count% ()
-    sys_mem_count% = mem_n
+function sys_mem_count () as integer
+    sys_mem_count = mem_n
 end function
 
 ''::::::::::
 '' name: sys_mem_tag
 '' desc: The label of mark i, trailing blanks trimmed.
 ''::::::::::
-function sys_mem_tag$ ( byval i as integer )
-    sys_mem_tag$ = rtrim$( mem_tag( i ) )
+function sys_mem_tag ( byval i as integer ) as string
+    sys_mem_tag = rtrim$( mem_tag( i ) )
 end function
 
 ''::::::::::
 '' name: sys_mem_val
 '' desc: memAvail at mark i -- the largest free DOS block.
 ''::::::::::
-function sys_mem_val& ( byval i as integer )
-    sys_mem_val& = mem_val( i )
+function sys_mem_val ( byval i as integer ) as long
+    sys_mem_val = mem_val( i )
 end function
 
 ''::::::::::
@@ -406,6 +406,6 @@ end function
 '' desc: FRE(-1) at mark i -- the largest free block in BASIC's far heap,
 ''       which is the fragmented pool and so the one that fails first.
 ''::::::::::
-function sys_mem_fre& ( byval i as integer )
-    sys_mem_fre& = mem_fre( i )
+function sys_mem_fre ( byval i as integer ) as long
+    sys_mem_fre = mem_fre( i )
 end function

@@ -33,6 +33,24 @@ is not a reason; measure it the way that number was measured.
 carrying a `2` or a `b` suffix means the distinction it is drawing was never
 given a word.
 
+**Quake-style subsystem prefix on every procedure.** `pl_move.bas` is the
+model: `pl_trace`, `pl_gravity`, `pl_hull_check`. The prefix names the
+subsystem, not the file -- `d_surf.bas` carries both `sc_` (the cache) and
+`sb_` (surface building), which is correct because they are two subsystems.
+An unprefixed name like `point_side_of_node` does not say whose it is;
+`r_node_side` does.
+
+**No type sigils. Declare the type.**
+
+    function r_plane_dist ( pt as u3dVector3f, pl as plane2 ) as single
+
+not `r_plane_dist!`. Same for parameters and locals: `as integer`,
+`as long`, `as single`. `DEFINT`-style suffixes scattered through a
+signature are the reader's problem, and `%`/`&`/`!`/`#`/`$` do not survive
+being read aloud. The one exception is calling into uGL, whose own headers
+still declare `uglMapEx&` -- the sigil there is the library's spelling of
+the name, not ours.
+
 **A procedure does what its name says, on what it is given.** If it is
 called `classify_point` it takes a point -- not a camera it reaches into for
 one. And the name has to answer "against what?": `point_side_of_plane` says

@@ -202,7 +202,7 @@ dim shared sc_desc() as long
 ''       page. The renderer takes the coarser of this and its own
 ''       distance-based choice.
 ''::::::::::
-function sc_mipfloor% ( byval extw as integer, byval exth as integer )
+function sc_mipfloor ( byval extw as integer, byval exth as integer ) as integer
     dim m as integer
     dim w as integer, h as integer
 
@@ -211,12 +211,12 @@ function sc_mipfloor% ( byval extw as integer, byval exth as integer )
         h = exth \ (2 ^ m)
         if ( w < 1 ) then w = 1
         if ( h < 1 ) then h = 1
-        if ( sc_shift%(w) + sc_shift%(h) <= SC_MAXSUM ) then
-            sc_mipfloor% = m
+        if ( sc_shift(w) + sc_shift(h) <= SC_MAXSUM ) then
+            sc_mipfloor = m
             exit function
         end if
     next m
-    sc_mipfloor% = 3
+    sc_mipfloor = 3
 end function
 
 ''::::::::::
@@ -224,7 +224,7 @@ end function
 '' desc: Smallest power-of-two shift that covers v, clamped to the classes
 ''       the filler can address.
 ''::::::::::
-function sc_shift% ( byval v as integer )
+function sc_shift ( byval v as integer ) as integer
     dim s as integer
     dim p as integer
 
@@ -234,7 +234,7 @@ function sc_shift% ( byval v as integer )
         p = p * 2
         s = s + 1
     wend
-    sc_shift% = s
+    sc_shift = s
 end function
 
 ''::::::::::
@@ -243,21 +243,21 @@ end function
 ''       become one), a split produces one, so the count churns and must
 ''       not just walk sc_bcnt upward forever.
 ''::::::::::
-function sc_brec% ( )
+function sc_brec ( ) as integer
     dim b as integer
 
     if ( sc_rfree >= 0 ) then
         b = sc_rfree
         sc_rfree = sc_bnext(b)
-        sc_brec% = b
+        sc_brec = b
         exit function
     end if
     if ( sc_bcnt < SC_NBLK ) then
-        sc_brec% = sc_bcnt
+        sc_brec = sc_bcnt
         sc_bcnt = sc_bcnt + 1
         exit function
     end if
-    sc_brec% = -1
+    sc_brec = -1
 end function
 
 sub sc_bput ( byval b as integer )
@@ -278,15 +278,15 @@ sub sc_fpush ( byval b as integer )
     sc_fhead( sc_bord(b) ) = b
 end sub
 
-function sc_fpop% ( byval ord as integer )
+function sc_fpop ( byval ord as integer ) as integer
     dim b as integer
 
     b = sc_fhead(ord)
     if ( b >= 0 ) then sc_fhead(ord) = sc_bnext(b)
-    sc_fpop% = b
+    sc_fpop = b
 end function
 
-function sc_ftake% ( byval ord as integer, byval gran as integer )
+function sc_ftake ( byval ord as integer, byval gran as integer ) as integer
     dim b as integer, p as integer
 
     b = sc_fhead(ord)
@@ -294,13 +294,13 @@ function sc_ftake% ( byval ord as integer, byval gran as integer )
     while ( b >= 0 )
         if ( sc_bgrn(b) = gran ) then
             if ( p >= 0 ) then sc_bnext(p) = sc_bnext(b) else sc_fhead(ord) = sc_bnext(b)
-            sc_ftake% = b
+            sc_ftake = b
             exit function
         end if
         p = b
         b = sc_bnext(b)
     wend
-    sc_ftake% = -1
+    sc_ftake = -1
 end function
 
 ''::::::::::
@@ -325,7 +325,7 @@ sub sc_bfree ( byval blk as integer )
     '' WHILE/WEND has no EXIT in this dialect, hence the flag
     while ( more and ord < SC_NORD - 1 )
         g = sc_bgrn(b) xor cint( 2 ^ ord )
-        bud = sc_ftake%( ord, g )
+        bud = sc_ftake( ord, g )
         if ( bud < 0 ) then
             more = 0
         else
@@ -350,17 +350,17 @@ end sub
 ''       repeatedly. -1 if nothing larger is free. The upper half of each
 ''       split goes on its own free list, so nothing is lost.
 ''::::::::::
-function sc_bsplit% ( byval ord as integer )
+function sc_bsplit ( byval ord as integer ) as integer
     dim j as integer, b as integer, h as integer
 
     for j = ord + 1 to SC_NORD - 1
-        b = sc_fpop%( j )
+        b = sc_fpop( j )
         if ( b >= 0 ) then
             while ( sc_bord(b) > ord )
-                h = sc_brec%
+                h = sc_brec
                 if ( h < 0 ) then          '' no record to hold the half
                     sc_fpush b
-                    sc_bsplit% = -1
+                    sc_bsplit = -1
                     exit function
                 end if
                 sc_bord(b) = sc_bord(b) - 1
@@ -369,11 +369,11 @@ function sc_bsplit% ( byval ord as integer )
                 sc_bprev(h) = -1
                 sc_fpush h
             wend
-            sc_bsplit% = b
+            sc_bsplit = b
             exit function
         end if
     next j
-    sc_bsplit% = -1
+    sc_bsplit = -1
 end function
 
 ''::::::::::
@@ -384,17 +384,17 @@ end function
 ''       would read garbage past the seam. Every size here is a power of two
 ''       that divides the page, so aligning to it is enough. -1 when full.
 ''::::::::::
-function sc_grab& ( byval sz as long )
+function sc_grab ( byval sz as long ) as long
     dim o as long
 
     o = sc_next
     if ( (o mod sz) <> 0 ) then o = o + (sz - (o mod sz))
     if ( o + sz > sc_cap ) then
-        sc_grab& = -1
+        sc_grab = -1
         exit function
     end if
     sc_next = o + sz
-    sc_grab& = o
+    sc_grab = o
 end function
 
 ''::::::::::
@@ -519,9 +519,9 @@ end sub
 '' desc: Claims the store DC, on first use. Deliberately not in sc_init --
 ''       see the note there.
 ''::::::::::
-function sc_store_open% ( )
+function sc_store_open ( ) as integer
     if ( sc_hnd <> 0 ) then
-        sc_store_open% = -1
+        sc_store_open = -1
         exit function
     end if
     ''
@@ -533,12 +533,12 @@ function sc_store_open% ( )
     sc_hnd = uglNew&( UGL.EMS, UGL.8BIT, SC_PGBYTES, SC_PAGES )
     if ( sc_hnd = 0 ) then
         sc_cap = 0
-        sc_store_open% = 0
+        sc_store_open = 0
         exit function
     end if
     sc_cap = SC_STORE#
     sc_next = 0
-    sc_store_open% = -1
+    sc_store_open = -1
 end function
 
 ''::::::::::
@@ -575,21 +575,21 @@ end sub
 '' desc: The DC holding this face's surface, or 0 if it has to be built.
 ''       A mip other than the cached one counts as a miss.
 ''::::::::::
-function sc_find& ( byval face as integer, byval mip as integer, _
+function sc_find ( byval face as integer, byval mip as integer, _
                     byval w as integer, byval h as integer )
     dim dc as long
     dim a as integer, b as integer, vcls as integer
 
     if ( sc_ok = 0 ) then
-        sc_find& = 0
+        sc_find = 0
         exit function
     end if
     if ( sc_slot(face).blk < 0 ) then
-        sc_find& = 0
+        sc_find = 0
         exit function
     end if
     if ( sc_slot(face).tag <> sc_gen * 4 + mip ) then
-        sc_find& = 0
+        sc_find = 0
         exit function
     end if
     ''
@@ -598,10 +598,10 @@ function sc_find& ( byval face as integer, byval mip as integer, _
     '' uses less of it. Aiming a smaller view at a larger block's offset is
     '' safe -- the bigger alignment implies the smaller one.
     ''
-    a = sc_shift%( w )
-    b = sc_shift%( h )
+    a = sc_shift( w )
+    b = sc_shift( h )
     if ( a + b > SC_MAXSUM ) then
-        sc_find& = 0
+        sc_find = 0
         exit function
     end if
     vcls = (a - SC_MINSH) * 5 + (b - SC_MINSH)
@@ -613,7 +613,7 @@ function sc_find& ( byval face as integer, byval mip as integer, _
         sc_hits = sc_hits + 1
         sc_lru_touch sc_slot(face).blk  '' a hit is a use -- the whole point
     end if
-    sc_find& = dc
+    sc_find = dc
 end function
 
 ''::::::::::
@@ -621,7 +621,7 @@ end function
 '' desc: A DC big enough for w by h, remembered against the face. Returns 0
 ''       if the surface is larger than the filler can address or EMS is out.
 ''::::::::::
-function sc_alloc& ( byval face as integer, byval mip as integer, _
+function sc_alloc ( byval face as integer, byval mip as integer, _
                      byval w as integer, byval h as integer, _
                      byval fw as integer, byval fh as integer )
     dim a as integer, b as integer, cidx as integer, bord as integer
@@ -631,22 +631,22 @@ function sc_alloc& ( byval face as integer, byval mip as integer, _
     dim ofs as long, sz as long
 
     if ( sc_ok = 0 or w <= 0 or h <= 0 ) then
-        sc_alloc& = 0
+        sc_alloc = 0
         exit function
     end if
     if ( sc_hnd = 0 ) then
-        if ( sc_store_open% = 0 ) then
+        if ( sc_store_open = 0 ) then
             sc_ok = 0                   '' no store, no cache
-            sc_alloc& = 0
+            sc_alloc = 0
             exit function
         end if
     end if
 
-    a = sc_shift%( w )
-    b = sc_shift%( h )
+    a = sc_shift( w )
+    b = sc_shift( h )
     if ( a + b > SC_MAXSUM ) then   '' past one EMS page, and rdAccess maps
                                     '' only one, so the rest would be garbage
-        sc_alloc& = 0
+        sc_alloc = 0
         exit function
     end if
     cidx = (a - SC_MINSH) * 5 + (b - SC_MINSH)
@@ -659,7 +659,7 @@ function sc_alloc& ( byval face as integer, byval mip as integer, _
     if ( sc_desc(cidx) = 0 ) then
         dc = uglNewView&( sc_hnd, 0, 2 ^ a, 2 ^ b )
         if ( dc = 0 ) then
-            sc_alloc& = 0
+            sc_alloc = 0
             exit function
         end if
         sc_desc(cidx) = dc
@@ -704,8 +704,8 @@ function sc_alloc& ( byval face as integer, byval mip as integer, _
         '' Five ways to get a block, cheapest first. Only the last is an
         '' eviction, and only the very last gives up.
         ''
-        blk = sc_fpop%( bord )                  '' 1. already free, right size
-        if ( blk < 0 ) then blk = sc_bsplit%( bord )   '' 2. halve a bigger free one
+        blk = sc_fpop( bord )                  '' 1. already free, right size
+        if ( blk < 0 ) then blk = sc_bsplit( bord )   '' 2. halve a bigger free one
         if ( blk < 0 ) then                     '' 3. fresh store
             ''
             '' Splitting comes BEFORE growing on purpose. The store is the
@@ -714,9 +714,9 @@ function sc_alloc& ( byval face as integer, byval mip as integer, _
             '' surfaces; taking virgin store first would leave the free
             '' pool untouched until the store was exhausted.
             ''
-            blk = sc_brec%
+            blk = sc_brec
             if ( blk >= 0 ) then
-                ofs = sc_grab&( sz )
+                ofs = sc_grab( sz )
                 if ( ofs < 0 ) then
                     sc_bput blk
                     blk = -1
@@ -758,7 +758,7 @@ function sc_alloc& ( byval face as integer, byval mip as integer, _
                     end if
                     sc_lru_unlink vic
                     sc_bfree vic
-                    blk = sc_bsplit%( bord )
+                    blk = sc_bsplit( bord )
                     if ( blk >= 0 ) then exit for
                 end if
             next j
@@ -766,7 +766,7 @@ function sc_alloc& ( byval face as integer, byval mip as integer, _
         if ( blk < 0 ) then
             '' the backstop, and it should now be unreachable
             sc_flush
-            sc_alloc& = 0
+            sc_alloc = 0
             exit function
         end if
 
@@ -785,11 +785,11 @@ function sc_alloc& ( byval face as integer, byval mip as integer, _
 
     '' aim it at the bytes just claimed, ready for the builder to write
     if ( uglSetView%( dc, ofs ) = 0 ) then
-        sc_alloc& = 0
+        sc_alloc = 0
         exit function
     end if
 
-    sc_alloc& = dc
+    sc_alloc = dc
 end function
 
 ''::::::::::
@@ -840,7 +840,7 @@ end sub
 ''       faces get distinct surfaces, a flush retires every slot, and bytes
 ''       written to a cached DC read back.
 ''::::::::::
-function sc_selftest% ( )
+function sc_selftest ( ) as integer
     dim d0 as long, d1 as long, d2 as long
     dim i as integer, gen0 as integer, made0 as integer
     dim wr(31) as integer, rd(31) as integer
@@ -848,38 +848,38 @@ function sc_selftest% ( )
     dim fp as long
 
     if ( sc_ok = 0 ) then
-        sc_selftest% = -1
+        sc_selftest = -1
         exit function
     end if
 
     sc_reset
 
     '' 224 rounds to 256, 112 to 128, 20 to 32
-    if ( sc_shift%( 224 ) <> 8 ) then sc_selftest% = -2 : exit function
-    if ( sc_shift%( 112 ) <> 7 ) then sc_selftest% = -3 : exit function
-    if ( sc_shift%( 20 ) <> 5 ) then sc_selftest% = -4 : exit function
-    if ( sc_shift%( 16 ) <> 4 ) then sc_selftest% = -5 : exit function
+    if ( sc_shift( 224 ) <> 8 ) then sc_selftest = -2 : exit function
+    if ( sc_shift( 112 ) <> 7 ) then sc_selftest = -3 : exit function
+    if ( sc_shift( 20 ) <> 5 ) then sc_selftest = -4 : exit function
+    if ( sc_shift( 16 ) <> 4 ) then sc_selftest = -5 : exit function
 
     '' 224x224 pads to 256x256 = 64K, four pages: it must be refused
-    if ( sc_alloc&( 9, 0, 224, 224, 224, 224 ) <> 0 ) then sc_selftest% = -6 : exit function
+    if ( sc_alloc( 9, 0, 224, 224, 224, 224 ) <> 0 ) then sc_selftest = -6 : exit function
     '' 112x112 pads to 128x128 = 16,384, exactly one page: it must not be
-    d0 = sc_alloc&( 0, 0, 112, 112, 112, 112 )
-    d1 = sc_alloc&( 1, 0, 112, 96, 112, 96 )
-    if ( d0 = 0 ) then sc_selftest% = -7 : exit function
-    if ( d1 = 0 ) then sc_selftest% = -8 : exit function
+    d0 = sc_alloc( 0, 0, 112, 112, 112, 112 )
+    d1 = sc_alloc( 1, 0, 112, 96, 112, 96 )
+    if ( d0 = 0 ) then sc_selftest = -7 : exit function
+    if ( d1 = 0 ) then sc_selftest = -8 : exit function
     '' both round to 128x128, so they share a view and differ only in where
     '' it points -- the whole point of the store
-    if ( d0 <> d1 ) then sc_selftest% = -18 : exit function
-    if ( sc_slot(0).blk = sc_slot(1).blk ) then sc_selftest% = -21 : exit function
-    if ( sc_hnd = 0 ) then sc_selftest% = -22 : exit function
+    if ( d0 <> d1 ) then sc_selftest = -18 : exit function
+    if ( sc_slot(0).blk = sc_slot(1).blk ) then sc_selftest = -21 : exit function
+    if ( sc_hnd = 0 ) then sc_selftest = -22 : exit function
 
     '' and the floor it implies: 224 needs mip 1, 112 does not
-    if ( sc_mipfloor%( 224, 224 ) <> 1 ) then sc_selftest% = -19 : exit function
-    if ( sc_mipfloor%( 112, 112 ) <> 0 ) then sc_selftest% = -20 : exit function
+    if ( sc_mipfloor( 224, 224 ) <> 1 ) then sc_selftest = -19 : exit function
+    if ( sc_mipfloor( 112, 112 ) <> 0 ) then sc_selftest = -20 : exit function
 
-    if ( sc_find&( 0, 0, 112, 112 ) <> d0 ) then sc_selftest% = -9 : exit function
-    if ( sc_find&( 1, 0, 112, 96 ) <> d1 ) then sc_selftest% = -10 : exit function
-    if ( sc_find&( 1, 1, 112, 96 ) <> 0 ) then sc_selftest% = -11 : exit function
+    if ( sc_find( 0, 0, 112, 112 ) <> d0 ) then sc_selftest = -9 : exit function
+    if ( sc_find( 1, 0, 112, 96 ) <> d1 ) then sc_selftest = -10 : exit function
+    if ( sc_find( 1, 1, 112, 96 ) <> 0 ) then sc_selftest = -11 : exit function
 
     '' a write into the last row of the largest class, the 16K page edge
     for i = 0 to 31
@@ -891,22 +891,22 @@ function sc_selftest% ( )
     uglRowRead d0, 0, 127, 32, UGL.8BIT, fp
     '' 32 pixels is 32 bytes, the first 16 of a 2-byte-per-element array
     for i = 0 to 15
-        if ( rd(i) <> wr(i) ) then sc_selftest% = -12 : exit function
+        if ( rd(i) <> wr(i) ) then sc_selftest = -12 : exit function
     next i
 
     '' a flush must retire the slots and hand the DCs back, not make more
     gen0 = sc_gen
     made0 = sc_made
     sc_flush
-    if ( sc_gen = gen0 ) then sc_selftest% = -13 : exit function
-    if ( sc_find&( 0, 0, 112, 112 ) <> 0 ) then sc_selftest% = -14 : exit function
+    if ( sc_gen = gen0 ) then sc_selftest = -13 : exit function
+    if ( sc_find( 0, 0, 112, 112 ) <> 0 ) then sc_selftest = -14 : exit function
 
     '' a flush rewinds the store and makes no new view
-    d2 = sc_alloc&( 5, 0, 112, 112, 112, 112 )
-    if ( d2 <> d0 ) then sc_selftest% = -15 : exit function
-    if ( sc_made <> made0 ) then sc_selftest% = -16 : exit function
-    if ( sc_slot(5).blk < 0 ) then sc_selftest% = -23 : exit function
-    if ( sc_bgrn( sc_slot(5).blk ) <> 0 ) then sc_selftest% = -33 : exit function
+    d2 = sc_alloc( 5, 0, 112, 112, 112, 112 )
+    if ( d2 <> d0 ) then sc_selftest = -15 : exit function
+    if ( sc_made <> made0 ) then sc_selftest = -16 : exit function
+    if ( sc_slot(5).blk < 0 ) then sc_selftest = -23 : exit function
+    if ( sc_bgrn( sc_slot(5).blk ) <> 0 ) then sc_selftest = -33 : exit function
 
     ''
     '' ---- the LRU itself ---------------------------------------------
@@ -919,34 +919,34 @@ function sc_selftest% ( )
     sc_reset
 
     '' fill one class: three faces, three distinct blocks
-    d0 = sc_alloc&( 0, 0, 112, 112, 112, 112 )
-    d1 = sc_alloc&( 1, 0, 112, 112, 112, 112 )
-    d2 = sc_alloc&( 2, 0, 112, 112, 112, 112 )
-    if ( d0 = 0 or d1 = 0 or d2 = 0 ) then sc_selftest% = -24 : exit function
+    d0 = sc_alloc( 0, 0, 112, 112, 112, 112 )
+    d1 = sc_alloc( 1, 0, 112, 112, 112, 112 )
+    d2 = sc_alloc( 2, 0, 112, 112, 112, 112 )
+    if ( d0 = 0 or d1 = 0 or d2 = 0 ) then sc_selftest = -24 : exit function
     '' PROBE: three allocations should be three new blocks. Separate codes --
     '' a single packed number turned out to have two valid decodes.
-    if ( sc_bcnt <> 3 ) then sc_selftest% = -(2000 + sc_bcnt) : exit function
-    if ( sc_slot(0).blk < 0 ) then sc_selftest% = -2999 : exit function
-    if ( sc_slot(0).blk = sc_slot(1).blk ) then sc_selftest% = -25 : exit function
-    if ( sc_slot(1).blk = sc_slot(2).blk ) then sc_selftest% = -26 : exit function
+    if ( sc_bcnt <> 3 ) then sc_selftest = -(2000 + sc_bcnt) : exit function
+    if ( sc_slot(0).blk < 0 ) then sc_selftest = -2999 : exit function
+    if ( sc_slot(0).blk = sc_slot(1).blk ) then sc_selftest = -25 : exit function
+    if ( sc_slot(1).blk = sc_slot(2).blk ) then sc_selftest = -26 : exit function
 
     '' face 0 is the oldest, so touching it must make face 1 the victim
-    if ( sc_find&( 0, 0, 112, 112 ) = 0 ) then sc_selftest% = -27 : exit function
-    if ( sc_lhead( sc_slot(0).cls ) < 0 ) then sc_selftest% = -28 : exit function
+    if ( sc_find( 0, 0, 112, 112 ) = 0 ) then sc_selftest = -27 : exit function
+    if ( sc_lhead( sc_slot(0).cls ) < 0 ) then sc_selftest = -28 : exit function
     if ( sc_bown( sc_lhead( sc_slot(0).cls ) ) <> 1 ) then _
-        sc_selftest% = -(4000 + sc_bown( sc_lhead( sc_slot(0).cls ) )) : exit function
+        sc_selftest = -(4000 + sc_bown( sc_lhead( sc_slot(0).cls ) )) : exit function
 
     '' rebuilding the SAME face at a new mip must reuse its own block, not
     '' take a second one -- this is the leak the old allocator had
     ofs0 = clng( sc_slot(0).blk )
     live0 = sc_live
     flush0 = sc_flushes
-    if ( sc_alloc&( 0, 1, 56, 56, 112, 112 ) = 0 ) then sc_selftest% = -29 : exit function
-    if ( clng( sc_slot(0).blk ) <> ofs0 ) then sc_selftest% = -30 : exit function
-    if ( sc_live <> live0 ) then sc_selftest% = -31 : exit function
+    if ( sc_alloc( 0, 1, 56, 56, 112, 112 ) = 0 ) then sc_selftest = -29 : exit function
+    if ( clng( sc_slot(0).blk ) <> ofs0 ) then sc_selftest = -30 : exit function
+    if ( sc_live <> live0 ) then sc_selftest = -31 : exit function
 
     '' and a mip change must not have cost a flush
-    if ( sc_flushes <> flush0 ) then sc_selftest% = -32 : exit function
+    if ( sc_flushes <> flush0 ) then sc_selftest = -32 : exit function
 
     ''
     '' ---- buddy merge -------------------------------------------------
@@ -961,16 +961,16 @@ function sc_selftest% ( )
     '' free must merge them into one order-1 block.
     ''
     sc_reset
-    if ( sc_alloc&( 0, 0, 16, 16, 16, 16 ) = 0 ) then sc_selftest% = -40 : exit function
-    if ( sc_alloc&( 1, 0, 16, 16, 16, 16 ) = 0 ) then sc_selftest% = -41 : exit function
+    if ( sc_alloc( 0, 0, 16, 16, 16, 16 ) = 0 ) then sc_selftest = -40 : exit function
+    if ( sc_alloc( 1, 0, 16, 16, 16, 16 ) = 0 ) then sc_selftest = -41 : exit function
     '' grow both: each takes a new order-2 block and hands its order-0 back
-    if ( sc_alloc&( 0, 0, 32, 32, 32, 32 ) = 0 ) then sc_selftest% = -42 : exit function
-    if ( sc_alloc&( 1, 0, 32, 32, 32, 32 ) = 0 ) then sc_selftest% = -43 : exit function
+    if ( sc_alloc( 0, 0, 32, 32, 32, 32 ) = 0 ) then sc_selftest = -42 : exit function
+    if ( sc_alloc( 1, 0, 32, 32, 32, 32 ) = 0 ) then sc_selftest = -43 : exit function
 
     next0 = sc_next
     '' 32x16 is 512 bytes, order 1: only the MERGED pair can serve it
-    if ( sc_alloc&( 2, 0, 32, 16, 32, 16 ) = 0 ) then sc_selftest% = -44 : exit function
-    if ( sc_next <> next0 ) then sc_selftest% = -45 : exit function
+    if ( sc_alloc( 2, 0, 32, 16, 32, 16 ) = 0 ) then sc_selftest = -44 : exit function
+    if ( sc_next <> next0 ) then sc_selftest = -45 : exit function
 
     ''
     '' ---- buddy split -------------------------------------------------
@@ -979,14 +979,14 @@ function sc_selftest% ( )
     '' rather than the store being grown again.
     ''
     sc_reset
-    if ( sc_alloc&( 0, 0, 32, 32, 32, 32 ) = 0 ) then sc_selftest% = -46 : exit function
-    if ( sc_alloc&( 0, 0, 64, 64, 64, 64 ) = 0 ) then sc_selftest% = -47 : exit function
+    if ( sc_alloc( 0, 0, 32, 32, 32, 32 ) = 0 ) then sc_selftest = -46 : exit function
+    if ( sc_alloc( 0, 0, 64, 64, 64, 64 ) = 0 ) then sc_selftest = -47 : exit function
     next0 = sc_next
-    if ( sc_alloc&( 1, 0, 16, 16, 16, 16 ) = 0 ) then sc_selftest% = -48 : exit function
-    if ( sc_next <> next0 ) then sc_selftest% = -49 : exit function
+    if ( sc_alloc( 1, 0, 16, 16, 16, 16 ) = 0 ) then sc_selftest = -48 : exit function
+    if ( sc_next <> next0 ) then sc_selftest = -49 : exit function
 
     sc_reset
-    sc_selftest% = 1
+    sc_selftest = 1
 end function
 
 
@@ -996,7 +996,7 @@ end function
 ''       integer DEF SEG wants. Conventional memory reaches past 8000h, so
 ''       the value is often negative -- the bits are what matter.
 ''::::::::::
-function sb_seg% ( byval p as long )
+function sb_seg ( byval p as long ) as integer
     dim lo as long, hi as long
 
     ''
@@ -1013,23 +1013,23 @@ function sb_seg% ( byval p as long )
     ''
     lo = p and 65535&
     hi = (p - lo) / 65536&
-    sb_seg% = cint( hi )
+    sb_seg = cint( hi )
 end function
 
 ''::::::::::
 '' name: sb_i / sb_u
 '' desc: A signed and an unsigned 16-bit read from wherever DEF SEG points.
 ''::::::::::
-function sb_i% ( byval o as long )
+function sb_i ( byval o as long ) as integer
     dim v as long
 
     v = clng( peek( o ) ) + clng( peek( o + 1& ) ) * 256&
     if ( v > 32767 ) then v = v - 65536&
-    sb_i% = cint( v )
+    sb_i = cint( v )
 end function
 
-function sb_u& ( byval o as long )
-    sb_u& = clng( peek( o ) ) + clng( peek( o + 1& ) ) * 256&
+function sb_u ( byval o as long ) as long
+    sb_u = clng( peek( o ) ) + clng( peek( o + 1& ) ) * 256&
 end function
 
 ''::::::::::
@@ -1037,14 +1037,14 @@ end function
 '' desc: v rounded up to a power of two. Luxel grids top out at 17, so the
 ''       loop runs at most five times and only once per surface build.
 ''::::::::::
-function sb_pot% ( byval v as integer )
+function sb_pot ( byval v as integer ) as integer
     dim p as integer
 
     p = 1
     while ( p < v )
         p = p * 2
     wend
-    sb_pot% = p
+    sb_pot = p
 end function
 
 ''::::::::::
@@ -1127,12 +1127,12 @@ sub sb_dump ( byval face as integer, byval mip as integer )
     sh = eh \ (2 ^ mip)
     if ( sw < 1 ) then sw = 1
     if ( sh < 1 ) then sh = 1
-    pw = 2 ^ sc_shift%( sw )
-    ph = 2 ^ sc_shift%( sh )
+    pw = 2 ^ sc_shift( sw )
+    ph = 2 ^ sc_shift( sh )
 
     mi = tex_inf_buff( tri_buffer(face).texinfoid ).miptex
 
-    dc = sc_alloc&( face, mip, sw, sh, pw, ph )
+    dc = sc_alloc( face, mip, sw, sh, pw, ph )
     if ( dc = 0 ) then
         print "dumpsurf: sc_alloc failed for face"; face; "mip"; mip
         exit sub
@@ -1212,8 +1212,8 @@ sub sb_build ( byval dc as long, byval tex as long, _
         lmw    = 1
         lmh    = 1
     else
-        lmp    = lm_map&( lmy )
-        lseg   = clng( sb_seg%( lmp ) )
+        lmp    = mod_lm_map( lmy )
+        lseg   = clng( sb_seg( lmp ) )
         lofs16 = (lmp and 65535&) + lmx
     end if
 
@@ -1232,8 +1232,8 @@ sub sb_build ( byval dc as long, byval tex as long, _
     '' each dimension for alignment, so the rows are pot(lmw) apart even
     '' though only lmw of each is ours.
     ''
-    sbp.lmstride = clng( sb_pot%( lmw ) )
-    sbp.cmapptr = cm_map&
+    sbp.lmstride = clng( sb_pot( lmw ) )
+    sbp.cmapptr = mod_cm_map
     sbp.au0 = au
     sbp.av0 = av
     sbp.du  = du
@@ -1273,7 +1273,7 @@ sub sb_fetch ( byval face as integer )
         gn = GEOM_W - tri_buffer(face).geom_ofs
     end if
 
-    gp = geom_map&( tri_buffer(face).geom_row )
+    gp = mod_geom_map( tri_buffer(face).geom_row )
     dst = clng( varseg( gv_buf(0) ) ) * 65536& + _
           (clng( varptr( gv_buf(0) ) ) and 65535&)
     memCopy dst, gp + clng( tri_buffer(face).geom_ofs ), clng( gn )
@@ -1306,8 +1306,8 @@ end sub
 ''       was doing the cache's bookkeeping -- and doing it only when the
 ''       overlay was compiled in.
 ''::::::::::
-function sc_frame_end% ()
-    sc_frame_end% = sc_builds
+function sc_frame_end () as integer
+    sc_frame_end = sc_builds
     if ( sc_builds > sc_bpeak ) then sc_bpeak = sc_builds
     sc_hits   = 0
     sc_builds = 0
@@ -1318,8 +1318,8 @@ end function
 '' desc: Whether there is a cache at all. Zero after a failed init, and
 ''       every caller treats that as "draw it plain".
 ''::::::::::
-function sc_ready% ()
-    sc_ready% = sc_ok
+function sc_ready () as integer
+    sc_ready = sc_ok
 end function
 
 ''::::::::::
@@ -1332,10 +1332,10 @@ end function
 ''       the tag encoding -- generation * 4 + mip -- was known in two
 ''       modules and enforced in neither.
 ''::::::::::
-function sc_held% ( byval face as integer )
-    sc_held% = -1
+function sc_held ( byval face as integer ) as integer
+    sc_held = -1
     if ( sc_ok = 0 ) then exit function
     if ( sc_slot(face).blk < 0 ) then exit function
     if ( (sc_slot(face).tag \ 4) <> sc_gen ) then exit function
-    sc_held% = sc_slot(face).tag and 3
+    sc_held = sc_slot(face).tag and 3
 end function

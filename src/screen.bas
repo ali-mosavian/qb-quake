@@ -823,7 +823,7 @@ end sub
 sub hud_shade ( dc as long, x0 as integer, y0 as integer, _
                 x1 as integer, y1 as integer, rw as integer )
 
-    if ( cm_ready% = 0 ) then
+    if ( mod_cm_ready = 0 ) then
         uglRectF dc, x0, y0, x1, y1, hc_slab
         exit sub
     end if
@@ -834,7 +834,7 @@ sub hud_shade ( dc as long, x0 as integer, y0 as integer, _
     '' Hoisted into a variable because BASIC will not take a Function
     '' call in a Sub's argument list here.
     dim cmp as long
-    cmp = cm_map&
+    cmp = mod_cm_map
     uglShadeRect dc, x0, y0, x1, y1, cmp, rw
 end sub
 
@@ -1255,7 +1255,7 @@ sub scr_count_frame
 
     '' The cache closes its own frame now and reports what it built; the
     '' HUD only keeps the history graph, which is the HUD's business.
-    g_bld(g_head) = sc_frame_end%
+    g_bld(g_head) = sc_frame_end
     g_fps(g_head) = g_fsec
     g_head = (g_head + 1) mod GRAPH_N
 
