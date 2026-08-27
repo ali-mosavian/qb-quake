@@ -26,16 +26,11 @@ end type
 '' REDIMmed in ent_load_teleports rather than sized here.
 ''
 '' Per-submodel run-time state. See BrushModel for what each field means.
-common shared /ent_s/ brush() as BrushModel
-
-common shared /ent_s/ tele() as Teleporter
-common shared /ent_s/ tele_count as integer
 
 ''
 '' Which submodel owns each face, so the renderer can find the offset without
 '' searching. Built once at load.
 ''
-common shared /ent_s/ face_mdl() as integer
 
 const ENT_PLAT_DOWN = 0
 const ENT_PLAT_UP   = 1
@@ -52,9 +47,6 @@ type PlatEnt
     mins        as Vec3         '' its volume at the map position
     maxs        as Vec3
 end type
-
-common shared /ent_s/ plat() as PlatEnt
-common shared /ent_s/ plat_count as integer
 
 ''
 '' ent.bas. Declared here: these name World, PlayerState and Env.

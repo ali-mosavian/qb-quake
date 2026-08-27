@@ -87,7 +87,13 @@ declare sub mod_load_world ( _
     models() as Submodel, _
     ord() as integer, _
     pflag() as integer, _
-    gv() as integer _
+    gv() as integer, _
+    brush() as BrushModel, _
+    tele() as Teleporter, _
+    face_mdl() as integer, _
+    plat() as PlatEnt, _
+    tele_count as integer, _
+    plat_count as integer _
 )
 declare sub mod_load_colormap ( wld as World )
 declare sub mod_close ( wld as World )
@@ -107,7 +113,13 @@ declare sub r_alloc_pvs ( byval leaf_count as long )
 declare sub r_load_lfaces ( byval lump_bytes as long )
 declare sub ent_load_teleports ( _
     wld as World, _
-    models() as Submodel _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    tele() as Teleporter, _
+    face_mdl() as integer, _
+    plat() as PlatEnt, _
+    tele_count as integer, _
+    plat_count as integer _
 )
 declare sub pl_load_hulls ( wld as World )
 declare sub r_load_leaves ( wld as World )
@@ -798,7 +810,13 @@ sub mod_load_world ( _
     models() as Submodel, _
     ord() as integer, _
     pflag() as integer, _
-    gv() as integer _
+    gv() as integer, _
+    brush() as BrushModel, _
+    tele() as Teleporter, _
+    face_mdl() as integer, _
+    plat() as PlatEnt, _
+    tele_count as integer, _
+    plat_count as integer _
 )
     mod_alloc wld, faces(), tex_info(), planes(), nodes(), models(), ord(), pflag()
     sys_mem_mark "bsp_arrays"
@@ -817,6 +835,7 @@ sub mod_load_world ( _
     mod_load_clipnodes wld
     sys_mem_mark "clip_nodes"
 
-    ent_load_teleports wld, models()
+    ent_load_teleports wld, models(), brush(), tele(), face_mdl(), plat(), _
+                       tele_count, plat_count
 
 end sub

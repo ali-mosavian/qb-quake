@@ -3,6 +3,11 @@ import io, re, glob, sys
 
 STRUCTS = ['wld','env','pl','cam','rdr','vis','scr','cp','ft','pal']
 
+ARRAYS = ['tri_buffer','tex_inf_buff','pln_buffer','nds_buffer','mdl_buffer',
+          'order_list','poly_flag','gv_buf','h_textr_dc','mip_buff_inf',
+          'h_rawtx_dc','brush','tele','face_mdl','plat','cp_x','cp_y','cp_z',
+          'bit_array','frustum']
+
 
 def procs(path):
     lines = io.open(path,'rb').read().decode('latin-1').replace('\r\n','\n').split('\n')
@@ -37,6 +42,9 @@ if __name__ == '__main__':
             hit = [v for v in STRUCTS
                    if v not in params
                    and re.search(r'(?<![A-Za-z0-9_.])%s(?![A-Za-z0-9_])' % v, body)]
+            hit += [a + '()' for a in ARRAYS
+                    if a not in params
+                    and re.search(r'(?<![A-Za-z0-9_.])%s\s*\(' % a, body)]
             if hit:
                 bad += 1
                 print("%-14s %-22s %s" % (f.split('/')[-1], name, ', '.join(hit)))

@@ -34,7 +34,8 @@ declare function ent_find_node ( _
     byval m as integer, _
     models() as Submodel, _
     nodes() as Node, _
-    planes() as Plane _
+    planes() as Plane, _
+    brush() as BrushModel _
 ) as integer
 declare function ent_point_leaf ( _
     p as Vec3, _
@@ -54,7 +55,9 @@ declare sub ent_vec ( _
 )
 declare function ent_plat_touched ( _
     byval p as integer, _
-    pl as PlayerState _
+    pl as PlayerState, _
+    brush() as BrushModel, _
+    plat() as PlatEnt _
 ) as integer
 
 ''
@@ -62,21 +65,33 @@ declare function ent_plat_touched ( _
 ''
 declare sub ent_load_teleports ( _
     wld as World, _
-    models() as Submodel _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    tele() as Teleporter, _
+    face_mdl() as integer, _
+    plat() as PlatEnt, _
+    tele_count as integer, _
+    plat_count as integer _
 )
 declare sub ent_check_teleport ( _
     pl as PlayerState, _
-    env as Env _
+    env as Env, _
+    tele() as Teleporter, _
+    byval tele_count as integer _
 )
 declare sub ent_move_plats ( _
     byval dt as single, _
-    pl as PlayerState _
+    pl as PlayerState, _
+    brush() as BrushModel, _
+    plat() as PlatEnt, _
+    byval plat_count as integer _
 )
 declare sub ent_place_models ( _
     byval model_count as integer, _
     models() as Submodel, _
     nodes() as Node, _
-    planes() as Plane _
+    planes() as Plane, _
+    brush() as BrushModel _
 )
 
 ''
@@ -164,7 +179,13 @@ end sub
 ''::::::::::
 sub ent_load_teleports ( _
     wld as World, _
-    models() as Submodel _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    tele() as Teleporter, _
+    face_mdl() as integer, _
+    plat() as PlatEnt, _
+    tele_count as integer, _
+    plat_count as integer _
 )
     dim entity as string
     dim strm(50) as string
@@ -326,7 +347,9 @@ end sub
 ''::::::::::
 sub ent_check_teleport ( _
     pl as PlayerState, _
-    env as Env _
+    env as Env, _
+    tele() as Teleporter, _
+    byval tele_count as integer _
 )
     dim i as integer
     dim pmin as Vec3, pmax as Vec3
@@ -373,7 +396,9 @@ end sub
 ''::::::::::
 function ent_plat_touched ( _
     byval p as integer, _
-    pl as PlayerState _
+    pl as PlayerState, _
+    brush() as BrushModel, _
+    plat() as PlatEnt _
 ) as integer
     dim top as single
 
@@ -414,7 +439,10 @@ end function
 ''::::::::::
 sub ent_move_plats ( _
     byval dt as single, _
-    pl as PlayerState _
+    pl as PlayerState, _
+    brush() as BrushModel, _
+    plat() as PlatEnt, _
+    byval plat_count as integer _
 )
     dim p as integer
     dim m as integer
@@ -424,7 +452,7 @@ sub ent_move_plats ( _
     for  p = 0 to plat_count-1
         m = plat(p).model
 
-        riding = ent_plat_touched( p, pl )
+        riding = ent_plat_touched( p, pl, brush(), plat() )
 
         if ( riding ) then
             plat(p).state = ENT_PLAT_UP
@@ -500,12 +528,13 @@ sub ent_place_models ( _
     byval model_count as integer, _
     models() as Submodel, _
     nodes() as Node, _
-    planes() as Plane _
+    planes() as Plane, _
+    brush() as BrushModel _
 )
     dim m as integer
 
     for  m = 1 to model_count-1
-        brush(m).node = ent_find_node( m, models(), nodes(), planes() )
+        brush(m).node = ent_find_node( m, models(), nodes(), planes(), brush() )
     next m
 
 end sub
@@ -528,7 +557,8 @@ function ent_find_node ( _
     byval m as integer, _
     models() as Submodel, _
     nodes() as Node, _
-    planes() as Plane _
+    planes() as Plane, _
+    brush() as BrushModel _
 ) as integer
     dim mp as long
     dim nodenr as integer, pid as integer

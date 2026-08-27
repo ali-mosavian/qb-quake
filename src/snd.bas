@@ -29,7 +29,10 @@ declare sub s_get_blaster ( _
     hdma as integer _
 )
 declare sub s_init ( env as Env )
-declare sub s_start_music ( env as Env )
+declare sub s_start_music ( _
+    env as Env, _
+    mymod as UGMMOD _
+)
 declare sub s_stop_music ( env as Env )
 
 
@@ -166,7 +169,10 @@ end sub
 '' name: s_start_music
 '' desc: Starts the module that plays over the loading screen.
 ''::::::::::
-sub s_start_music ( env as Env )
+sub s_start_music ( _
+    env as Env, _
+    mymod as UGMMOD _
+)
     if ( env.sound = true ) then
         if ( modInit = false ) then
             sys_error "0x1004, Could not init mod module..."

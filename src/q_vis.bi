@@ -24,8 +24,6 @@ type VisState
                                 '' r_bsp.bas has no room for the env block
 end type
 
-common shared /vis_a/ bit_array() as integer, frustum() as DiskPlane
-
 ''
 '' r_bsp.bas. Declared here: r_draw_world names VisState.
 ''
