@@ -53,19 +53,18 @@ dim shared cm_dc as long
 dim shared cm_size as long
 
 ''
-'' THE LIGHTMAP ATLAS. Owned here for the same reason as the colormap:
-'' mod_load_lightmaps creates it, and its one reader wants a scanline
-'' out of it rather than the handle.
+'' THE LIGHTMAP ATLAS AND THE GEOMETRY STORE. Owned here for the same
+'' reason as the colormap: mod_load_lightmaps and mod_load_geometry make
+'' them, and their readers want a scanline or a row out of them rather
+'' than the handle. Which EMS slot a resource is mapped into is a
+'' property of the resource, not of whoever reads it, so the slot came
+'' along too -- both take turns in PAGE_SLOT. See q_map.bi for why taking
+'' turns in one window is safe.
 ''
-'' LM_SLOT comes along, because which EMS slot a resource is mapped into
-'' is a property of the resource, not of whoever reads it. Note it is 2,
-'' the same as GEOM_SLOT, NODE_SLOT and CLIP_SLOT -- worth having those
-'' collisions visible in one file.
-''
-'' GEOM_SLOT is shared with the luxel atlas above. Safe because a face's
-'' record is copied out of the row immediately, and the atlas is not
-'' mapped until sb_build, several hundred lines later in the frame.
-const GEOM_SLOT = 2
+dim shared lm_atlas as long
+dim shared lm_size as long
+dim shared lm_read as long
+
 dim shared geom_dc as long
 dim shared geom_rows as integer
 
@@ -76,11 +75,6 @@ dim shared geom_rows as integer
 ''
 dim shared pvs_ptr as long
 dim shared pvs_size as long
-
-const LM_SLOT = 2
-dim shared lm_atlas as long
-dim shared lm_size as long
-dim shared lm_read as long
 
 dim shared ledg_count as long
 dim shared pln_count as long
@@ -376,7 +370,7 @@ sub mod_load_facevtx
     if ( geom_dc = 0 ) then sys_error "0x0010, no EMS for the geometry store"
 
     for y = 0 to geom_rows-1
-        p = uglMapEx&( geom_dc, y, GEOM_SLOT )
+        p = uglMapEx&( geom_dc, y, PAGE_SLOT )
         if ( p = 0 ) then sys_error "0x0012, geometry store will not map"
         if ( fileReadH( f, p, GEOM_W ) <> GEOM_W ) then
             sys_error "0x0013, fgeom.bin short read"
@@ -455,7 +449,7 @@ sub mod_load_nodes
     '' room), not from the heap the BSP arrays compete for.
     h_nds = uglArrNew&( UGL.MEM, len( nds_buffer(0) ), wld.nds_count, 0 )
     if ( h_nds = 0 ) then
-        h_nds = uglArrNew&( UGL.EMS, len( nds_buffer(0) ), wld.nds_count, NODE_SLOT )
+        h_nds = uglArrNew&( UGL.EMS, len( nds_buffer(0) ), wld.nds_count, PAGE_SLOT )
     end if
     if ( h_nds = 0 ) then sys_error "0x0030, no room for the node tree"
 
@@ -632,7 +626,7 @@ end function
 ''       mapping reaches all of it.
 ''::::::::::
 function lm_map& ( byval row as integer )
-    lm_map& = uglMapEx&( lm_atlas, row, LM_SLOT )
+    lm_map& = uglMapEx&( lm_atlas, row, PAGE_SLOT )
 end function
 
 ''::::::::::
@@ -655,7 +649,7 @@ end function
 ''       end is also the end of the mapped window.
 ''::::::::::
 function geom_map& ( byval row as integer )
-    geom_map& = uglMapEx&( geom_dc, row, GEOM_SLOT )
+    geom_map& = uglMapEx&( geom_dc, row, PAGE_SLOT )
 end function
 
 ''::::::::::

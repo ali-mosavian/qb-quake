@@ -579,12 +579,9 @@ sub rb_load_leaves ( byval cnt as long )
     '' array out of it leaves a larger contiguous hole behind even when the
     '' total free does not change.
     ''
-    '' CLIP_SLOT for the EMS fallback is the name the original used. It is
-    '' 2, the same page as GEOM_SLOT, NODE_SLOT and LM_SLOT -- four names
-    '' for one slot, which is its own commit.
     h_lef = uglArrNew&( UGL.MEM, len( lef_buffer(0) ), cnt, 0 )
     if ( h_lef = 0 ) then
-        h_lef = uglArrNew&( UGL.EMS, len( lef_buffer(0) ), cnt, CLIP_SLOT )
+        h_lef = uglArrNew&( UGL.EMS, len( lef_buffer(0) ), cnt, PAGE_SLOT )
     end if
     if ( h_lef = 0 ) then sys_error "0x0036, no room for the leaves"
 

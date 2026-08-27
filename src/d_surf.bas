@@ -1184,7 +1184,7 @@ sub sb_build ( byval dc as long, byval tex as long, _
 
     ''
     '' Out of the record d_draw_faces already fetched, NOT out of the
-    '' window it came from. GEOM_SLOT does not still hold that page by the
+    '' window it came from. PAGE_SLOT does not still hold that page by the
     '' time a build runs -- something between the fetch and here remaps it,
     '' and the header read back as zeros, which hangs uglBuildSurf on a 0x0
     '' luxel grid. The copy is the only safe source, and it is free.

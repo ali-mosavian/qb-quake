@@ -688,7 +688,7 @@ sub pl_load_hulls ( byval cnt as long )
     ''
     h_clp = uglArrNew&( UGL.MEM, len( clp_buffer(0) ), cnt, 0 )
     if ( h_clp = 0 ) then
-        h_clp = uglArrNew&( UGL.EMS, len( clp_buffer(0) ), cnt, CLIP_SLOT )
+        h_clp = uglArrNew&( UGL.EMS, len( clp_buffer(0) ), cnt, PAGE_SLOT )
     end if
     if ( h_clp = 0 ) then sys_error "0x0033, no room for the clip hulls"
 
