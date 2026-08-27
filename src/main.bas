@@ -921,7 +921,7 @@ sub host_bench_report ( _
     print #benchf, "watertype " + ltrim$(str$( pl.water_type ))
     print #benchf, "animtime " + ltrim$(str$( rdr.anim_time ))
     if ( plat_count > 0 ) then
-        print #benchf, "platzofs " + ltrim$(str$( mdl_zofs( plat(0).model ) ))
+        print #benchf, "platzofs " + ltrim$(str$( brush( plat(0).model ).zofs ))
         print #benchf, "platstate " + ltrim$(str$( plat(0).state ))
     end if
     close #benchf

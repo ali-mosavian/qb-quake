@@ -94,8 +94,7 @@ declare sub pl_gravity ( _
     tr as TraceResult, _
     byval nmodels as integer, _
     models() as Submodel, _
-    solid() as integer, _
-    zofs() as single, _
+    brush() as BrushModel, _
     clip() as ClipNode, _
     planes() as Plane _
 )
@@ -125,8 +124,7 @@ declare sub pl_move ( _
     cam as CamState, _
     byval nmodels as integer, _
     models() as Submodel, _
-    solid() as integer, _
-    zofs() as single, _
+    brush() as BrushModel, _
     nodes() as Node, _
     planes() as Plane _
 )
@@ -137,8 +135,7 @@ declare sub pl_slide_move ( _
     tr as TraceResult, _
     byval nmodels as integer, _
     models() as Submodel, _
-    solid() as integer, _
-    zofs() as single, _
+    brush() as BrushModel, _
     clip() as ClipNode, _
     planes() as Plane _
 )
@@ -150,8 +147,7 @@ declare sub pl_step_move ( _
     tr as TraceResult, _
     byval nmodels as integer, _
     models() as Submodel, _
-    solid() as integer, _
-    zofs() as single, _
+    brush() as BrushModel, _
     clip() as ClipNode, _
     planes() as Plane _
 )
@@ -161,8 +157,7 @@ declare sub pl_trace ( _
     tr as TraceResult, _
     byval nmodels as integer, _
     models() as Submodel, _
-    solid() as integer, _
-    zofs() as single, _
+    brush() as BrushModel, _
     clip() as ClipNode, _
     planes() as Plane _
 )
