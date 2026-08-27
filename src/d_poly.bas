@@ -230,7 +230,7 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
     '' Clearing this turns every face below into a plain textured one,
     '' which is exactly what an unlit face already does.
     lm_use = 0
-    if ( env.use_lm and rdr.lightmap and sc_ok <> 0 ) then lm_use = -1
+    if ( env.use_lm and rdr.lightmap and sc_ready% <> 0 ) then lm_use = -1
 
     ''
     '' Where memCopy puts a face's record. Hoisted: VARSEG/VARPTR on a
@@ -582,12 +582,10 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
                 '' before a flush would pin the mip to a surface that is no
                 '' longer there.
                 ''
-                if ( sc_ok <> 0 ) then
-                    if ( sc_slot(i).blk >= 0 and (sc_slot(i).tag \ 4) = sc_gen ) then
-                        lm_cm = sc_slot(i).tag and 3
-                        if ( abs( lm_mip - lm_cm ) <= 1 ) then lm_mip = lm_cm
-                        if ( lm_mip < lm_floor ) then lm_mip = lm_floor
-                    end if
+                lm_cm = sc_held%( i )
+                if ( lm_cm >= 0 ) then
+                    if ( abs( lm_mip - lm_cm ) <= 1 ) then lm_mip = lm_cm
+                    if ( lm_mip < lm_floor ) then lm_mip = lm_floor
                 end if
 
                 lm_sw = lm_extw \ (2 ^ lm_mip)

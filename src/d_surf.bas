@@ -149,6 +149,10 @@ dim shared lm_flat(0) as integer
 '' are the only writers, and the two readers want a picture of the cache,
 '' not nine separate variables. sc_stats gives them one.
 ''
+dim shared sc_slot() as scslot
+dim shared sc_gen as integer
+dim shared sc_ok as integer
+
 dim shared sc_made as integer
 dim shared sc_flushes as long
 dim shared sc_peak as long
@@ -442,7 +446,7 @@ end sub
 '' desc: Empties the pool. DCs are made on demand, so nothing is claimed
 ''       here beyond the bookkeeping.
 ''::::::::::
-function sc_init% ( )
+sub sc_init
     dim i as integer, j as integer
 
     sc_gen = 1
@@ -493,8 +497,7 @@ function sc_init% ( )
 
     if ( emsCheck% = 0 ) then
         sc_ok = 0
-        sc_init% = 0
-        exit function
+        exit sub
     end if
 
     ''
@@ -509,8 +512,7 @@ function sc_init% ( )
     '' is taken then. See sc_store_open.
     ''
     sc_ok = -1
-    sc_init% = -1
-end function
+end sub
 
 ''::::::::::
 '' name: sc_store_open
@@ -1309,4 +1311,31 @@ function sc_frame_end% ()
     if ( sc_builds > sc_bpeak ) then sc_bpeak = sc_builds
     sc_hits   = 0
     sc_builds = 0
+end function
+
+''::::::::::
+'' name: sc_ready
+'' desc: Whether there is a cache at all. Zero after a failed init, and
+''       every caller treats that as "draw it plain".
+''::::::::::
+function sc_ready% ()
+    sc_ready% = sc_ok
+end function
+
+''::::::::::
+'' name: sc_held
+'' desc: Which mip this face already has resident, or -1 for none.
+''
+''       The generation has to match, or a stale tag from before a flush
+''       would pin a mip to a surface that is no longer there. That test
+''       used to be written out at the call site in d_poly, which meant
+''       the tag encoding -- generation * 4 + mip -- was known in two
+''       modules and enforced in neither.
+''::::::::::
+function sc_held% ( byval face as integer )
+    sc_held% = -1
+    if ( sc_ok = 0 ) then exit function
+    if ( sc_slot(face).blk < 0 ) then exit function
+    if ( (sc_slot(face).tag \ 4) <> sc_gen ) then exit function
+    sc_held% = sc_slot(face).tag and 3
 end function
