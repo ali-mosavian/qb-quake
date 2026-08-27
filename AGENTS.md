@@ -358,6 +358,19 @@ recursion -- moves the frontend and not the fill, and a full-frame timing
 buries it: fill dominates, so a large regression in the walk shows up as
 a small one overall and a small one is invisible.
 
+**But check it is not measuring the clock.** On dm3ish the frontend is
+faster than the timer resolves, so `-nodraw` returns the tick floor and
+not the code: three different builds all reported
+
+    ftmean 9.97680673249007   frames 1908
+
+identical to eight decimals. Identical-to-many-decimals across builds
+that differ is the tell, and 9.9768ms is 1/100.23s -- the tick, not the
+work. `-nodraw` measures the frontend only on a map where the frontend
+is slow enough to see; on a small one it measures `tickhz`. Confirm the
+number moves when you deliberately make the walk slower before trusting
+it to show that you made it faster.
+
 **Always use the dynamic core.** It is the default everywhere and there
 is no case for turning it off.
 
@@ -380,11 +393,60 @@ five-to-fifteen minute round trip on the interpreter.
 **Pin the emulated CPU on BOTH sides of a comparison.**
 
 `cycles=max` scales with whatever else the host is doing, so two runs of
-the SAME build differ. `tools/dosbox.sh` now defaults run and viz to the
-same 40000/normal for exactly this reason -- override both or neither.
+the SAME build differ. Every mode inherits `dosbox/template.conf`'s
+75000/dynamic for exactly this reason -- override both sides or neither.
 
-A before/after is only a measurement if the map, the flags, the cycles
-and the core all match. State them when quoting a number.
+A before/after is only a measurement if the map, the flags, the cycles,
+the core AND the linked `UGLV.LIB` all match. Rebuilding uGL mid-session
+silently makes the two sides different programs; `cmp` the two staged
+`UGLV.LIB`s before quoting a number. State them when quoting one.
+
+### One run per side is not a measurement
+
+`ftmean` over a campath run has a run-to-run spread of about **2.3 ms**
+-- wider than most changes worth arguing about. It is also quantised:
+the same handful of values recur across unrelated builds, so two runs
+agreeing to ten decimals means the metric is coarse, not that the builds
+are identical.
+
+**Six runs per arm, interleaved A/B/A/B, and compare medians.** Not six
+of one then six of the other: the host drifts, and a block design loads
+that drift onto whichever arm ran second.
+
+Build the other side in a worktree so both trees stay intact, and point
+both at the SAME library:
+
+    git worktree add -q --detach /tmp/base <commit>
+    cp -r data/assets /tmp/base/data/
+    NATIVE_UGL=$PWD/build/native-mgl/UGLV.LIB \
+      VBD_OUT=/tmp/base/build/o /tmp/base/tools/dosbox.sh build
+    cp build/vbd-x/campath.bin /tmp/base/build/o/
+
+    for r in 1 2 3 4 5 6; do
+      for a in "base:/tmp/base:/tmp/base/build/o" "head:$PWD:$PWD/build/vbd-x"; do
+        IFS=: read t rt out <<< "$a"
+        NATIVE_UGL=$PWD/build/native-mgl/UGLV.LIB VBD_OUT=$out \
+          QFLAGS="-lm -campath" $rt/tools/dosbox.sh run > /dev/null 2>&1
+        echo "$t $(grep '^ftmean ' $out/bench.txt | cut -d' ' -f2)"
+      done
+    done
+
+`git worktree remove --force` each one afterwards.
+
+Three per arm is not enough. A 3v3 here produced a clean-looking +1.95ms
+with no overlap between the arms, which did not survive n=6 -- the
+medians then differed by 0.04ms. The confirming test is cheap and worth
+running whenever a delta looks real: **bench the baseline against
+itself**, perturbed only in layout -- add a never-called sub of about
+the same code size to the module that grew, and rebuild. If the control
+reproduces the "regression", the effect is not in your change. It did.
+
+Before believing any delta, check what actually changed in the hot path:
+
+    grep -E ' (D_POLY|D_SURF|SCREEN|PL_MOVE)_CODE' build/<dir>/QRENDER.MAP
+
+Byte-identical segment sizes for the per-frame code mean no per-frame
+work was added, whatever the timings say.
 
 ## Harness: benchmark mode
 
