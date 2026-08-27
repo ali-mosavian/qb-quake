@@ -422,16 +422,16 @@ sub host_main
 
         '' Skip the first few frames: they carry the tail of loading and
         '' the first surface builds, which no later frame repeats.
-        if ( frame_no > 3 and sys_raw_dt > 0.0 ) then
-            if ( ft_n = 0 ) then
-                ft_min = sys_raw_dt
-                ft_max = sys_raw_dt
+        if ( frame_no > 3 and ft.raw_dt > 0.0 ) then
+            if ( ft.n = 0 ) then
+                ft.min = ft.raw_dt
+                ft.max = ft.raw_dt
             else
-                if ( sys_raw_dt < ft_min ) then ft_min = sys_raw_dt
-                if ( sys_raw_dt > ft_max ) then ft_max = sys_raw_dt
+                if ( ft.raw_dt < ft.min ) then ft.min = ft.raw_dt
+                if ( ft.raw_dt > ft.max ) then ft.max = ft.raw_dt
             end if
-            ft_sum = ft_sum + sys_raw_dt
-            ft_n   = ft_n + 1
+            ft.sum = ft.sum + ft.raw_dt
+            ft.n   = ft.n + 1
         end if
 
         host_advance scr.frame_time
@@ -455,7 +455,7 @@ sub host_main
         ''
         frame_no = frame_no + 1
         '' -campath ends when the route does, whatever -bench says
-        if ( env.cam_path and cp_done ) then
+        if ( env.cam_path and cp.done ) then
             host_bench_report frame_no, h_dst_dc
             exit do
         end if
@@ -518,9 +518,9 @@ sub cp_load
     dim i as integer, n as integer
     dim x as integer, y as integer, z as integer
 
-    cp_n = 0
-    cp_i = 0
-    cp_t = 0.0
+    cp.n = 0
+    cp.i = 0
+    cp.t = 0.0
 
     f = freefile
     open "campath.bin" for binary as #f
@@ -539,7 +539,7 @@ sub cp_load
         cp_z(i) = z
     next i
     close #f
-    cp_n = n
+    cp.n = n
 end sub
 
 ''::::::::::
@@ -567,7 +567,7 @@ sub cp_advance
     '' code rather than something approximated here. A route the player
     '' cannot walk simply does not get walked.
     ''
-    if ( cp_n < 1 or cp_done ) then exit sub
+    if ( cp.n < 1 or cp.done ) then exit sub
 
     ''
     '' Start ON the route. The spawn is wherever the map puts it, and
@@ -576,17 +576,17 @@ sub cp_advance
     '' into the first wall between. Every waypoint is a verified standing
     '' position, so dropping the player on one is safe; gravity settles it.
     ''
-    if ( cp_init = 0 ) then
+    if ( cp.started = 0 ) then
         pl.pos.x = cp_x(0)
         pl.pos.y = cp_y(0)
         pl.pos.z = cp_z(0)
         pl.vel.x = 0.0
         pl.vel.y = 0.0
         pl.vel.z = 0.0
-        cp_i     = 1
-        cp_lastx = pl.pos.x
-        cp_lasty = pl.pos.y
-        cp_init  = -1
+        cp.i     = 1
+        cp.last_x = pl.pos.x
+        cp.last_y = pl.pos.y
+        cp.started  = -1
         exit sub
     end if
 
@@ -600,10 +600,10 @@ sub cp_advance
     '' Instead: slide the index forward to the nearest waypoint in a short
     '' window ahead. Monotonic, so it can never run backwards and oscillate.
     ''
-    best  = cp_i
+    best  = cp.i
     bestd = 1e30
-    k = cp_i
-    do while ( k <= cp_i + 12 and k <= cp_n-1 )
+    k = cp.i
+    do while ( k <= cp.i + 12 and k <= cp.n-1 )
         dx = cp_x(k) - pl.pos.x
         dy = cp_y(k) - pl.pos.y
         dl = dx*dx + dy*dy
@@ -613,14 +613,14 @@ sub cp_advance
         end if
         k = k + 1
     loop
-    cp_i = best
+    cp.i = best
 
     '' done when the last waypoint is the nearest and we are on it
-    if ( cp_i >= cp_n-1 ) then
-        dx = cp_x(cp_n-1) - pl.pos.x
-        dy = cp_y(cp_n-1) - pl.pos.y
+    if ( cp.i >= cp.n-1 ) then
+        dx = cp_x(cp.n-1) - pl.pos.x
+        dy = cp_y(cp.n-1) - pl.pos.y
         if ( sqr( dx*dx + dy*dy ) < CP_REACH * 2.0 ) then
-            cp_done = -1
+            cp.done = -1
             exit sub
         end if
     end if
@@ -630,8 +630,8 @@ sub cp_advance
     '' not at the one we are about to reach. A near target's bearing
     '' swings wildly as it is approached; a far one's barely moves.
     ''
-    k = cp_i
-    do while ( k < cp_n-1 )
+    k = cp.i
+    do while ( k < cp.n-1 )
         dx = cp_x(k) - pl.pos.x
         dy = cp_y(k) - pl.pos.y
         if ( sqr( dx*dx + dy*dy ) >= CP_AHEAD ) then exit do
@@ -642,24 +642,24 @@ sub cp_advance
     dl = sqr( dx*dx + dy*dy )
 
     if ( dl > 0.001 ) then
-        cp_dirx = dx / dl
-        cp_diry = dy / dl
+        cp.dir_x = dx / dl
+        cp.dir_y = dy / dl
     end if
 
     '' Stuck? The hull is against something the path did not know about.
     '' Give up on this waypoint rather than grinding into a wall forever.
-    if ( abs(pl.pos.x - cp_lastx) + abs(pl.pos.y - cp_lasty) < 0.5 ) then
-        cp_stuck = cp_stuck + 1
-        if ( cp_stuck > 60 ) then
-            cp_stuck = 0
-            cp_i = cp_i + 1
-            if ( cp_i > cp_n-1 ) then cp_done = -1
+    if ( abs(pl.pos.x - cp.last_x) + abs(pl.pos.y - cp.last_y) < 0.5 ) then
+        cp.stuck = cp.stuck + 1
+        if ( cp.stuck > 60 ) then
+            cp.stuck = 0
+            cp.i = cp.i + 1
+            if ( cp.i > cp.n-1 ) then cp.done = -1
         end if
     else
-        cp_stuck = 0
+        cp.stuck = 0
     end if
-    cp_lastx = pl.pos.x
-    cp_lasty = pl.pos.y
+    cp.last_x = pl.pos.x
+    cp.last_y = pl.pos.y
 end sub
 
 ''::::::::::
@@ -856,23 +856,23 @@ sub host_bench_report ( _
     print #benchf, "seconds " + ltrim$(str$( scr.bench_secs ))
     print #benchf, "last_fps " + ltrim$(str$( scr.fps ))
     print #benchf, "peak_fps " + ltrim$(str$( scr.fps_peak ))
-    print #benchf, "low_fps " + ltrim$(str$( fps_low ))
-    print #benchf, "cp_pts " + ltrim$(str$( cp_n ))
+    print #benchf, "low_fps " + ltrim$(str$( ft.fps_low ))
+    print #benchf, "cp_pts " + ltrim$(str$( cp.n ))
     ''
     '' Frame times in milliseconds, and the rates they imply. These are the
     '' numbers to compare: fastest frame, slowest frame, mean over the run.
     ''
-    if ( ft_n > 0 ) then
-        print #benchf, "ft_min " + ltrim$(str$( ft_min * 1000.0 ))
-        print #benchf, "ft_max " + ltrim$(str$( ft_max * 1000.0 ))
-        print #benchf, "ft_mean " + ltrim$(str$( (ft_sum / ft_n) * 1000.0 ))
-        print #benchf, "ft_n " + ltrim$(str$( ft_n ))
-        if ( ft_min > 0.0 ) then _
-            print #benchf, "fps_best " + ltrim$(str$( 1.0 / ft_min ))
-        if ( ft_max > 0.0 ) then _
-            print #benchf, "fps_worst " + ltrim$(str$( 1.0 / ft_max ))
-        if ( ft_sum > 0.0 ) then _
-            print #benchf, "fps_mean " + ltrim$(str$( ft_n / ft_sum ))
+    if ( ft.n > 0 ) then
+        print #benchf, "ft_min " + ltrim$(str$( ft.min * 1000.0 ))
+        print #benchf, "ft_max " + ltrim$(str$( ft.max * 1000.0 ))
+        print #benchf, "ft_mean " + ltrim$(str$( (ft.sum / ft.n) * 1000.0 ))
+        print #benchf, "ft_n " + ltrim$(str$( ft.n ))
+        if ( ft.min > 0.0 ) then _
+            print #benchf, "fps_best " + ltrim$(str$( 1.0 / ft.min ))
+        if ( ft.max > 0.0 ) then _
+            print #benchf, "fps_worst " + ltrim$(str$( 1.0 / ft.max ))
+        if ( ft.sum > 0.0 ) then _
+            print #benchf, "fps_mean " + ltrim$(str$( ft.n / ft.sum ))
     end if
     print #benchf, "polys " + ltrim$(str$( rdr.polys ))
     print #benchf, "tris " + ltrim$(str$( rdr.tris ))
