@@ -81,6 +81,13 @@ dim shared cam_up as u3dVector3f
 dim shared lightmap as long
 
 ''
+'' THE DEPTH BUFFER. Created here, alongside the destination dc it belongs
+'' to. d_poly is the only other module that cares, and only to ask whether
+'' depth exists at all -- z_on answers that.
+''
+dim shared z_dc as long
+
+''
 '' polyFlag holds the frame a face was last marked visible in, not a flag:
 '' see bspShowModel. pvsLeaf is the leaf the visible set was last unpacked
 '' for -- leaf ids carry bit 15, so 0 doubles as "nothing cached yet".
@@ -864,7 +871,7 @@ sub host_bench_report ( frame_no as long, h_dst_dc as long )
     print #benchf, "memavail " + ltrim$(str$( memAvail& ))
     print #benchf, "lmsize " + ltrim$(str$( lm_bytes& ))
     print #benchf, "lmread " + ltrim$(str$( lm_got& ))
-    print #benchf, "geomrows " + ltrim$(str$( geom_rows ))
+    print #benchf, "geomrows " + ltrim$(str$( geom_nrows% ))
     print #benchf, "cmsize " + ltrim$(str$( cm_bytes& ))
         sc_stats scs
     print #benchf, "scmade " + ltrim$(str$( scs.made ))
@@ -913,3 +920,13 @@ sub host_bench_report ( frame_no as long, h_dst_dc as long )
     close #benchf
 
 end sub
+
+''::::::::::
+'' name: z_on
+'' desc: Whether a depth buffer exists. main.bas creates it, so it answers
+''       for it; d_poly hoists this once a frame rather than testing a
+''       shared handle per face.
+''::::::::::
+function z_on% ()
+    z_on% = ( z_dc <> 0 )
+end function

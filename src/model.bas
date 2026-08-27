@@ -62,6 +62,21 @@ dim shared cm_size as long
 '' the same as GEOM_SLOT, NODE_SLOT and CLIP_SLOT -- worth having those
 '' collisions visible in one file.
 ''
+'' GEOM_SLOT is shared with the luxel atlas above. Safe because a face's
+'' record is copied out of the row immediately, and the atlas is not
+'' mapped until sb_build, several hundred lines later in the frame.
+const GEOM_SLOT = 2
+dim shared geom_dc as long
+dim shared geom_rows as integer
+
+''
+'' THE VISIBILITY LUMP. memAlloc'd, not a uGL store -- r_bsp reaches it by
+'' DEF SEG and an offset rather than as an array, so all it needs is the
+'' base. pvs_size is read nowhere else and stays private.
+''
+dim shared pvs_ptr as long
+dim shared pvs_size as long
+
 const LM_SLOT = 2
 dim shared lm_atlas as long
 dim shared lm_size as long
@@ -665,4 +680,31 @@ end function
 
 function lm_got& ()
     lm_got& = lm_read
+end function
+
+''::::::::::
+'' name: geom_map
+'' desc: One row of the geometry store, mapped, as a far pointer. The
+''       builder keeps a face's whole record inside one row, so the row
+''       end is also the end of the mapped window.
+''::::::::::
+function geom_map& ( byval row as integer )
+    geom_map& = uglMapEx&( geom_dc, row, GEOM_SLOT )
+end function
+
+''::::::::::
+'' name: geom_nrows
+'' desc: How many rows the store has, for the bench report.
+''::::::::::
+function geom_nrows% ()
+    geom_nrows% = geom_rows
+end function
+
+''::::::::::
+'' name: pvs_base
+'' desc: Far pointer to the visibility lump. Fixed for the whole run, so
+''       callers hoist it rather than asking per leaf.
+''::::::::::
+function pvs_base& ()
+    pvs_base& = pvs_ptr
 end function

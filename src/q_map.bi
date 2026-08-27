@@ -74,7 +74,6 @@ common shared /map_a/ lef_buffer() as leaf2
 '' positions start at gv_buf(9).
 ''
 const GEOM_W = 8192
-const GEOM_SLOT = 2
 ''
 '' The BSP nodes share GEOM_SLOT's physical page. emsMapEx consults the
 '' EMS layer's record of what a slot holds before remapping, so the
@@ -89,7 +88,8 @@ const GEOM_LMOFS = 1            '' gv_buf index of the lightmap header
 const GEOM_VTX0  = 9            '' gv_buf index of the first corner
 const GEOM_MAXREC = 18 + GEOM_MAXVTX * 6
 
-common shared /map_a/ geom_dc as long, geom_rows as integer
+'' The geometry store is NOT here any more -- model.bas owns it and
+'' GEOM_SLOT with it; d_poly and d_surf ask for a row through geom_map.
 
 ''
 '' The face record most recently fetched by d_draw_faces. Shared because
@@ -132,7 +132,9 @@ common shared /map_a/ order_list() as integer
 '' array of integers in the first place; nothing indexes it. 8K on dm3ish
 '' and 40K on e1m1, which is the largest single item on that map.
 ''
-common shared /map_a/ pvs_ptr as long, pvs_size as long
+'' The visibility lump is NOT here any more. model.bas allocates it and
+'' hands out its base through pvs_base; pvs_size never left that module
+'' at all, so it needs no accessor.
 common shared /map_a/ tex_inf_buff() as texinfo2, poly_flag() as integer
 
 ''
@@ -200,7 +202,8 @@ common shared /map_a/ h_tri as long
 '' array was never needed for it.
 const MEM_MARKS = 20
 
-common shared /map_a/ z_dc as long
+'' The depth buffer is NOT here any more -- main.bas creates it and
+'' d_poly asks z_on whether depth is available.
 ''
 '' The colormap: 64 light levels x 256 colours, in a memAlloc'd block.
 ''
