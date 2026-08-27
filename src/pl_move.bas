@@ -123,7 +123,7 @@ function pl_point_contents ( p as vec3 ) as integer
         end if
     loop
 
-    pl_point_contents = lef_buffer( not nodenr ).cont
+    pl_point_contents = rb_leaf_contents%( not nodenr )
 
 end function
 

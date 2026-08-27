@@ -52,7 +52,8 @@ common shared /map_s/ ldr as LoadState
 '' array, so these stay loose.
 ''
 common shared /map_a/ tri_buffer() as face2
-common shared /map_a/ lef_buffer() as leaf2
+'' The leaves are NOT here any more -- r_bsp.bas owns them and loads
+'' them; pl_move asks rb_leaf_contents for the one field it wants.
 
 ''
 '' The geometry store. Every face's corner positions written out flat, in
@@ -156,7 +157,6 @@ common shared /map_a/ tex_inf_buff() as texinfo2, poly_flag() as integer
 '' buys is a bigger contiguous hole for the allocations that follow, which
 '' is what actually fails first.
 ''
-common shared /map_a/ h_lef as long
 '' The faces. 55,160 bytes on e1m1, the largest single item left.
 common shared /map_a/ h_tri as long
 
