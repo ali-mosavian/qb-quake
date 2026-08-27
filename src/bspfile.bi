@@ -482,8 +482,6 @@ declare sub mod_alloc ( )
 
 declare sub mod_load_faces ( )
 declare sub mod_load_lightmaps ( )
-declare sub sc_stats ( s as CacheStats )
-declare function sc_frame_end ( ) as integer
 declare function mod_geom_map ( byval row as integer ) as long
 declare function mod_geom_rows ( ) as integer
 declare function mod_pvs_base ( ) as long
@@ -495,58 +493,6 @@ declare function mod_cm_map ( ) as long
 declare function mod_cm_ready ( ) as integer
 declare function mod_cm_bytes ( ) as long
 declare sub mod_load_colormap ( )
-declare sub sc_init ( )
-declare function sc_ready ( ) as integer
-declare function sc_held ( byval face as integer ) as integer
-declare function sc_store_open ( ) as integer
-declare sub sc_point ( _
-    byval dc as long, _
-    byval ofs as long, _
-    byval rows as integer _
-)
-declare function sc_grab ( byval sz as long ) as long
-declare function sc_shift ( byval v as integer ) as integer
-declare function sc_mipfloor ( _
-    byval extw as integer, _
-    byval exth as integer _
-) as integer
-declare sub sc_flush ( )
-declare function sc_find ( _
-    byval face as integer, _
-    byval mip as integer, _
-    byval w as integer, _
-    byval h as integer _
-) as long
-declare function sc_alloc ( _
-    byval face as integer, _
-    byval mip as integer, _
-    byval w as integer, _
-    byval h as integer, _
-    byval fw as integer, _
-    byval fh as integer _
-) as long
-declare sub sc_lru_unlink ( byval b as integer )
-declare sub sc_lru_touch ( byval b as integer )
-declare sub sc_reset ( )
-declare sub sc_shutdown ( )
-declare function sc_selftest ( ) as integer
-declare function sb_seg ( byval p as long ) as integer
-declare sub sb_fetch ( byval face as integer )
-declare function sb_i ( byval o as long ) as integer
-declare function sb_u ( byval o as long ) as long
-declare function sb_pot ( byval v as integer ) as integer
-declare sub sb_dump ( _
-    byval face as integer, _
-    byval mip as integer _
-)
-declare sub sb_build ( _
-    byval dc as long, _
-    byval tex as long, _
-    byval face as integer, _
-    byval mip as integer, _
-    byval sw as integer, _
-    byval sh as integer _
-)
 declare sub mod_load_facevtx ( )
 declare sub mod_load_leafs ( )
 declare sub mod_load_marksurfaces ( )
@@ -587,6 +533,79 @@ declare function pl_point_contents ( _
 ) as integer
 
 declare sub d_init_turb ( )
+declare sub sb_build ( _
+    byval dc as long, _
+    byval tex as long, _
+    byval face as integer, _
+    byval mip as integer, _
+    byval sw as integer, _
+    byval sh as integer, _
+    tri_buffer() as Face, _
+    tex_inf_buff() as TexInfo, _
+    gv_buf() as integer, _
+    mip_buff_inf() as MipTex _
+)
+declare sub sb_dump ( _
+    byval face as integer, _
+    byval mip as integer, _
+    byval nfaces as long, _
+    tri_buffer() as Face, _
+    tex_inf_buff() as TexInfo, _
+    gv_buf() as integer, _
+    h_rawtx_dc() as long _
+)
+declare sub sb_fetch ( _
+    byval face as integer, _
+    tri_buffer() as Face, _
+    gv_buf() as integer _
+)
+declare function sb_i ( byval o as long ) as integer
+declare function sb_pot ( byval v as integer ) as integer
+declare function sb_seg ( byval p as long ) as integer
+declare function sb_u ( byval o as long ) as long
+declare function sc_alloc ( _
+    byval face as integer, _
+    byval mip as integer, _
+    byval w as integer, _
+    byval h as integer, _
+    byval fw as integer, _
+    byval fh as integer, _
+    byval nfaces as long _
+)
+declare sub sc_bfree ( byval blk as integer )
+declare sub sc_bput ( byval b as integer )
+declare function sc_brec ( ) as integer
+declare function sc_bsplit ( byval ord as integer ) as integer
+declare function sc_find ( _
+    byval face as integer, _
+    byval mip as integer, _
+    byval w as integer, _
+    byval h as integer _
+)
+declare sub sc_flush ( byval nfaces as long )
+declare function sc_fpop ( byval ord as integer ) as integer
+declare sub sc_fpush ( byval b as integer )
+declare function sc_frame_end ( ) as integer
+declare function sc_ftake ( _
+    byval ord as integer, _
+    byval gran as integer _
+) as integer
+declare function sc_grab ( byval sz as long ) as long
+declare function sc_held ( byval face as integer ) as integer
+declare sub sc_init ( byval nfaces as long )
+declare sub sc_lru_touch ( byval b as integer )
+declare sub sc_lru_unlink ( byval b as integer )
+declare function sc_mipfloor ( _
+    byval extw as integer, _
+    byval exth as integer _
+) as integer
+declare function sc_ready ( ) as integer
+declare sub sc_reset ( byval nfaces as long )
+declare function sc_selftest ( byval nfaces as long ) as integer
+declare function sc_shift ( byval v as integer ) as integer
+declare sub sc_stats ( s as CacheStats )
+declare function sc_store_open ( ) as integer
+
 declare function r_plane_dist ( _
     p as Vec3, _
     pl as Plane _
