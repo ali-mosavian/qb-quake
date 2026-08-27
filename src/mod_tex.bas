@@ -34,11 +34,21 @@ option explicit
 ''
 '' This module's own procedures.
 ''
+declare sub mod_link_anims ( wld as World )
+
+''
+'' This module's own procedures.
+''
 declare sub mod_load_texinfo ( _
     wld as World, _
+    env as Env, _
     tex_info() as TexInfo _
 )
-declare sub mod_load_textures ( wld as World )
+declare sub mod_load_textures ( _
+    wld as World, _
+    env as Env, _
+    pal as long _
+)
 
 ''
 '' Declared here, not in a header: this module is the only caller, and a
@@ -66,6 +76,7 @@ dim shared t_mip_inf( 1 ) as DiskMipTex
 ''::::::::::
 sub mod_load_texinfo ( _
     wld as World, _
+    env as Env, _
     tex_info() as TexInfo _
 )
     scr_load_stage "texture info"
@@ -112,7 +123,11 @@ end sub
 ''       matches each one back into the Quake palette. One loop over
 ''       numtex, so it is one routine.
 ''::::::::::
-sub mod_load_textures ( wld as World )
+sub mod_load_textures ( _
+    wld as World, _
+    env as Env, _
+    pal as long _
+)
     dim i as integer, j as integer
     dim bmp_file as string
     dim dc as long

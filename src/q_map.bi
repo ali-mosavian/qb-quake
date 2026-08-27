@@ -97,7 +97,6 @@ type LoadState
     dc          as long         '' the temporary 320x200 loading DC
 end type
 
-common shared /map_s/ wld as World
 '' ldr is NOT here any more. screen.bas draws the loading screen and is
 '' the only module that touches it; loaders report through scr_load_step.
 
@@ -352,51 +351,3 @@ declare function mod_geom_map ( _
     wld as World, _
     byval row as integer _
 ) as long
-declare sub hud_shade ( _
-    wld as World, _
-    dc as long, _
-    x0 as integer, _
-    y0 as integer, _
-    x1 as integer, _
-    y1 as integer, _
-    rw as integer _
-)
-declare sub mod_alloc ( _
-    wld as World, _
-    faces() as Face, _
-    texinf() as TexInfo, _
-    planes() as Plane, _
-    nodes() as Node, _
-    models() as Submodel, _
-    ord() as integer, _
-    pflag() as integer _
-)
-declare sub mod_link_anims ( wld as World )
-declare sub mod_load_clipnodes ( wld as World )
-declare sub mod_load_faces ( _
-    wld as World, _
-    faces() as Face _
-)
-declare sub mod_load_facevtx ( _
-    wld as World, _
-    gv_buf() as integer _
-)
-declare sub mod_load_leafs ( wld as World )
-declare sub mod_load_lightmaps ( wld as World )
-declare sub mod_load_marksurfaces ( wld as World )
-declare sub mod_load_nodes ( _
-    wld as World, _
-    nodes() as Node _
-)
-declare sub mod_load_visibility ( wld as World )
-declare sub r_mark_leaves ( _
-    byval nodenr as integer, _
-    wld as World, _
-    campos as u3dVector3f, _
-    nodes() as Node, _
-    planes() as Plane, _
-    bit_array() as integer, _
-    pvsb() as integer _
-)
-declare sub sc_flush ( wld as World )
-declare sub sc_reset ( wld as World )

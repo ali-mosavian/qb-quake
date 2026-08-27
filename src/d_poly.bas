@@ -36,6 +36,20 @@ option explicit
 ''
 '' This module's own procedures.
 ''
+declare sub d_clip_z ( _
+    ot_vtx() as u3dVector4f, _
+    ot_uv() as TexCoord, _
+    ot_cnt as integer, _
+    in_vtx() as u3dVector4f, _
+    in_uv() as TexCoord, _
+    in_cnt as integer, _
+    byval z_near as single, _
+    byval z_far as single _
+)
+
+''
+'' This module's own procedures.
+''
 declare sub d_draw_faces ( _
     h_dst_dc as long, _
     mtx_fin as u3dMtrx, _

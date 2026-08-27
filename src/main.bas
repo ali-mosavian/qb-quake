@@ -60,6 +60,141 @@ option explicit
 ''
 '' This module's own procedures.
 ''
+declare sub cp_load ( _
+    cp as CamPath, _
+    cp_x() as integer, _
+    cp_y() as integer, _
+    cp_z() as integer _
+)
+declare sub host_bench_report ( _
+    frame_no as long, _
+    h_dst_dc as long, _
+    wld as World, _
+    env as Env, _
+    pl as PlayerState, _
+    rdr as RenderState, _
+    scr as ScreenState, _
+    cp as CamPath, _
+    ft as FrameTimes, _
+    brush() as BrushModel, _
+    plat() as PlatEnt _
+)
+declare sub host_render ( _
+    byval h_dst_dc as long, _
+    mtx_prj as u3dMtrx, _
+    byval xresh as single, _
+    byval yresh as single, _
+    wld as World, _
+    env as Env, _
+    cam as CamState, _
+    rdr as RenderState, _
+    vis as VisState, _
+    scr as ScreenState, _
+    tri_buffer() as Face, _
+    tex_inf_buff() as TexInfo, _
+    pln_buffer() as Plane, _
+    nds_buffer() as Node, _
+    mdl_buffer() as Submodel, _
+    order_list() as integer, _
+    poly_flag() as integer, _
+    gv_buf() as integer, _
+    brush() as BrushModel, _
+    frustum() as DiskPlane, _
+    bit_array() as integer, _
+    h_rawtx_dc() as long, _
+    h_textr_dc() as long, _
+    mip_buff_inf() as MipTex, _
+    face_mdl() as integer _
+)
+declare sub host_tick ( _
+    byval dt as single, _
+    wld as World, _
+    scr as ScreenState, _
+    env as Env, _
+    pl as PlayerState, _
+    rdr as RenderState, _
+    cam as CamState, _
+    cp as CamPath, _
+    brush() as BrushModel, _
+    models() as Submodel, _
+    planes() as Plane, _
+    nodes() as Node, _
+    cp_x() as integer, _
+    cp_y() as integer, _
+    cp_z() as integer _
+)
+declare sub host_advance ( _
+    byval real_dt as single, _
+    wld as World, _
+    scr as ScreenState, _
+    env as Env, _
+    pl as PlayerState, _
+    rdr as RenderState, _
+    cam as CamState, _
+    cp as CamPath, _
+    brush() as BrushModel, _
+    models() as Submodel, _
+    planes() as Plane, _
+    nodes() as Node, _
+    cp_x() as integer, _
+    cp_y() as integer, _
+    cp_z() as integer _
+)
+declare sub host_init ( _
+    wld as World, _
+    pal as long, _
+    env as Env, _
+    pl as PlayerState, _
+    cam as CamState, _
+    tri_buffer() as Face, _
+    tex_inf_buff() as TexInfo, _
+    pln_buffer() as Plane, _
+    nds_buffer() as Node, _
+    mdl_buffer() as Submodel, _
+    order_list() as integer, _
+    poly_flag() as integer, _
+    gv_buf() as integer, _
+    bit_array() as integer, _
+    cp_x() as integer, _
+    cp_y() as integer, _
+    cp_z() as integer, _
+    cp as CamPath, _
+    vis as VisState _
+)
+declare sub host_main ( _
+    env as Env, _
+    cam as CamState, _
+    rdr as RenderState, _
+    vis as VisState, _
+    scr as ScreenState, _
+    cp as CamPath, _
+    ft as FrameTimes, _
+    wld as World, _
+    pl as PlayerState, _
+    cp_x() as integer, _
+    cp_y() as integer, _
+    cp_z() as integer, _
+    tri_buffer() as Face, _
+    tex_inf_buff() as TexInfo, _
+    pln_buffer() as Plane, _
+    nds_buffer() as Node, _
+    mdl_buffer() as Submodel, _
+    order_list() as integer, _
+    poly_flag() as integer, _
+    gv_buf() as integer, _
+    brush() as BrushModel, _
+    frustum() as DiskPlane, _
+    bit_array() as integer, _
+    h_rawtx_dc() as long, _
+    h_textr_dc() as long, _
+    mip_buff_inf() as MipTex, _
+    face_mdl() as integer, _
+    plat() as PlatEnt _
+)
+
+''
+'' This module's own procedures.
+''
 declare sub host_shutdown ( )
 declare function host_z_on ( ) as integer
 
@@ -103,13 +238,17 @@ declare sub s_init ( env as Env )
 declare sub s_start_music ( env as Env )
 declare sub s_stop_music ( env as Env )
 declare sub scr_begin_loading ( env as Env )
-declare sub sys_init_tables ( )
+declare sub sys_init_tables ( env as Env )
 declare sub sys_parse_args ( env as Env )
 declare sub sys_time_init ( )
-declare sub vid_init ( env as Env )
+declare sub vid_init ( _
+    env as Env, _
+    pal as long _
+)
 declare sub vid_init_ugl ( )
 declare sub mod_load_texinfo ( _
     wld as World, _
+    env as Env, _
     tex_info() as TexInfo _
 )
 declare sub mod_load_world ( _
@@ -144,7 +283,11 @@ declare function mod_lm_got ( wld as World ) as long
 declare function sc_selftest ( wld as World ) as integer
 declare sub mod_close ( wld as World )
 declare sub mod_load_colormap ( wld as World )
-declare sub mod_load_textures ( wld as World )
+declare sub mod_load_textures ( _
+    wld as World, _
+    env as Env, _
+    pal as long _
+)
 declare sub sc_init ( wld as World )
 declare sub r_draw_world ( _
     byval model as integer, _
@@ -186,6 +329,7 @@ declare sub d_draw_faces ( _
 )
 declare sub scr_count_frame ( _
     env as Env, _
+    ft as FrameTimes, _
     scr as ScreenState, _
     rdr as RenderState _
 )
@@ -222,8 +366,6 @@ declare sub pl_init ( _
     cam as CamState, _
     env as Env _
 )
-Declare Sub cp_load ( )
-Declare Sub cp_advance ( )
 
 ''
 '' Simulation time owed but not yet run. Frames deliver time in whatever
@@ -252,6 +394,22 @@ dim shared lightmap as long
 '' depth exists at all -- host_z_on answers that.
 ''
 ''
+'' THE APPLICATION STATE. `dim`, not `dim shared`: module-level code can
+'' see these and the procedures below cannot, so the compiler enforces
+'' that everything receives what it needs rather than reaching for it.
+''
+dim wld as World
+dim pal as long
+dim pl as PlayerState
+dim vis as VisState
+dim cam as CamState
+dim rdr as RenderState
+dim env as Env
+dim scr as ScreenState
+dim cp as CamPath
+dim ft as FrameTimes
+
+''
 '' THE MAP ARRAYS. Declared here because REDIM forces an array to module
 '' level and something has to hold them -- this is the module that runs
 '' the load and the frame, so nothing else needs to name them. World
@@ -278,6 +436,9 @@ declare sub v_update_camera ( _
     pl as PlayerState, _
     cam as CamState, _
     cp as CamPath, _
+    cp_x() as integer, _
+    cp_y() as integer, _
+    cp_z() as integer, _
     brush() as BrushModel, _
     models() as Submodel, _
     planes() as Plane, _
@@ -355,12 +516,19 @@ dim shared z_dc as long
         
     '':::::
     
-    host_init 
+    host_init wld, pal, env, pl, cam, _
+              tri_buffer(), tex_inf_buff(), pln_buffer(), nds_buffer(), mdl_buffer(), _
+              order_list(), poly_flag(), gv_buf(), bit_array(), _
+              cp_x(), cp_y(), cp_z(), cp, vis
     if ( env.dump_set ) then
         sb_dump env.dump_face, env.dump_mip, wld, _
                 tri_buffer(), tex_inf_buff(), gv_buf(), h_rawtx_dc()
     else
-        host_main
+        host_main env, cam, rdr, vis, scr, cp, ft, wld, pl, _
+              cp_x(), cp_y(), cp_z(), _
+              tri_buffer(), tex_inf_buff(), pln_buffer(), nds_buffer(), mdl_buffer(), _
+              order_list(), poly_flag(), gv_buf(), brush(), frustum(), bit_array(), _
+              h_rawtx_dc(), h_textr_dc(), mip_buff_inf(), face_mdl(), plat()
     end if
     host_shutdown
     
@@ -395,7 +563,27 @@ HandleErr:
 ''       reads as the list of things that have to be true before the first
 ''       frame. Contrast bspDrawFaces, which is one routine on purpose.
 ''::::::::::
-sub host_init
+sub host_init ( _
+    wld as World, _
+    pal as long, _
+    env as Env, _
+    pl as PlayerState, _
+    cam as CamState, _
+    tri_buffer() as Face, _
+    tex_inf_buff() as TexInfo, _
+    pln_buffer() as Plane, _
+    nds_buffer() as Node, _
+    mdl_buffer() as Submodel, _
+    order_list() as integer, _
+    poly_flag() as integer, _
+    gv_buf() as integer, _
+    bit_array() as integer, _
+    cp_x() as integer, _
+    cp_y() as integer, _
+    cp_z() as integer, _
+    cp as CamPath, _
+    vis as VisState _
+)
     ''
     '' Load profiling. A 1 kHz AUTOINIT timer counts milliseconds, and the
     '' phase boundaries below are recorded so load time can be attributed
@@ -414,7 +602,7 @@ sub host_init
 
     '' arguments and subsystems
     sys_parse_args env
-    sys_init_tables
+    sys_init_tables env
     sys_mem_mark "start"
     d_init_turb
     vid_init_ugl
@@ -443,8 +631,8 @@ sub host_init
     t_lump = timer
 
     '' textures and palette
-    mod_load_texinfo wld, tex_inf_buff()
-    mod_load_textures wld
+    mod_load_texinfo wld, env, tex_inf_buff()
+    mod_load_textures wld, env, pal
     sys_mem_mark "textures"
     mod_close wld
     sys_mem_mark "mapclose"
@@ -455,7 +643,7 @@ sub host_init
     t_tex = timer
 
     '' hand over to the real video mode
-    vid_init env
+    vid_init env, pal
     sys_mem_mark "backbuf"
     in_init env
     s_stop_music env
@@ -489,7 +677,36 @@ end sub
 
 
 ''::::
-sub host_main
+sub host_main ( _
+    env as Env, _
+    cam as CamState, _
+    rdr as RenderState, _
+    vis as VisState, _
+    scr as ScreenState, _
+    cp as CamPath, _
+    ft as FrameTimes, _
+    wld as World, _
+    pl as PlayerState, _
+    cp_x() as integer, _
+    cp_y() as integer, _
+    cp_z() as integer, _
+    tri_buffer() as Face, _
+    tex_inf_buff() as TexInfo, _
+    pln_buffer() as Plane, _
+    nds_buffer() as Node, _
+    mdl_buffer() as Submodel, _
+    order_list() as integer, _
+    poly_flag() as integer, _
+    gv_buf() as integer, _
+    brush() as BrushModel, _
+    frustum() as DiskPlane, _
+    bit_array() as integer, _
+    h_rawtx_dc() as long, _
+    h_textr_dc() as long, _
+    mip_buff_inf() as MipTex, _
+    face_mdl() as integer, _
+    plat() as PlatEnt _
+)
     dim mtx_prj as u3dMtrx
     
     
@@ -580,7 +797,7 @@ sub host_main
     redim cp_x(CP_MAX) as integer
     redim cp_y(CP_MAX) as integer
     redim cp_z(CP_MAX) as integer
-    if ( env.cam_path ) then cp_load
+    if ( env.cam_path ) then cp_load cp, cp_x(), cp_y(), cp_z()
     vis.bad_order = env.bad_order
     vis.no_ents   = env.no_ents
     
@@ -623,7 +840,9 @@ sub host_main
             ft.n   = ft.n + 1
         end if
 
-        host_advance scr.frame_time
+        host_advance scr.frame_time, wld, scr, env, pl, rdr, cam, cp, brush(), _
+                     mdl_buffer(), pln_buffer(), nds_buffer(), _
+                     cp_x(), cp_y(), cp_z()
 
         '' cp_advance is called from view.bas now, where the movement
         '' input is assembled -- it steers the player rather than placing
@@ -632,7 +851,11 @@ sub host_main
         ''
         '' Combine all transforms
         ''
-        host_render h_dst_dc, mtx_prj, xresh, yresh
+        host_render h_dst_dc, mtx_prj, xresh, yresh, _
+                    wld, env, cam, rdr, vis, scr, _
+                    tri_buffer(), tex_inf_buff(), pln_buffer(), nds_buffer(), mdl_buffer(), _
+                    order_list(), poly_flag(), gv_buf(), brush(), frustum(), _
+                    bit_array(), h_rawtx_dc(), h_textr_dc(), mip_buff_inf(), face_mdl()
 
 
         ''
@@ -645,21 +868,24 @@ sub host_main
         frame_no = frame_no + 1
         '' -campath ends when the route does, whatever -bench says
         if ( env.cam_path and cp.done ) then
-            host_bench_report frame_no, h_dst_dc
+            host_bench_report frame_no, h_dst_dc, wld, env, pl, rdr, scr, cp, ft, _
+                              brush(), plat()
             exit do
         end if
         if ( env.bench_ticks > 0 and host_ticks >= env.bench_ticks ) then
-            host_bench_report frame_no, h_dst_dc
+            host_bench_report frame_no, h_dst_dc, wld, env, pl, rdr, scr, cp, ft, _
+                              brush(), plat()
             exit do
         end if
         if ( env.bench_frames > 0 and frame_no >= env.bench_frames ) then
-            host_bench_report frame_no, h_dst_dc
+            host_bench_report frame_no, h_dst_dc, wld, env, pl, rdr, scr, cp, ft, _
+                              brush(), plat()
             exit do
         end if
 
         in_screenshot_key h_dst_dc, env
         vid_update h_dst_dc, page, env
-        scr_count_frame env, scr, rdr
+        scr_count_frame env, ft, scr, rdr
 
         ''
         '' -benchsecs: a wall-clock budget instead of a frame/tick count, for
@@ -667,7 +893,8 @@ sub host_main
         '' scr_count_frame just above, so this must run after it.
         ''
         if ( env.bench_secs > 0 and scr.bench_secs >= env.bench_secs ) then
-            host_bench_report frame_no, h_dst_dc
+            host_bench_report frame_no, h_dst_dc, wld, env, pl, rdr, scr, cp, ft, _
+                              brush(), plat()
             exit do
         end if
 
@@ -702,7 +929,12 @@ end sub
 ''       not here -- a path through lava would time the warp and the
 ''       palette flash rather than the renderer.
 ''::::::::::
-sub cp_load
+sub cp_load ( _
+    cp as CamPath, _
+    cp_x() as integer, _
+    cp_y() as integer, _
+    cp_z() as integer _
+)
     dim f as integer
     dim i as integer, n as integer
     dim x as integer, y as integer, z as integer
@@ -740,7 +972,14 @@ end sub
 ''       compare the renderer instead of how far a quicker build managed
 ''       to travel in the same wall time.
 ''::::::::::
-sub cp_advance
+sub cp_advance ( _
+    byval dt as single, _
+    pl as PlayerState, _
+    cp as CamPath, _
+    cp_x() as integer, _
+    cp_y() as integer, _
+    cp_z() as integer _
+)
     dim dx as single, dy as single, dl as single
     dim k as integer, best as integer
     dim bestd as single
@@ -865,14 +1104,32 @@ end sub
 ''       carried. Physics sees a constant rate; only how many steps a
 ''       frame runs varies.
 ''::::::::::
-sub host_advance ( byval real_dt as single )
+sub host_advance ( _
+    byval real_dt as single, _
+    wld as World, _
+    scr as ScreenState, _
+    env as Env, _
+    pl as PlayerState, _
+    rdr as RenderState, _
+    cam as CamState, _
+    cp as CamPath, _
+    brush() as BrushModel, _
+    models() as Submodel, _
+    planes() as Plane, _
+    nodes() as Node, _
+    cp_x() as integer, _
+    cp_y() as integer, _
+    cp_z() as integer _
+)
     dim steps as integer
 
     host_accum = host_accum + real_dt
 
     steps = 0
     do while ( host_accum >= HOST_DT# and steps < HOST_MAXSTEPS )
-        host_tick HOST_DT#
+        host_tick HOST_DT#, wld, scr, env, pl, rdr, cam, cp, brush(), _
+                  mdl_buffer(), pln_buffer(), nds_buffer(), _
+                  cp_x(), cp_y(), cp_z()
         host_accum = host_accum - HOST_DT#
         host_ticks = host_ticks + 1
         steps = steps + 1
@@ -900,13 +1157,29 @@ end sub
 ''       fixed step, a halved step for a sub-tick -- without the routine
 ''       knowing or caring.
 ''::::::::::
-sub host_tick ( byval dt as single )
+sub host_tick ( _
+    byval dt as single, _
+    wld as World, _
+    scr as ScreenState, _
+    env as Env, _
+    pl as PlayerState, _
+    rdr as RenderState, _
+    cam as CamState, _
+    cp as CamPath, _
+    brush() as BrushModel, _
+    models() as Submodel, _
+    planes() as Plane, _
+    nodes() as Node, _
+    cp_x() as integer, _
+    cp_y() as integer, _
+    cp_z() as integer _
+)
 
     '' what the player asked for
     in_handle_toggles env, pl, cam, rdr, scr
 
     '' and what the world does about it: camera, and the physics under it
-    v_update_camera dt, wld, env, pl, cam, cp, brush(), _
+    v_update_camera dt, wld, env, pl, cam, cp, cp_x(), cp_y(), cp_z(), brush(), _
                     mdl_buffer(), pln_buffer(), nds_buffer()
 
     '' and anything the world does to the player as a result of moving
@@ -935,7 +1208,28 @@ sub host_render ( _
     byval h_dst_dc as long, _
     mtx_prj as u3dMtrx, _
     byval xresh as single, _
-    byval yresh as single _
+    byval yresh as single, _
+    wld as World, _
+    env as Env, _
+    cam as CamState, _
+    rdr as RenderState, _
+    vis as VisState, _
+    scr as ScreenState, _
+    tri_buffer() as Face, _
+    tex_inf_buff() as TexInfo, _
+    pln_buffer() as Plane, _
+    nds_buffer() as Node, _
+    mdl_buffer() as Submodel, _
+    order_list() as integer, _
+    poly_flag() as integer, _
+    gv_buf() as integer, _
+    brush() as BrushModel, _
+    frustum() as DiskPlane, _
+    bit_array() as integer, _
+    h_rawtx_dc() as long, _
+    h_textr_dc() as long, _
+    mip_buff_inf() as MipTex, _
+    face_mdl() as integer _
 )
     dim mtx_mdl as u3dMtrx
     dim zz as long                  '' soaks up uglZMode's return;
@@ -1028,7 +1322,16 @@ end sub
 ''::::::::::
 sub host_bench_report ( _
     frame_no as long, _
-    h_dst_dc as long _
+    h_dst_dc as long, _
+    wld as World, _
+    env as Env, _
+    pl as PlayerState, _
+    rdr as RenderState, _
+    scr as ScreenState, _
+    cp as CamPath, _
+    ft as FrameTimes, _
+    brush() as BrushModel, _
+    plat() as PlatEnt _
 )
     dim scs as CacheStats
     dim dv as long

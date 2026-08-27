@@ -31,6 +31,137 @@ option explicit
 ''
 '' This module's own procedures.
 ''
+declare sub hud_shade ( _
+    wld as World, _
+    dc as long, _
+    x0 as integer, _
+    y0 as integer, _
+    x1 as integer, _
+    y1 as integer, _
+    rw as integer _
+)
+declare function draw_load_font ( _
+    flname as string, _
+    colb as long, _
+    env as Env, _
+    bit_array() as integer _
+) as integer
+declare sub bevel ( _
+    x0 as integer, _
+    y0 as integer, _
+    x1 as integer, _
+    y1 as integer, _
+    hi as integer, _
+    lo as integer, _
+    raised as integer _
+)
+declare sub bg_band ( _
+    x0 as integer, _
+    x1 as integer, _
+    y0 as integer, _
+    y1 as integer _
+)
+declare sub draw_bar ( _
+    h_dc as long, _
+    x as integer, _
+    y as integer, _
+    wdt as integer, _
+    hgt as integer, _
+    percent as single _
+)
+declare sub draw_logo ( _
+    text as string, _
+    x as integer, _
+    y as integer, _
+    sc as integer _
+)
+declare sub draw_pct ( _
+    dc as long, _
+    xright as integer, _
+    y as integer, _
+    percent as single _
+)
+declare sub draw_string ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    text as string _
+)
+declare sub draw_string_r ( _
+    dc as long, _
+    xright as integer, _
+    y as integer, _
+    text as string _
+)
+declare sub draw_string_scl ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    scale as single, _
+    text as string _
+)
+declare sub hud_bar ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    w as integer, _
+    h as integer, _
+    percent as single _
+)
+declare sub hud_graph ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    h as integer, _
+    buf() as integer, _
+    mx as integer _
+)
+declare sub hud_num ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    sc as integer, _
+    txt as string, _
+    col as integer _
+)
+declare sub hud_panel ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    w as integer, _
+    h as integer, _
+    title as string, _
+    wld as World _
+)
+declare sub hud_row ( _
+    dc as long, _
+    x as integer, _
+    w as integer, _
+    y as integer, _
+    label as string, _
+    value as string _
+)
+declare sub hud_vu ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    w as integer, _
+    h as integer, _
+    percent as single, _
+    ch as integer _
+)
+declare sub rivet ( _
+    x as integer, _
+    y as integer _
+)
+declare sub draw_spinner ( )
+declare sub scr_load_chrome ( env as Env )
+declare sub scr_load_palette ( )
+declare sub scr_load_tick ( )
+
+''
+'' This module's own procedures.
+''
 declare sub scr_load_part ( _
     byval frac as single, _
     byval redraw as integer _
@@ -49,6 +180,7 @@ declare sub draw_init_font ( _
 )
 declare sub scr_count_frame ( _
     env as Env, _
+    ft as FrameTimes, _
     scr as ScreenState, _
     rdr as RenderState _
 )
@@ -954,7 +1086,8 @@ sub hud_panel ( _
     y as integer, _
     w as integer, _
     h as integer, _
-    title as string _
+    title as string, _
+    wld as World _
 )
     ''
     '' Tinted glass, then the slab's furniture: the scene stays visible
@@ -1165,7 +1298,7 @@ sub scr_draw_hud ( _
         ''
         '' left, top: this frame
         ''
-        hud_panel h_dst_dc, lx, 6, cw, 76, "RENDER"
+        hud_panel h_dst_dc, lx, 6, cw, 76, "RENDER", wld
 
         ''
         '' The frame rate is the number a player actually watches, so it
@@ -1198,7 +1331,7 @@ sub scr_draw_hud ( _
         '' one crossing into d_surf for the whole panel
         sc_stats scs
 
-        hud_panel h_dst_dc, lx, 90, cw, 78, "SURFACE CACHE"
+        hud_panel h_dst_dc, lx, 90, cw, 78, "SURFACE CACHE", wld
 
         ''
         '' Warning flash: evictions and flushes are the events being
@@ -1235,7 +1368,7 @@ sub scr_draw_hud ( _
         ''
         '' right: the map, which never changes while it is loaded
         ''
-        hud_panel h_dst_dc, rx, 6, cw, 56, "WORLD"
+        hud_panel h_dst_dc, rx, 6, cw, 56, "WORLD", wld
         hud_row h_dst_dc, rx, cw, 12, "Resolution", _
                 ltrim$(str$( env.x_res )) + "x" + ltrim$(str$( env.y_res ))
         hud_row h_dst_dc, rx, cw, 20, "Vertices", ltrim$(str$( wld.count.verts ))
@@ -1393,6 +1526,7 @@ end sub
 ''::::::::::
 sub scr_count_frame ( _
     env as Env, _
+    ft as FrameTimes, _
     scr as ScreenState, _
     rdr as RenderState _
 )

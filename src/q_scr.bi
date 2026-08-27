@@ -41,7 +41,6 @@ type ScreenState
                                 '' is coarser than a frame.
 end type
 
-common shared /scr_s/ scr as ScreenState
 
 ''
 '' The benchmark flight path (tools/campath.py, A* over the map's EMPTY
@@ -134,8 +133,6 @@ end type
 
 '' The path itself stays loose: arrays cannot be TYPE members.
 common shared /scr_s/ cp_x() as integer, cp_y() as integer, cp_z() as integer
-common shared /scr_s/ cp as CamPath
-common shared /scr_s/ ft as FrameTimes
 
 ''
 '' screen.bas. Declared here: these name ScreenState and friends.

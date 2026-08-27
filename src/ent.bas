@@ -30,6 +30,36 @@ option explicit
 ''
 '' This module's own procedures.
 ''
+declare function ent_find_node ( _
+    byval m as integer, _
+    models() as Submodel, _
+    nodes() as Node, _
+    planes() as Plane _
+) as integer
+declare function ent_point_leaf ( _
+    p as Vec3, _
+    nodes() as Node, _
+    planes() as Plane _
+) as integer
+declare function ent_value ( _
+    strm() as string, _
+    byval strm_cnt as integer, _
+    kname as string _
+) as string
+declare sub ent_vec ( _
+    strm() as string, _
+    byval strm_cnt as integer, _
+    kname as string, _
+    v as Vec3 _
+)
+declare function ent_plat_touched ( _
+    byval p as integer, _
+    pl as PlayerState _
+) as integer
+
+''
+'' This module's own procedures.
+''
 declare sub ent_load_teleports ( _
     wld as World, _
     models() as Submodel _

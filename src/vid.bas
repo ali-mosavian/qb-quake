@@ -36,7 +36,10 @@ declare sub vid_update ( _
     env as Env _
 )
 declare sub vid_init_ugl ( )
-declare sub vid_init ( env as Env )
+declare sub vid_init ( _
+    env as Env, _
+    pal as long _
+)
 
 ''
 '' Declared here, not in a header: this module is the only caller, and a
@@ -67,7 +70,10 @@ end sub
 '' name: vid_init
 '' desc: Final video mode, backbuffer and the Quake palette.
 ''::::::::::
-sub vid_init ( env as Env )
+sub vid_init ( _
+    env as Env, _
+    pal as long _
+)
     dim pages as integer
 
     if ( env.use_paging = true ) then

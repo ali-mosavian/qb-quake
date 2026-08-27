@@ -23,6 +23,26 @@ option explicit
 ''
 '' This module's own procedures.
 ''
+declare function com_arg ( _
+    strm() as string, _
+    strm_cnt as integer, _
+    line_num as integer _
+) as string
+declare function com_yesno ( _
+    strm() as string, _
+    strm_cnt as integer, _
+    line_num as integer _
+) as integer
+declare sub com_check_args ( _
+    strm() as string, _
+    strm_cnt as integer, _
+    byval want as integer, _
+    byval line_num as integer _
+)
+
+''
+'' This module's own procedures.
+''
 declare sub com_parse_config ( _
     filename as string, _
     env as Env _

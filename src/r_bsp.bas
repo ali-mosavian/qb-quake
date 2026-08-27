@@ -29,6 +29,33 @@ option explicit
 ''
 '' This module's own procedures.
 ''
+declare sub r_mark_leaves ( _
+    byval nodenr as integer, _
+    wld as World, _
+    campos as u3dVector3f, _
+    nodes() as Node, _
+    planes() as Plane, _
+    bit_array() as integer, _
+    pvsb() as integer _
+)
+declare function r_cull_box ( _
+    bbox as Bounds, _
+    frustum() as DiskPlane _
+) as integer
+declare function r_node_side ( _
+    byval node_idx as integer, _
+    pt as u3dVector3f, _
+    nodes() as Node, _
+    planes() as Plane _
+)
+declare function r_plane_dist ( _
+    p as Vec3, _
+    pl as Plane _
+) as single
+
+''
+'' This module's own procedures.
+''
 declare function r_cam_plane_dist ( _
     pt as u3dVector3f, _
     pl as Plane _

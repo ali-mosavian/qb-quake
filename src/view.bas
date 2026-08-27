@@ -28,6 +28,18 @@ option explicit
 '$include: 'q_ent.bi'
 
 ''
+'' cp_advance lives in main.bas; this is its only caller.
+''
+declare sub cp_advance ( _
+    byval dt as single, _
+    pl as PlayerState, _
+    cp as CamPath, _
+    cp_x() as integer, _
+    cp_y() as integer, _
+    cp_z() as integer _
+)
+
+''
 '' This module's own procedures.
 ''
 declare sub v_update_camera ( _
@@ -37,6 +49,9 @@ declare sub v_update_camera ( _
     pl as PlayerState, _
     cam as CamState, _
     cp as CamPath, _
+    cp_x() as integer, _
+    cp_y() as integer, _
+    cp_z() as integer, _
     brush() as BrushModel, _
     models() as Submodel, _
     planes() as Plane, _
@@ -67,7 +82,6 @@ declare sub pl_move ( _
     nodes() as Node, _
     planes() as Plane _
 )
-Declare Sub cp_advance ( )
 
 ''
 '' Camera-script playback state. These were eight parameters threaded from
@@ -111,6 +125,9 @@ sub v_update_camera ( _
     pl as PlayerState, _
     cam as CamState, _
     cp as CamPath, _
+    cp_x() as integer, _
+    cp_y() as integer, _
+    cp_z() as integer, _
     brush() as BrushModel, _
     models() as Submodel, _
     planes() as Plane, _
@@ -263,7 +280,7 @@ sub v_update_camera ( _
             '' wall stops the walk exactly as it stops a player.
             ''
             if ( env.cam_path ) then
-                cp_advance
+                cp_advance dt, pl, cp, cp_x(), cp_y(), cp_z()
                 if ( cp.dir_x <> 0.0 or cp.dir_y <> 0.0 ) then
                     ''
                     '' Face the way we are going. The view and the walk
