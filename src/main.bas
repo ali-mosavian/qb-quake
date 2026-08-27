@@ -805,7 +805,11 @@ sub host_render ( _
     '' is fill, which paging does not affect.
     if ( env.no_draw ) then exit sub
 
-    d_draw_faces h_dst_dc, mtx_fin, xresh, yresh
+    d_draw_faces h_dst_dc, mtx_fin, xresh, yresh, _
+                 cam.pos, rdr, env, vis.frame_stamp, vis.ord_count, _
+                 tri_buffer(), tex_inf_buff(), gv_buf(), face_mdl(), brush(), _
+                 pln_buffer(), nds_buffer(), mip_buff_inf(), _
+                 h_rawtx_dc(), h_textr_dc(), order_list(), poly_flag()
 
     '' leave depth off for the overlay, which is 2D and would otherwise
     '' test itself against the scene it is drawn on top of
