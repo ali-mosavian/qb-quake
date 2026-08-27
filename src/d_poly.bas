@@ -617,8 +617,6 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
                         '' sb_build clamps its luxel and atlas reads, so the
                         '' extra columns come out edge-extended.
                         ''
-                        sc_builds = sc_builds + 1
-                        sc_tbuilds = sc_tbuilds + 1
                         sb_build lm_dc, h_rawtx_dc(mipidx*4 + lm_mip), _
                                  i, lm_mip, 2 ^ sc_shift%( lm_sw ), _
                                  2 ^ sc_shift%( lm_sh )
