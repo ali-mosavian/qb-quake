@@ -55,6 +55,8 @@ option explicit
 '$include: 'q_pl.bi'
 '$include: 'q_map.bi'
 '$include: 'q_ent.bi'
+Declare Sub cp_load ()
+Declare Sub cp_advance ()
 
 ''
 '' Simulation time owed but not yet run. Frames deliver time in whatever
@@ -376,6 +378,11 @@ sub host_main
     rdr.backface = -1
     scr.stats    = -1
     if ( env.no_stats ) then scr.stats = 0
+
+    redim cp_x(CP_MAX) as integer
+    redim cp_y(CP_MAX) as integer
+    redim cp_z(CP_MAX) as integer
+    if ( env.campath ) then cp_load
     vis.bad_order = env.bad_order
     vis.no_ents   = env.no_ents
     
@@ -404,7 +411,25 @@ sub host_main
         ''
         scr.frame_time = sys_frame_time
 
+        '' Skip the first few frames: they carry the tail of loading and
+        '' the first surface builds, which no later frame repeats.
+        if ( frame_no > 3 and sys_raw_dt > 0.0 ) then
+            if ( ft_n = 0 ) then
+                ft_min = sys_raw_dt
+                ft_max = sys_raw_dt
+            else
+                if ( sys_raw_dt < ft_min ) then ft_min = sys_raw_dt
+                if ( sys_raw_dt > ft_max ) then ft_max = sys_raw_dt
+            end if
+            ft_sum = ft_sum + sys_raw_dt
+            ft_n   = ft_n + 1
+        end if
+
         host_advance scr.frame_time
+
+        '' cp_advance is called from view.bas now, where the movement
+        '' input is assembled -- it steers the player rather than placing
+        '' the camera.
 
         ''
         '' Combine all transforms
@@ -420,6 +445,11 @@ sub host_main
         '' can.
         ''
         frame_no = frame_no + 1
+        '' -campath ends when the route does, whatever -bench says
+        if ( env.campath and cp_done ) then
+            host_bench_report frame_no, h_dst_dc
+            exit do
+        end if
         if ( env.bench_ticks > 0 and host_ticks >= env.bench_ticks ) then
             host_bench_report frame_no, h_dst_dc
             exit do
@@ -466,6 +496,162 @@ sub host_shutdown
 
 end sub
 
+
+''::::::::::
+'' name: cp_load
+'' desc: Reads campath.bin, the A* flight path tools/campath.py builds over
+''       the map's EMPTY leaves. Water, slime and lava are excluded there,
+''       not here -- a path through lava would time the warp and the
+''       palette flash rather than the renderer.
+''::::::::::
+sub cp_load
+    dim f as integer
+    dim i as integer, n as integer
+    dim x as integer, y as integer, z as integer
+
+    cp_n = 0
+    cp_i = 0
+    cp_t = 0.0
+
+    f = freefile
+    open "campath.bin" for binary as #f
+    if ( lof(f) < 8 ) then
+        close #f
+        exit sub
+    end if
+    get #f, , n
+    if ( n > CP_MAX ) then n = CP_MAX
+    for i = 0 to n-1
+        get #f, , x
+        get #f, , y
+        get #f, , z
+        cp_x(i) = x
+        cp_y(i) = y
+        cp_z(i) = z
+    next i
+    close #f
+    cp_n = n
+end sub
+
+''::::::::::
+'' name: cp_advance
+'' desc: Steps the camera along the path by a FIXED amount per frame.
+''
+''       Per frame, not per second, deliberately. Both builds then render
+''       the identical sequence of viewpoints, so frames, peak and low
+''       compare the renderer instead of how far a quicker build managed
+''       to travel in the same wall time.
+''::::::::::
+sub cp_advance
+    dim dx as single, dy as single, dl as single
+    dim k as integer, best as integer
+    dim bestd as single
+
+    ''
+    '' STEERING, not positioning. The camera used to be placed on the path
+    '' directly, which flew it through walls -- an exact BSP point test put
+    '' 36% of the route inside solid -- and ignored gravity and the player
+    '' hull entirely.
+    ''
+    '' Now the path only says WHERE TO WALK. pl_move does the moving, so
+    '' collision, gravity, step-up and the 32x32x56 hull are the game's own
+    '' code rather than something approximated here. A route the player
+    '' cannot walk simply does not get walked.
+    ''
+    if ( cp_n < 1 or cp_done ) then exit sub
+
+    ''
+    '' Start ON the route. The spawn is wherever the map puts it, and
+    '' waypoint 0 is at one extreme of the level -- so from the spawn the
+    '' steering aimed at a target most of a map away and walked straight
+    '' into the first wall between. Every waypoint is a verified standing
+    '' position, so dropping the player on one is safe; gravity settles it.
+    ''
+    if ( cp_init = 0 ) then
+        pl.pos.x = cp_x(0)
+        pl.pos.y = cp_y(0)
+        pl.pos.z = cp_z(0)
+        pl.vel.x = 0.0
+        pl.vel.y = 0.0
+        pl.vel.z = 0.0
+        cp_i     = 1
+        cp_lastx = pl.pos.x
+        cp_lasty = pl.pos.y
+        cp_init  = -1
+        exit sub
+    end if
+
+    ''
+    '' Advance by PROGRESS, not proximity. Steering 64 units ahead means
+    '' the player walks past a waypoint without ever coming within the
+    '' reach radius of it -- so a proximity test never fires, the index
+    '' never moves, and the walk circles that point forever. That is the
+    '' spinning.
+    ''
+    '' Instead: slide the index forward to the nearest waypoint in a short
+    '' window ahead. Monotonic, so it can never run backwards and oscillate.
+    ''
+    best  = cp_i
+    bestd = 1e30
+    k = cp_i
+    do while ( k <= cp_i + 12 and k <= cp_n-1 )
+        dx = cp_x(k) - pl.pos.x
+        dy = cp_y(k) - pl.pos.y
+        dl = dx*dx + dy*dy
+        if ( dl < bestd ) then
+            bestd = dl
+            best  = k
+        end if
+        k = k + 1
+    loop
+    cp_i = best
+
+    '' done when the last waypoint is the nearest and we are on it
+    if ( cp_i >= cp_n-1 ) then
+        dx = cp_x(cp_n-1) - pl.pos.x
+        dy = cp_y(cp_n-1) - pl.pos.y
+        if ( sqr( dx*dx + dy*dy ) < CP_REACH * 2.0 ) then
+            cp_done = -1
+            exit sub
+        end if
+    end if
+
+    ''
+    '' Pure pursuit: aim at the first waypoint at least CP_AHEAD away,
+    '' not at the one we are about to reach. A near target's bearing
+    '' swings wildly as it is approached; a far one's barely moves.
+    ''
+    k = cp_i
+    do while ( k < cp_n-1 )
+        dx = cp_x(k) - pl.pos.x
+        dy = cp_y(k) - pl.pos.y
+        if ( sqr( dx*dx + dy*dy ) >= CP_AHEAD ) then exit do
+        k = k + 1
+    loop
+    dx = cp_x(k) - pl.pos.x
+    dy = cp_y(k) - pl.pos.y
+    dl = sqr( dx*dx + dy*dy )
+
+    if ( dl > 0.001 ) then
+        cp_dirx = dx / dl
+        cp_diry = dy / dl
+    end if
+
+    '' Stuck? The hull is against something the path did not know about.
+    '' Give up on this waypoint rather than grinding into a wall forever.
+    if ( abs(pl.pos.x - cp_lastx) + abs(pl.pos.y - cp_lasty) < 0.5 ) then
+        cp_stuck = cp_stuck + 1
+        if ( cp_stuck > 60 ) then
+            cp_stuck = 0
+            cp_i = cp_i + 1
+            if ( cp_i > cp_n-1 ) then cp_done = -1
+        end if
+    else
+        cp_stuck = 0
+    end if
+    cp_lastx = pl.pos.x
+    cp_lasty = pl.pos.y
+end sub
 
 ''::::::::::
 '' name: host_advance
@@ -603,6 +789,11 @@ sub host_render ( byval h_dst_dc as long, mtx_prj as u3dMtrx, _
     ''
     if ( z_dc <> 0 ) then uglClearZ z_dc, 0
 
+    '' -nodraw stops HERE: the walk above has run and filled order_list,
+    '' so everything the node paging touches has happened. What is skipped
+    '' is fill, which paging does not affect.
+    if ( env.no_draw ) then exit sub
+
     d_draw_faces h_dst_dc, mtx_fin, xresh, yresh
 
     '' leave depth off for the overlay, which is 2D and would otherwise
@@ -637,6 +828,25 @@ sub host_bench_report ( frame_no as long, h_dst_dc as long )
     print #benchf, "frames " + ltrim$(str$( frame_no ))
     print #benchf, "seconds " + ltrim$(str$( scr.bench_secs ))
     print #benchf, "lastfps " + ltrim$(str$( scr.fps ))
+    print #benchf, "peakfps " + ltrim$(str$( scr.fps_peak ))
+    print #benchf, "lowfps " + ltrim$(str$( fps_low ))
+    print #benchf, "cppts " + ltrim$(str$( cp_n ))
+    ''
+    '' Frame times in milliseconds, and the rates they imply. These are the
+    '' numbers to compare: fastest frame, slowest frame, mean over the run.
+    ''
+    if ( ft_n > 0 ) then
+        print #benchf, "ftmin " + ltrim$(str$( ft_min * 1000.0 ))
+        print #benchf, "ftmax " + ltrim$(str$( ft_max * 1000.0 ))
+        print #benchf, "ftmean " + ltrim$(str$( (ft_sum / ft_n) * 1000.0 ))
+        print #benchf, "ftn " + ltrim$(str$( ft_n ))
+        if ( ft_min > 0.0 ) then _
+            print #benchf, "fpsbest " + ltrim$(str$( 1.0 / ft_min ))
+        if ( ft_max > 0.0 ) then _
+            print #benchf, "fpsworst " + ltrim$(str$( 1.0 / ft_max ))
+        if ( ft_sum > 0.0 ) then _
+            print #benchf, "fpsmean " + ltrim$(str$( ft_n / ft_sum ))
+    end if
     print #benchf, "polys " + ltrim$(str$( rdr.polys ))
     print #benchf, "tris " + ltrim$(str$( rdr.tris ))
     print #benchf, "px " + ltrim$(str$( pl.pos.x ))

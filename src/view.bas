@@ -23,6 +23,7 @@ option explicit
 '$include: 'q_scr.bi'
 '$include: 'q_cam.bi'
 '$include: 'q_pl.bi'
+Declare Sub cp_advance ()
 
 ''
 '' Camera-script playback state. These were eight parameters threaded from
@@ -66,6 +67,7 @@ sub v_update_camera ( byval dt as single )
     dim fwd as single, strafe as single
     dim dir_x as single, dir_y as single, dir_l as single
     dim jump as integer
+    dim t as single
 
 	''
 	'' mode script_play run through the bezier curves
@@ -198,6 +200,54 @@ sub v_update_camera ( byval dt as single )
             jump = 0
             if ( env.keyboard.spcbar ) then jump = -1
             if ( env.bench_jump       ) then jump = -1
+
+            ''
+            '' -campath steers instead of positioning: the direction comes
+            '' from the route, the MOVING is pl_move's. Gravity, the hull
+            '' and step-up are then the game's, not an approximation, and a
+            '' wall stops the walk exactly as it stops a player.
+            ''
+            if ( env.campath ) then
+                cp_advance
+                if ( cp_dirx <> 0.0 or cp_diry <> 0.0 ) then
+                    ''
+                    '' Face the way we are going. The view and the walk
+                    '' come from ONE vector -- looking somewhere the player
+                    '' is not heading is what made the earlier passes look
+                    '' like the camera was sliding sideways through rooms.
+                    ''
+                    '' Eased rather than snapped, so a corner turns instead
+                    '' of cutting; the waypoints are 32 units apart and an
+                    '' instant turn at each reads as a flinch.
+                    ''
+                    if ( cp_lx = 0.0 and cp_ly = 0.0 ) then
+                        cp_lx = cp_dirx
+                        cp_ly = cp_diry
+                    else
+                        '' dt-scaled, clamped: a long frame must not
+                        '' overshoot the target direction
+                        t = CP_TURN * dt
+                        if ( t > 1.0 ) then t = 1.0
+                        cp_lx = cp_lx + (cp_dirx - cp_lx) * t
+                        cp_ly = cp_ly + (cp_diry - cp_ly) * t
+                    end if
+                    dir_l = sqr( cp_lx*cp_lx + cp_ly*cp_ly )
+                    if ( dir_l > 0.001 ) then
+                        cp_lx = cp_lx / dir_l
+                        cp_ly = cp_ly / dir_l
+                    end if
+
+                    '' renderer z is bsp y, and keep the view level
+                    cam.look_at.x = cp_lx
+                    cam.look_at.y = 0.0
+                    cam.look_at.z = cp_ly
+
+                    dir_x  = cp_lx
+                    dir_y  = cp_ly
+                    fwd    = 1.0
+                    strafe = 0.0
+                end if
+            end if
 
             pl_move fwd, strafe, dir_x, dir_y, jump, dt
         end if

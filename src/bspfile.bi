@@ -347,6 +347,19 @@ type EnvType
                                 '' into triangles. A/B against the proven
                                 '' uglTriTP path.
     no_z        as integer      '' -noz: skip the depth buffer entirely
+    campath     as integer      '' -campath: fly the A* route from
+                                '' campath.bin instead of standing still.
+                                '' The old bench rendered ONE viewpoint, so
+                                '' peak, low and mean were the same number
+                                '' and a change that only hurt expensive
+                                '' views was invisible.
+    no_draw     as integer      '' -nodraw: run the frontend (BSP walk, PVS,
+                                '' visibility) and SKIP rasterising. Isolates
+                                '' what a change to the walk costs from what
+                                '' the rasteriser costs -- paging the node
+                                '' tree moves the first and not the second,
+                                '' so a full-frame timing buries the effect
+                                '' under fill.
     no_stats    as integer      '' -nostats: the overlay covers a third of the
                                 '' frame, which is a third of what a screenshot
                                 '' was taken to look at.
