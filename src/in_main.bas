@@ -95,13 +95,13 @@ end function
 ''::::::::::
 sub in_handle_toggles
 
-    if ( in_keystroke( env.keyboard.f1  ) ) then rdr.usemips  = not rdr.usemips
-    if ( in_keystroke( env.keyboard.f2  ) ) then rdr.rendmode = (rdr.rendmode + 1) mod 3
-    if ( in_keystroke( env.keyboard.f3  ) ) then cam.fpsview  = not cam.fpsview
+    if ( in_keystroke( env.keyboard.f1  ) ) then rdr.use_mips  = not rdr.use_mips
+    if ( in_keystroke( env.keyboard.f2  ) ) then rdr.rend_mode = (rdr.rend_mode + 1) mod 3
+    if ( in_keystroke( env.keyboard.f3  ) ) then cam.fps_view  = not cam.fps_view
     if ( in_keystroke( env.keyboard.f12 ) ) then scr.stats    = not scr.stats
     if ( in_keystroke( env.keyboard.b   ) ) then rdr.backface = not rdr.backface
     if ( in_keystroke( env.keyboard.l   ) ) then rdr.lightmap = not rdr.lightmap
-    if ( in_keystroke( env.keyboard.f4  ) ) then pl.noclip    = not pl.noclip
+    if ( in_keystroke( env.keyboard.f4  ) ) then pl.no_clip    = not pl.no_clip
 
 end sub
 

@@ -121,7 +121,7 @@ sub sys_parse_args
             env.no_stats = true
         end if
         if ( lcase$(argv(i)) = "-campath" ) then
-            env.campath = true
+            env.cam_path = true
         end if
         if ( lcase$(argv(i)) = "-nodraw" ) then
             env.no_draw  = true
@@ -173,7 +173,7 @@ sub sys_init_tables
     '' array as name() -- with no elements. Both carried a real bound in their
     '' DIM, so they must be sized here or the first write is out of range.
     ''
-    redim bitarray( 15 ) as integer
+    redim bit_array( 15 ) as integer
     redim frustum( 5 ) as DiskPlane
 
     dim i as integer
@@ -181,7 +181,7 @@ sub sys_init_tables
     com_parse_config "stuff.ini"    
     
     for  i = 0 to 15
-        bitarray(i) = clng(2^i)
+        bit_array(i) = clng(2^i)
     next i    
 
 end sub

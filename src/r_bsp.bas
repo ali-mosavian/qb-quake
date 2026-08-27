@@ -55,7 +55,7 @@ dim shared pvs_leaf as integer
 ''
 declare sub r_recursive_world_node ( _
     byval nodenr as integer, _
-    byval nmodels as long, _
+    byval model_count as long, _
     models() as Submodel, _
     brush() as BrushModel, _
     cpos as u3dVector3f, _
@@ -99,7 +99,7 @@ function r_point_leaf ( _
 
     nodenr = 0
     do while ( (nodenr and &h8000) = 0 )
-        if ( r_plane_dist( p, planes( nodes(nodenr).planeid ) ) >= 0.0 ) then
+        if ( r_plane_dist( p, planes( nodes(nodenr).plane_id ) ) >= 0.0 ) then
             nodenr = nodes(nodenr).child0
         else
             nodenr = nodes(nodenr).child1
@@ -125,7 +125,7 @@ function r_node_side ( _
     nodes() as Node, _
     planes() as Plane _
 )
-    if ( r_cam_plane_dist( pt, planes( nodes(node_idx).planeid ) ) > 0.0 ) then
+    if ( r_cam_plane_dist( pt, planes( nodes(node_idx).plane_id ) ) > 0.0 ) then
         r_node_side = -1
         exit function
     end if
@@ -151,7 +151,7 @@ end function
 ''::::::::::
 sub r_emit_entities ( _
     byval nodenr as integer, _
-    byval nmodels as long, _
+    byval model_count as long, _
     campos as u3dVector3f, _
     vis as VisState, _
     ign as integer, _
@@ -168,12 +168,12 @@ sub r_emit_entities ( _
 
     if ( ign or vis.bad_order or vis.no_ents ) then exit sub
 
-    for  m = 1 to nmodels-1
+    for  m = 1 to model_count-1
         if ( brush(m).draw and brush(m).node = nodenr ) then
             vis.ent_left = vis.ent_left - 1
             ign = true
-            r_recursive_world_node int( models(m).headnode0 ), _
-                              nmodels, models(), brush(), _
+            r_recursive_world_node int( models(m).head_node0 ), _
+                              model_count, models(), brush(), _
                               campos, vis, ign, _
                               nodes(), planes(), lef_buffer(), lfc_buffer(), _
                               pvsb(), pflag(), ord(), fru()
@@ -187,7 +187,7 @@ end sub
 
 sub r_recursive_world_node ( _
     byval nodenr as integer, _
-    byval nmodels as long, _
+    byval model_count as long, _
     models() as Submodel, _
     brush() as BrushModel, _
     cpos as u3dVector3f, _
@@ -224,8 +224,8 @@ sub r_recursive_world_node ( _
 	    if ( (ign or pvsb(not nodenr)) and _
 	         r_cull_box( lef(not nodenr).bound, fru() ) ) then
 	    
-	        frst = lef(not nodenr).lfaceid
-	        last = frst+lef(not nodenr).lfacenum
+	        frst = lef(not nodenr).lface_id
+	        last = frst+lef(not nodenr).lface_num
 	        
 	        for  i = frst to last-1	            
 	            pflag(lfc(i)) = vs.frame_stamp
@@ -240,7 +240,7 @@ sub r_recursive_world_node ( _
     	    '' on arrival at that leaf. Anything larger straddles a plane
     	    '' and is emitted at a node instead, further down.
     	    ''
-    	    if ( vs.ent_left ) then r_emit_entities nodenr, nmodels, cpos, vs, ign, _
+    	    if ( vs.ent_left ) then r_emit_entities nodenr, model_count, cpos, vs, ign, _
                                         models(), brush(), nds(), pln(), _
                                         pvsb(), pflag(), ord(), fru()
 
@@ -259,7 +259,7 @@ sub r_recursive_world_node ( _
         exit sub
     end if
     
-    if ( r_cam_plane_dist( cpos, pln( nds(nodenr).planeid ) ) >= 0.0 ) then
+    if ( r_cam_plane_dist( cpos, pln( nds(nodenr).plane_id ) ) >= 0.0 ) then
         side = 1
     else
         side = 0
@@ -273,13 +273,13 @@ sub r_recursive_world_node ( _
     		
         '' No map here: the one at the top of the sub still holds -- the
         '' cull and the plane maths between them do not touch the slot.
-        r_recursive_world_node nds(nodenr).child1, nmodels, models(), brush(), cpos, vs, ign, nds(), pln(), lef(), lfc(), pvsb(), pflag(), ord(), fru()
-        if ( vs.ent_left ) then r_emit_entities nodenr, nmodels, cpos, vs, ign, _
+        r_recursive_world_node nds(nodenr).child1, model_count, models(), brush(), cpos, vs, ign, nds(), pln(), lef(), lfc(), pvsb(), pflag(), ord(), fru()
+        if ( vs.ent_left ) then r_emit_entities nodenr, model_count, cpos, vs, ign, _
                                         models(), brush(), nds(), pln(), _
                                         pvsb(), pflag(), ord(), fru()
 	    ord(vs.ord_count) = nodenr
 	    vs.ord_count = vs.ord_count + 1
-        r_recursive_world_node nds(nodenr).child0, nmodels, models(), brush(), cpos, vs, ign, nds(), pln(), lef(), lfc(), pvsb(), pflag(), ord(), fru()
+        r_recursive_world_node nds(nodenr).child0, model_count, models(), brush(), cpos, vs, ign, nds(), pln(), lef(), lfc(), pvsb(), pflag(), ord(), fru()
         
     else
         ''
@@ -288,13 +288,13 @@ sub r_recursive_world_node ( _
 	    ''
     		
         '' likewise: still covered by the map at the top of the sub
-        r_recursive_world_node nds(nodenr).child0, nmodels, models(), brush(), cpos, vs, ign, nds(), pln(), lef(), lfc(), pvsb(), pflag(), ord(), fru()        
-        if ( vs.ent_left ) then r_emit_entities nodenr, nmodels, cpos, vs, ign, _
+        r_recursive_world_node nds(nodenr).child0, model_count, models(), brush(), cpos, vs, ign, nds(), pln(), lef(), lfc(), pvsb(), pflag(), ord(), fru()        
+        if ( vs.ent_left ) then r_emit_entities nodenr, model_count, cpos, vs, ign, _
                                         models(), brush(), nds(), pln(), _
                                         pvsb(), pflag(), ord(), fru()
 	    ord(vs.ord_count) = nodenr
 	    vs.ord_count = vs.ord_count + 1        
-        r_recursive_world_node nds(nodenr).child1, nmodels, models(), brush(), cpos, vs, ign, nds(), pln(), lef(), lfc(), pvsb(), pflag(), ord(), fru()
+        r_recursive_world_node nds(nodenr).child1, model_count, models(), brush(), cpos, vs, ign, nds(), pln(), lef(), lfc(), pvsb(), pflag(), ord(), fru()
     end if
     
 
@@ -305,9 +305,9 @@ end sub
 '':::::::::
 sub r_draw_world ( _
     byval model as integer, _
-    byval nmodels as long, _
-    byval nleafs as long, _
-    byval nfaces as long, _
+    byval model_count as long, _
+    byval leaf_count as long, _
+    byval face_count as long, _
     campos as u3dVector3f, _
     vis as VisState, _
     models() as Submodel, _
@@ -317,7 +317,7 @@ sub r_draw_world ( _
     pflag() as integer, _
     ord() as integer, _
     fru() as DiskPlane, _
-    bitarray() as integer _
+    bit_array() as integer _
 )
     dim i as integer
     ''
@@ -338,7 +338,7 @@ sub r_draw_world ( _
     '' QuickBASIC traps integer overflow at run time rather than wrapping.
     ''
     if ( vis.frame_stamp = 32767 ) then
-        for  i = 0 to nfaces-1
+        for  i = 0 to face_count-1
             pflag(i) = 0
         next i
         vis.frame_stamp = 0
@@ -348,23 +348,23 @@ sub r_draw_world ( _
     ''
     '' Extract pvs
     ''
-    r_mark_leaves int(models(model).headnode0), nleafs, campos, _
-                  nodes(), planes(), bitarray(), pvs_buffer_b()
+    r_mark_leaves int(models(model).head_node0), leaf_count, campos, _
+                  nodes(), planes(), bit_array(), pvs_buffer_b()
     
     ''
     '' How many brush entities the walk still has to place. Once it is zero
     '' the per-node test below costs nothing.
     ''
     vis.ent_left = 0
-    for  i = 1 to nmodels-1
+    for  i = 1 to model_count-1
         if ( brush(i).draw ) then vis.ent_left = vis.ent_left + 1
     next i
 
     ''
     '' Traverse tree
     ''
-    r_recursive_world_node int( models(model).headnode0 ), _
-                              nmodels, models(), brush(), campos, vis, r_ignore_pvs, _
+    r_recursive_world_node int( models(model).head_node0 ), _
+                              model_count, models(), brush(), campos, vis, r_ignore_pvs, _
                               nodes(), planes(), lef_buffer(), lfc_buffer(), _
                               pvs_buffer_b(), pflag(), ord(), fru()
 
@@ -374,11 +374,11 @@ sub r_draw_world ( _
     '' so the fix can be shown rather than asserted.
     ''
     if ( vis.bad_order and vis.no_ents = false ) then
-        for  i = 1 to nmodels-1
+        for  i = 1 to model_count-1
             if ( brush(i).draw ) then
                 r_ignore_pvs = true
-                r_recursive_world_node int( models(i).headnode0 ), _
-                              nmodels, models(), brush(), campos, vis, r_ignore_pvs, _
+                r_recursive_world_node int( models(i).head_node0 ), _
+                              model_count, models(), brush(), campos, vis, r_ignore_pvs, _
                               nodes(), planes(), lef_buffer(), lfc_buffer(), _
                               pvs_buffer_b(), pflag(), ord(), fru()
                 r_ignore_pvs = false
@@ -544,11 +544,11 @@ end function
 ''::::::::::
 sub r_mark_leaves ( _
     byval nodenr as integer, _
-    byval nleafs as long, _
+    byval leaf_count as long, _
     campos as u3dVector3f, _
     nodes() as Node, _
     planes() as Plane, _
-    bitarray() as integer, _
+    bit_array() as integer, _
     pvsb() as integer _
 )
     dim mp as long
@@ -584,7 +584,7 @@ sub r_mark_leaves ( _
     '' 
     '' Setup
     ''    
-    v = lef_buffer( not nodenr ).vislist
+    v = lef_buffer( not nodenr ).vis_list
     if ( v = -2 ) then sys_error "Leaf has no pvs data."
         
     '' memAlloc is paragraph-aligned, so the block's own offset is zero
@@ -592,8 +592,8 @@ sub r_mark_leaves ( _
     v = v + (mod_pvs_base and 65535&)
     def seg = sb_seg( mod_pvs_base )
     
-    if ( lef_buffer( not nodenr ).vislist = -1 ) then
-        for  i = 0 to nleafs-1
+    if ( lef_buffer( not nodenr ).vis_list = -1 ) then
+        for  i = 0 to leaf_count-1
             pvsb(i) = -1
         next i           
 
@@ -604,12 +604,12 @@ sub r_mark_leaves ( _
     '' Extract the pvs data
     ''
     l = 1
-    while ( l < nleafs )
+    while ( l < leaf_count )
         
         if ( peek( v ) = 0 ) then
             j = l
             l = l + 8& * peek( v+1 ) 
-            if ( l > nleafs ) then l = nleafs
+            if ( l > leaf_count ) then l = leaf_count
             
             for  j = j to l-1
                 pvsb(j) = 0
@@ -624,10 +624,10 @@ sub r_mark_leaves ( _
                 '' A run can carry past the last leaf; in real mode that
                 '' writes over whatever follows the array.
                 ''
-                if ( l >= nleafs ) then exit for
+                if ( l >= leaf_count ) then exit for
                 
                         
-                if ( byte and bitarray(bit) ) then
+                if ( byte and bit_array(bit) ) then
                     pvsb(l) = 1
                 else                 
                     pvsb(l) = 0
@@ -651,10 +651,10 @@ end sub
 ''       The elements are plain integers, so the count is the lump over
 ''       len() of one -- taken here, where the array actually lives.
 ''::::::::::
-sub r_load_lfaces ( byval lumpbytes as long )
+sub r_load_lfaces ( byval lump_bytes as long )
     dim n as long
 
-    n = lumpbytes \ len( lfc_buffer(0) )
+    n = lump_bytes \ len( lfc_buffer(0) )
     redim lfc_buffer( n-1 ) as integer
 
     def seg = varseg( lfc_buffer(0) )
@@ -670,8 +670,8 @@ end sub
 ''       0..lef_count-1, and a run can carry past the last leaf -- in real
 ''       mode that writes over whatever follows the array.
 ''::::::::::
-sub r_alloc_pvs ( byval nleafs as long )
-    redim pvs_buffer_b( nleafs-1 ) as integer
+sub r_alloc_pvs ( byval leaf_count as long )
+    redim pvs_buffer_b( leaf_count-1 ) as integer
 end sub
 
 ''::::::::::

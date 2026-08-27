@@ -25,7 +25,7 @@ option explicit
 sub com_tokenize ( _
     strm() as string, _
     strm_cnt as integer, _
-    tokenlist as string, _
+    token_list as string, _
     stream as string _
 )
              
@@ -61,12 +61,12 @@ sub com_tokenize ( _
     ''
     '' Exract tokens
     ''
-    token_cnt = len( tokenlist )
+    token_cnt = len( token_list )
     if ( token_cnt = 0  ) then exit sub
     if ( token_cnt > 50 ) then exit sub
     
     for  i = 1 to token_cnt
-        token( i-1 ) = mid$( tokenlist, i, 1 )
+        token( i-1 ) = mid$( token_list, i, 1 )
     next i
     
     ''
@@ -143,8 +143,8 @@ sub com_parse_config ( filename as string )
                       fov_flag or sound_flag
     
     dim flags as integer   
-    dim rawline as string
-    dim linenum as integer
+    dim raw_line as string
+    dim line_num as integer
     dim strm(50) as string
     dim strm_cnt as integer
     dim file as integer
@@ -157,9 +157,9 @@ sub com_parse_config ( filename as string )
     env.c_fmt = UGL.8BIT    
             
     do 
-        line input #file, rawline
-        linenum = linenum + 1
-        com_tokenize strm(), strm_cnt, "  ", rawline
+        line input #file, raw_line
+        line_num = line_num + 1
+        com_tokenize strm(), strm_cnt, "  ", raw_line
         
         
         if ( strm_cnt > 0 ) then
@@ -167,64 +167,64 @@ sub com_parse_config ( filename as string )
                 case "//"
                 
                 case "display.xres"                
-                    env.x_res = val( com_arg( strm(), strm_cnt, linenum ) )
+                    env.x_res = val( com_arg( strm(), strm_cnt, line_num ) )
                     flags = flags or xres_flag
                     
                 case "display.yres"
-                    env.y_res = val( com_arg( strm(), strm_cnt, linenum ) )
+                    env.y_res = val( com_arg( strm(), strm_cnt, line_num ) )
                     flags = flags or yres_flag
                     
                     
                 case "display.clear"
-                    env.disclear = com_yesno( strm(), strm_cnt, linenum )
+                    env.clear_screen = com_yesno( strm(), strm_cnt, line_num )
                     flags = flags or clear_flag
                                         
                 case "display.pages"
-                    env.pages = val( com_arg( strm(), strm_cnt, linenum ) )
+                    env.pages = val( com_arg( strm(), strm_cnt, line_num ) )
                     flags = flags or page_flag
                     
                 case "display.usepaging"
-                    env.usepag = com_yesno( strm(), strm_cnt, linenum )
+                    env.use_paging = com_yesno( strm(), strm_cnt, line_num )
                     flags = flags or usepg_flag
                                     
                 case "world.frustum.zn"                
-                    env.z_near = val( com_arg( strm(), strm_cnt, linenum ) )
+                    env.z_near = val( com_arg( strm(), strm_cnt, line_num ) )
                     flags = flags or zn_flag
                                     
                 case "world.frustum.zf"                
-                    env.z_far = val( com_arg( strm(), strm_cnt, linenum ) )
+                    env.z_far = val( com_arg( strm(), strm_cnt, line_num ) )
                     flags = flags or zf_flag
                                     
                 case "world.camera.script"
-                    env.camscrpt = com_arg( strm(), strm_cnt, linenum )
+                    env.cam_script = com_arg( strm(), strm_cnt, line_num )
                     flags = flags or cmscr_flag
                     
                 case "world.camera.interp"
-                    env.caminterp = val( com_arg( strm(), strm_cnt, linenum ) )
+                    env.cam_interp = val( com_arg( strm(), strm_cnt, line_num ) )
                     flags = flags or cminp_flag
                     
                 case "world.camera.mode"
-                    if ( com_arg( strm(), strm_cnt, linenum ) = "freelook" ) then
-                        env.cammode = 0
-                    elseif ( com_arg( strm(), strm_cnt, linenum ) = "script_play" ) then
-                        env.cammode = 1
-                    elseif ( com_arg( strm(), strm_cnt, linenum ) = "script_edit" ) then
-                        env.cammode = 2
+                    if ( com_arg( strm(), strm_cnt, line_num ) = "freelook" ) then
+                        env.cam_mode = 0
+                    elseif ( com_arg( strm(), strm_cnt, line_num ) = "script_play" ) then
+                        env.cam_mode = 1
+                    elseif ( com_arg( strm(), strm_cnt, line_num ) = "script_edit" ) then
+                        env.cam_mode = 2
                     else
-                        sys_error "Unknown syntax at line #" + str$(linenum)                                                
+                        sys_error "Unknown syntax at line #" + str$(line_num)                                                
                     end if                    
                     
                     flags = flags or cmmde_flag
                     
                 case "world.camera.fov"
-                    env.camfov = val( com_arg( strm(), strm_cnt, linenum ) )
+                    env.cam_fov = val( com_arg( strm(), strm_cnt, line_num ) )
                     flags = flags or fov_flag
                     
                 case "sound.enabled"
-                    env.sound = com_yesno( strm(), strm_cnt, linenum )
+                    env.sound = com_yesno( strm(), strm_cnt, line_num )
                     flags = flags or sound_flag
                 case else
-                    sys_error "Unknown command, " + rawline
+                    sys_error "Unknown command, " + raw_line
                     
             end select                                    
         end if
@@ -261,18 +261,18 @@ end sub
 function com_yesno ( _
     strm() as string, _
     strm_cnt as integer, _
-    linenum as integer _
+    line_num as integer _
 ) as integer
     dim v as string
 
-    v = com_arg( strm(), strm_cnt, linenum )
+    v = com_arg( strm(), strm_cnt, line_num )
 
     if ( v = "yes" or v = "true" ) then
         com_yesno = true
     elseif ( v = "no" or v = "false" ) then
         com_yesno = false
     else
-        sys_error "Expected yes/no at line #" + str$(linenum)
+        sys_error "Expected yes/no at line #" + str$(line_num)
     end if
 
 end function
@@ -292,9 +292,9 @@ end function
 function com_arg ( _
     strm() as string, _
     strm_cnt as integer, _
-    linenum as integer _
+    line_num as integer _
 ) as string
-    com_check_args strm(), strm_cnt, 3, linenum
+    com_check_args strm(), strm_cnt, 3, line_num
     com_arg = strm(2)
 end function
 
@@ -313,7 +313,7 @@ sub com_check_args ( _
     strm() as string, _
     strm_cnt as integer, _
     byval want as integer, _
-    byval linenum as integer _
+    byval line_num as integer _
 )
 
     ''
@@ -326,14 +326,14 @@ sub com_check_args ( _
     ''
     if ( strm_cnt <> want ) then
         if ( strm_cnt < 4 ) then
-            sys_error "Unknown syntax at line #" + str$(linenum)
+            sys_error "Unknown syntax at line #" + str$(line_num)
         elseif ( strm(3) <> "//" ) then
-            sys_error "Unknown syntax at line #" + str$(linenum)
+            sys_error "Unknown syntax at line #" + str$(line_num)
         end if
     end if
 
     if ( strm(1) <> "=" ) then
-        sys_error "Unknown syntax at line #" + str$(linenum)
+        sys_error "Unknown syntax at line #" + str$(line_num)
     end if
 
 end sub

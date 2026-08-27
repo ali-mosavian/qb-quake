@@ -25,16 +25,16 @@ type VisState
 end type
 
 common shared /vis_s/ vis as VisState
-common shared /vis_a/ bitarray() as integer, frustum() as DiskPlane
+common shared /vis_a/ bit_array() as integer, frustum() as DiskPlane
 
 ''
 '' r_bsp.bas. Declared here: r_draw_world names VisState.
 ''
 declare sub r_draw_world ( _
     byval model as integer, _
-    byval nmodels as long, _
-    byval nleafs as long, _
-    byval nfaces as long, _
+    byval model_count as long, _
+    byval leaf_count as long, _
+    byval face_count as long, _
     campos as u3dVector3f, _
     vis as VisState, _
     models() as Submodel, _
@@ -44,5 +44,5 @@ declare sub r_draw_world ( _
     pflag() as integer, _
     ord() as integer, _
     fru() as DiskPlane, _
-    bitarray() as integer _
+    bit_array() as integer _
 )

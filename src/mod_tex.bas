@@ -32,10 +32,10 @@ option explicit
 '$include: 'q_snd.bi'
 
 '$static
-dim shared texoffs( 256 ) as long
+dim shared tex_offs( 256 ) as long
 
 '$dynamic
-dim shared tmipinf( 1 ) as DiskMipTex
+dim shared t_mip_inf( 1 ) as DiskMipTex
 
 
 
@@ -63,14 +63,14 @@ sub mod_load_texinfo
 
     scr_load_step
     
-    seek #wld.file, wld.head.miptex.offs+1
-    get #wld.file,, wld.numtex
+    seek #wld.file, wld.head.mip_tex.offs+1
+    get #wld.file,, wld.num_tex
     
-    redim tmipinf( wld.numtex-1 ) as DiskMipTex
-    redim mip_buff_inf( wld.numtex-1 ) as MipTex
+    redim t_mip_inf( wld.num_tex-1 ) as DiskMipTex
+    redim mip_buff_inf( wld.num_tex-1 ) as MipTex
     
-    for  i = 0 to wld.numtex-1
-        get #wld.file,, texoffs(i)
+    for  i = 0 to wld.num_tex-1
+        get #wld.file,, tex_offs(i)
     next i    
     
 
@@ -91,7 +91,7 @@ end sub
 ''::::::::::
 sub mod_load_textures
     dim i as integer, j as integer
-    dim bmpfile as string
+    dim bmp_file as string
     dim dc as long
 
     ''
@@ -102,17 +102,17 @@ sub mod_load_textures
 
     scr_load_stage "textures"
 
-    for  i = 0 to wld.numtex-1
+    for  i = 0 to wld.num_tex-1
         ''
         '' Per-texture header only: the renderer scales texture axes by the
         '' reciprocal of the ORIGINAL texture size, so those dimensions are
         '' still needed even though the pixels come from the bmps.
         ''
-        seek #wld.file, wld.head.miptex.offs+texoffs(i)+1
-        get #wld.file,, tmipinf(i)
+        seek #wld.file, wld.head.mip_tex.offs+tex_offs(i)+1
+        get #wld.file,, t_mip_inf(i)
 
-        mip_buff_inf(i).hght = 1.0 / tmipinf(i).hght
-        mip_buff_inf(i).wdth = 1.0 / tmipinf(i).wdth
+        mip_buff_inf(i).hght = 1.0 / t_mip_inf(i).hght
+        mip_buff_inf(i).wdth = 1.0 / t_mip_inf(i).wdth
 
         ''
         '' Quake encodes what a texture does in its name. A leading * is a
@@ -123,7 +123,7 @@ sub mod_load_textures
         mip_buff_inf(i).anim_base  = i
         mip_buff_inf(i).anim_count = 1
 
-        if ( left$( tmipinf(i).name, 1 ) = "*" ) then
+        if ( left$( t_mip_inf(i).name, 1 ) = "*" ) then
             mip_buff_inf(i).liquid = true
         end if
 
@@ -142,12 +142,12 @@ sub mod_load_textures
         '' 3-3-2 palette and the indices, already correct, would be destroyed.
         ''
         for  j = 0 to 3
-            bmpfile = "t" + right$( "00" + ltrim$(str$( i )), 3 ) + _
+            bmp_file = "t" + right$( "00" + ltrim$(str$( i )), 3 ) + _
                       "m" + ltrim$(str$( j )) + ".bmp"
 
-            dc = uglNewBMPEx( UGL.EMS, UGL.8BIT, bmpfile, BMPOPT.NO332 )
+            dc = uglNewBMPEx( UGL.EMS, UGL.8BIT, bmp_file, BMPOPT.NO332 )
             if ( dc = false ) then
-                sys_error "0x0004, missing " + bmpfile + " -- run tools/mkassets.py"
+                sys_error "0x0004, missing " + bmp_file + " -- run tools/mkassets.py"
             end if
 
             h_textr_dc(i*4+j) = dc
@@ -159,11 +159,11 @@ sub mod_load_textures
             '' brightened index as a raw one. See mkassets.py's r*/t* note.
             ''
             if ( env.use_lm ) then
-                bmpfile = "r" + right$( "00" + ltrim$(str$( i )), 3 ) + _
+                bmp_file = "r" + right$( "00" + ltrim$(str$( i )), 3 ) + _
                           "m" + ltrim$(str$( j )) + ".bmp"
-                dc = uglNewBMPEx( UGL.EMS, UGL.8BIT, bmpfile, BMPOPT.NO332 )
+                dc = uglNewBMPEx( UGL.EMS, UGL.8BIT, bmp_file, BMPOPT.NO332 )
                 if ( dc = false ) then
-                    sys_error "0x0005, missing " + bmpfile + " -- run tools/mkassets.py"
+                    sys_error "0x0005, missing " + bmp_file + " -- run tools/mkassets.py"
                 end if
                 h_rawtx_dc(i*4+j) = dc
             end if
@@ -171,7 +171,7 @@ sub mod_load_textures
             if ( (i and 15) = 0 ) then scr_mip_tick (j+1)*25
         next j
 
-        ldr.pct = ldr.pct + (100.0/LOAD_STEPS)/wld.numtex
+        ldr.pct = ldr.pct + (100.0/LOAD_STEPS)/wld.num_tex
         if ( (i and 15) = 0 ) then scr_load_tick
     next i
 
@@ -204,19 +204,19 @@ sub mod_link_anims
     dim chain0 as integer, n as integer
     dim suffix as string
 
-    for  i = 0 to wld.numtex-1
-        if ( left$( tmipinf(i).name, 1 ) = "+" ) then
+    for  i = 0 to wld.num_tex-1
+        if ( left$( t_mip_inf(i).name, 1 ) = "+" ) then
 
             '' already claimed by an earlier frame's chain
             if ( mip_buff_inf(i).anim_count > 1 ) then goto next_tex
 
-            suffix$ = mid$( rtrim$(tmipinf(i).name), 3 )
+            suffix$ = mid$( rtrim$(t_mip_inf(i).name), 3 )
             chain0 = i
             n    = 0
 
-            for  j = i to wld.numtex-1
-                if ( left$( tmipinf(j).name, 1 ) = "+" ) then
-                    if ( mid$( rtrim$(tmipinf(j).name), 3 ) = suffix$ ) then
+            for  j = i to wld.num_tex-1
+                if ( left$( t_mip_inf(j).name, 1 ) = "+" ) then
+                    if ( mid$( rtrim$(t_mip_inf(j).name), 3 ) = suffix$ ) then
                         n = n + 1
                     end if
                 end if

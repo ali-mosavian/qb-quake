@@ -50,7 +50,7 @@ end sub
 sub vid_init
     dim pages as integer
 
-    if ( env.usepag = true ) then
+    if ( env.use_paging = true ) then
         pages = env.pages
     else
         pages = 1
@@ -65,7 +65,7 @@ sub vid_init
     ''
     '' Create a backbuffer
     '' 
-    if ( env.usepag = false ) then
+    if ( env.use_paging = false ) then
         env.h_back_bdc = uglNew( ugl.mem, env.c_fmt, env.x_res, env.y_res )
         if ( env.h_back_bdc = FALSE ) then 
             sys_error "0x0002, Could not create a backbuffer..."
@@ -103,7 +103,7 @@ sub vid_update ( _
     '' three of them nothing to do with video. Input polling in the present
     '' path is the odd one: pressing a key had to wait for a blit.
     ''
-    if ( env.usepag = false ) then
+    if ( env.use_paging = false ) then
         uglPut env.h_video_dc, 0, 0, env.h_back_bdc
     else
         uglSetVisPage page

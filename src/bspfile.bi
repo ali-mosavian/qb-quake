@@ -24,14 +24,14 @@ type BspHeader
     version     as long
     entities    as LumpEntry
     planes      as LumpEntry
-    miptex      as LumpEntry
+    mip_tex      as LumpEntry
     vertices    as LumpEntry
-    vislist     as LumpEntry
+    vis_list     as LumpEntry
     nodes       as LumpEntry
-    texinfo     as LumpEntry
+    tex_info     as LumpEntry
     faces       as LumpEntry
     lightmaps   as LumpEntry
-    clipnode    as LumpEntry
+    clip_node    as LumpEntry
     leaves      as LumpEntry
     lface       as LumpEntry
     edges       as LumpEntry
@@ -65,13 +65,13 @@ type Submodel
     mins        as Vec3
     maxs        as Vec3
 	origin      as Vec3
-	headnode0   as long
-	headnode1   as long
-	headnode2   as long
-	headnode3   as long
-	visleafs    as long
-	firstface   as long
-	numfaces    as long
+	head_node0   as long
+	head_node1   as long
+	head_node2   as long
+	head_node3   as long
+	vis_leafs    as long
+	first_face   as long
+	num_faces    as long
 end type
 
 type DiskVertex
@@ -91,11 +91,11 @@ end type
 '' nothing reads a raw .x/.y/.z off it.
 
 type DiskFace
-    planeid     as integer
+    plane_id     as integer
     side        as integer
-    ledgeid     as long
-    ledgenum    as integer
-    texinfoid   as integer
+    ledge_id     as long
+    ledge_num    as integer
+    tex_info_id   as integer
     flag1       as integer
     flag2       as integer
     lightmap    as long    
@@ -112,7 +112,7 @@ end type
 '' undo the same wrap: value + 65536 when it comes back negative. See
 '' d_poly.bas where lid is read.
 type Face
-    planeid     as integer
+    plane_id     as integer
     side        as integer
     geom_row    as integer      '' this face's record in the geometry
     geom_ofs    as integer      '' store: the row uglMapEx maps, and the
@@ -120,7 +120,7 @@ type Face
                                 '' Replaces the old ledgeid/ledgenum pair
                                 '' in the same ten bytes -- and needs no
                                 '' unwrapping on read, which ledgeid did
-    texinfoid   as integer
+    tex_info_id   as integer
 end type
 
 ''
@@ -148,10 +148,10 @@ end type
 ''
 type SurfBuild
     lmptr       as long         '' -> this face's rect in the luxel atlas
-    lmstride    as long         '' atlas bytes per row. Long only so every
+    lm_stride    as long         '' atlas bytes per row. Long only so every
                                 '' field below keeps its offset; the high
                                 '' half is never read
-    cmapptr     as long         '' -> colormap[64][256]
+    cmap_ptr     as long         '' -> colormap[64][256]
     au0         as long         '' initial u, 16.16
     av0         as long         '' initial v, 16.16
     du          as long         '' u step per texel
@@ -194,7 +194,7 @@ type CacheStats
     evict       as long         '' blocks thrown out over the run
     flushes     as long         '' whole-cache flushes over the run
     peak        as long         '' high-water bytes in the cache DC
-    tbuilds     as long         '' builds over the whole run
+    total_builds     as long         '' builds over the whole run
 end type
 
 type CacheSlot
@@ -207,10 +207,10 @@ end type
 
 type DiskLeaf
     cont        as long
-    vislist     as long    
+    vis_list     as long    
     bound       as Bounds
-    lfaceid     as integer
-    lfacenum    as integer
+    lface_id     as integer
+    lface_num    as integer
     stuff       as string * 4
 end type
 
@@ -219,10 +219,10 @@ end type
 '' as an integer -- the long here only ever held a value that fits in one.
 type Leaf
     cont        as integer      '' CONTENTS_*: only hull 0 knows about water
-    vislist     as long
+    vis_list     as long
     bound       as Bounds
-    lfaceid     as integer
-    lfacenum    as integer
+    lface_id     as integer
+    lface_num    as integer
 end type
 
 type DiskPlane
@@ -238,27 +238,27 @@ type Plane
 end type
 
 type DiskNode
-    planeid     as long
+    plane_id     as long
     child0      as integer    
     child1      as integer    
     bound       as Bounds
-    lfaceid     as integer
-    lfacenum    as integer
+    lface_id     as integer
+    lface_num    as integer
 end type
 
 type Node
-    planeid     as integer
+    plane_id     as integer
     child0      as integer    
     child1      as integer
-    lfaceid     as integer
-    lfacenum    as integer
+    lface_id     as integer
+    lface_num    as integer
     bound       as Bounds
 end type
 
 type DiskTexInfo
     vecs(3)     as single
     vect(3)     as single
-    miptex      as long
+    mip_tex      as long
     flags       as long
 end type
 
@@ -268,7 +268,7 @@ end type
 type TexInfo
     vecs(3)     as single
     vect(3)     as single
-    miptex      as integer
+    mip_tex      as integer
 end type
 
 
@@ -294,7 +294,7 @@ end type
 '' 8 bytes (long+short+short) -- see cliptmp below, the len() source for
 '' wld.clp_count, which must NOT shrink with this type.
 type ClipNode
-    planenum    as integer
+    plane_num    as integer
     front       as integer
     back        as integer
 end type
@@ -304,7 +304,7 @@ end type
 '' reads the ORIGINAL .bsp file directly, so it needs the ORIGINAL record
 '' size -- same reason fce/nodetmp/leaftmp/planetmp exist below.
 type DiskClipNode
-    planenum    as long
+    plane_num    as long
     front       as integer
     back        as integer
 end type
@@ -331,14 +331,14 @@ type Env
     y_res       as integer
     c_fmt       as integer
     pages       as integer
-    usepag      as integer
-    disclear    as integer
+    use_paging      as integer
+    clear_screen    as integer
     
     sound       as integer
-    camfov      as single
-    cammode     as integer
-    caminterp   as integer   
-    camscrpt    as string * 40
+    cam_fov      as single
+    cam_mode     as integer
+    cam_interp   as integer   
+    cam_script    as string * 40
 
     '' Set from the command line, not from stuff.ini.
     map_name    as string * 64
@@ -363,7 +363,7 @@ type Env
                                 '' into triangles. A/B against the proven
                                 '' uglTriTP path.
     no_z        as integer      '' -noz: skip the depth buffer entirely
-    campath     as integer      '' -campath: fly the A* route from
+    cam_path     as integer      '' -campath: fly the A* route from
                                 '' campath.bin instead of standing still.
                                 '' The old bench rendered ONE viewpoint, so
                                 '' peak, low and mean were the same number
@@ -515,7 +515,7 @@ declare sub sb_build ( _
 declare sub sb_dump ( _
     byval face as integer, _
     byval mip as integer, _
-    byval nfaces as long, _
+    byval face_count as long, _
     tri_buffer() as Face, _
     tex_inf_buff() as TexInfo, _
     gv_buf() as integer, _
@@ -537,7 +537,7 @@ declare function sc_alloc ( _
     byval h as integer, _
     byval fw as integer, _
     byval fh as integer, _
-    byval nfaces as long _
+    byval face_count as long _
 )
 declare sub sc_bfree ( byval blk as integer )
 declare sub sc_bput ( byval b as integer )
@@ -549,7 +549,7 @@ declare function sc_find ( _
     byval w as integer, _
     byval h as integer _
 )
-declare sub sc_flush ( byval nfaces as long )
+declare sub sc_flush ( byval face_count as long )
 declare function sc_fpop ( byval ord as integer ) as integer
 declare sub sc_fpush ( byval b as integer )
 declare function sc_frame_end ( ) as integer
@@ -559,7 +559,7 @@ declare function sc_ftake ( _
 ) as integer
 declare function sc_grab ( byval sz as long ) as long
 declare function sc_held ( byval face as integer ) as integer
-declare sub sc_init ( byval nfaces as long )
+declare sub sc_init ( byval face_count as long )
 declare sub sc_lru_touch ( byval b as integer )
 declare sub sc_lru_unlink ( byval b as integer )
 declare function sc_mipfloor ( _
@@ -567,8 +567,8 @@ declare function sc_mipfloor ( _
     byval exth as integer _
 ) as integer
 declare function sc_ready ( ) as integer
-declare sub sc_reset ( byval nfaces as long )
-declare function sc_selftest ( byval nfaces as long ) as integer
+declare sub sc_reset ( byval face_count as long )
+declare function sc_selftest ( byval face_count as long ) as integer
 declare function sc_shift ( byval v as integer ) as integer
 declare sub sc_stats ( s as CacheStats )
 declare function sc_store_open ( ) as integer
@@ -577,23 +577,23 @@ declare sub com_parse_config ( filename as string )
 declare function com_arg ( _
     strm() as string, _
     strm_cnt as integer, _
-    linenum as integer _
+    line_num as integer _
 ) as string
 declare function com_yesno ( _
     strm() as string, _
     strm_cnt as integer, _
-    linenum as integer _
+    line_num as integer _
 ) as integer
 declare sub com_check_args ( _
     strm() as string, _
     strm_cnt as integer, _
     byval want as integer, _
-    byval linenum as integer _
+    byval line_num as integer _
 )
 declare sub com_tokenize ( _
     strm() as string, _
     strm_cnt as integer, _
-    tokenlist as string, _
+    token_list as string, _
     stream as string _
 )
                         
@@ -607,7 +607,7 @@ end type
 declare sub com_tokenize ( _
     strm() as string, _
     strm_cnt as integer, _
-    tokenlist as string, _
+    token_list as string, _
     stream as string _
 )
 declare function draw_load_font ( _
@@ -738,7 +738,7 @@ declare sub scr_screenshot ( _
 ''
 '' r_bsp.bas
 ''
-declare sub r_alloc_pvs ( byval nleafs as long )
+declare sub r_alloc_pvs ( byval leaf_count as long )
 declare function r_cam_plane_dist ( _
     pt as u3dVector3f, _
     pl as Plane _
@@ -749,14 +749,14 @@ declare function r_cull_box ( _
 ) as integer
 declare function r_leaf_contents ( byval leafnr as integer ) as integer
 declare sub r_load_leaves ( byval cnt as long )
-declare sub r_load_lfaces ( byval lumpbytes as long )
+declare sub r_load_lfaces ( byval lump_bytes as long )
 declare sub r_mark_leaves ( _
     byval nodenr as integer, _
-    byval nleafs as long, _
+    byval leaf_count as long, _
     campos as u3dVector3f, _
     nodes() as Node, _
     planes() as Plane, _
-    bitarray() as integer, _
+    bit_array() as integer, _
     pvsb() as integer _
 )
 declare function r_node_side ( _

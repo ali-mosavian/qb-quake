@@ -38,7 +38,7 @@ option explicit
 '' Quake's turbsin. A table because two sines per vertex of every
 '' liquid face is not something to compute in the draw loop.
 ''
-dim shared turbsin( 255 ) as single
+dim shared turb_sin( 255 ) as single
 dim shared poly(64) as u3dVector4f
 dim shared polyb(32) as u3dVector4f
 ''
@@ -53,7 +53,7 @@ dim shared su0 as single, su1 as single, su2 as single, su3 as single
 dim shared sv0 as single, sv1 as single, sv2 as single, sv3 as single
 dim shared tw as single, th as single
 dim shared uvbuff(64) as TexCoord
-dim shared uvbuffb(32) as TexCoord
+dim shared uv_buff_b(32) as TexCoord
 dim shared vcnt as integer, mipidx as integer
 
 dim shared vtx(31) as tritype
@@ -190,7 +190,7 @@ sub d_draw_faces ( _
     mtx_fin as u3dMtrx, _
     xresh as single, _
     yresh as single, _
-    byval nfaces as long, _
+    byval face_count as long, _
     campos as u3dVector3f, _
     rdr as RenderState, _
     env as Env, _
@@ -210,7 +210,7 @@ sub d_draw_faces ( _
     poly_flag() as integer _
 )
     dim dp as single
-    dim polycnt as integer
+    dim poly_cnt as integer
     dim mi as integer, m as integer
     dim leaf_indx as integer, leaf_end as integer, ti as integer, i as integer
     dim pid as integer, tex as integer, j as integer
@@ -220,7 +220,7 @@ sub d_draw_faces ( _
 
     dim gp as long, gv_dst as long
     dim zl as single
-    dim miplevel as integer, tex_indx as integer
+    dim mip_level as integer, tex_indx as integer
     dim p2 as integer, p3 as integer
     dim liquid as integer
     dim tu as single, tv as single
@@ -279,8 +279,8 @@ sub d_draw_faces ( _
         '' a real remap each way, but only once per node rather than once
         '' per face -- and emsMapEx skips it entirely when the page has
         '' not moved.
-        leaf_indx = nds_buffer(m).lfaceid
-        leaf_end = leaf_indx + nds_buffer(m).lfacenum-1
+        leaf_indx = nds_buffer(m).lface_id
+        leaf_end = leaf_indx + nds_buffer(m).lface_num-1
         
         for  ti = leaf_indx to leaf_end            
             i = ti
@@ -317,7 +317,7 @@ sub d_draw_faces ( _
             '' one map per face: it covers planeid, side, geom_row,
             '' geom_ofs and texinfoid, and nothing between them remaps this
             '' array (the geometry window is a different store entirely).
-            dp = r_cam_plane_dist( campos, pln_buffer( tri_buffer(i).planeid ) )
+            dp = r_cam_plane_dist( campos, pln_buffer( tri_buffer(i).plane_id ) )
                       
             if ( tri_buffer(i).side ) then dp = -dp
                 
@@ -342,8 +342,8 @@ sub d_draw_faces ( _
             memCopy gv_dst, gp + clng( tri_buffer(i).geom_ofs ), clng( gn )
 
             vcnt = gv_buf(0)
-            tex = tri_buffer(i).texinfoid
-            mipidx = tex_inf_buff(tex).miptex
+            tex = tri_buffer(i).tex_info_id
+            mipidx = tex_inf_buff(tex).mip_tex
 
             liquid = mip_buff_inf(mipidx).liquid
             zofs   = brush( face_mdl(i) ).zofs
@@ -463,8 +463,8 @@ sub d_draw_faces ( _
                 polyb(j).z = vy
                 polyb(j).w = 1.0
                         
-                uvbuffb(j).u = su0*vx + su1*vy + su2*vz + su3
-                uvbuffb(j).v = sv0*vx + sv1*vy + sv2*vz + sv3
+                uv_buff_b(j).u = su0*vx + su1*vy + su2*vz + su3
+                uv_buff_b(j).v = sv0*vx + sv1*vy + sv2*vz + sv3
 
                 ''
                 '' A liquid displaces each coordinate by a sine of the
@@ -475,12 +475,12 @@ sub d_draw_faces ( _
                 '' mapper, and uGL's mapper is not ours to change.
                 ''
                 if ( liquid ) then
-                    tu = uvbuffb(j).u
-                    tv = uvbuffb(j).v
+                    tu = uv_buff_b(j).u
+                    tv = uv_buff_b(j).v
                     tqi = int( tv*TURB_FREQ# + turbph ) and 255
                     tqj = int( tu*TURB_FREQ# + turbph ) and 255
-                    uvbuffb(j).u = tu + turbsin(tqi)
-                    uvbuffb(j).v = tv + turbsin(tqj)
+                    uv_buff_b(j).u = tu + turb_sin(tqi)
+                    uv_buff_b(j).v = tv + turb_sin(tqj)
                 end if
             next j
 
@@ -501,12 +501,12 @@ sub d_draw_faces ( _
             ''
             u3dMtrxByVec4 polyb(0), len( polyb(0) ), mtx_fin, _
                           polyb(0), len( polyb(0) ), vcnt
-            d_clip_z poly(), uvbuff(), polycnt, polyb(), uvbuffb(), vcnt, env.z_near, env.z_far
+            d_clip_z poly(), uvbuff(), poly_cnt, polyb(), uv_buff_b(), vcnt, env.z_near, env.z_far
 
 			''
 			'' If more then 2 vertices, rasterize
 			''
-            if polycnt > 2 then
+            if poly_cnt > 2 then
                     	
             ''
             '' Project every vertex of the polygon once, then let
@@ -520,7 +520,7 @@ sub d_draw_faces ( _
             '' where 7 do. On a 486 without a fast divide that is
             '' the most expensive line in the loop.
             ''
-            for  j = 0 to polycnt-1
+            for  j = 0 to poly_cnt-1
                 prj_w(j) = 1.0 / polyb(j).w
                 prj_x(j) = xresh + polyb(j).x*prj_w(j)*xresh
                 prj_y(j) = yresh - polyb(j).y*prj_w(j)*yresh
@@ -535,15 +535,15 @@ sub d_draw_faces ( _
             '' near-identical copies the mode branches used to
             '' carry.
             ''
-            if ( rdr.rendmode = 0 ) then
-                for  j = 0 to polycnt-1
-                    prj_u(j) = uvbuffb(j).u * prj_w(j)
-                    prj_v(j) = uvbuffb(j).v * prj_w(j)
+            if ( rdr.rend_mode = 0 ) then
+                for  j = 0 to poly_cnt-1
+                    prj_u(j) = uv_buff_b(j).u * prj_w(j)
+                    prj_v(j) = uv_buff_b(j).v * prj_w(j)
                 next j
-            elseif ( rdr.rendmode = 1 ) then
-                for  j = 0 to polycnt-1
-                    prj_u(j) = uvbuffb(j).u
-                    prj_v(j) = uvbuffb(j).v
+            elseif ( rdr.rend_mode = 1 ) then
+                for  j = 0 to poly_cnt-1
+                    prj_u(j) = uv_buff_b(j).u
+                    prj_v(j) = uv_buff_b(j).v
                 next j
             end if
 
@@ -561,23 +561,23 @@ sub d_draw_faces ( _
             '' mip per surface, and so does this now.
             ''
             zl = 0.0
-            for  j = 0 to polycnt-1
+            for  j = 0 to poly_cnt-1
                 zl = zl + polyb(j).w
             next j
-            zl = zl / polycnt
+            zl = zl / poly_cnt
 
             if  ( zl >= 1400.0 ) then
-                miplevel = 3
+                mip_level = 3
             elseif  ( zl >= 560.0 ) then
-                miplevel = 2
+                mip_level = 2
             elseif  ( zl >= 280.0 ) then
-                miplevel = 1
+                mip_level = 1
             else
-                miplevel = 0
+                mip_level = 0
             end if
 
-            if ( rdr.usemips ) then
-                tex_indx = mipidx*4+miplevel
+            if ( rdr.use_mips ) then
+                tex_indx = mipidx*4+mip_level
             else
                 tex_indx = mipidx*4
             end if
@@ -590,8 +590,8 @@ sub d_draw_faces ( _
             ''
             src_dc = h_textr_dc(tex_indx)
             if ( lm_on ) then
-                lm_mip = miplevel
-                if ( rdr.usemips = 0 ) then lm_mip = 0
+                lm_mip = mip_level
+                if ( rdr.use_mips = 0 ) then lm_mip = 0
                 lm_floor = sc_mipfloor( lm_extw, lm_exth )
                 if ( lm_mip < lm_floor ) then lm_mip = lm_floor
 
@@ -631,7 +631,7 @@ sub d_draw_faces ( _
 
                 lm_dc = sc_find( i, lm_mip, lm_sw, lm_sh )
                 if ( lm_dc = 0 ) then
-                    lm_dc = sc_alloc( i, lm_mip, lm_sw, lm_sh, lm_fw, lm_fh, nfaces )
+                    lm_dc = sc_alloc( i, lm_mip, lm_sw, lm_sh, lm_fw, lm_fh, face_count )
                     if ( lm_dc <> 0 ) then
                         ''
                         '' Build the DC's WHOLE padded extent, not just the
@@ -660,13 +660,13 @@ sub d_draw_faces ( _
                     ''
                     lm_su = 1.0 / ((2 ^ lm_mip) * (2 ^ sc_shift( lm_sw )))
                     lm_sv = 1.0 / ((2 ^ lm_mip) * (2 ^ sc_shift( lm_sh )))
-                    if ( rdr.rendmode = 0 ) then
-                        for  j = 0 to polycnt-1
+                    if ( rdr.rend_mode = 0 ) then
+                        for  j = 0 to poly_cnt-1
                             prj_u(j) = (prj_u(j) - lm_tms*prj_w(j)) * lm_su
                             prj_v(j) = (prj_v(j) - lm_tmt*prj_w(j)) * lm_sv
                         next j
                     else
-                        for  j = 0 to polycnt-1
+                        for  j = 0 to poly_cnt-1
                             prj_u(j) = (prj_u(j) - lm_tms) * lm_su
                             prj_v(j) = (prj_v(j) - lm_tmt) * lm_sv
                         next j
@@ -678,7 +678,7 @@ sub d_draw_faces ( _
                     '' DC would not fit. The coordinates are still in texel
                     '' units, so put them back on the atlas scale.
                     ''
-                    for  j = 0 to polycnt-1
+                    for  j = 0 to poly_cnt-1
                         prj_u(j) = prj_u(j) * tw
                         prj_v(j) = prj_v(j) * th
                     next j
@@ -690,8 +690,8 @@ sub d_draw_faces ( _
                 '' internal edges for the rasteriser to seam along.
                 '' Wireframe mode still fans, it wants the triangles.
                 ''
-                if ( env.poly_tp and polycnt <= 12 ) then
-                    for  j = 0 to polycnt-1
+                if ( env.poly_tp and poly_cnt <= 12 ) then
+                    for  j = 0 to poly_cnt-1
                         pvtx(j).x = prj_x(j)
                         pvtx(j).y = prj_y(j)
                         pvtx(j).z = prj_w(j)
@@ -699,12 +699,12 @@ sub d_draw_faces ( _
                         pvtx(j).v = prj_v(j)
                     next j
 
-                    uglPolyTP h_dst_dc, pvtx(0), polycnt, 0, src_dc
-                    rdr.tris = rdr.tris + (polycnt-2)
+                    uglPolyTP h_dst_dc, pvtx(0), poly_cnt, 0, src_dc
+                    rdr.tris = rdr.tris + (poly_cnt-2)
                     goto poly_done
                 end if
 
-                for j = 0 to polycnt-3
+                for j = 0 to poly_cnt-3
                     p2 = j+1
                     p3 = j+2
 
@@ -722,7 +722,7 @@ sub d_draw_faces ( _
                     vtx(j).v3.x = prj_x(p3)
                     vtx(j).v3.y = prj_y(p3)
 
-                    if ( rdr.rendmode = 2 ) then
+                    if ( rdr.rend_mode = 2 ) then
                         uglTriF h_dst_dc, vtx(j), 200
                         uglLine h_dst_dc, vtx(j).v1.x, vtx(j).v1.y, vtx(j).v2.x, vtx(j).v2.y, 0
                         uglLine h_dst_dc, vtx(j).v2.x, vtx(j).v2.y, vtx(j).v3.x, vtx(j).v3.y, 0
@@ -735,7 +735,7 @@ sub d_draw_faces ( _
                         vtx(j).v3.u = prj_u(p3)
                         vtx(j).v3.v = prj_v(p3)
 
-                        if ( rdr.rendmode = 0 ) then
+                        if ( rdr.rend_mode = 0 ) then
                             uglTriTP h_dst_dc, vtx(j), 0, src_dc
                         else
                             uglTriT h_dst_dc, vtx(j), 0, src_dc
@@ -767,7 +767,7 @@ sub d_init_turb
     dim i as integer
 
     for  i = 0 to 255
-        turbsin(i) = TURB_AMP# * sin( i * (2.0*3.14159265 / 256.0) )
+        turb_sin(i) = TURB_AMP# * sin( i * (2.0*3.14159265 / 256.0) )
     next i
 
 end sub

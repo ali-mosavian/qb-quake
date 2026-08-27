@@ -150,7 +150,7 @@ sub ent_load_teleports ( _
     next i
 
     for  j = 1 to wld.mdl_count-1
-        for  k = models(j).firstface to models(j).firstface + models(j).numfaces - 1
+        for  k = models(j).first_face to models(j).first_face + models(j).num_faces - 1
             if ( k >= 0 and k <= wld.tri_count-1 ) then face_mdl(k) = j
         next k
     next j
@@ -279,7 +279,7 @@ sub ent_check_teleport ( _
     dim i as integer
     dim pmin as Vec3, pmax as Vec3
 
-    if ( pl.noclip ) then exit sub
+    if ( pl.no_clip ) then exit sub
 
     pmin.x = pl.pos.x - 16.0
     pmin.y = pl.pos.y - 16.0
@@ -445,14 +445,14 @@ end function
 ''       "furthest", and everything the entity should hide gets drawn after it.
 ''::::::::::
 sub ent_place_models ( _
-    byval nmodels as integer, _
+    byval model_count as integer, _
     models() as Submodel, _
     nodes() as Node, _
     planes() as Plane _
 )
     dim m as integer
 
-    for  m = 1 to nmodels-1
+    for  m = 1 to model_count-1
         brush(m).node = ent_find_node( m, models(), nodes(), planes() )
     next m
 
@@ -495,7 +495,7 @@ function ent_find_node ( _
     nodenr = 0
 
     do while ( (nodenr and &h8000) = 0 )
-        pid = nodes(nodenr).planeid
+        pid = nodes(nodenr).plane_id
 
         ''
         '' The box corner furthest along the normal and the one furthest

@@ -110,6 +110,12 @@ reaching for it only pays once the declaration goes; a `COMMON` entry that
 every procedure now receives as a parameter is worse than before, because it
 looks live. Re-check the block after each conversion.
 
+**Leave what you touch better.** A procedure you are editing for another
+reason is a procedure you may fix: flatten a nest, split a routine that does
+two things, name a variable properly. `mod_find_spawn` was six levels deep
+inside one loop; the block parsing came out as `mod_spawn_from_block` and
+nothing nests past two now. Keep it to the code you were already in.
+
 **Comments are short, and say what the code cannot.** No banner block on a
 function whose name already says it. Comment the swap, the trap, the reason
 for `single` -- not the obvious. `r_plane_dist` carried fourteen lines over
@@ -488,7 +494,7 @@ a small one overall and a small one is invisible.
 faster than the timer resolves, so `-nodraw` returns the tick floor and
 not the code: three different builds all reported
 
-    ftmean 9.97680673249007   frames 1908
+    ft_mean 9.97680673249007   frames 1908
 
 identical to eight decimals. Identical-to-many-decimals across builds
 that differ is the tell, and 9.9768ms is 1/100.23s -- the tick, not the
@@ -529,7 +535,7 @@ silently makes the two sides different programs; `cmp` the two staged
 
 ### One run per side is not a measurement
 
-`ftmean` over a campath run has a run-to-run spread of about **2.3 ms**
+`ft_mean` over a campath run has a run-to-run spread of about **2.3 ms**
 -- wider than most changes worth arguing about. It is also quantised:
 the same handful of values recur across unrelated builds, so two runs
 agreeing to ten decimals means the metric is coarse, not that the builds
@@ -553,7 +559,7 @@ both at the SAME library:
         IFS=: read t rt out <<< "$a"
         NATIVE_UGL=$PWD/build/native-mgl/UGLV.LIB VBD_OUT=$out \
           QFLAGS="-lm -campath" $rt/tools/dosbox.sh run > /dev/null 2>&1
-        echo "$t $(grep '^ftmean ' $out/bench.txt | cut -d' ' -f2)"
+        echo "$t $(grep '^ft_mean ' $out/bench.txt | cut -d' ' -f2)"
       done
     done
 
