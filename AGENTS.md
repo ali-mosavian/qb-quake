@@ -313,6 +313,79 @@ rather than the set faster.
 explicitly, because the recompiler throws away translations when mgl
 patches immediates into its own inner loops.
 
+## Drive DOSBox hands-on, do not wait on files
+
+**Watch the emulator while it runs. Do not start a run and wait for a text
+file to appear.** Waiting blind cost most of an afternoon here: three
+separate "it is hung" conclusions were all a run that simply had not
+finished, and a "control" that had died at load with `runtime error 53`
+was read as evidence for an hour because nobody looked at the screen.
+
+The MCP DOSBox tools attach to a conf that has a debugger section --
+`tools/dosbox.sh viz <map>` emits one:
+
+    tools/dosbox.sh viz dm3ish.bsp        # prints the conf path
+    dosbox_launch { conf, headless: true }
+    dosbox_screenshot { path }            # then Read the png
+    dosbox_text_screen                    # text mode
+    dosbox_regs                           # is it executing, or spinning?
+
+What each answers, in seconds rather than minutes:
+
+- **screenshot** -- is the picture right, and is the overlay advancing?
+  Two identical captures a few seconds apart mean one frame is taking
+  longer than that, NOT that it is stuck. Space them out before deciding.
+- **regs** -- sampled twice, do CS:EIP move? Moving means slow, not hung.
+  `ES` near the EMS frame (0xE000 + slot*0x400) says it is in a window.
+
+**EVERY inspection FREEZES the CPU and does not resume it.** `dosbox_regs`,
+`dosbox_where` and `dosbox_screenshot` all leave `cpuRunning: false,
+debuggerFrozen: true` -- check with `dosbox_status`. Resume with
+`dosbox_continue` (it will time out waiting for a stop that never comes;
+that is fine, the CPU is running again). Forgetting this makes the
+emulator look stalled BECAUSE YOU STALLED IT, and any wall-clock number
+taken across an inspection is worthless. Sample for WHERE it is, never
+for HOW LONG it took.
+- **RUN.OUT / ERROR.LOG / ERRMEM.TXT** -- read these FIRST when a run
+  produces nothing. An empty RUN.OUT with an ERROR.LOG beside it is a
+  runtime error, not a hang.
+
+## Benchmarking a change to the frontend
+
+**Use `-nodraw`.** It runs the BSP walk, PVS and visibility and skips
+rasterising. A change to the walk -- paging the node tree, reordering the
+recursion -- moves the frontend and not the fill, and a full-frame timing
+buries it: fill dominates, so a large regression in the walk shows up as
+a small one overall and a small one is invisible.
+
+**Always use the dynamic core.** It is the default everywhere and there
+is no case for turning it off.
+
+`dosbox/template.conf` pins the machine and every mode inherits it:
+
+    core=dynamic
+    cycles=75000
+    priority=higher,normal        # [sdl]
+
+These are THE settings. They are not tuning knobs -- a before/after is a
+measurement only if both sides ran on the same emulated machine, and
+`cycles=max` makes that machine vary with host load. CYCLES/CORE can
+override, but only with a reason you can state, and never on one side of
+a comparison.
+
+Speed here is not a luxury: a run you can watch finish is a run you will
+actually watch, and every wrong "it is hung" call today came from a
+five-to-fifteen minute round trip on the interpreter.
+
+**Pin the emulated CPU on BOTH sides of a comparison.**
+
+`cycles=max` scales with whatever else the host is doing, so two runs of
+the SAME build differ. `tools/dosbox.sh` now defaults run and viz to the
+same 40000/normal for exactly this reason -- override both or neither.
+
+A before/after is only a measurement if the map, the flags, the cycles
+and the core all match. State them when quoting a number.
+
 ## Harness: benchmark mode
 
     qrender.exe dm3ish.bsp -bench 500
