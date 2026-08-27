@@ -66,7 +66,7 @@ common shared /map_s/ ldr as LoadState
 ''
 common shared /surf/ tri_buffer() as Face
 '' The leaves are NOT here any more -- r_bsp.bas owns them and loads
-'' them; pl_move asks rb_leaf_contents for the one field it wants.
+'' them; pl_move asks r_leaf_contents for the one field it wants.
 
 ''
 '' The geometry store. Every face's corner positions written out flat, in
@@ -121,7 +121,7 @@ const GEOM_VTX0  = 9            '' gv_buf index of the first corner
 const GEOM_MAXREC = 18 + GEOM_MAXVTX * 6
 
 '' The geometry store is NOT here any more -- model.bas owns it and
-'' PAGE_SLOT with it; d_poly and d_surf ask for a row through geom_map.
+'' PAGE_SLOT with it; d_poly and d_surf ask for a row through mod_geom_map.
 
 ''
 '' The face record most recently fetched by d_draw_faces. Shared because
@@ -179,7 +179,7 @@ common shared /surf/ order_list() as integer
 '' and 40K on e1m1, which is the largest single item on that map.
 ''
 '' The visibility lump is NOT here any more. model.bas allocates it and
-'' hands out its base through pvs_base; pvs_size never left that module
+'' hands out its base through mod_pvs_base; pvs_size never left that module
 '' at all, so it needs no accessor.
 common shared /surf/ tex_inf_buff() as TexInfo, poly_flag() as integer
 
@@ -220,7 +220,7 @@ common shared /surf/ h_tri as long
 '' that map loading.
 ''
 '' The atlas handle is NOT here any more. model.bas loads it and owns
-'' PAGE_SLOT with it; sb_build asks for a scanline through lm_map rather
+'' PAGE_SLOT with it; sb_build asks for a scanline through mod_lm_map rather
 '' than mapping a slot it does not own.
 ''
 '' The depth buffer. World faces write through it without testing -- the
@@ -248,7 +248,7 @@ common shared /surf/ h_tri as long
 const MEM_MARKS = 20
 
 '' The depth buffer is NOT here any more -- main.bas creates it and
-'' d_poly asks z_on whether depth is available.
+'' d_poly asks host_z_on whether depth is available.
 ''
 '' The colormap: 64 light levels x 256 colours, in a memAlloc'd block.
 ''
@@ -271,7 +271,7 @@ const MEM_MARKS = 20
 ''
 '' The colormap is NOT here any more. model.bas loads it and owns the
 '' dc, the size and CM_SLOT; d_surf and screen ask for it through
-'' cm_map/cm_ready rather than mapping a slot they do not own.
+'' mod_cm_map/mod_cm_ready rather than mapping a slot they do not own.
 ''
 ''
 '' Surface cache state. In COMMON rather than d_surf.bas's own DIM SHARED

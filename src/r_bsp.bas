@@ -73,36 +73,19 @@ declare sub r_recursive_world_node ( _
 '' ==========================================================================
 ''  BSP WALK
 '' ==========================================================================
-''::::::::::
-'' name: point_dist_to_plane
-'' desc: Signed distance from a RENDERER-space point to a BSP-space plane.
-''
-''       The axes swap here, and only here. The renderer is Y-up and the
-''       BSP is Z-up, so the dot product pairs y with norm.z and z with
-''       norm.y. That swap used to be spelled out at three call sites --
-''       transpose one of them and you get a cull that is wrong only on
-''       some geometry.
-''
-''       SINGLE, not double. Returning double here rounded two faces onto
-''       the other side of their plane on the bench path -- 297 triangles
-''       where every previous run drew 299. The callers hold the result in
-''       a single, so the extra precision only moved the boundary.
-''::::::::::
+'' Renderer space is Y-up, the BSP is Z-up, so y pairs with norm.z.
+'' Single, not double: returning double moved two edge-on faces onto the
+'' other side of their plane.
 function r_plane_dist ( _
     pt as u3dVector3f, _
     pl as Plane _
 ) as single
     r_plane_dist = pt.x*pl.norm.x + _
-                           pt.y*pl.norm.z + _
-                           pt.z*pl.norm.y - pl.dist
+                   pt.y*pl.norm.z + _
+                   pt.z*pl.norm.y - pl.dist
 end function
 
-''::::::::::
-'' name: point_side_of_node
-'' desc: Which side of a node's splitting plane a point falls on:
-''       -1 in front, 0 behind. Takes the point it is classifying and the
-''       tables it needs, so it says what it does on what it is given.
-''::::::::::
+'' Which side of a node's splitting plane a point falls on: -1 front, 0 behind.
 function r_node_side ( _
     byval node_idx as integer, _
     pt as u3dVector3f, _
@@ -499,7 +482,7 @@ sub r_mark_leaves ( byval nodenr as integer )
     '' Find the node that the camera is in
     ''
     while not ( nodenr and &h8000 )
-        '' point_side_of_node maps nodenr itself and nothing since has
+        '' r_node_side maps nodenr itself and nothing since has
         '' remapped, so the children are readable without a second call
         if ( r_node_side( nodenr, cam.pos, nds_buffer(), pln_buffer() ) ) then
             nodenr = nds_buffer(nodenr).child0
@@ -599,7 +582,7 @@ sub r_draw_brush_model ( byval m as integer )
 end sub
 
 ''::::::::::
-'' name: rb_load_lfaces
+'' name: r_load_lfaces
 '' desc: Sizes and loads the marksurface list from its lump byte count.
 ''       The elements are plain integers, so the count is the lump over
 ''       len() of one -- taken here, where the array actually lives.
@@ -616,7 +599,7 @@ sub r_load_lfaces ( byval lumpbytes as long )
 end sub
 
 ''::::::::::
-'' name: rb_alloc_pvs
+'' name: r_alloc_pvs
 '' desc: One visibility bit per leaf.
 ''
 ''       Sized to the map, not a fixed 4096: r_mark_leaves indexes this
@@ -628,7 +611,7 @@ sub r_alloc_pvs ( byval nleafs as long )
 end sub
 
 ''::::::::::
-'' name: rb_load_leaves
+'' name: r_load_leaves
 '' desc: Builds the leaf store and binds it. The loader passes the count
 ''       and nothing else -- where the leaves live is this module's.
 ''::::::::::
@@ -673,7 +656,7 @@ sub r_load_leaves ( byval cnt as long )
 end sub
 
 ''::::::::::
-'' name: rb_leaf_contents
+'' name: r_leaf_contents
 '' desc: The contents field of one leaf. pl_move's point test walks the
 ''       node tree itself and needs exactly this at the end of it, which
 ''       is not reason enough for the whole array to be shared.

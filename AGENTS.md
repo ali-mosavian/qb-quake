@@ -84,6 +84,19 @@ called `classify_point` it takes a point -- not a camera it reaches into for
 one. And the name has to answer "against what?": `point_side_of_plane` says
 what `classify_point` only gestures at.
 
+**Docstrings earn their place.** A banner block on a function whose name
+already says it is noise, and noise is what stops the next person reading
+the blocks that matter. Comment what is not in the code: why the axes swap,
+why single and not double, which trap this avoids. `r_plane_dist` had a
+fourteen-line header over three lines of arithmetic; two lines of it were
+worth keeping.
+
+**Comments are short, and say what the code cannot.** No banner block on a
+function whose name already says it. Comment the swap, the trap, the reason
+for `single` -- not the obvious. `r_plane_dist` carried fourteen lines over
+three of arithmetic; two were worth keeping. This applies to commit messages
+and to anything else written here.
+
 **Bail early; do not nest.** Guard clauses and `exit sub` beat an `if` that
 wraps the body. Keep procedures tight and small enough to read whole.
 

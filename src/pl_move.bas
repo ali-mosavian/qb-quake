@@ -743,11 +743,7 @@ sub pl_load_hulls ( byval cnt as long )
     mapped = uglArrMap&( h_clp, clp_buffer(), 0 )
 end sub
 
-''::::::::::
-'' name: pl_hull_rec
-'' desc: Record size, for the bench report -- so main.bas can quote it
-''       without reaching into this module's array.
-''::::::::::
+'' Clipnode record size, for the bench report.
 function pl_hull_rec ( ) as integer
     pl_hull_rec = len( clp_buffer(0) )
 end function

@@ -83,7 +83,7 @@ dim shared lightmap as long
 ''
 '' THE DEPTH BUFFER. Created here, alongside the destination dc it belongs
 '' to. d_poly is the only other module that cares, and only to ask whether
-'' depth exists at all -- z_on answers that.
+'' depth exists at all -- host_z_on answers that.
 ''
 dim shared z_dc as long
 
@@ -929,7 +929,7 @@ sub host_bench_report ( _
 end sub
 
 ''::::::::::
-'' name: z_on
+'' name: host_z_on
 '' desc: Whether a depth buffer exists. main.bas creates it, so it answers
 ''       for it; d_poly hoists this once a frame rather than testing a
 ''       shared handle per face.
