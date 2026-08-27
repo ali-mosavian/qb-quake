@@ -171,8 +171,7 @@ sub mod_load_textures
             if ( (i and 15) = 0 ) then scr_mip_tick (j+1)*25
         next j
 
-        ldr.pct = ldr.pct + (100.0/LOAD_STEPS)/wld.num_tex
-        if ( (i and 15) = 0 ) then scr_load_tick
+        scr_load_part 1.0/wld.num_tex, ((i and 15) = 0)
     next i
 
     mod_link_anims

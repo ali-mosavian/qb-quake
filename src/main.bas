@@ -50,8 +50,8 @@ option explicit
 '$include: 'q_env.bi'
 '$include: 'q_vis.bi'
 '$include: 'q_draw.bi'
-'$include: 'q_scr.bi'
 '$include: 'q_map.bi'
+'$include: 'q_scr.bi'
 '$include: 'q_cam.bi'
 '$include: 'q_pl.bi'
 '$include: 'q_ent.bi'
@@ -218,7 +218,7 @@ sub host_init
     sys_mem_mark "ugl"
     s_init
     s_start_music
-    draw_init_font
+    draw_init_font env, bit_array()
     sys_mem_mark "font"
 
     '' map file and the loading screen
@@ -226,7 +226,7 @@ sub host_init
 
     mod_open wld, env, mdl_buffer()
     sys_mem_mark "mapopen"
-    scr_begin_loading
+    scr_begin_loading env
     mod_find_spawn wld, cam
     pl_init pl, cam, env
     mod_alloc wld, tri_buffer(), tex_inf_buff(), pln_buffer(), _
@@ -470,7 +470,7 @@ sub host_main
 
         in_screenshot_key h_dst_dc
         vid_update h_dst_dc, page
-        scr_count_frame
+        scr_count_frame env, scr, rdr
 
         ''
         '' -benchsecs: a wall-clock budget instead of a frame/tick count, for
@@ -821,7 +821,7 @@ sub host_render ( _
 
 
     
-    scr_draw_hud h_dst_dc
+    scr_draw_hud h_dst_dc, env, scr, rdr, vis, wld
 
 end sub
 
@@ -848,7 +848,7 @@ sub host_bench_report ( _
     dim mi as integer
     dim benchf as integer
 
-    scr_screenshot "bench.bmp", h_dst_dc
+    scr_screenshot "bench.bmp", h_dst_dc, env
 
     benchf = freefile
     open "bench.txt" for output as #benchf

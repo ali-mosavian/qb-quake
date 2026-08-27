@@ -20,8 +20,9 @@ option explicit
 '$include: 'mod.bi'
 '$include: 'q_env.bi'
 '$include: 'q_draw.bi'
-'$include: 'q_scr.bi'
 '$include: 'q_map.bi'
+'$include: 'q_vis.bi'
+'$include: 'q_scr.bi'
 '$include: 'q_cam.bi'
 '$include: 'q_pl.bi'
 
@@ -121,7 +122,7 @@ sub in_screenshot_key ( h_dst_dc as long )
     '' F5, not S: S walks backwards now.
     ''
     if ( env.keyboard.f5 ) then
-        scr_screenshot "scrn" + ltrim$(rtrim$(str$( screenie ))) + ".bmp", h_dst_dc
+        scr_screenshot "scrn" + ltrim$(rtrim$(str$( screenie ))) + ".bmp", h_dst_dc, env
         screenie = screenie + 1
     end if
 

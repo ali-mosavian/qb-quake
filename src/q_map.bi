@@ -45,7 +45,8 @@ type LoadState
 end type
 
 common shared /map_s/ wld as MapState
-common shared /map_s/ ldr as LoadState
+'' ldr is NOT here any more. screen.bas draws the loading screen and is
+'' the only module that touches it; loaders report through scr_load_step.
 
 ''
 '' Written by model.bas, walked by the renderer. A TYPE cannot contain an

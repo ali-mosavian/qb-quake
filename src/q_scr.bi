@@ -121,3 +121,20 @@ common shared /scr_s/ cp_done as integer
 common shared /scr_s/ ft_min as single, ft_max as single, ft_sum as single
 common shared /scr_s/ ft_n as long
 common shared /scr_s/ sys_raw_dt as single
+
+''
+'' screen.bas. Declared here: these name ScreenState and friends.
+''
+declare sub scr_count_frame ( _
+    env as Env, _
+    scr as ScreenState, _
+    rdr as RenderState _
+)
+declare sub scr_draw_hud ( _
+    h_dst_dc as long, _
+    env as Env, _
+    scr as ScreenState, _
+    rdr as RenderState, _
+    vis as VisState, _
+    wld as MapState _
+)
