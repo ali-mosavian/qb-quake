@@ -304,9 +304,7 @@ end sub
 '':::::::::
 sub r_draw_world ( _
     byval model as integer, _
-    byval model_count as long, _
-    byval leaf_count as long, _
-    byval face_count as long, _
+    wld as World, _
     campos as u3dVector3f, _
     vis as VisState, _
     models() as Submodel, _
@@ -337,7 +335,7 @@ sub r_draw_world ( _
     '' QuickBASIC traps integer overflow at run time rather than wrapping.
     ''
     if ( vis.frame_stamp = 32767 ) then
-        for  i = 0 to face_count-1
+        for  i = 0 to wld.count.faces-1
             pflag(i) = 0
         next i
         vis.frame_stamp = 0
@@ -347,7 +345,7 @@ sub r_draw_world ( _
     ''
     '' Extract pvs
     ''
-    r_mark_leaves int(models(model).head_node0), leaf_count, campos, _
+    r_mark_leaves int(models(model).head_node0), wld, campos, _
                   nodes(), planes(), bit_array(), pvs_buffer_b()
     
     ''
@@ -355,7 +353,7 @@ sub r_draw_world ( _
     '' the per-node test below costs nothing.
     ''
     vis.ent_left = 0
-    for  i = 1 to model_count-1
+    for  i = 1 to wld.count.models-1
         if ( brush(i).draw ) then vis.ent_left = vis.ent_left + 1
     next i
 
@@ -363,7 +361,7 @@ sub r_draw_world ( _
     '' Traverse tree
     ''
     r_recursive_world_node int( models(model).head_node0 ), _
-                              model_count, models(), brush(), campos, vis, r_ignore_pvs, _
+                              wld.count.models, models(), brush(), campos, vis, r_ignore_pvs, _
                               nodes(), planes(), lef_buffer(), lfc_buffer(), _
                               pvs_buffer_b(), pflag(), ord(), fru()
 
@@ -373,11 +371,11 @@ sub r_draw_world ( _
     '' so the fix can be shown rather than asserted.
     ''
     if ( vis.bad_order and vis.no_ents = false ) then
-        for  i = 1 to model_count-1
+        for  i = 1 to wld.count.models-1
             if ( brush(i).draw ) then
                 r_ignore_pvs = true
                 r_recursive_world_node int( models(i).head_node0 ), _
-                              model_count, models(), brush(), campos, vis, r_ignore_pvs, _
+                              wld.count.models, models(), brush(), campos, vis, r_ignore_pvs, _
                               nodes(), planes(), lef_buffer(), lfc_buffer(), _
                               pvs_buffer_b(), pflag(), ord(), fru()
                 r_ignore_pvs = false
@@ -543,13 +541,14 @@ end function
 ''::::::::::
 sub r_mark_leaves ( _
     byval nodenr as integer, _
-    byval leaf_count as long, _
+    wld as World, _
     campos as u3dVector3f, _
     nodes() as Node, _
     planes() as Plane, _
     bit_array() as integer, _
     pvsb() as integer _
 )
+    dim pvs_base as long
     dim mp as long
     dim v as long
     dim l as long
@@ -557,6 +556,8 @@ sub r_mark_leaves ( _
     dim bit as long
     dim byte as integer
     dim i as integer
+
+    pvs_base = mod_pvs_base( wld )
     
     ''
     '' Find the node that the camera is in
@@ -588,11 +589,11 @@ sub r_mark_leaves ( _
         
     '' memAlloc is paragraph-aligned, so the block's own offset is zero
     '' and v is the offset within it exactly as the lump stores it
-    v = v + (mod_pvs_base and 65535&)
-    def seg = sb_seg( mod_pvs_base )
+    v = v + (pvs_base and 65535&)
+    def seg = sb_seg( pvs_base )
     
     if ( lef_buffer( not nodenr ).vis_list = -1 ) then
-        for  i = 0 to leaf_count-1
+        for  i = 0 to wld.count.leaves-1
             pvsb(i) = -1
         next i           
 
@@ -603,12 +604,12 @@ sub r_mark_leaves ( _
     '' Extract the pvs data
     ''
     l = 1
-    while ( l < leaf_count )
+    while ( l < wld.count.leaves )
         
         if ( peek( v ) = 0 ) then
             j = l
             l = l + 8& * peek( v+1 ) 
-            if ( l > leaf_count ) then l = leaf_count
+            if ( l > wld.count.leaves ) then l = wld.count.leaves
             
             for  j = j to l-1
                 pvsb(j) = 0
@@ -623,7 +624,7 @@ sub r_mark_leaves ( _
                 '' A run can carry past the last leaf; in real mode that
                 '' writes over whatever follows the array.
                 ''
-                if ( l >= leaf_count ) then exit for
+                if ( l >= wld.count.leaves ) then exit for
                 
                         
                 if ( byte and bit_array(bit) ) then
@@ -678,7 +679,7 @@ end sub
 '' desc: Builds the leaf store and binds it. The loader passes the count
 ''       and nothing else -- where the leaves live is this module's.
 ''::::::::::
-sub r_load_leaves ( byval cnt as long )
+sub r_load_leaves ( wld as World )
     dim f as FILE
     dim mapped as long
 
@@ -688,9 +689,9 @@ sub r_load_leaves ( byval cnt as long )
     '' array out of it leaves a larger contiguous hole behind even when the
     '' total free does not change.
     ''
-    wld.store.leaves = uglArrNew&( UGL.MEM, len( lef_buffer(0) ), cnt, 0 )
+    wld.store.leaves = uglArrNew&( UGL.MEM, len( lef_buffer(0) ), wld.count.leaves, 0 )
     if ( wld.store.leaves = 0 ) then
-        wld.store.leaves = uglArrNew&( UGL.EMS, len( lef_buffer(0) ), cnt, PAGE_SLOT )
+        wld.store.leaves = uglArrNew&( UGL.EMS, len( lef_buffer(0) ), wld.count.leaves, PAGE_SLOT )
     end if
     if ( wld.store.leaves = 0 ) then sys_error "0x0036, no room for the leaves"
 

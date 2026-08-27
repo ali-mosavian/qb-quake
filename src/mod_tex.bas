@@ -44,7 +44,7 @@ dim shared t_mip_inf( 1 ) as DiskMipTex
 '' name: mod_load_texinfo
 '' desc: Reads the miptex directory and sizes the texture tables.
 ''::::::::::
-sub mod_load_texinfo
+sub mod_load_texinfo ( wld as World )
     scr_load_stage "texture info"
     ''
     '' hTextrDC is COMMON now, and COMMON can only declare it as hTextrDC()
@@ -89,7 +89,7 @@ end sub
 ''       matches each one back into the Quake palette. One loop over
 ''       numtex, so it is one routine.
 ''::::::::::
-sub mod_load_textures
+sub mod_load_textures ( wld as World )
     dim i as integer, j as integer
     dim bmp_file as string
     dim dc as long
@@ -174,7 +174,7 @@ sub mod_load_textures
         scr_load_part 1.0/wld.count.textures, ((i and 15) = 0)
     next i
 
-    mod_link_anims
+    mod_link_anims wld
 
 
     uglRestore
@@ -198,7 +198,7 @@ end sub
 ''       is how qbsp writes them. dm3ish has no animated textures at all, so
 ''       this is exercised only by maps that do.
 ''::::::::::
-sub mod_link_anims
+sub mod_link_anims ( wld as World )
     dim i as integer, j as integer
     dim chain0 as integer, n as integer
     dim suffix as string

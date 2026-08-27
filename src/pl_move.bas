@@ -728,7 +728,7 @@ end sub
 ''       which passes the count and nothing else -- it does not need to
 ''       know where the hulls live.
 ''::::::::::
-sub pl_load_hulls ( byval cnt as long )
+sub pl_load_hulls ( wld as World )
     dim f as FILE
     dim mapped as long
 
@@ -746,9 +746,9 @@ sub pl_load_hulls ( byval cnt as long )
     '' hole for the allocations that come after. The far heap is the
     '' fragmented pool; DOS memory is not.
     ''
-    wld.store.clips = uglArrNew&( UGL.MEM, len( clp_buffer(0) ), cnt, 0 )
+    wld.store.clips = uglArrNew&( UGL.MEM, len( clp_buffer(0) ), wld.count.clips, 0 )
     if ( wld.store.clips = 0 ) then
-        wld.store.clips = uglArrNew&( UGL.EMS, len( clp_buffer(0) ), cnt, PAGE_SLOT )
+        wld.store.clips = uglArrNew&( UGL.EMS, len( clp_buffer(0) ), wld.count.clips, PAGE_SLOT )
     end if
     if ( wld.store.clips = 0 ) then sys_error "0x0033, no room for the clip hulls"
 

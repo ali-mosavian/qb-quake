@@ -38,7 +38,7 @@ dim shared tex_info_tmp as DiskTexInfo       '' tex_inf_buff dropped flags and
 ''
 '' THE COLORMAP. Owned here -- mod_load_colormap is what creates it, and
 '' the two readers (sb_build, hud_shade) want the same thing from it: a
-'' pointer to the mapped table. They get that from mod_cm_map, so CM_SLOT
+'' pointer to the mapped table. They get that from mod_cm_map( wld ), so CM_SLOT
 '' stops being a constant three modules have to agree about.
 ''
 '' One row of 16,384, which is one EMS page, so a single uglMapEx reaches
@@ -278,7 +278,7 @@ end sub
 ''       Merely holding that block wedges the program. Nothing here needs
 ''       memAlloc's paragraph alignment: the builder only PEEKs the table.
 ''::::::::::
-sub mod_load_colormap
+sub mod_load_colormap ( wld as World )
     dim f as FILE
 
     scr_load_stage "colormap"
@@ -322,7 +322,7 @@ end sub
 ''       No pointer fixup here: a face's rect is found by mapping its atlas
 ''       scanline, which sb_build does per build.
 ''::::::::::
-sub mod_load_lightmaps
+sub mod_load_lightmaps ( wld as World )
     scr_load_stage "lightmaps"
     dim f as FILE
     dim got as long
@@ -366,7 +366,10 @@ end sub
 '' that read it into an array first would defeat that at the worst
 '' possible moment -- while every other buffer is also allocated.
 ''
-sub mod_load_facevtx ( gv_buf() as integer )
+sub mod_load_facevtx ( _
+    wld as World, _
+    gv_buf() as integer _
+)
     dim f as FILE
     dim y as integer
     dim p as long
@@ -415,7 +418,7 @@ sub mod_load_leafs ( wld as World )
 
     '' r_bsp owns the leaves -- it is the heaviest reader and the only one
     '' that needs the array itself. All the loader passes is the count.
-    r_load_leaves wld.count.leaves
+    r_load_leaves wld
 
     scr_load_step
 end sub
@@ -550,7 +553,7 @@ sub mod_load_clipnodes ( wld as World )
     '' pl_move owns the hulls -- it is the only reader -- so it makes the
     '' store and binds its own array. All the loader still knows is how
     '' many there are.
-    pl_load_hulls wld.count.clips
+    pl_load_hulls wld
 
     scr_load_step
 end sub
@@ -561,7 +564,7 @@ end sub
 ''::::::::::
 '' name: mod_load_visibility
 ''::::::::::
-sub mod_load_visibility
+sub mod_load_visibility ( wld as World )
     dim f as FILE
 
     scr_load_stage "visibility"
@@ -605,29 +608,29 @@ sub mod_close ( wld as World )
 end sub
 
 ''::::::::::
-'' name: mod_cm_map
+'' name: mod_cm_map( wld )
 '' desc: The colormap, mapped, as a far pointer. Mapped per call and never
 ''       held: CM_SLOT is the depth buffer's, so anything that touched
 ''       depth in between has already taken it back.
 ''::::::::::
-function mod_cm_map ( ) as long
+function mod_cm_map ( wld as World ) as long
     mod_cm_map = uglMapEx&( wld.cmap.dc, 0, CM_SLOT )
 end function
 
 ''::::::::::
-'' name: mod_cm_ready
+'' name: mod_cm_ready( wld )
 '' desc: Whether a full table actually loaded. Callers that can fall back
 ''       -- hud_shade draws an opaque slab instead -- ask this first.
 ''::::::::::
-function mod_cm_ready ( ) as integer
+function mod_cm_ready ( wld as World ) as integer
     mod_cm_ready = ( wld.cmap.size >= 16384 )
 end function
 
 ''::::::::::
-'' name: mod_cm_bytes
+'' name: mod_cm_bytes( wld )
 '' desc: Table size, for the bench report.
 ''::::::::::
-function mod_cm_bytes ( ) as long
+function mod_cm_bytes ( wld as World ) as long
     mod_cm_bytes = wld.cmap.size
 end function
 
@@ -637,20 +640,23 @@ end function
 ''       packer keeps a face's whole rect inside one scanline, so a single
 ''       mapping reaches all of it.
 ''::::::::::
-function mod_lm_map ( byval row as integer ) as long
+function mod_lm_map ( _
+    wld as World, _
+    byval row as integer _
+) as long
     mod_lm_map = uglMapEx&( wld.light.atlas, row, PAGE_SLOT )
 end function
 
 ''::::::::::
-'' name: mod_lm_bytes / mod_lm_got
+'' name: mod_lm_bytes( wld ) / mod_lm_got( wld )
 '' desc: Atlas size on disk, and how much of it actually loaded, for the
 ''       bench report.
 ''::::::::::
-function mod_lm_bytes ( ) as long
+function mod_lm_bytes ( wld as World ) as long
     mod_lm_bytes = wld.light.size
 end function
 
-function mod_lm_got ( ) as long
+function mod_lm_got ( wld as World ) as long
     mod_lm_got = wld.light.loaded
 end function
 
@@ -660,23 +666,26 @@ end function
 ''       builder keeps a face's whole record inside one row, so the row
 ''       end is also the end of the mapped window.
 ''::::::::::
-function mod_geom_map ( byval row as integer ) as long
+function mod_geom_map ( _
+    wld as World, _
+    byval row as integer _
+) as long
     mod_geom_map = uglMapEx&( wld.geom.dc, row, PAGE_SLOT )
 end function
 
 ''::::::::::
-'' name: mod_geom_rows
+'' name: mod_geom_rows( wld )
 '' desc: How many rows the store has, for the bench report.
 ''::::::::::
-function mod_geom_rows ( ) as integer
+function mod_geom_rows ( wld as World ) as integer
     mod_geom_rows = wld.geom.rows
 end function
 
 ''::::::::::
-'' name: mod_pvs_base
+'' name: mod_pvs_base( wld )
 '' desc: Far pointer to the visibility lump. Fixed for the whole run, so
 ''       callers hoist it rather than asking per leaf.
 ''::::::::::
-function mod_pvs_base ( ) as long
+function mod_pvs_base ( wld as World ) as long
     mod_pvs_base = wld.pvs.ptr
 end function

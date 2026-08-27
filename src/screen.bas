@@ -887,6 +887,7 @@ end sub
 ''       loaded, so the overlay never depends on -lm's data being there.
 ''::::::::::
 sub hud_shade ( _
+    wld as World, _
     dc as long, _
     x0 as integer, _
     y0 as integer, _
@@ -895,7 +896,7 @@ sub hud_shade ( _
     rw as integer _
 )
 
-    if ( mod_cm_ready = 0 ) then
+    if ( mod_cm_ready( wld ) = 0 ) then
         uglRectF dc, x0, y0, x1, y1, hc_slab
         exit sub
     end if
@@ -906,7 +907,7 @@ sub hud_shade ( _
     '' Hoisted into a variable because BASIC will not take a Function
     '' call in a Sub's argument list here.
     dim cmp as long
-    cmp = mod_cm_map
+    cmp = mod_cm_map( wld )
     uglShadeRect dc, x0, y0, x1, y1, cmp, rw
 end sub
 
@@ -924,7 +925,7 @@ sub hud_panel ( _
     '' under the panel, darkened three-quarters of the way down Quake's
     '' colormap, with the bevel and rivets on top saying where it ends.
     ''
-    hud_shade dc, x, y, x+w, y+h, 46
+    hud_shade wld, dc, x, y, x+w, y+h, 46
     uglHLine dc, x, y, x+w, hc_slabhi
     uglVLine dc, x, y, y+h, hc_slabhi
     uglHLine dc, x, y+h, x+w, hc_slablo

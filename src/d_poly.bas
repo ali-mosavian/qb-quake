@@ -190,7 +190,7 @@ sub d_draw_faces ( _
     mtx_fin as u3dMtrx, _
     xresh as single, _
     yresh as single, _
-    byval face_count as long, _
+    wld as World, _
     campos as u3dVector3f, _
     rdr as RenderState, _
     env as Env, _
@@ -334,7 +334,7 @@ sub d_draw_faces ( _
             '' the mapped EMS window, and a fixed-size copy from a record
             '' near it would read off the page.
             ''
-            gp = mod_geom_map( tri_buffer(i).geom_row )
+            gp = mod_geom_map( wld, tri_buffer(i).geom_row )
             gn = GEOM_MAXREC
             if ( tri_buffer(i).geom_ofs + gn > GEOM_W ) then
                 gn = GEOM_W - tri_buffer(i).geom_ofs
@@ -631,7 +631,7 @@ sub d_draw_faces ( _
 
                 lm_dc = sc_find( i, lm_mip, lm_sw, lm_sh )
                 if ( lm_dc = 0 ) then
-                    lm_dc = sc_alloc( i, lm_mip, lm_sw, lm_sh, lm_fw, lm_fh, face_count )
+                    lm_dc = sc_alloc( i, lm_mip, lm_sw, lm_sh, lm_fw, lm_fh, wld )
                     if ( lm_dc <> 0 ) then
                         ''
                         '' Build the DC's WHOLE padded extent, not just the
@@ -645,7 +645,7 @@ sub d_draw_faces ( _
                         sb_build lm_dc, h_rawtx_dc(mipidx*4 + lm_mip), _
                                  i, lm_mip, 2 ^ sc_shift( lm_sw ), _
                                  2 ^ sc_shift( lm_sh ), _
-                                 tri_buffer(), tex_inf_buff(), gv_buf(), _
+                                 wld, tri_buffer(), tex_inf_buff(), gv_buf(), _
                                  mip_buff_inf()
                     end if
                 end if

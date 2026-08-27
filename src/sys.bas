@@ -21,11 +21,12 @@ option explicit
 '$include: 'snd.bi'
 '$include: 'mod.bi'
 '$include: 'q_env.bi'
-'' for sys_raw_dt: the benchmark's unclamped frame delta lives in /scr_s/
-'$include: 'q_draw.bi'
 '$include: 'q_map.bi'
 '$include: 'q_vis.bi'
+'$include: 'q_draw.bi'
 '$include: 'q_scr.bi'
+'$include: 'q_snd.bi'
+'' for sys_raw_dt: the benchmark's unclamped frame delta lives in /scr_s/
 
 ''
 '' Frame timing. A 1 kHz uGL timer, read once a frame.
@@ -52,7 +53,6 @@ dim shared last_tick as long
 dim shared timing_on as integer
 dim shared tick_hz as single
 '$dynamic
-'$include: 'q_snd.bi'
 
 '$dynamic
 

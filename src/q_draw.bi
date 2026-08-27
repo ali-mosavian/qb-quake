@@ -71,7 +71,7 @@ declare sub d_draw_faces ( _
     mtx_fin as u3dMtrx, _
     xresh as single, _
     yresh as single, _
-    byval face_count as long, _
+    wld as World, _
     campos as u3dVector3f, _
     rdr as RenderState, _
     env as Env, _
