@@ -832,7 +832,7 @@ sub host_bench_report ( _
     frame_no as long, _
     h_dst_dc as long _
 )
-    dim scs as scstat
+    dim scs as CacheStats
     dim dv as long
     dim df as long
     dim ddv as long

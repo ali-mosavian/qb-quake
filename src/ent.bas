@@ -34,7 +34,7 @@ option explicit
 ''
 '$static
 dim shared dest_name( ENT_MAXTELE ) as string * 32
-dim shared dest_org( ENT_MAXTELE ) as vec3
+dim shared dest_org( ENT_MAXTELE ) as Vec3
 dim shared dest_yaw( ENT_MAXTELE ) as single
 dim shared dest_count as integer
 
@@ -81,7 +81,7 @@ sub ent_vec ( _
     strm() as string, _
     byval strm_cnt as integer, _
     kname as string, _
-    v as vec3 _
+    v as Vec3 _
 )
     dim j as integer
 
@@ -274,7 +274,7 @@ end sub
 ''::::::::::
 sub ent_check_teleport
     dim i as integer
-    dim pmin as vec3, pmax as vec3
+    dim pmin as Vec3, pmax as Vec3
 
     if ( pl.noclip ) then exit sub
 
@@ -412,7 +412,7 @@ end sub
 ''       pl_point_contents, stopping one step earlier: that wants what is at
 ''       the point, this wants where the point is.
 ''::::::::::
-function ent_point_leaf ( p as vec3 ) as integer
+function ent_point_leaf ( p as Vec3 ) as integer
     dim mp as long
     dim nodenr as integer
     dim pid as integer

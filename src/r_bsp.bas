@@ -38,7 +38,7 @@ option explicit
 '' model.bas allocated and BLOADed them, which is a load-time write, not
 '' a share -- so the loader hands over the sizes and r_bsp does the rest.
 ''
-dim shared lef_buffer() as leaf2
+dim shared lef_buffer() as Leaf
 dim shared h_lef as long
 dim shared lfc_buffer() as integer
 dim shared pvs_buffer_b() as integer
@@ -57,14 +57,14 @@ declare sub r_recursive_world_node ( _
     cpos as u3dVector3f, _
     vs as VisState, _
     byval ign as integer, _
-    nds() as nodeb, _
-    pln() as plane2, _
-    lef() as leaf2, _
+    nds() as Node, _
+    pln() as Plane, _
+    lef() as Leaf, _
     lfc() as integer, _
     pvsb() as integer, _
     pflag() as integer, _
     ord() as integer, _
-    fru() as plane _
+    fru() as DiskPlane _
 )
 
 
@@ -90,7 +90,7 @@ declare sub r_recursive_world_node ( _
 ''::::::::::
 function r_plane_dist ( _
     pt as u3dVector3f, _
-    pl as plane2 _
+    pl as Plane _
 ) as single
     r_plane_dist = pt.x*pl.norm.x + _
                            pt.y*pl.norm.z + _
@@ -106,8 +106,8 @@ end function
 function r_node_side ( _
     byval node_idx as integer, _
     pt as u3dVector3f, _
-    nodes() as nodeb, _
-    planes() as plane2 _
+    nodes() as Node, _
+    planes() as Plane _
 )
     if ( r_plane_dist( pt, planes( nodes(node_idx).planeid ) ) > 0.0 ) then
         r_node_side = -1
@@ -159,14 +159,14 @@ sub r_recursive_world_node ( _
     cpos as u3dVector3f, _
     vs as VisState, _
     byval ign as integer, _
-    nds() as nodeb, _
-    pln() as plane2, _
-    lef() as leaf2, _
+    nds() as Node, _
+    pln() as Plane, _
+    lef() as Leaf, _
     lfc() as integer, _
     pvsb() as integer, _
     pflag() as integer, _
     ord() as integer, _
-    fru() as plane _
+    fru() as DiskPlane _
 ) static
     dim dp as single
     dim frst as integer, last as integer, i as integer
@@ -338,7 +338,7 @@ end sub
 
 '':::::::::
 sub r_set_frustum ( _
-    frustum() as plane, _
+    frustum() as DiskPlane, _
     mtx as u3dMtrx _
 )
     dim i as integer
@@ -415,11 +415,11 @@ end sub
 
 '':::::::::
 function r_cull_box ( _
-    bbox as bboundbox, _
-    frustum() as plane _
+    bbox as Bounds, _
+    frustum() as DiskPlane _
 ) as integer
     dim dp as single
-    dim near_point as vertex
+    dim near_point as DiskVertex
     dim i as integer
 
 
@@ -636,7 +636,7 @@ sub r_load_leaves ( byval cnt as long )
     dim f as FILE
     dim mapped as long
 
-    redim lef_buffer(0) as leaf2
+    redim lef_buffer(0) as Leaf
 
     '' MEM first: the far heap is the fragmented pool, and taking a 34K
     '' array out of it leaves a larger contiguous hole behind even when the

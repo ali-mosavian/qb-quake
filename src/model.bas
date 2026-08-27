@@ -24,15 +24,15 @@ option explicit
 '$include: 'q_cam.bi'
 
 '$dynamic
-dim shared fce as face                  '' fields the renderer keeps, discard
-dim shared nodetmp as node              '' the rest. Also the len() source for
-dim shared leaftmp as leaf              '' the lump counts in bspOpen.
-dim shared planetmp as plane
-dim shared clptmp as cliptmp           '' clipnode narrowed the live type;
+dim shared fce as DiskFace                  '' fields the renderer keeps, discard
+dim shared nodetmp as DiskNode              '' the rest. Also the len() source for
+dim shared leaftmp as DiskLeaf              '' the lump counts in bspOpen.
+dim shared planetmp as DiskPlane
+dim shared clptmp as DiskClipNode           '' clipnode narrowed the live type;
                                          '' this stays the on-disk 8 bytes
-dim shared vtxtmp as vertex            '' vtx_buffer narrowed to Q13.3; this
+dim shared vtxtmp as DiskVertex            '' vtx_buffer narrowed to Q13.3; this
                                          '' stays the on-disk 12 float bytes
-dim shared texinfotmp as texinfo       '' tex_inf_buff dropped flags and
+dim shared texinfotmp as DiskTexInfo       '' tex_inf_buff dropped flags and
                                          '' narrowed miptex; this stays the
                                          '' on-disk 40 bytes
 ''
@@ -172,14 +172,14 @@ end sub
 ''::::::::::
 sub mod_alloc
     '' ONE element; uglArrNew1D takes it over in mod_load_faces
-    redim tri_buffer(0) as face2
+    redim tri_buffer(0) as Face
 
     '' ONE element; uglArrNew1D takes it over in mod_load_leafs
-    redim pln_buffer(pln_count-1) as plane2
+    redim pln_buffer(pln_count-1) as Plane
     '' ONE element. uglArrNew1D takes the descriptor over in
     '' mod_load_nodes and the tree lives in EMS -- see q_map.bi.
-    redim nds_buffer(0) as nodeb
-    redim mdl_buffer(wld.mdl_count-1) as model
+    redim nds_buffer(0) as Node
+    redim mdl_buffer(wld.mdl_count-1) as Submodel
     redim order_list(wld.nds_count-1) as integer
     '' r_bsp sizes its own PVS bits; it states why over there.
     r_alloc_pvs wld.lef_count
@@ -189,7 +189,7 @@ sub mod_alloc
     '' SMALL there, an out-of-bounds write waiting to happen, not just
     '' wasted space on the smaller maps.
     redim poly_flag( wld.tri_count-1 ) as integer
-    redim tex_inf_buff(wld.texi_count-1) as texinfo2
+    redim tex_inf_buff(wld.texi_count-1) as TexInfo
 
 end sub
 

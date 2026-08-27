@@ -9,4 +9,4 @@
 '' Include after bspfile.bi and the uGL headers; the types come from there.
 ''
 
-common shared /env/ env as EnvType
+common shared /env/ env as Env

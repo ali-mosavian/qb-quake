@@ -51,8 +51,8 @@ dim shared prj_y(32) as single
 dim shared su0 as single, su1 as single, su2 as single, su3 as single
 dim shared sv0 as single, sv1 as single, sv2 as single, sv3 as single
 dim shared tw as single, th as single
-dim shared uvbuff(64) as uv
-dim shared uvbuffb(32) as uv
+dim shared uvbuff(64) as TexCoord
+dim shared uvbuffb(32) as TexCoord
 dim shared vcnt as integer, mipidx as integer
 
 dim shared vtx(31) as tritype
@@ -75,10 +75,10 @@ const VTX_UNSCALE# = 1.0 / 8.0
 '':::::::
 sub d_clip_z ( _
     ot_vtx() as u3dVector4f, _
-    ot_uv() as uv, _
+    ot_uv() as TexCoord, _
     ot_cnt as integer, _
     in_vtx() as u3dVector4f, _
-    in_uv() as uv, _
+    in_uv() as TexCoord, _
     in_cnt as integer _
 )
 

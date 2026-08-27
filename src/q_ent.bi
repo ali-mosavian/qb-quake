@@ -15,9 +15,9 @@ const ENT_MAXTELE = 8
 '' info_teleport_destination.
 ''
 type Teleporter
-    mins        as vec3         '' the trigger volume, from the submodel
-    maxs        as vec3
-    dest        as vec3         '' where it puts you
+    mins        as Vec3         '' the trigger volume, from the submodel
+    maxs        as Vec3
+    dest        as Vec3         '' where it puts you
     yaw         as single       '' and which way you face on arrival
 end type
 
@@ -70,8 +70,8 @@ type PlatEnt
     travel      as single       '' how far down it goes
     speed       as single       '' units per second
     state       as integer      '' heading down, or up
-    mins        as vec3         '' its volume at the map position
-    maxs        as vec3
+    mins        as Vec3         '' its volume at the map position
+    maxs        as Vec3
 end type
 
 common shared /ent_s/ plat() as PlatEnt

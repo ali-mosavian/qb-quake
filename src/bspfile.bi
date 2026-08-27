@@ -1,53 +1,48 @@
-type vec3
+type Vec3
     x           as single
     y           as single
     z           as single
 end type
 
-type vec3i
+type Vec3i
     x           as integer
     y           as integer
     z           as integer
 end type
 
-type boundbox
-    min         as vec3
-    max         as vec3
+type Bounds
+    min         as Vec3i
+    max         as Vec3i
 end type
 
-type bboundbox
-    min         as vec3i
-    max         as vec3i
-end type
-
-type dentry
+type LumpEntry
     offs        as long
     size        as long
 end type
 
-type header
+type BspHeader
     version     as long
-    entities    as dentry
-    planes      as dentry
-    miptex      as dentry
-    vertices    as dentry
-    vislist     as dentry
-    nodes       as dentry
-    texinfo     as dentry
-    faces       as dentry
-    lightmaps   as dentry
-    clipnode    as dentry
-    leaves      as dentry
-    lface       as dentry
-    edges       as dentry
-    ledges      as dentry
-    models      as dentry
+    entities    as LumpEntry
+    planes      as LumpEntry
+    miptex      as LumpEntry
+    vertices    as LumpEntry
+    vislist     as LumpEntry
+    nodes       as LumpEntry
+    texinfo     as LumpEntry
+    faces       as LumpEntry
+    lightmaps   as LumpEntry
+    clipnode    as LumpEntry
+    leaves      as LumpEntry
+    lface       as LumpEntry
+    edges       as LumpEntry
+    ledges      as LumpEntry
+    models      as LumpEntry
 end type
 
-type model
-    mins        as vec3
-    maxs        as vec3
-	origin      as vec3
+type Submodel
+    mins        as Vec3
+    maxs        as Vec3
+	origin      as Vec3
 	headnode0   as long
 	headnode1   as long
 	headnode2   as long
@@ -57,7 +52,7 @@ type model
 	numfaces    as long
 end type
 
-type vertex
+type DiskVertex
     x           as single
     y           as single
     z           as single
@@ -72,27 +67,8 @@ end type
 '' and d_poly.bas's vx/vy/vz reads for the dequantise (divide back by 8
 '' into a single) that undoes it. The buffer stays fixed point in memory;
 '' nothing reads a raw .x/.y/.z off it.
-type vertex2
-    x           as integer
-    y           as integer
-    z           as integer
-end type
 
-type surface
-    vector_s    as vec3
-    dist_s      as single
-    vector_t    as vec3
-    dist_t      as single    
-    textureid   as long
-    animated    as long
-end type
-
-type edge
-    v0          as integer    
-    v1          as integer    
-end type
-
-type face
+type DiskFace
     planeid     as integer
     side        as integer
     ledgeid     as long
@@ -113,7 +89,7 @@ end type
 '' as the two's-complement bit pattern (mkassets.py), so the reader must
 '' undo the same wrap: value + 65536 when it comes back negative. See
 '' d_poly.bas where lid is read.
-type face2
+type Face
     planeid     as integer
     side        as integer
     geom_row    as integer      '' this face's record in the geometry
@@ -148,7 +124,7 @@ end type
 '' struc in mgl/src/ugl/uglsurf.asm field for field -- the two must move
 '' together, the same rule the .bld lumps live by.
 ''
-type SBPARM
+type SurfBuild
     lmptr       as long         '' -> this face's rect in the luxel atlas
     lmstride    as long         '' atlas bytes per row. Long only so every
                                 '' field below keeps its offset; the high
@@ -186,7 +162,7 @@ end type
 '' make seven separate crossings a frame and the counters themselves stay
 '' inside d_surf.bas.
 ''
-type scstat
+type CacheStats
     hits        as integer      '' per FRAME -- a build costs milliseconds,
     builds      as integer      '' so what hitches is how many land in one
     bpeak       as integer      '' frame. bpeak is the worst frame seen,
@@ -199,7 +175,7 @@ type scstat
     tbuilds     as long         '' builds over the whole run
 end type
 
-type scslot
+type CacheSlot
     blk         as integer      '' index into the block table, -1 for none
     tag         as integer      '' generation * 4 + mip the CONTENT holds
     cls         as integer      '' size class of the block, fixed per face
@@ -207,10 +183,10 @@ end type
 
 
 
-type leaf
+type DiskLeaf
     cont        as long
     vislist     as long    
-    bound       as bboundbox
+    bound       as Bounds
     lfaceid     as integer
     lfacenum    as integer
     stuff       as string * 4
@@ -219,45 +195,45 @@ end type
 '' cont narrowed long->integer: CONTENTS_* is always one of six small
 '' negatives (-1..-6, q_pl.bi), and pl_point_contents already returns it
 '' as an integer -- the long here only ever held a value that fits in one.
-type leaf2
+type Leaf
     cont        as integer      '' CONTENTS_*: only hull 0 knows about water
     vislist     as long
-    bound       as bboundbox
+    bound       as Bounds
     lfaceid     as integer
     lfacenum    as integer
 end type
 
-type plane
-    norm        as vec3
+type DiskPlane
+    norm        as Vec3
     dist        as single
     ptype       as long    
 end type
 
-type plane2
-    norm        as vec3
+type Plane
+    norm        as Vec3
     dist        as single
     ptype       as integer
 end type
 
-type node
+type DiskNode
     planeid     as long
     child0      as integer    
     child1      as integer    
-    bound       as bboundbox
+    bound       as Bounds
     lfaceid     as integer
     lfacenum    as integer
 end type
 
-type nodeb
+type Node
     planeid     as integer
     child0      as integer    
     child1      as integer
     lfaceid     as integer
     lfacenum    as integer
-    bound       as bboundbox
+    bound       as Bounds
 end type
 
-type texinfo
+type DiskTexInfo
     vecs(3)     as single
     vect(3)     as single
     miptex      as long
@@ -267,21 +243,21 @@ end type
 '' flags is dropped: nothing reads it -- confirmed by grep, no `.flags`
 '' anywhere in src/*.bas. miptex narrows long->integer: it indexes this
 '' map's own texture list, max seen across all target maps is 72.
-type texinfo2
+type TexInfo
     vecs(3)     as single
     vect(3)     as single
     miptex      as integer
 end type
 
 
-type miptex
+type DiskMipTex
     name        as string * 16
     wdth        as long
     hght        as long
     offset(3)   as long
 end type
 
-type miptexb    
+type MipTex    
     wdth        as single
     hght        as single
     lnext       as integer
@@ -295,7 +271,7 @@ end type
 '' maps is 2,736 (e1m3), 12x under int16 range. On-disk clipnode_t stays
 '' 8 bytes (long+short+short) -- see cliptmp below, the len() source for
 '' wld.clp_count, which must NOT shrink with this type.
-type clipnode
+type ClipNode
     planenum    as integer
     front       as integer
     back        as integer
@@ -305,7 +281,7 @@ end type
 '' own on-disk record size exactly. mod_open's wld.clp_count = size \ len(...)
 '' reads the ORIGINAL .bsp file directly, so it needs the ORIGINAL record
 '' size -- same reason fce/nodetmp/leaftmp/planetmp exist below.
-type cliptmp
+type DiskClipNode
     planenum    as long
     front       as integer
     back        as integer
@@ -315,7 +291,7 @@ end type
 const FALSE = 0
 const TRUE  = -1
 
-type EnvType
+type Env
     z_far       as single
     z_near      as single    
     
@@ -457,34 +433,34 @@ declare sub pl_load_hulls ( byval cnt as long )
 declare function pl_hull_rec ( ) as integer
 declare function pl_hull_contents ( _
     byval node as integer, _
-    p as vec3 _
+    p as Vec3 _
 ) as integer
 declare function pl_hull_check ( _
     byval node as integer, _
     byval p1f as single, _
     byval p2f as single, _
-    p1 as vec3, _
-    p2 as vec3 _
+    p1 as Vec3, _
+    p2 as Vec3 _
 ) as integer
 declare sub pl_trace ( _
-    start as vec3, _
-    fin as vec3 _
+    start as Vec3, _
+    fin as Vec3 _
 )
 declare sub pl_clip_velocity ( _
-    v as vec3, _
-    norm as vec3 _
+    v as Vec3, _
+    norm as Vec3 _
 )
 declare sub pl_slide_move ( _
-    org as vec3, _
-    vel as vec3, _
+    org as Vec3, _
+    vel as Vec3, _
     byval dt as single _
 )
 declare sub pl_step_move ( _
-    org as vec3, _
-    vel as vec3, _
+    org as Vec3, _
+    vel as Vec3, _
     byval dt as single _
 )
-declare function pl_point_contents ( p as vec3 ) as integer
+declare function pl_point_contents ( p as Vec3 ) as integer
 declare sub pl_water_level ( )
 declare sub pl_gravity ( byval dt as single )
 declare sub pl_init ( )
@@ -534,7 +510,7 @@ declare sub mod_alloc ( )
 
 declare sub mod_load_faces ( )
 declare sub mod_load_lightmaps ( )
-declare sub sc_stats ( s as scstat )
+declare sub sc_stats ( s as CacheStats )
 declare function sc_frame_end ( ) as integer
 declare function mod_geom_map ( byval row as integer ) as long
 declare function mod_geom_rows ( ) as integer
@@ -620,13 +596,13 @@ declare sub ent_vec ( _
     strm() as string, _
     byval strm_cnt as integer, _
     kname as string, _
-    v as vec3 _
+    v as Vec3 _
 )
 declare sub ent_load_teleports ( )
 declare sub ent_check_teleport ( )
 declare function ent_plat_touched ( byval p as integer ) as integer
 declare sub ent_move_plats ( byval dt as single )
-declare function ent_point_leaf ( p as vec3 ) as integer
+declare function ent_point_leaf ( p as Vec3 ) as integer
 declare sub ent_place_models ( )
 declare function ent_find_node ( byval m as integer ) as integer
 
@@ -638,20 +614,20 @@ declare sub in_init ( )
 declare sub s_stop_music ( )
 declare function r_plane_dist ( _
     pt as u3dVector3f, _
-    pl as plane2 _
+    pl as Plane _
 ) as single
 declare function r_node_side ( _
     byval node_idx as integer, _
     pt as u3dVector3f, _
-    nodes() as nodeb, _
-    planes() as plane2 _
+    nodes() as Node, _
+    planes() as Plane _
 ) as integer
 declare function r_cull_box ( _
-    bbox as bboundbox, _
-    frustum() as plane _
+    bbox as Bounds, _
+    frustum() as DiskPlane _
 ) as integer
 declare sub r_set_frustum ( _
-    frustum() as plane, _
+    frustum() as DiskPlane, _
     mtx as u3dMtrx _
 )
 declare sub com_parse_config ( filename as string )
@@ -679,7 +655,7 @@ declare sub com_tokenize ( _
 )
                         
                         
-type uv
+type TexCoord
     u           as single
     v           as single
 end type
@@ -816,10 +792,10 @@ declare sub scr_screenshot ( _
                          
 declare sub d_clip_z ( _
     ot_vtx() as u3dVector4f, _
-    ot_uv() as uv, _
+    ot_uv() as TexCoord, _
     ot_cnt as integer, _
     in_vtx() as u3dVector4f, _
-    in_uv() as uv, _
+    in_uv() as TexCoord, _
     in_cnt as integer _
 )
                                                     

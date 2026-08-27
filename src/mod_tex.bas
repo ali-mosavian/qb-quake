@@ -35,7 +35,7 @@ option explicit
 dim shared texoffs( 256 ) as long
 
 '$dynamic
-dim shared tmipinf( 1 ) as miptex
+dim shared tmipinf( 1 ) as DiskMipTex
 
 
 
@@ -67,8 +67,8 @@ sub mod_load_texinfo
     seek #wld.file, wld.head.miptex.offs+1
     get #wld.file,, wld.numtex
     
-    redim tmipinf( wld.numtex-1 ) as miptex
-    redim mip_buff_inf( wld.numtex-1 ) as miptexb
+    redim tmipinf( wld.numtex-1 ) as DiskMipTex
+    redim mip_buff_inf( wld.numtex-1 ) as MipTex
     
     for  i = 0 to wld.numtex-1
         get #wld.file,, texoffs(i)
