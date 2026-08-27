@@ -21,6 +21,8 @@ option explicit
 '$include: 'snd.bi'
 '$include: 'mod.bi'
 '$include: 'q_env.bi'
+'' for sys_raw_dt: the benchmark's unclamped frame delta lives in /scr_s/
+'$include: 'q_scr.bi'
 
 ''
 '' Frame timing. A 1 kHz uGL timer, read once a frame.
@@ -107,6 +109,13 @@ sub sys_parse_args
         end if
         if ( lcase$(argv(i)) = "-nostats" ) then
             env.no_stats = true
+        end if
+        if ( lcase$(argv(i)) = "-campath" ) then
+            env.campath = true
+        end if
+        if ( lcase$(argv(i)) = "-nodraw" ) then
+            env.no_draw  = true
+            env.no_stats = true     '' the overlay is rasterising too
         end if
         if ( lcase$(argv(i)) = "-yaw" and i+1 <= argc-1 ) then
             env.start_yaw = val( argv(i+1) )
@@ -287,6 +296,17 @@ function sys_frame_time ( ) as single
     last_tick = tick
 
     if ( dt < 0.0    ) then dt = 1.0 / 60.0      '' counter wrapped
+
+    ''
+    '' The UNCLAMPED delta, for the benchmark. The clamps below exist to
+    '' keep the simulation stable -- a 0.1s cap stops a long frame turning
+    '' into a physics explosion -- but they destroy the measurement: every
+    '' frame slower than 10fps reads as exactly 10fps, so the reported
+    '' worst frame is the clamp rather than the renderer, and the reported
+    '' best is one timer tick. Record the truth before flattening it.
+    ''
+    sys_raw_dt = dt
+
     if ( dt < 0.001  ) then dt = 0.001
     if ( dt > 0.1    ) then dt = 0.1
 
@@ -323,4 +343,25 @@ sub sys_mem_mark ( tag as string )
     mem_val( mem_n ) = memAvail&
     mem_fre( mem_n ) = fre( -1 )
     mem_n = mem_n + 1
+
+    ''
+    '' Also write it out NOW, opened and closed per mark.
+    ''
+    '' The array is dumped by host_bench_report at the end of a run, which
+    '' is no use for the one question this trace exists to answer: where
+    '' did the memory go when startup ran out of it? An OOM never reaches
+    '' the report, and the handler cannot write one either -- it needs the
+    '' memory it has just run out of. Both ERRMEM.TXT and ERROR.LOG come
+    '' back zero bytes from a failed e1m1 load.
+    ''
+    '' A line per mark, flushed by the close, survives that. It costs an
+    '' open and close per mark and there are twenty of them, all during
+    '' startup, so nothing measurable.
+    ''
+    dim mf as integer
+    mf = freefile
+    open "memtrace.txt" for append as #mf
+    print #mf, tag + " " + ltrim$(str$( mem_val( mem_n-1 ) )) + _
+               " " + ltrim$(str$( mem_fre( mem_n-1 ) ))
+    close #mf
 end sub

@@ -27,6 +27,11 @@ const HOST_MAXSTEPS  = 5
 
 type ScreenState
     fps         as integer      '' last completed second's frame count
+    fps_peak    as integer      '' best second seen this run. The LAST
+                                '' second is not the interesting one -- a
+                                '' bench ends wherever it ends, and the
+                                '' figure that characterises a build is the
+                                '' best it reached, not where it stopped.
     stats       as integer      '' overlay toggle
     bench_secs  as integer      '' seconds elapsed, for -bench
     frame_time  as single       '' seconds the last frame took; the physics
@@ -37,3 +42,82 @@ type ScreenState
 end type
 
 common shared /scr_s/ scr as ScreenState
+
+''
+'' The benchmark flight path (tools/campath.py, A* over the map's EMPTY
+'' leaves -- water, slime and lava excluded). cp_n = 0 means no path.
+''
+'' cp_t advances a FIXED amount PER FRAME, not per second. That is the
+'' whole point: both builds then render the identical sequence of
+'' viewpoints, so frame counts, peak and low describe the renderer rather
+'' than how far a faster build happened to travel.
+''
+const CP_MAX  = 512   '' smoothing multiplies the A* waypoints ~4x
+''
+'' Units travelled per FRAME. A fixed distance, not a fixed fraction of a
+'' segment: waypoints are not evenly spaced, so stepping by fraction made
+'' the camera crawl through short hops and leap across long ones.
+''
+'' 6 units, not a running speed. This is per frame and the renderer manages
+'' about 15 of them a second, so 24 units/frame was 360 units/sec -- full
+'' Quake sprint, sampled 15 times a second. Every visible frame jumped a
+'' third of a corridor, which reads as teleporting however smooth the
+'' underlying motion is. The camera trace was perfectly even at 24; the
+'' problem was never the path.
+''
+'' Slower also samples better: the same route yields ~400 frames instead
+'' of ~100, so the mean frame time rests on four times the evidence.
+''
+'' How close, horizontally, counts as reaching a waypoint.
+''
+'' SMALLER than the 32-unit grid the waypoints sit on. At 48 the player
+'' could tick off the next waypoint while still well off the route, so it
+'' cut corners, drifted into walls and stuck. Following tightly matters
+'' more than following smoothly: each segment is verified walkable, the
+'' straight line between two distant ones is not.
+const CP_REACH = 12.0
+''
+'' Steer toward a waypoint at least this far ahead, not the next one.
+''
+'' Aiming at the nearest target is what makes a follower wobble: as you
+'' close on a point the bearing to it swings through large angles for
+'' small movements, so the facing jitters and the walk weaves. Picking a
+'' target further along -- pure pursuit -- gives a bearing that changes
+'' slowly and smoothly. 64 units is about two seconds of walking here.
+''
+const CP_AHEAD = 64.0
+''
+'' How far ahead the camera looks, in units along the path, and how
+'' quickly the view turns toward it.
+''
+'' Aiming at the NEXT WAYPOINT was what made the flythrough lurch: the
+'' waypoints are not evenly spaced -- 8 units in a doorway, 500 across a
+'' hall -- so in a tight cluster the aim point changed every frame and the
+'' view snapped around, then locked onto something half a room away. A
+'' point a fixed distance ahead moves smoothly whatever the spacing, and
+'' easing toward it removes what is left.
+''
+const CP_LOOKAHEAD = 160.0
+'' Turn rate PER SECOND, scaled by dt. Per-frame easing meant the camera
+'' turned at a rate that depended on the frame rate -- faster where the
+'' renderer was quick, slower where it struggled, which is backwards.
+const CP_TURN = 4.0
+common shared /scr_s/ cp_x() as integer, cp_y() as integer, cp_z() as integer
+common shared /scr_s/ cp_n as integer, cp_i as integer, cp_t as single
+common shared /scr_s/ cp_dirx as single, cp_diry as single
+common shared /scr_s/ cp_lastx as single, cp_lasty as single
+common shared /scr_s/ cp_stuck as integer
+common shared /scr_s/ cp_init as integer
+common shared /scr_s/ cp_lx as single, cp_ly as single, cp_lz as single
+common shared /scr_s/ fps_low as integer
+common shared /scr_s/ cp_done as integer
+
+''
+'' Per-FRAME timing. bench_secs counts whole seconds, so on a 143 frame
+'' run it yields ten samples, drops the final partial second, and reports
+'' a peak and a low quantised to whatever happened to fall either side of
+'' a second boundary. Frame times measure the thing directly.
+''
+common shared /scr_s/ ft_min as single, ft_max as single, ft_sum as single
+common shared /scr_s/ ft_n as long
+common shared /scr_s/ sys_raw_dt as single

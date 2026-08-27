@@ -1234,6 +1234,13 @@ sub scr_count_frame
 
     if env.sec_timer.counter > 0 then
         scr.fps = fps1
+        if ( fps1 > scr.fps_peak ) then scr.fps_peak = fps1
+        '' low ignores the first completed second: it contains the tail of
+        '' loading and the first surface builds, so it is not a frame rate
+        '' the renderer ever sustains
+        if ( scr.bench_secs > 0 ) then
+            if ( fps_low = 0 or fps1 < fps_low ) then fps_low = fps1
+        end if
         g_fsec = fps1
         fps1 = 0
         env.sec_timer.counter = 0
