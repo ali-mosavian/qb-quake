@@ -842,7 +842,7 @@ same variables in the same order.
 That is only worth anything if the headers are split, which is the point:
 
     q_env.bi    env                       8/10 modules
-    q_map.bi    wld ldr + the 12 arrays   6/10
+    q_map.bi    wld ldr /world/ /surf/    6/10
     q_vis.bi    vis bitarray frustum      5/10
     q_draw.bi   rdr + texture handles     6/10
     q_scr.bi    scr                       4/10
@@ -854,8 +854,46 @@ That is only worth anything if the headers are split, which is the point:
 every map array and the frustum. Add a block to a module only when that module
 genuinely needs it.
 
-**Arrays cannot go in a TYPE**, so the twelve `COMMON` arrays stay loose. That
-is a language limit, not an oversight.
+**Arrays cannot go in a TYPE**, so the shared arrays stay loose. That is a
+language limit, not an oversight.
+
+### What is shared, and what is merely global
+
+`/map_a/` held 42 variables and is gone. What replaced it:
+
+    /world/   h_nds nds_buffer pln_buffer mdl_buffer
+              r_bsp, ent, pl_move, d_poly -- the BSP itself
+
+    /surf/    tri_buffer h_tri tex_inf_buff gv_buf poly_flag order_list
+              d_poly, d_surf (+1 line in main) -- the rasteriser pipeline
+
+Everything else moved into the one module that reads it. The rule that
+decides which is possible is the **access shape**, not the size:
+
+- **An EMS dc reached by `uglMapEx`** encapsulates cleanly -- the reader
+  wants a mapped pointer, not the handle. `cm_map`, `lm_map`, `geom_map`,
+  `pvs_base`, `z_on`, `sc_held`. The slot constant moves with the resource.
+- **A MEM store bound to a BASIC array**, or a plain `REDIM` array, cannot:
+  an accessor gives up the native subscript that is the whole reason it is
+  flat. Ownership is the only move and it needs a single reader.
+
+**Discount the loader when counting readers.** `model.bas` appears in almost
+every reader list, but its references are load-time writes. Hand the loading
+to the owner -- `pl_load_hulls`, `rb_load_leaves`, `rb_load_lfaces` take a
+count and do the rest -- and arrays that looked shared turn out to have one
+reader. That is what freed `lfc_buffer`, `pvs_buffer_b` and `lef_buffer`.
+
+**The remaining ten are not a to-do.** They could be procedure parameters --
+BASIC passes `a() as nodeb` and subscripts normally inside -- but that puts a
+descriptor indirection in `r_bsp`'s recursion and `d_poly`'s per-face loop.
+Ten variables shared for a stated reason are not the problem the refactor
+set out to fix. Measure on `pln_buffer` first if you revisit it.
+
+**Splitting create from bind is what made any of this possible.** An array
+has to be visible where it is subscripted and `REDIM` forces module level, so
+every array had to be declared once, globally, whatever used it. Since
+`uglArrNew` and `uglArrMap` are separate calls, a module declares a
+one-element stub, hands it over, and owns the array outright.
 
 **Renaming needs a lexer, not a regex.** A plain word-boundary substitution
 rewrote HUD text (`"Renderd rnd.polys:"`) and the `bench.txt` keys, because it
