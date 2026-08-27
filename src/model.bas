@@ -28,6 +28,43 @@ option explicit
 ''
 '' This module's own procedures.
 ''
+declare sub mod_alloc ( _
+    wld as World, _
+    faces() as Face, _
+    texinf() as TexInfo, _
+    planes() as Plane, _
+    nodes() as Node, _
+    models() as Submodel, _
+    ord() as integer, _
+    pflag() as integer _
+)
+declare sub mod_load_faces ( _
+    wld as World, _
+    faces() as Face _
+)
+declare sub mod_load_facevtx ( _
+    wld as World, _
+    gv_buf() as integer _
+)
+declare sub mod_load_nodes ( _
+    wld as World, _
+    nodes() as Node _
+)
+declare sub mod_load_clipnodes ( wld as World )
+declare sub mod_load_leafs ( wld as World )
+declare sub mod_load_lightmaps ( wld as World )
+declare sub mod_load_marksurfaces ( wld as World )
+declare sub mod_load_visibility ( wld as World )
+declare sub mod_load_planes ( planes() as Plane )
+declare sub mod_load_submodels ( models() as Submodel )
+declare sub mod_spawn_from_block ( _
+    block as string, _
+    cam as CamState _
+)
+
+''
+'' This module's own procedures.
+''
 declare sub mod_open ( _
     wld as World, _
     env as Env, _

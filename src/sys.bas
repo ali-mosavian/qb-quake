@@ -31,7 +31,7 @@ option explicit
 '' This module's own procedures.
 ''
 declare sub sys_parse_args ( env as Env )
-declare sub sys_init_tables ( )
+declare sub sys_init_tables ( env as Env )
 declare sub sys_time_init ( )
 declare function sys_frame_time ( ft as FrameTimes ) as single
 declare function sys_tick_hz ( ) as single
@@ -192,7 +192,7 @@ end sub
 '' name: sys_init_tables
 '' desc: Reads stuff.ini and builds the bit mask table the PVS decoder indexes.
 ''::::::::::
-sub sys_init_tables
+sub sys_init_tables ( env as Env )
     ''
     '' bitarray and frustum are COMMON now, and COMMON can only declare an
     '' array as name() -- with no elements. Both carried a real bound in their

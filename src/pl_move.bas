@@ -33,6 +33,83 @@ option explicit
 ''
 '' This module's own procedures.
 ''
+declare function pl_hull_contents ( _
+    byval node as integer, _
+    p as Vec3, _
+    clip() as ClipNode, _
+    planes() as Plane _
+) as integer
+declare function pl_point_contents ( _
+    p as Vec3, _
+    nodes() as Node, _
+    planes() as Plane _
+) as integer
+declare sub pl_clip_velocity ( _
+    v as Vec3, _
+    norm as Vec3 _
+)
+declare function pl_hull_check ( _
+    byval node as integer, _
+    byval p1f as single, _
+    byval p2f as single, _
+    p1 as Vec3, _
+    p2 as Vec3, _
+    tr as TraceResult, _
+    clip() as ClipNode, _
+    planes() as Plane _
+) as integer
+declare sub pl_gravity ( _
+    byval dt as single, _
+    pl as PlayerState, _
+    tr as TraceResult, _
+    byval model_count as integer, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    clip() as ClipNode, _
+    planes() as Plane _
+)
+declare sub pl_slide_move ( _
+    org as Vec3, _
+    vel as Vec3, _
+    byval dt as single, _
+    tr as TraceResult, _
+    byval model_count as integer, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    clip() as ClipNode, _
+    planes() as Plane _
+)
+declare sub pl_step_move ( _
+    org as Vec3, _
+    vel as Vec3, _
+    byval dt as single, _
+    pl as PlayerState, _
+    tr as TraceResult, _
+    byval model_count as integer, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    clip() as ClipNode, _
+    planes() as Plane _
+)
+declare sub pl_trace ( _
+    start as Vec3, _
+    fin as Vec3, _
+    tr as TraceResult, _
+    byval model_count as integer, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    clip() as ClipNode, _
+    planes() as Plane _
+)
+declare sub pl_water_level ( _
+    pl as PlayerState, _
+    nodes() as Node, _
+    planes() as Plane _
+)
+
+''
+'' This module's own procedures.
+''
 declare sub pl_init ( _
     pl as PlayerState, _
     cam as CamState, _

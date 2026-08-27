@@ -46,7 +46,6 @@ type RenderState
                                 '' single float.
 end type
 
-common shared /drw_s/ rdr as RenderState
 common shared /drw_a/ h_textr_dc() as long, mip_buff_inf() as MipTex
 '' Raw-index atlases, sized and filled only under -lm: the surface builder
 '' shades through the full colormap and must not be handed a t* texel that

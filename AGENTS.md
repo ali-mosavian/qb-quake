@@ -7,6 +7,12 @@ Hard-won things, mostly the kind that cost an hour before they cost a minute.
 These are not suggestions. Apply them to anything you touch, and do not
 introduce new violations even where the surrounding code still has them.
 
+**The compiler can prove it.** `main.bas` declares the application state
+with `dim`, not `dim shared` -- module-level code sees it, procedures do
+not. Anything that reaches gets `Variable not declared` at the build. That
+is what turned "probably converted" into a fact. `tools/qbglob.py` finds
+them before the build does.
+
 **No function reads a global.** Everything a procedure uses is a parameter
 or a local. This is the rule the rest follow from. A module-level
 `DIM SHARED` counts as a global to the procedures in that module -- owning

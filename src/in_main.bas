@@ -29,6 +29,11 @@ option explicit
 ''
 '' This module's own procedures.
 ''
+declare function in_keystroke ( key_down as integer ) as integer
+
+''
+'' This module's own procedures.
+''
 declare sub in_handle_toggles ( _
     env as Env, _
     pl as PlayerState, _

@@ -83,7 +83,6 @@ type PlayerState
     water_type  as integer      '' CONTENTS_WATER, _SLIME or _LAVA
 end type
 
-common shared /pl_s/ pl as PlayerState
 
 ''
 '' pl_move.bas. Declared here: these name PlayerState and TraceResult.
@@ -92,65 +91,3 @@ common shared /pl_s/ pl as PlayerState
 ''
 '' Procedures whose signatures can be read from here.
 ''
-declare function ent_plat_touched ( _
-    byval p as integer, _
-    pl as PlayerState _
-) as integer
-declare function pl_hull_check ( _
-    byval node as integer, _
-    byval p1f as single, _
-    byval p2f as single, _
-    p1 as Vec3, _
-    p2 as Vec3, _
-    tr as TraceResult, _
-    clip() as ClipNode, _
-    planes() as Plane _
-) as integer
-declare sub pl_gravity ( _
-    byval dt as single, _
-    pl as PlayerState, _
-    tr as TraceResult, _
-    byval model_count as integer, _
-    models() as Submodel, _
-    brush() as BrushModel, _
-    clip() as ClipNode, _
-    planes() as Plane _
-)
-declare sub pl_slide_move ( _
-    org as Vec3, _
-    vel as Vec3, _
-    byval dt as single, _
-    tr as TraceResult, _
-    byval model_count as integer, _
-    models() as Submodel, _
-    brush() as BrushModel, _
-    clip() as ClipNode, _
-    planes() as Plane _
-)
-declare sub pl_step_move ( _
-    org as Vec3, _
-    vel as Vec3, _
-    byval dt as single, _
-    pl as PlayerState, _
-    tr as TraceResult, _
-    byval model_count as integer, _
-    models() as Submodel, _
-    brush() as BrushModel, _
-    clip() as ClipNode, _
-    planes() as Plane _
-)
-declare sub pl_trace ( _
-    start as Vec3, _
-    fin as Vec3, _
-    tr as TraceResult, _
-    byval model_count as integer, _
-    models() as Submodel, _
-    brush() as BrushModel, _
-    clip() as ClipNode, _
-    planes() as Plane _
-)
-declare sub pl_water_level ( _
-    pl as PlayerState, _
-    nodes() as Node, _
-    planes() as Plane _
-)

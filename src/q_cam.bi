@@ -21,7 +21,6 @@ type CamState
     script_file as integer      '' open handle in cammode 1 and 2, else 0
 end type
 
-common shared /cam_s/ cam as CamState
 
 ''
 '' model.bas. Declared here: mod_find_spawn names CamState.
@@ -30,7 +29,3 @@ common shared /cam_s/ cam as CamState
 ''
 '' Procedures whose signatures can be read from here.
 ''
-declare sub mod_spawn_from_block ( _
-    block as string, _
-    cam as CamState _
-)

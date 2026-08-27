@@ -21,6 +21,35 @@ option explicit
 ''
 '' This module's own procedures.
 ''
+declare sub sc_flush ( wld as World )
+declare sub sc_reset ( wld as World )
+declare function sc_ftake ( _
+    byval ord as integer, _
+    byval gran as integer _
+) as integer
+declare sub sb_fetch ( _
+    byval face as integer, _
+    wld as World, _
+    tri_buffer() as Face, _
+    gv_buf() as integer _
+)
+declare function sb_i ( byval o as long ) as integer
+declare function sb_pot ( byval v as integer ) as integer
+declare function sb_u ( byval o as long ) as long
+declare function sc_brec ( ) as integer
+declare function sc_bsplit ( byval ord as integer ) as integer
+declare function sc_fpop ( byval ord as integer ) as integer
+declare function sc_grab ( byval sz as long ) as long
+declare function sc_store_open ( ) as integer
+declare sub sc_bfree ( byval blk as integer )
+declare sub sc_bput ( byval b as integer )
+declare sub sc_fpush ( byval b as integer )
+declare sub sc_lru_touch ( byval b as integer )
+declare sub sc_lru_unlink ( byval b as integer )
+
+''
+'' This module's own procedures.
+''
 declare function sc_mipfloor ( _
     byval extw as integer, _
     byval exth as integer _
@@ -1202,7 +1231,7 @@ sub sb_dump ( _
     '' renderer uses, so the sb_build call below reads exactly what it
     '' would have read mid-frame.
     ''
-    sb_fetch face, tri_buffer(), gv_buf()
+    sb_fetch face, wld, tri_buffer(), gv_buf()
     lmw = gv_buf(GEOM_LMOFS + 4)
     lmh = gv_buf(GEOM_LMOFS + 5)
 
@@ -1364,6 +1393,7 @@ end sub
 ''::::::::::
 sub sb_fetch ( _
     byval face as integer, _
+    wld as World, _
     tri_buffer() as Face, _
     gv_buf() as integer _
 )
