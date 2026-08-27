@@ -31,6 +31,6 @@ declare sub mod_spawn_from_block ( _
     cam as CamState _
 )
 declare sub mod_find_spawn ( _
-    wld as MapState, _
+    wld as World, _
     cam as CamState _
 )

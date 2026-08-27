@@ -63,14 +63,14 @@ sub mod_load_texinfo
 
     scr_load_step
     
-    seek #wld.file, wld.head.mip_tex.offs+1
-    get #wld.file,, wld.num_tex
+    seek #wld.file.handle, wld.file.head.mip_tex.offs+1
+    get #wld.file.handle,, wld.count.textures
     
-    redim t_mip_inf( wld.num_tex-1 ) as DiskMipTex
-    redim mip_buff_inf( wld.num_tex-1 ) as MipTex
+    redim t_mip_inf( wld.count.textures-1 ) as DiskMipTex
+    redim mip_buff_inf( wld.count.textures-1 ) as MipTex
     
-    for  i = 0 to wld.num_tex-1
-        get #wld.file,, tex_offs(i)
+    for  i = 0 to wld.count.textures-1
+        get #wld.file.handle,, tex_offs(i)
     next i    
     
 
@@ -102,14 +102,14 @@ sub mod_load_textures
 
     scr_load_stage "textures"
 
-    for  i = 0 to wld.num_tex-1
+    for  i = 0 to wld.count.textures-1
         ''
         '' Per-texture header only: the renderer scales texture axes by the
         '' reciprocal of the ORIGINAL texture size, so those dimensions are
         '' still needed even though the pixels come from the bmps.
         ''
-        seek #wld.file, wld.head.mip_tex.offs+tex_offs(i)+1
-        get #wld.file,, t_mip_inf(i)
+        seek #wld.file.handle, wld.file.head.mip_tex.offs+tex_offs(i)+1
+        get #wld.file.handle,, t_mip_inf(i)
 
         mip_buff_inf(i).hght = 1.0 / t_mip_inf(i).hght
         mip_buff_inf(i).wdth = 1.0 / t_mip_inf(i).wdth
@@ -171,7 +171,7 @@ sub mod_load_textures
             if ( (i and 15) = 0 ) then scr_mip_tick (j+1)*25
         next j
 
-        scr_load_part 1.0/wld.num_tex, ((i and 15) = 0)
+        scr_load_part 1.0/wld.count.textures, ((i and 15) = 0)
     next i
 
     mod_link_anims
@@ -203,7 +203,7 @@ sub mod_link_anims
     dim chain0 as integer, n as integer
     dim suffix as string
 
-    for  i = 0 to wld.num_tex-1
+    for  i = 0 to wld.count.textures-1
         if ( left$( t_mip_inf(i).name, 1 ) = "+" ) then
 
             '' already claimed by an earlier frame's chain
@@ -213,7 +213,7 @@ sub mod_link_anims
             chain0 = i
             n    = 0
 
-            for  j = i to wld.num_tex-1
+            for  j = i to wld.count.textures-1
                 if ( left$( t_mip_inf(j).name, 1 ) = "+" ) then
                     if ( mid$( rtrim$(t_mip_inf(j).name), 3 ) = suffix$ ) then
                         n = n + 1

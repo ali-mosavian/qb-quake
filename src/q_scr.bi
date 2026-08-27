@@ -151,5 +151,5 @@ declare sub scr_draw_hud ( _
     scr as ScreenState, _
     rdr as RenderState, _
     vis as VisState, _
-    wld as MapState _
+    wld as World _
 )

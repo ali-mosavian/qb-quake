@@ -49,8 +49,6 @@ dim shared tex_info_tmp as DiskTexInfo       '' tex_inf_buff dropped flags and
 '' explicit restore.
 ''
 const CM_SLOT = 3
-dim shared cm_dc as long
-dim shared cm_size as long
 
 ''
 '' THE LIGHTMAP ATLAS AND THE GEOMETRY STORE. Owned here for the same
@@ -61,20 +59,13 @@ dim shared cm_size as long
 '' along too -- both take turns in PAGE_SLOT. See q_map.bi for why taking
 '' turns in one window is safe.
 ''
-dim shared lm_atlas as long
-dim shared lm_size as long
-dim shared lm_read as long
 
-dim shared geom_dc as long
-dim shared geom_rows as integer
 
 ''
 '' THE VISIBILITY LUMP. memAlloc'd, not a uGL store -- r_bsp reaches it by
 '' DEF SEG and an offset rather than as an array, so all it needs is the
 '' base. pvs_size is read nowhere else and stays private.
 ''
-dim shared pvs_ptr as long
-dim shared pvs_size as long
 
 dim shared ledg_count as long
 dim shared pln_count as long
@@ -87,27 +78,27 @@ dim shared pln_count as long
 '' desc: Opens the map, reads the header and derives every lump count.
 ''::::::::::
 sub mod_open ( _
-    wld as MapState, _
+    wld as World, _
     env as Env, _
     models() as Submodel _
 )
-    wld.file = freefile
-    open rtrim$( env.map_name ) for binary as #wld.file
+    wld.file.handle = freefile
+    open rtrim$( env.map_name ) for binary as #wld.file.handle
     
-    get #wld.file,, wld.head
+    get #wld.file.handle,, wld.file.head
     
-    wld.tri_count = wld.head.faces.size \ len( fce )
-    wld.vtx_count = wld.head.vertices.size \ len( vtxtmp )
-    wld.edg_count = wld.head.edges.size \ 4
-    ledg_count = wld.head.ledges.size \ 4
-    wld.lef_count = wld.head.leaves.size \ len( leaf_tmp )
-    pln_count = wld.head.planes.size \ len( plane_tmp )
-    wld.nds_count = wld.head.nodes.size \ len( node_tmp )
-    wld.mdl_count = wld.head.models.size \ len( models(0) )
-    wld.texi_count = wld.head.tex_info.size \ len( tex_info_tmp )
-    wld.clp_count = wld.head.clip_node.size \ len( clip_tmp )
-    seek #wld.file, wld.head.mip_tex.offs+1
-    get #wld.file,, wld.num_tex    
+    wld.count.faces = wld.file.head.faces.size \ len( fce )
+    wld.count.verts = wld.file.head.vertices.size \ len( vtxtmp )
+    wld.count.edges = wld.file.head.edges.size \ 4
+    ledg_count = wld.file.head.ledges.size \ 4
+    wld.count.leaves = wld.file.head.leaves.size \ len( leaf_tmp )
+    pln_count = wld.file.head.planes.size \ len( plane_tmp )
+    wld.count.nodes = wld.file.head.nodes.size \ len( node_tmp )
+    wld.count.models = wld.file.head.models.size \ len( models(0) )
+    wld.count.tex_infos = wld.file.head.tex_info.size \ len( tex_info_tmp )
+    wld.count.clips = wld.file.head.clip_node.size \ len( clip_tmp )
+    seek #wld.file.handle, wld.file.head.mip_tex.offs+1
+    get #wld.file.handle,, wld.count.textures    
 
 end sub
 
@@ -153,16 +144,16 @@ end sub
 ''       decides whether it is the one we want.
 ''::::::::::
 sub mod_find_spawn ( _
-    wld as MapState, _
+    wld as World, _
     cam as CamState _
 )
     dim entity as string
     dim ch as string
     dim i as integer, open_at as integer
 
-    entity$ = space$( wld.head.entities.size )
-    seek #wld.file, wld.head.entities.offs+1
-    get #wld.file,, entity$
+    entity$ = space$( wld.file.head.entities.size )
+    seek #wld.file.handle, wld.file.head.entities.offs+1
+    get #wld.file.handle,, entity$
 
     for  i = 1 to len( entity$ )
         ch$ = mid$( entity$, i, 1 )
@@ -187,7 +178,7 @@ end sub
 '' desc: Sizes every level buffer from the counts bspOpen derived.
 ''::::::::::
 sub mod_alloc ( _
-    wld as MapState, _
+    wld as World, _
     faces() as Face, _
     texinf() as TexInfo, _
     planes() as Plane, _
@@ -204,17 +195,17 @@ sub mod_alloc ( _
     '' ONE element. uglArrNew1D takes the descriptor over in
     '' mod_load_nodes and the tree lives in EMS -- see q_map.bi.
     redim nodes(0) as Node
-    redim models(wld.mdl_count-1) as Submodel
-    redim ord(wld.nds_count-1) as integer
+    redim models(wld.count.models-1) as Submodel
+    redim ord(wld.count.nodes-1) as integer
     '' r_bsp sizes its own PVS bits; it states why over there.
-    r_alloc_pvs wld.lef_count
+    r_alloc_pvs wld.count.leaves
 
     '' Sized to the map, not a fixed 4096: poly_flag is indexed by face
-    '' 0..wld.tri_count-1, and e3m6 has 6,985 faces -- a fixed 4096 was too
+    '' 0..wld.count.faces-1, and e3m6 has 6,985 faces -- a fixed 4096 was too
     '' SMALL there, an out-of-bounds write waiting to happen, not just
     '' wasted space on the smaller maps.
-    redim pflag( wld.tri_count-1 ) as integer
-    redim texinf(wld.texi_count-1) as TexInfo
+    redim pflag( wld.count.faces-1 ) as integer
+    redim texinf(wld.count.tex_infos-1) as TexInfo
 
 end sub
 
@@ -230,7 +221,7 @@ end sub
 '' name: mod_load_faces
 ''::::::::::
 sub mod_load_faces ( _
-    wld as MapState, _
+    wld as World, _
     faces() as Face _
 )
     dim f as FILE
@@ -242,8 +233,8 @@ sub mod_load_faces ( _
     '' cost an INT 67h each time. A MEM-backed store needs no slot at all,
     '' so it also cannot collide with the geometry window d_poly maps
     '' between these reads.
-    h_tri = uglArrNew&( UGL.MEM, len( faces(0) ), wld.tri_count, 0 )
-    if ( h_tri = 0 ) then sys_error "0x0039, no room for the faces"
+    wld.store.faces = uglArrNew&( UGL.MEM, len( faces(0) ), wld.count.faces, 0 )
+    if ( wld.store.faces = 0 ) then sys_error "0x0039, no room for the faces"
 
     '' Hands the descriptor over. NOT ceremony: this is what takes
     '' it out of the far heap's chain, and only BASIC can do that
@@ -257,7 +248,7 @@ sub mod_load_faces ( _
     if ( fileOpen%( f, "faces.pag", F4READ ) = 0 ) then
         sys_error "0x003A, faces.pag missing"
     end if
-    if ( uglArrLoad%( f, h_tri ) = 0 ) then
+    if ( uglArrLoad%( f, wld.store.faces ) = 0 ) then
         fileClose f
         sys_error "0x003B, faces.pag short or unreadable"
     end if
@@ -268,7 +259,7 @@ sub mod_load_faces ( _
     '' the descriptor at the entire block and every subscript works from
     '' here on with no further calls.
     ''
-    mapped = uglArrMap&( h_tri, faces(), 0 )
+    mapped = uglArrMap&( wld.store.faces, faces(), 0 )
 
     scr_load_step
 end sub
@@ -294,24 +285,24 @@ sub mod_load_colormap
 
     dim p as long
 
-    cm_dc = 0
-    cm_size = 0
+    wld.cmap.dc = 0
+    wld.cmap.size = 0
 
     if ( fileOpen( f, "colmap.bin", F4READ ) = 0 ) then exit sub
 
-    cm_dc = uglNew&( UGL.EMS, UGL.8BIT, 16384, 1 )
-    if ( cm_dc <> 0 ) then
-        p = uglMapEx&( cm_dc, 0, CM_SLOT )
+    wld.cmap.dc = uglNew&( UGL.EMS, UGL.8BIT, 16384, 1 )
+    if ( wld.cmap.dc <> 0 ) then
+        p = uglMapEx&( wld.cmap.dc, 0, CM_SLOT )
         if ( p <> 0 ) then
             if ( fileReadH( f, p, 16384 ) = 16384 ) then
-                cm_size = 16384
+                wld.cmap.size = 16384
             end if
         end if
     end if
 
     fileClose f
 
-    if ( cm_size = 0 ) then sys_error "0x0015, colormap would not load"
+    if ( wld.cmap.size = 0 ) then sys_error "0x0015, colormap would not load"
 end sub
 
 
@@ -336,8 +327,8 @@ sub mod_load_lightmaps
     dim f as FILE
     dim got as long
 
-    lm_atlas = 0
-    lm_size = 0
+    wld.light.atlas = 0
+    wld.light.size = 0
 
     ''
     '' Every luxel in the map, as one 8-bit EMS dc built straight from a
@@ -349,14 +340,14 @@ sub mod_load_lightmaps
     '' cost 40K on dm3ish and more on the bigger maps.
     ''
     if ( fileOpen( f, "lm.bmp", F4READ ) <> 0 ) then
-        lm_size = fileSize( f )
+        wld.light.size = fileSize( f )
         fileClose f
     end if
-    lm_atlas = uglNewBMPEx( UGL.EMS, UGL.8BIT, "lm.bmp", BMPOPT.NO332 )
-    if ( lm_atlas <> 0 ) then
-        lm_read = lm_size
+    wld.light.atlas = uglNewBMPEx( UGL.EMS, UGL.8BIT, "lm.bmp", BMPOPT.NO332 )
+    if ( wld.light.atlas <> 0 ) then
+        wld.light.loaded = wld.light.size
     else
-        lm_read = 0
+        wld.light.loaded = 0
     end if
 
     scr_load_step
@@ -391,12 +382,12 @@ sub mod_load_facevtx ( gv_buf() as integer )
     '' would write a whole record past it
     redim gv_buf(108) as integer
 
-    geom_rows = cint( (fileSize&( f ) + GEOM_W - 1) \ GEOM_W )
-    geom_dc = uglNew&( UGL.EMS, UGL.8BIT, GEOM_W, geom_rows )
-    if ( geom_dc = 0 ) then sys_error "0x0010, no EMS for the geometry store"
+    wld.geom.rows = cint( (fileSize&( f ) + GEOM_W - 1) \ GEOM_W )
+    wld.geom.dc = uglNew&( UGL.EMS, UGL.8BIT, GEOM_W, wld.geom.rows )
+    if ( wld.geom.dc = 0 ) then sys_error "0x0010, no EMS for the geometry store"
 
-    for y = 0 to geom_rows-1
-        p = uglMapEx&( geom_dc, y, PAGE_SLOT )
+    for y = 0 to wld.geom.rows-1
+        p = uglMapEx&( wld.geom.dc, y, PAGE_SLOT )
         if ( p = 0 ) then sys_error "0x0012, geometry store will not map"
         if ( fileReadH( f, p, GEOM_W ) <> GEOM_W ) then
             sys_error "0x0013, fgeom.bin short read"
@@ -419,12 +410,12 @@ end sub
 ''::::::::::
 '' name: mod_load_leafs
 ''::::::::::
-sub mod_load_leafs ( wld as MapState )
+sub mod_load_leafs ( wld as World )
     scr_load_stage "bsp leaves"
 
     '' r_bsp owns the leaves -- it is the heaviest reader and the only one
     '' that needs the array itself. All the loader passes is the count.
-    r_load_leaves wld.lef_count
+    r_load_leaves wld.count.leaves
 
     scr_load_step
 end sub
@@ -435,10 +426,10 @@ end sub
 ''::::::::::
 '' name: mod_load_marksurfaces
 ''::::::::::
-sub mod_load_marksurfaces ( wld as MapState )
+sub mod_load_marksurfaces ( wld as World )
     '' r_bsp owns the list -- it is the only reader. All it needs is how
     '' many bytes the lump holds.
-    r_load_lfaces wld.head.lface.size
+    r_load_lfaces wld.file.head.lface.size
 
     scr_load_step
 end sub
@@ -450,7 +441,7 @@ end sub
 '' name: mod_load_nodes
 ''::::::::::
 sub mod_load_nodes ( _
-    wld as MapState, _
+    wld as World, _
     nodes() as Node _
 )
     dim f as FILE
@@ -473,11 +464,11 @@ sub mod_load_nodes ( _
     '' It still gets the tree out of BASIC's far heap, which is what FRE(-1)
     '' measures; memAlloc takes it from DOS (upper memory when there is
     '' room), not from the heap the BSP arrays compete for.
-    h_nds = uglArrNew&( UGL.MEM, len( nodes(0) ), wld.nds_count, 0 )
-    if ( h_nds = 0 ) then
-        h_nds = uglArrNew&( UGL.EMS, len( nodes(0) ), wld.nds_count, PAGE_SLOT )
+    wld.store.nodes = uglArrNew&( UGL.MEM, len( nodes(0) ), wld.count.nodes, 0 )
+    if ( wld.store.nodes = 0 ) then
+        wld.store.nodes = uglArrNew&( UGL.EMS, len( nodes(0) ), wld.count.nodes, PAGE_SLOT )
     end if
-    if ( h_nds = 0 ) then sys_error "0x0030, no room for the node tree"
+    if ( wld.store.nodes = 0 ) then sys_error "0x0030, no room for the node tree"
 
     '' Hands the descriptor over. NOT ceremony: this is what takes
     '' it out of the far heap's chain, and only BASIC can do that
@@ -493,7 +484,7 @@ sub mod_load_nodes ( _
     if ( fileOpen%( f, "nodes.pag", F4READ ) = 0 ) then
         sys_error "0x0031, nodes.pag missing"
     end if
-    if ( uglArrLoad%( f, h_nds ) = 0 ) then
+    if ( uglArrLoad%( f, wld.store.nodes ) = 0 ) then
         fileClose f
         sys_error "0x0032, nodes.pag short or unreadable"
     end if
@@ -504,7 +495,7 @@ sub mod_load_nodes ( _
     '' the descriptor at the entire block and every subscript works from
     '' here on with no further calls.
     ''
-    mapped = uglArrMap&( h_nds, nodes(), 0 )
+    mapped = uglArrMap&( wld.store.nodes, nodes(), 0 )
 
     scr_load_step
 end sub
@@ -553,13 +544,13 @@ end sub
 ''       consumer, and the dead declaration for it was deleted in the
 ''       first cleanup commit of this refactor.
 ''::::::::::
-sub mod_load_clipnodes ( wld as MapState )
+sub mod_load_clipnodes ( wld as World )
     scr_load_stage "clip hulls"
 
     '' pl_move owns the hulls -- it is the only reader -- so it makes the
     '' store and binds its own array. All the loader still knows is how
     '' many there are.
-    pl_load_hulls wld.clp_count
+    pl_load_hulls wld.count.clips
 
     scr_load_step
 end sub
@@ -575,27 +566,27 @@ sub mod_load_visibility
 
     scr_load_stage "visibility"
 
-    pvs_ptr = 0
-    pvs_size = 0
+    wld.pvs.ptr = 0
+    wld.pvs.size = 0
 
     if ( fileOpen( f, "pvs.bin", F4READ ) <> 0 ) then
-        pvs_size = fileSize&( f )
-        if ( pvs_size > 0 ) then
-            pvs_ptr = memAlloc( pvs_size )
-            if ( pvs_ptr <> 0 ) then
-                if ( fileReadH( f, pvs_ptr, pvs_size ) <> pvs_size ) then
-                    memFree pvs_ptr
-                    pvs_ptr = 0
-                    pvs_size = 0
+        wld.pvs.size = fileSize&( f )
+        if ( wld.pvs.size > 0 ) then
+            wld.pvs.ptr = memAlloc( wld.pvs.size )
+            if ( wld.pvs.ptr <> 0 ) then
+                if ( fileReadH( f, wld.pvs.ptr, wld.pvs.size ) <> wld.pvs.size ) then
+                    memFree wld.pvs.ptr
+                    wld.pvs.ptr = 0
+                    wld.pvs.size = 0
                 end if
             else
-                pvs_size = 0
+                wld.pvs.size = 0
             end if
         end if
         fileClose f
     end if
 
-    if ( pvs_ptr = 0 ) then sys_error "0x0014, visibility lump would not load"
+    if ( wld.pvs.ptr = 0 ) then sys_error "0x0014, visibility lump would not load"
 
     scr_load_step
 end sub
@@ -608,9 +599,9 @@ end sub
 ''       that closed it, and the handle's lifetime spanned two modules
 ''       with nothing naming the contract.
 ''::::::::::
-sub mod_close ( wld as MapState )
-    close #wld.file
-    wld.file = 0
+sub mod_close ( wld as World )
+    close #wld.file.handle
+    wld.file.handle = 0
 end sub
 
 ''::::::::::
@@ -620,7 +611,7 @@ end sub
 ''       depth in between has already taken it back.
 ''::::::::::
 function mod_cm_map ( ) as long
-    mod_cm_map = uglMapEx&( cm_dc, 0, CM_SLOT )
+    mod_cm_map = uglMapEx&( wld.cmap.dc, 0, CM_SLOT )
 end function
 
 ''::::::::::
@@ -629,7 +620,7 @@ end function
 ''       -- hud_shade draws an opaque slab instead -- ask this first.
 ''::::::::::
 function mod_cm_ready ( ) as integer
-    mod_cm_ready = ( cm_size >= 16384 )
+    mod_cm_ready = ( wld.cmap.size >= 16384 )
 end function
 
 ''::::::::::
@@ -637,7 +628,7 @@ end function
 '' desc: Table size, for the bench report.
 ''::::::::::
 function mod_cm_bytes ( ) as long
-    mod_cm_bytes = cm_size
+    mod_cm_bytes = wld.cmap.size
 end function
 
 ''::::::::::
@@ -647,7 +638,7 @@ end function
 ''       mapping reaches all of it.
 ''::::::::::
 function mod_lm_map ( byval row as integer ) as long
-    mod_lm_map = uglMapEx&( lm_atlas, row, PAGE_SLOT )
+    mod_lm_map = uglMapEx&( wld.light.atlas, row, PAGE_SLOT )
 end function
 
 ''::::::::::
@@ -656,11 +647,11 @@ end function
 ''       bench report.
 ''::::::::::
 function mod_lm_bytes ( ) as long
-    mod_lm_bytes = lm_size
+    mod_lm_bytes = wld.light.size
 end function
 
 function mod_lm_got ( ) as long
-    mod_lm_got = lm_read
+    mod_lm_got = wld.light.loaded
 end function
 
 ''::::::::::
@@ -670,7 +661,7 @@ end function
 ''       end is also the end of the mapped window.
 ''::::::::::
 function mod_geom_map ( byval row as integer ) as long
-    mod_geom_map = uglMapEx&( geom_dc, row, PAGE_SLOT )
+    mod_geom_map = uglMapEx&( wld.geom.dc, row, PAGE_SLOT )
 end function
 
 ''::::::::::
@@ -678,7 +669,7 @@ end function
 '' desc: How many rows the store has, for the bench report.
 ''::::::::::
 function mod_geom_rows ( ) as integer
-    mod_geom_rows = geom_rows
+    mod_geom_rows = wld.geom.rows
 end function
 
 ''::::::::::
@@ -687,5 +678,5 @@ end function
 ''       callers hoist it rather than asking per leaf.
 ''::::::::::
 function mod_pvs_base ( ) as long
-    mod_pvs_base = pvs_ptr
+    mod_pvs_base = wld.pvs.ptr
 end function

@@ -1112,7 +1112,7 @@ sub scr_draw_hud ( _
     scr as ScreenState, _
     rdr as RenderState, _
     vis as VisState, _
-    wld as MapState _
+    wld as World _
 )
     dim scs as CacheStats
     dim l as integer, r as integer
@@ -1201,11 +1201,11 @@ sub scr_draw_hud ( _
         hud_panel h_dst_dc, rx, 6, cw, 56, "WORLD"
         hud_row h_dst_dc, rx, cw, 12, "Resolution", _
                 ltrim$(str$( env.x_res )) + "x" + ltrim$(str$( env.y_res ))
-        hud_row h_dst_dc, rx, cw, 20, "Vertices", ltrim$(str$( wld.vtx_count ))
-        hud_row h_dst_dc, rx, cw, 28, "Edges", ltrim$(str$( wld.edg_count ))
-        hud_row h_dst_dc, rx, cw, 36, "Faces", ltrim$(str$( wld.tri_count ))
-        hud_row h_dst_dc, rx, cw, 44, "Nodes", ltrim$(str$( wld.nds_count ))
-        hud_row h_dst_dc, rx, cw, 52, "Leaves", ltrim$(str$( wld.lef_count ))
+        hud_row h_dst_dc, rx, cw, 20, "Vertices", ltrim$(str$( wld.count.verts ))
+        hud_row h_dst_dc, rx, cw, 28, "Edges", ltrim$(str$( wld.count.edges ))
+        hud_row h_dst_dc, rx, cw, 36, "Faces", ltrim$(str$( wld.count.faces ))
+        hud_row h_dst_dc, rx, cw, 44, "Nodes", ltrim$(str$( wld.count.nodes ))
+        hud_row h_dst_dc, rx, cw, 52, "Leaves", ltrim$(str$( wld.count.leaves ))
 
         ''
         '' one footer line for every toggle, in the order of the keys
