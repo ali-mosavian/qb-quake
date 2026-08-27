@@ -258,7 +258,7 @@ sub host_init
     mod_close
     sys_mem_mark "mapclose"
 
-    sc_ok = sc_init%
+    sc_init
     sys_mem_mark "surfcache"
 
     t_tex = timer

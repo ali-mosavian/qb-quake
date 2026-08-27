@@ -233,9 +233,10 @@ const MEM_MARKS = 20
 '' because DIM SHARED is scoped to the module that writes it, and the
 '' renderer and the bench report both read these.
 ''
-common shared /map_a/ sc_slot() as scslot
-
-common shared /map_a/ sc_gen as integer, sc_ok as integer
+'' The surface cache is NOT here any more -- none of it. d_surf.bas keeps
+'' the slot table, the generation and the ready flag; d_poly asks sc_held
+'' which mip a face already has cached, and sc_ready whether there is a
+'' cache at all.
 ''
 '' The counters are NOT here any more. d_surf.bas keeps them and hands
 '' out a scstat snapshot; screen.bas and main.bas read that instead of
