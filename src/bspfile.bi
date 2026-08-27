@@ -203,8 +203,6 @@ type CacheSlot
     cls         as integer      '' size class of the block, fixed per face
 end type
 
-
-
 type DiskLeaf
     cont        as long
     vis_list     as long    
@@ -271,7 +269,6 @@ type TexInfo
     mip_tex      as integer
 end type
 
-
 type DiskMipTex
     name        as string * 16
     wdth        as long
@@ -287,7 +284,6 @@ type MipTex
     anim_base   as integer      '' name began with +N: first frame's index,
     anim_count  as integer      '' and how many frames the chain has
 end type
-
 
 '' planenum narrowed long->integer: verified max value across all 9 target
 '' maps is 2,736 (e1m3), 12x under int16 range. On-disk clipnode_t stays
@@ -308,7 +304,6 @@ type DiskClipNode
     front       as integer
     back        as integer
 end type
-
 
 const FALSE = 0
 const TRUE  = -1
@@ -409,126 +404,49 @@ const DEG2RAD# = 3.14159265359 / 180.0
 
 '' defined in main.bas, called from model.bas -- within one module
 '' BASIC auto-declares, across modules it needs this.
-declare sub host_init ( )
-declare sub host_main ( )
-declare sub host_shutdown ( )
-declare sub host_tick ( byval dt as single )
-declare sub host_advance ( byval real_dt as single )
-declare sub host_render ( _
-    byval h_dst_dc as long, _
-    mtx_prj as u3dMtrx, _
-    byval xresh as single, _
-    byval yresh as single _
-)
-declare sub host_bench_report ( _
-    frame_no as long, _
-    h_dst_dc as long _
-)
-declare sub sys_error ( msg as string )
-declare sub sys_time_init ( )
-declare function sys_frame_time ( ) as single
-declare function sys_tick_hz ( ) as single
-declare sub v_update_camera ( _
-    byval dt as single, _
-    models() as Submodel, _
-    planes() as Plane, _
-    nodes() as Node _
-)
-declare sub in_handle_toggles ( )
+
 ''
 '' pl_move.bas -- player physics
 ''
 
-declare sub v_open_script ( )
-declare function in_keystroke ( key_down as integer ) as integer
-declare sub vid_update ( _
-    h_dst_dc as long, _
-    page as integer _
-)
-declare sub in_screenshot_key ( h_dst_dc as long )
-
 '' Startup steps, in the order doInit runs them. Each is entered once,
 '' which is the whole reason they are separate routines.
-declare sub sys_parse_args ( )
-declare sub sys_init_tables ( )
-declare sub sys_mem_mark ( tag as string )
-declare function sys_mem_count ( ) as integer
-declare function sys_mem_tag ( byval i as integer ) as string
-declare function sys_mem_val ( byval i as integer ) as long
-declare function sys_mem_fre ( byval i as integer ) as long
-declare sub vid_init_ugl ( )
-declare sub s_init ( )
-declare sub s_start_music ( )
-
-declare function host_z_on ( ) as integer
 
 ''
 '' ent.bas -- entities
 ''
 
-declare sub vid_init ( )
-declare sub in_init ( )
-declare sub s_stop_music ( )
+                        
+                        
+type TexCoord
+    u           as single
+    v           as single
+end type
 
+                            
 
-declare sub pl_clip_velocity ( _
-    v as Vec3, _
-    norm as Vec3 _
-)
-declare function pl_hull_contents ( _
-    byval node as integer, _
-    p as Vec3, _
-    clip() as ClipNode, _
-    planes() as Plane _
-) as integer
-declare function pl_hull_rec ( ) as integer
-declare function pl_point_contents ( _
-    p as Vec3, _
-    nodes() as Node, _
-    planes() as Plane _
-) as integer
+                         
+                                                    
 
-declare sub d_init_turb ( )
-declare sub sb_fetch ( _
-    byval face as integer, _
-    tri_buffer() as Face, _
-    gv_buf() as integer _
-)
-declare function sb_i ( byval o as long ) as integer
-declare function sb_pot ( byval v as integer ) as integer
-declare function sb_seg ( byval p as long ) as integer
-declare function sb_u ( byval o as long ) as long
-declare sub sc_bfree ( byval blk as integer )
-declare sub sc_bput ( byval b as integer )
-declare function sc_brec ( ) as integer
-declare function sc_bsplit ( byval ord as integer ) as integer
-declare function sc_find ( _
-    byval face as integer, _
-    byval mip as integer, _
-    byval w as integer, _
-    byval h as integer _
-)
-declare function sc_fpop ( byval ord as integer ) as integer
-declare sub sc_fpush ( byval b as integer )
-declare function sc_frame_end ( ) as integer
-declare function sc_ftake ( _
-    byval ord as integer, _
-    byval gran as integer _
-) as integer
-declare function sc_grab ( byval sz as long ) as long
-declare function sc_held ( byval face as integer ) as integer
-declare sub sc_lru_touch ( byval b as integer )
-declare sub sc_lru_unlink ( byval b as integer )
-declare function sc_mipfloor ( _
-    byval extw as integer, _
-    byval exth as integer _
-) as integer
-declare function sc_ready ( ) as integer
-declare function sc_shift ( byval v as integer ) as integer
-declare sub sc_stats ( s as CacheStats )
-declare function sc_store_open ( ) as integer
+''
+'' r_bsp.bas
+''
 
-declare sub com_parse_config ( filename as string )
+''
+'' mod_tex.bas
+''
+
+''
+'' model.bas
+''
+
+''
+'' screen.bas
+''
+
+''
+'' Procedures whose signatures can be read from here.
+''
 declare function com_arg ( _
     strm() as string, _
     strm_cnt as integer, _
@@ -539,51 +457,44 @@ declare function com_yesno ( _
     strm_cnt as integer, _
     line_num as integer _
 ) as integer
-declare sub com_check_args ( _
+declare function draw_load_font ( _
+    flname as string, _
+    colb as long, _
+    env as Env, _
+    bit_array() as integer _
+) as integer
+declare function ent_find_node ( _
+    byval m as integer, _
+    models() as Submodel, _
+    nodes() as Node, _
+    planes() as Plane _
+) as integer
+declare function ent_point_leaf ( _
+    p as Vec3, _
+    nodes() as Node, _
+    planes() as Plane _
+) as integer
+declare function ent_value ( _
     strm() as string, _
-    strm_cnt as integer, _
-    byval want as integer, _
-    byval line_num as integer _
-)
-declare sub com_tokenize ( _
-    strm() as string, _
-    strm_cnt as integer, _
-    token_list as string, _
-    stream as string _
-)
-                        
-                        
-type TexCoord
-    u           as single
-    v           as single
-end type
-
-
-declare sub com_tokenize ( _
-    strm() as string, _
-    strm_cnt as integer, _
-    token_list as string, _
-    stream as string _
-)
-                            
-
-                         
-                                                    
-
-''
-'' r_bsp.bas
-''
-declare sub r_alloc_pvs ( byval leaf_count as long )
-declare function r_cam_plane_dist ( _
-    pt as u3dVector3f, _
-    pl as Plane _
-) as single
+    byval strm_cnt as integer, _
+    kname as string _
+) as string
+declare function in_keystroke ( key_down as integer ) as integer
+declare function pl_hull_contents ( _
+    byval node as integer, _
+    p as Vec3, _
+    clip() as ClipNode, _
+    planes() as Plane _
+) as integer
+declare function pl_point_contents ( _
+    p as Vec3, _
+    nodes() as Node, _
+    planes() as Plane _
+) as integer
 declare function r_cull_box ( _
     bbox as Bounds, _
     frustum() as DiskPlane _
 ) as integer
-declare function r_leaf_contents ( byval leafnr as integer ) as integer
-declare sub r_load_lfaces ( byval lump_bytes as long )
 declare function r_node_side ( _
     byval node_idx as integer, _
     pt as u3dVector3f, _
@@ -599,24 +510,18 @@ declare function r_point_leaf ( _
     nodes() as Node, _
     planes() as Plane _
 ) as integer
-declare sub r_set_frustum ( _
-    frustum() as DiskPlane, _
-    mtx as u3dMtrx _
-)
-
-''
-'' mod_tex.bas
-''
-
-''
-'' model.bas
-''
-declare sub mod_load_planes ( planes() as Plane )
-declare sub mod_load_submodels ( models() as Submodel )
-
-''
-'' screen.bas
-''
+declare function sb_i ( byval o as long ) as integer
+declare function sb_pot ( byval v as integer ) as integer
+declare function sb_u ( byval o as long ) as long
+declare function sc_brec ( ) as integer
+declare function sc_bsplit ( byval ord as integer ) as integer
+declare function sc_fpop ( byval ord as integer ) as integer
+declare function sc_ftake ( _
+    byval ord as integer, _
+    byval gran as integer _
+) as integer
+declare function sc_grab ( byval sz as long ) as long
+declare function sc_store_open ( ) as integer
 declare sub bevel ( _
     x0 as integer, _
     y0 as integer, _
@@ -632,6 +537,34 @@ declare sub bg_band ( _
     y0 as integer, _
     y1 as integer _
 )
+declare sub com_check_args ( _
+    strm() as string, _
+    strm_cnt as integer, _
+    byval want as integer, _
+    byval line_num as integer _
+)
+declare sub com_tokenize ( _
+    strm() as string, _
+    strm_cnt as integer, _
+    token_list as string, _
+    stream as string _
+)
+declare sub com_tokenize ( _
+    strm() as string, _
+    strm_cnt as integer, _
+    token_list as string, _
+    stream as string _
+)
+declare sub d_clip_z ( _
+    ot_vtx() as u3dVector4f, _
+    ot_uv() as TexCoord, _
+    ot_cnt as integer, _
+    in_vtx() as u3dVector4f, _
+    in_uv() as TexCoord, _
+    in_cnt as integer, _
+    byval z_near as single, _
+    byval z_far as single _
+)
 declare sub draw_bar ( _
     h_dc as long, _
     x as integer, _
@@ -640,16 +573,6 @@ declare sub draw_bar ( _
     hgt as integer, _
     percent as single _
 )
-declare sub draw_init_font ( _
-    env as Env, _
-    bit_array() as integer _
-)
-declare function draw_load_font ( _
-    flname as string, _
-    colb as long, _
-    env as Env, _
-    bit_array() as integer _
-) as integer
 declare sub draw_logo ( _
     text as string, _
     x as integer, _
@@ -682,6 +605,26 @@ declare sub draw_string_scl ( _
     scale as single, _
     text as string _
 )
+declare sub ent_vec ( _
+    strm() as string, _
+    byval strm_cnt as integer, _
+    kname as string, _
+    v as Vec3 _
+)
+declare sub host_advance ( byval real_dt as single )
+declare sub host_bench_report ( _
+    frame_no as long, _
+    h_dst_dc as long _
+)
+declare sub host_init ( )
+declare sub host_main ( )
+declare sub host_render ( _
+    byval h_dst_dc as long, _
+    mtx_prj as u3dMtrx, _
+    byval xresh as single, _
+    byval yresh as single _
+)
+declare sub host_tick ( byval dt as single )
 declare sub hud_bar ( _
     dc as long, _
     x as integer, _
@@ -731,24 +674,36 @@ declare sub hud_vu ( _
     percent as single, _
     ch as integer _
 )
+declare sub mod_load_planes ( planes() as Plane )
+declare sub mod_load_submodels ( models() as Submodel )
+declare sub pl_clip_velocity ( _
+    v as Vec3, _
+    norm as Vec3 _
+)
 declare sub rivet ( _
     x as integer, _
     y as integer _
 )
-declare sub scr_begin_loading ( env as Env )
-declare sub scr_hud_colors ( )
+declare sub sb_fetch ( _
+    byval face as integer, _
+    tri_buffer() as Face, _
+    gv_buf() as integer _
+)
+declare sub sc_bfree ( byval blk as integer )
+declare sub sc_bput ( byval b as integer )
+declare sub sc_fpush ( byval b as integer )
+declare sub sc_lru_touch ( byval b as integer )
+declare sub sc_lru_unlink ( byval b as integer )
+declare sub sc_stats ( s as CacheStats )
 declare sub scr_load_chrome ( env as Env )
 declare sub scr_load_palette ( )
-declare sub scr_load_part ( _
-    byval frac as single, _
-    byval redraw as integer _
-)
 declare sub scr_load_stage ( msg as string )
 declare sub scr_load_step ( )
 declare sub scr_load_tick ( )
-declare sub scr_mip_tick ( percent as single )
 declare sub scr_screenshot ( _
     flname as string, _
     byval dc as long, _
     env as Env _
 )
+declare sub sys_error ( msg as string )
+declare sub sys_mem_mark ( tag as string )

@@ -26,6 +26,22 @@ option explicit
 '$include: 'q_cam.bi'
 '$include: 'q_pl.bi'
 
+''
+'' This module's own procedures.
+''
+declare sub in_handle_toggles ( _
+    env as Env, _
+    pl as PlayerState, _
+    cam as CamState, _
+    rdr as RenderState, _
+    scr as ScreenState _
+)
+declare sub in_screenshot_key ( _
+    byval h_dst_dc as long, _
+    env as Env _
+)
+declare sub in_init ( env as Env )
+
 
 '' Screenshot counter: without it every shot overwrote scrn0.bmp.
 dim shared screenie as integer
@@ -39,7 +55,7 @@ dim shared screenie as integer
 '' name: in_init
 '' desc: Mouse, keyboard and the one second timer.
 ''::::::::::
-sub in_init
+sub in_init ( env as Env )
     if ( mouseInit( env.h_video_dc, env.mouse ) = FALSE ) then
         sys_error "0x0006, Could not init mouse..."
     end if  
@@ -94,7 +110,13 @@ end function
 '' name: in_handle_toggles
 '' desc: The render-mode keys. One line each now.
 ''::::::::::
-sub in_handle_toggles
+sub in_handle_toggles ( _
+    env as Env, _
+    pl as PlayerState, _
+    cam as CamState, _
+    rdr as RenderState, _
+    scr as ScreenState _
+)
 
     if ( in_keystroke( env.keyboard.f1  ) ) then rdr.use_mips  = not rdr.use_mips
     if ( in_keystroke( env.keyboard.f2  ) ) then rdr.rend_mode = (rdr.rend_mode + 1) mod 3
@@ -116,7 +138,10 @@ end sub
 '' desc: Writes scrnNN.bmp while the key is held. Lives with the other input
 ''       handling rather than in the present path.
 ''::::::::::
-sub in_screenshot_key ( h_dst_dc as long )
+sub in_screenshot_key ( _
+    byval h_dst_dc as long, _
+    env as Env _
+)
 
     ''
     '' F5, not S: S walks backwards now.

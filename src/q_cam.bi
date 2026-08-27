@@ -26,11 +26,11 @@ common shared /cam_s/ cam as CamState
 ''
 '' model.bas. Declared here: mod_find_spawn names CamState.
 ''
+
+''
+'' Procedures whose signatures can be read from here.
+''
 declare sub mod_spawn_from_block ( _
     block as string, _
-    cam as CamState _
-)
-declare sub mod_find_spawn ( _
-    wld as World, _
     cam as CamState _
 )

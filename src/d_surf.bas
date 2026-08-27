@@ -19,6 +19,69 @@ option explicit
 '$include: 'q_draw.bi'
 
 ''
+'' This module's own procedures.
+''
+declare function sc_mipfloor ( _
+    byval extw as integer, _
+    byval exth as integer _
+) as integer
+declare function sc_find ( _
+    byval face as integer, _
+    byval mip as integer, _
+    byval w as integer, _
+    byval h as integer _
+)
+declare function sc_alloc ( _
+    byval face as integer, _
+    byval mip as integer, _
+    byval w as integer, _
+    byval h as integer, _
+    byval fw as integer, _
+    byval fh as integer, _
+    wld as World _
+)
+declare sub sb_dump ( _
+    byval face as integer, _
+    byval mip as integer, _
+    wld as World, _
+    tri_buffer() as Face, _
+    tex_inf_buff() as TexInfo, _
+    gv_buf() as integer, _
+    h_rawtx_dc() as long _
+)
+declare sub sb_build ( _
+    byval dc as long, _
+    byval tex as long, _
+    byval face as integer, _
+    byval mip as integer, _
+    byval sw as integer, _
+    byval sh as integer, _
+    wld as World, _
+    tri_buffer() as Face, _
+    tex_inf_buff() as TexInfo, _
+    gv_buf() as integer, _
+    mip_buff_inf() as MipTex _
+)
+declare function sc_shift ( byval v as integer ) as integer
+declare sub sc_init ( wld as World )
+declare sub sc_shutdown ( )
+declare function sc_selftest ( wld as World ) as integer
+declare function sb_seg ( byval p as long ) as integer
+declare function sc_frame_end ( ) as integer
+declare function sc_ready ( ) as integer
+declare function sc_held ( byval face as integer ) as integer
+
+''
+'' Declared here, not in a header: this module is the only caller, and a
+'' header would hand these to modules that never use them -- BC's symbol
+'' table is finite, and it ran out when they all got everything.
+''
+declare function mod_lm_map ( _
+    wld as World, _
+    byval row as integer _
+) as long
+
+''
 '' d_surf.bas -- the surface cache: where a face's texture and its lightmap,
 '' already combined, wait to be drawn.
 ''

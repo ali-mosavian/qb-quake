@@ -25,6 +25,56 @@ option explicit
 '$include: 'q_pl.bi'
 '$include: 'q_ent.bi'
 
+''
+'' This module's own procedures.
+''
+declare sub mod_open ( _
+    wld as World, _
+    env as Env, _
+    models() as Submodel _
+)
+declare sub mod_find_spawn ( _
+    wld as World, _
+    cam as CamState _
+)
+declare function mod_lm_map ( _
+    wld as World, _
+    byval row as integer _
+) as long
+declare sub mod_load_world ( _
+    wld as World, _
+    faces() as Face, _
+    tex_info() as TexInfo, _
+    planes() as Plane, _
+    nodes() as Node, _
+    models() as Submodel, _
+    ord() as integer, _
+    pflag() as integer, _
+    gv() as integer _
+)
+declare sub mod_load_colormap ( wld as World )
+declare sub mod_close ( wld as World )
+declare function mod_cm_ready ( wld as World ) as integer
+declare function mod_cm_bytes ( wld as World ) as long
+declare function mod_lm_bytes ( wld as World ) as long
+declare function mod_lm_got ( wld as World ) as long
+declare function mod_geom_rows ( wld as World ) as integer
+declare function mod_pvs_base ( wld as World ) as long
+
+''
+'' Declared here, not in a header: this module is the only caller, and a
+'' header would hand these to modules that never use them -- BC's symbol
+'' table is finite, and it ran out when they all got everything.
+''
+declare sub r_alloc_pvs ( byval leaf_count as long )
+declare sub r_load_lfaces ( byval lump_bytes as long )
+declare sub ent_load_teleports ( _
+    wld as World, _
+    models() as Submodel _
+)
+declare sub pl_load_hulls ( wld as World )
+declare sub r_load_leaves ( wld as World )
+
 '$dynamic
 dim shared fce as DiskFace                  '' fields the renderer keeps, discard
 dim shared node_tmp as DiskNode              '' the rest. Also the len() source for

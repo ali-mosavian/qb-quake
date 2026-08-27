@@ -56,37 +56,7 @@ common shared /drw_a/ h_rawtx_dc() as long
 ''
 '' d_poly.bas. Declared here: d_draw_faces names RenderState.
 ''
-declare sub d_clip_z ( _
-    ot_vtx() as u3dVector4f, _
-    ot_uv() as TexCoord, _
-    ot_cnt as integer, _
-    in_vtx() as u3dVector4f, _
-    in_uv() as TexCoord, _
-    in_cnt as integer, _
-    byval z_near as single, _
-    byval z_far as single _
-)
-declare sub d_draw_faces ( _
-    h_dst_dc as long, _
-    mtx_fin as u3dMtrx, _
-    xresh as single, _
-    yresh as single, _
-    wld as World, _
-    campos as u3dVector3f, _
-    rdr as RenderState, _
-    env as Env, _
-    byval frame_stamp as integer, _
-    byval ord_count as integer, _
-    tri_buffer() as Face, _
-    tex_inf_buff() as TexInfo, _
-    gv_buf() as integer, _
-    face_mdl() as integer, _
-    brush() as BrushModel, _
-    pln_buffer() as Plane, _
-    nds_buffer() as Node, _
-    mip_buff_inf() as MipTex, _
-    h_rawtx_dc() as long, _
-    h_textr_dc() as long, _
-    order_list() as integer, _
-    poly_flag() as integer _
-)
+
+''
+'' Procedures whose signatures can be read from here.
+''

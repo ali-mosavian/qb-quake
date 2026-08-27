@@ -26,6 +26,59 @@ option explicit
 '$include: 'q_pl.bi'
 '$include: 'q_ent.bi'
 
+''
+'' This module's own procedures.
+''
+declare function r_cam_plane_dist ( _
+    pt as u3dVector3f, _
+    pl as Plane _
+) as single
+declare sub r_emit_entities ( _
+    byval nodenr as integer, _
+    byval model_count as long, _
+    campos as u3dVector3f, _
+    vis as VisState, _
+    ign as integer, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    nodes() as Node, _
+    planes() as Plane, _
+    pvsb() as integer, _
+    pflag() as integer, _
+    ord() as integer, _
+    fru() as DiskPlane _
+)
+declare sub r_draw_world ( _
+    byval model as integer, _
+    wld as World, _
+    campos as u3dVector3f, _
+    vis as VisState, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    nodes() as Node, _
+    planes() as Plane, _
+    pflag() as integer, _
+    ord() as integer, _
+    fru() as DiskPlane, _
+    bit_array() as integer _
+)
+declare sub r_set_frustum ( _
+    frustum() as DiskPlane, _
+    mtx as u3dMtrx _
+)
+declare sub r_load_lfaces ( byval lump_bytes as long )
+declare sub r_alloc_pvs ( byval leaf_count as long )
+declare sub r_load_leaves ( wld as World )
+declare function r_leaf_contents ( byval leafnr as integer ) as integer
+
+''
+'' Declared here, not in a header: this module is the only caller, and a
+'' header would hand these to modules that never use them -- BC's symbol
+'' table is finite, and it ran out when they all got everything.
+''
+declare function sb_seg ( byval p as long ) as integer
+declare function mod_pvs_base ( wld as World ) as long
+
 '$static
 ''
 '' Set while a brush entity is being walked. Its leaves are not in the

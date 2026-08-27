@@ -28,6 +28,28 @@ option explicit
 '$include: 'q_ent.bi'
 
 ''
+'' This module's own procedures.
+''
+declare sub ent_load_teleports ( _
+    wld as World, _
+    models() as Submodel _
+)
+declare sub ent_check_teleport ( _
+    pl as PlayerState, _
+    env as Env _
+)
+declare sub ent_move_plats ( _
+    byval dt as single, _
+    pl as PlayerState _
+)
+declare sub ent_place_models ( _
+    byval model_count as integer, _
+    models() as Submodel, _
+    nodes() as Node, _
+    planes() as Plane _
+)
+
+''
 '' Destinations, held only while the entity lump is being read: a trigger may
 '' name a destination that appears later in the text, so the links cannot be
 '' resolved in one pass.

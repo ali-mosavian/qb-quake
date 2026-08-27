@@ -26,6 +26,30 @@ option explicit
 '$include: 'q_draw.bi'
 '$include: 'q_scr.bi'
 '$include: 'q_snd.bi'
+
+''
+'' This module's own procedures.
+''
+declare sub sys_parse_args ( env as Env )
+declare sub sys_init_tables ( )
+declare sub sys_time_init ( )
+declare function sys_frame_time ( ft as FrameTimes ) as single
+declare function sys_tick_hz ( ) as single
+declare function sys_mem_count ( ) as integer
+declare function sys_mem_tag ( byval i as integer ) as string
+declare function sys_mem_val ( byval i as integer ) as long
+declare function sys_mem_fre ( byval i as integer ) as long
+
+''
+'' Declared here, not in a header: this module is the only caller, and a
+'' header would hand these to modules that never use them -- BC's symbol
+'' table is finite, and it ran out when they all got everything.
+''
+declare sub com_parse_config ( _
+    filename as string, _
+    env as Env _
+)
+declare sub host_shutdown ( )
 '' for sys_raw_dt: the benchmark's unclamped frame delta lives in /scr_s/
 
 ''
@@ -63,7 +87,7 @@ dim shared tick_hz as single
 '' name: sys_parse_args
 '' desc: A map on the command line, and the ini beside it.
 ''::::::::::
-sub sys_parse_args
+sub sys_parse_args ( env as Env )
     dim argv(16) as string
     dim argc as integer
     dim cl as string
@@ -179,7 +203,7 @@ sub sys_init_tables
 
     dim i as integer
 
-    com_parse_config "stuff.ini"    
+    com_parse_config "stuff.ini", env
     
     for  i = 0 to 15
         bit_array(i) = clng(2^i)
@@ -293,7 +317,7 @@ end sub
 ''       the first after loading, say -- move the player far enough to pass
 ''       through a wall, since the sweep is only as long as dt makes it.
 ''::::::::::
-function sys_frame_time ( ) as single
+function sys_frame_time ( ft as FrameTimes ) as single
     dim tick as long
     dim dt as single
 
