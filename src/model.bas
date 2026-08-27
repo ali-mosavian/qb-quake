@@ -22,6 +22,8 @@ option explicit
 '$include: 'q_env.bi'
 '$include: 'q_map.bi'
 '$include: 'q_cam.bi'
+'$include: 'q_pl.bi'
+'$include: 'q_ent.bi'
 
 '$dynamic
 dim shared fce as DiskFace                  '' fields the renderer keeps, discard
@@ -689,3 +691,45 @@ end function
 function mod_pvs_base ( wld as World ) as long
     mod_pvs_base = wld.pvs.ptr
 end function
+
+
+''::::::::::
+'' name: mod_load_world
+'' desc: Every lump of the open map, in the order they depend on each other.
+''       mod_alloc sizes the arrays from the header first; the stores bind
+''       into them after.
+''
+''       Textures are not here: they are their own load phase, timed
+''       separately, and mod_tex.bas owns them.
+''::::::::::
+sub mod_load_world ( _
+    wld as World, _
+    faces() as Face, _
+    tex_info() as TexInfo, _
+    planes() as Plane, _
+    nodes() as Node, _
+    models() as Submodel, _
+    ord() as integer, _
+    pflag() as integer, _
+    gv() as integer _
+)
+    mod_alloc wld, faces(), tex_info(), planes(), nodes(), models(), ord(), pflag()
+    sys_mem_mark "bsp_arrays"
+
+    mod_load_faces wld, faces()
+    mod_load_lightmaps wld
+    sys_mem_mark "lm_table"
+
+    mod_load_facevtx wld, gv()
+    mod_load_leafs wld
+    mod_load_marksurfaces wld
+    mod_load_nodes wld, nodes()
+    mod_load_planes planes()
+    mod_load_submodels models()
+    mod_load_visibility wld
+    mod_load_clipnodes wld
+    sys_mem_mark "clip_nodes"
+
+    ent_load_teleports wld, models()
+
+end sub

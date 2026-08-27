@@ -85,6 +85,22 @@ dim shared lightmap as long
 '' to. d_poly is the only other module that cares, and only to ask whether
 '' depth exists at all -- host_z_on answers that.
 ''
+''
+'' THE MAP ARRAYS. Declared here because REDIM forces an array to module
+'' level and something has to hold them -- this is the module that runs
+'' the load and the frame, so nothing else needs to name them. World
+'' describes them; the loaders bind them; everything below takes them as
+'' parameters.
+''
+dim shared tri_buffer() as Face
+dim shared tex_inf_buff() as TexInfo
+dim shared pln_buffer() as Plane
+dim shared nds_buffer() as Node
+dim shared mdl_buffer() as Submodel
+dim shared order_list() as integer
+dim shared poly_flag() as integer
+dim shared gv_buf() as integer
+
 dim shared z_dc as long
 
 ''
@@ -229,32 +245,18 @@ sub host_init
     scr_begin_loading env
     mod_find_spawn wld, cam
     pl_init pl, cam, env
-    mod_alloc wld, tri_buffer(), tex_inf_buff(), pln_buffer(), _
-              nds_buffer(), mdl_buffer(), order_list(), poly_flag()
-    sys_mem_mark "bsparrays"
 
     t_map = timer
 
-
     '' level lumps
-    mod_load_faces wld, tri_buffer()
-    mod_load_lightmaps wld
-    sys_mem_mark "lmtable"
-    mod_load_facevtx wld, gv_buf()
-    mod_load_leafs wld
-    mod_load_marksurfaces wld
-    mod_load_nodes wld, nds_buffer()
-    mod_load_planes pln_buffer()
-    mod_load_submodels mdl_buffer()
-    mod_load_visibility wld
-    mod_load_clipnodes wld
-    sys_mem_mark "clipnodes"
-    ent_load_teleports wld, mdl_buffer()
+    mod_load_world wld, tri_buffer(), tex_inf_buff(), pln_buffer(), _
+                   nds_buffer(), mdl_buffer(), order_list(), poly_flag(), _
+                   gv_buf()
 
     t_lump = timer
 
     '' textures and palette
-    mod_load_texinfo wld
+    mod_load_texinfo wld, tex_inf_buff()
     mod_load_textures wld
     sys_mem_mark "textures"
     mod_close wld
@@ -717,7 +719,7 @@ sub host_tick ( byval dt as single )
     in_handle_toggles
 
     '' and what the world does about it: camera, and the physics under it
-    v_update_camera dt
+    v_update_camera dt, mdl_buffer(), pln_buffer(), nds_buffer()
 
     '' and anything the world does to the player as a result of moving
     ent_check_teleport pl, env
