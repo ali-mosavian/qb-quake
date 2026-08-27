@@ -477,7 +477,6 @@ declare function pl_hull_contents ( _
     planes() as Plane _
 ) as integer
 declare function pl_hull_rec ( ) as integer
-declare sub pl_load_hulls ( byval cnt as long )
 declare function pl_point_contents ( _
     p as Vec3, _
     nodes() as Node, _
@@ -485,27 +484,6 @@ declare function pl_point_contents ( _
 ) as integer
 
 declare sub d_init_turb ( )
-declare sub sb_build ( _
-    byval dc as long, _
-    byval tex as long, _
-    byval face as integer, _
-    byval mip as integer, _
-    byval sw as integer, _
-    byval sh as integer, _
-    tri_buffer() as Face, _
-    tex_inf_buff() as TexInfo, _
-    gv_buf() as integer, _
-    mip_buff_inf() as MipTex _
-)
-declare sub sb_dump ( _
-    byval face as integer, _
-    byval mip as integer, _
-    byval face_count as long, _
-    tri_buffer() as Face, _
-    tex_inf_buff() as TexInfo, _
-    gv_buf() as integer, _
-    h_rawtx_dc() as long _
-)
 declare sub sb_fetch ( _
     byval face as integer, _
     tri_buffer() as Face, _
@@ -515,15 +493,6 @@ declare function sb_i ( byval o as long ) as integer
 declare function sb_pot ( byval v as integer ) as integer
 declare function sb_seg ( byval p as long ) as integer
 declare function sb_u ( byval o as long ) as long
-declare function sc_alloc ( _
-    byval face as integer, _
-    byval mip as integer, _
-    byval w as integer, _
-    byval h as integer, _
-    byval fw as integer, _
-    byval fh as integer, _
-    byval face_count as long _
-)
 declare sub sc_bfree ( byval blk as integer )
 declare sub sc_bput ( byval b as integer )
 declare function sc_brec ( ) as integer
@@ -534,7 +503,6 @@ declare function sc_find ( _
     byval w as integer, _
     byval h as integer _
 )
-declare sub sc_flush ( byval face_count as long )
 declare function sc_fpop ( byval ord as integer ) as integer
 declare sub sc_fpush ( byval b as integer )
 declare function sc_frame_end ( ) as integer
@@ -544,7 +512,6 @@ declare function sc_ftake ( _
 ) as integer
 declare function sc_grab ( byval sz as long ) as long
 declare function sc_held ( byval face as integer ) as integer
-declare sub sc_init ( byval face_count as long )
 declare sub sc_lru_touch ( byval b as integer )
 declare sub sc_lru_unlink ( byval b as integer )
 declare function sc_mipfloor ( _
@@ -552,8 +519,6 @@ declare function sc_mipfloor ( _
     byval exth as integer _
 ) as integer
 declare function sc_ready ( ) as integer
-declare sub sc_reset ( byval face_count as long )
-declare function sc_selftest ( byval face_count as long ) as integer
 declare function sc_shift ( byval v as integer ) as integer
 declare sub sc_stats ( s as CacheStats )
 declare function sc_store_open ( ) as integer
@@ -613,17 +578,7 @@ declare function r_cull_box ( _
     frustum() as DiskPlane _
 ) as integer
 declare function r_leaf_contents ( byval leafnr as integer ) as integer
-declare sub r_load_leaves ( byval cnt as long )
 declare sub r_load_lfaces ( byval lump_bytes as long )
-declare sub r_mark_leaves ( _
-    byval nodenr as integer, _
-    byval leaf_count as long, _
-    campos as u3dVector3f, _
-    nodes() as Node, _
-    planes() as Plane, _
-    bit_array() as integer, _
-    pvsb() as integer _
-)
 declare function r_node_side ( _
     byval node_idx as integer, _
     pt as u3dVector3f, _
@@ -647,28 +602,12 @@ declare sub r_set_frustum ( _
 ''
 '' mod_tex.bas
 ''
-declare sub mod_load_texinfo ( )
-declare sub mod_load_textures ( )
-declare sub mod_link_anims ( )
 
 ''
 '' model.bas
 ''
-declare function mod_cm_bytes ( ) as long
-declare function mod_cm_map ( ) as long
-declare function mod_cm_ready ( ) as integer
-declare function mod_geom_map ( byval row as integer ) as long
-declare function mod_geom_rows ( ) as integer
-declare function mod_lm_bytes ( ) as long
-declare function mod_lm_got ( ) as long
-declare function mod_lm_map ( byval row as integer ) as long
-declare sub mod_load_colormap ( )
-declare sub mod_load_facevtx ( gv_buf() as integer )
-declare sub mod_load_lightmaps ( )
 declare sub mod_load_planes ( planes() as Plane )
 declare sub mod_load_submodels ( models() as Submodel )
-declare sub mod_load_visibility ( )
-declare function mod_pvs_base ( ) as long
 
 ''
 '' screen.bas
@@ -777,14 +716,6 @@ declare sub hud_row ( _
     y as integer, _
     label as string, _
     value as string _
-)
-declare sub hud_shade ( _
-    dc as long, _
-    x0 as integer, _
-    y0 as integer, _
-    x1 as integer, _
-    y1 as integer, _
-    rw as integer _
 )
 declare sub hud_vu ( _
     dc as long, _

@@ -105,6 +105,20 @@ and the global was untouched. So a signature may reuse the global's name and
 the body needs no edit -- which is what made converting `pl_move` and `ent`
 a change to signatures and call sites only.
 
+**Includes have a canonical order.** A declare may only name types the
+including module has already seen, so `q_*.bi` go in dependency order:
+
+    bspfile.bi  q_env  q_map  q_vis  q_draw  q_scr  q_cam  q_pl  q_ent  q_snd
+
+`World` lives in `q_map.bi`, so a declare naming it cannot sit in
+`bspfile.bi`. BC reports the mismatch as `TYPE not defined` pointing at the
+DEFINITION, which reads as though the definition is wrong.
+
+**Refresh declares with `tools/qbdecl.py` after any signature change.** A
+declare drifted from its definition is the most common build break here,
+and BC again points at the definition. The tool rewrites each declare from
+its `.bas`, leaving it in whichever header it was in.
+
 **Drop a global the moment it stops being read.** Passing data instead of
 reaching for it only pays once the declaration goes; a `COMMON` entry that
 every procedure now receives as a parameter is worse than before, because it

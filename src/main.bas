@@ -48,13 +48,14 @@ option explicit
 '$include: 'snd.bi'
 '$include: 'mod.bi'
 '$include: 'q_env.bi'
+'$include: 'q_map.bi'
 '$include: 'q_vis.bi'
 '$include: 'q_draw.bi'
-'$include: 'q_map.bi'
 '$include: 'q_scr.bi'
 '$include: 'q_cam.bi'
 '$include: 'q_pl.bi'
 '$include: 'q_ent.bi'
+'$include: 'q_snd.bi'
 Declare Sub cp_load ( )
 Declare Sub cp_advance ( )
 
@@ -65,7 +66,6 @@ Declare Sub cp_advance ( )
 ''
 dim shared host_accum as single
 dim shared host_ticks as long          '' steps run, for the benchmark
-'$include: 'q_snd.bi'
 
 
 
@@ -154,7 +154,7 @@ dim shared z_dc as long
     
     host_init 
     if ( env.dump_set ) then
-        sb_dump env.dump_face, env.dump_mip, wld.count.faces, _
+        sb_dump env.dump_face, env.dump_mip, wld, _
                 tri_buffer(), tex_inf_buff(), gv_buf(), h_rawtx_dc()
     else
         host_main
@@ -238,15 +238,15 @@ sub host_init
 
     '' level lumps
     mod_load_faces wld, tri_buffer()
-    mod_load_lightmaps
+    mod_load_lightmaps wld
     sys_mem_mark "lmtable"
-    mod_load_facevtx gv_buf()
+    mod_load_facevtx wld, gv_buf()
     mod_load_leafs wld
     mod_load_marksurfaces wld
     mod_load_nodes wld, nds_buffer()
     mod_load_planes pln_buffer()
     mod_load_submodels mdl_buffer()
-    mod_load_visibility
+    mod_load_visibility wld
     mod_load_clipnodes wld
     sys_mem_mark "clipnodes"
     ent_load_teleports wld, mdl_buffer()
@@ -254,13 +254,13 @@ sub host_init
     t_lump = timer
 
     '' textures and palette
-    mod_load_texinfo
-    mod_load_textures
+    mod_load_texinfo wld
+    mod_load_textures wld
     sys_mem_mark "textures"
     mod_close wld
     sys_mem_mark "mapclose"
 
-    sc_init wld.count.faces
+    sc_init wld
     sys_mem_mark "surfcache"
 
     t_tex = timer
@@ -276,7 +276,7 @@ sub host_init
     '' left it short -- the program wedged inside vid_init with no error,
     '' having got all the way through loading. Nothing needs the table
     '' until the first surface is built.
-    if ( env.use_lm ) then mod_load_colormap
+    if ( env.use_lm ) then mod_load_colormap wld
     sys_mem_mark "colormap"
 
     t_vid = timer
@@ -791,7 +791,7 @@ sub host_render ( _
     ''
     '' Walk BSP tree
     ''
-    r_draw_world 0, wld.count.models, wld.count.leaves, wld.count.faces, cam.pos, vis, _
+    r_draw_world 0, wld, cam.pos, vis, _
                  mdl_buffer(), brush(), nds_buffer(), pln_buffer(), _
                  poly_flag(), order_list(), frustum(), bit_array()
 
@@ -809,7 +809,7 @@ sub host_render ( _
     '' is fill, which paging does not affect.
     if ( env.no_draw ) then exit sub
 
-    d_draw_faces h_dst_dc, mtx_fin, xresh, yresh, wld.count.faces, _
+    d_draw_faces h_dst_dc, mtx_fin, xresh, yresh, wld, _
                  cam.pos, rdr, env, vis.frame_stamp, vis.ord_count, _
                  tri_buffer(), tex_inf_buff(), gv_buf(), face_mdl(), brush(), _
                  pln_buffer(), nds_buffer(), mip_buff_inf(), _
@@ -884,10 +884,10 @@ sub host_bench_report ( _
     print #benchf, "dt " + ltrim$(str$( scr.frame_time ))
     print #benchf, "tick_hz " + ltrim$(str$( sys_tick_hz ))
     print #benchf, "mem_avail " + ltrim$(str$( memAvail& ))
-    print #benchf, "lm_size " + ltrim$(str$( mod_lm_bytes ))
-    print #benchf, "lm_read " + ltrim$(str$( mod_lm_got ))
-    print #benchf, "geom_rows " + ltrim$(str$( mod_geom_rows ))
-    print #benchf, "cm_size " + ltrim$(str$( mod_cm_bytes ))
+    print #benchf, "lm_size " + ltrim$(str$( mod_lm_bytes( wld ) ))
+    print #benchf, "lm_read " + ltrim$(str$( mod_lm_got( wld ) ))
+    print #benchf, "geom_rows " + ltrim$(str$( mod_geom_rows( wld ) ))
+    print #benchf, "cm_size " + ltrim$(str$( mod_cm_bytes( wld ) ))
         sc_stats scs
     print #benchf, "sc_made " + ltrim$(str$( scs.made ))
     print #benchf, "sc_ems " + ltrim$(str$( scs.peak ))
@@ -901,7 +901,7 @@ sub host_bench_report ( _
     print #benchf, "sc_live " + ltrim$(str$( scs.live ))
     print #benchf, "sc_evict " + ltrim$(str$( scs.evict ))
     print #benchf, "sc_flush " + ltrim$(str$( scs.flushes ))
-    print #benchf, "sc_test " + ltrim$(str$( sc_selftest( wld.count.faces ) ))
+    print #benchf, "sc_test " + ltrim$(str$( sc_selftest( wld ) ))
     print #benchf, "peak_z " + ltrim$(str$( pl.peak_z ))
     print #benchf, "ticks " + ltrim$(str$( host_ticks ))
     ''

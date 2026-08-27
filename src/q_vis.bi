@@ -32,9 +32,7 @@ common shared /vis_a/ bit_array() as integer, frustum() as DiskPlane
 ''
 declare sub r_draw_world ( _
     byval model as integer, _
-    byval model_count as long, _
-    byval leaf_count as long, _
-    byval face_count as long, _
+    wld as World, _
     campos as u3dVector3f, _
     vis as VisState, _
     models() as Submodel, _
