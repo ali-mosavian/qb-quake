@@ -85,7 +85,12 @@ MODS_DCT  := dctbnk dctems dctmem dctxms
 
 DIR_B8    := cfmt/b8
 MODS_B8   := 8main 8conv 8pixel 8line 8vline 8putm 8putb 8puts 8hflip \
-             8plxf 8plxg 8plxt 8plxtp 8plxtg 8plxtpg 8conv_m
+             8plxf 8plxg 8plxt 8plxtp 8plxtg 8plxtpg 8plxtz 8conv_m
+# 8plxtz holds the depth-aware fillers. 8plxt.asm and 8plxtp.asm REFERENCE
+# them (UL$HLINET8_ZT, UL$ZACC, HLINET_FIXUP_Z), so leaving it out of the
+# list produces a library that links only by luck -- whatever stale
+# 8plxtz.obj happens to be in the build tree. A genuinely clean build
+# fails with unresolved externals in a module the list does name.
 
 DIR_B15   := cfmt/b15
 MODS_B15  := 15main 15conv 15putm 15hflip 15plxg 15plxtg 15conv_m 15puts
