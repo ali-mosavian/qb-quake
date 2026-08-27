@@ -404,6 +404,7 @@ end sub
 ''       the point, this wants where the point is.
 ''::::::::::
 function ent_point_leaf ( p as vec3 ) as integer
+    dim mp as long
     dim nodenr as integer
     dim pid as integer
     dim d as single
@@ -467,6 +468,7 @@ end sub
 ''       Returns a leaf, bit 15 set, when the box fits inside one.
 ''::::::::::
 function ent_find_node ( byval m as integer ) as integer
+    dim mp as long
     dim nodenr as integer, pid as integer
     dim dnear as single, dfar as single
     dim x0 as single, x1 as single
