@@ -152,7 +152,7 @@ sub r_emit_entities ( byval nodenr as integer )
     if ( r_ignore_pvs or vis.bad_order or vis.no_ents ) then exit sub
 
     for  m = 1 to wld.mdl_count-1
-        if ( mdl_draw(m) and mdl_node(m) = nodenr ) then
+        if ( brush(m).draw and brush(m).node = nodenr ) then
             vis.ent_left = vis.ent_left - 1
             r_ignore_pvs = true
             r_recursive_world_node int( mdl_buffer(m).headnode0 ), _
@@ -314,7 +314,7 @@ sub r_draw_world ( model as integer )
     ''
     vis.ent_left = 0
     for  i = 1 to wld.mdl_count-1
-        if ( mdl_draw(i) ) then vis.ent_left = vis.ent_left + 1
+        if ( brush(i).draw ) then vis.ent_left = vis.ent_left + 1
     next i
 
     ''
@@ -332,7 +332,7 @@ sub r_draw_world ( model as integer )
     ''
     if ( vis.bad_order and vis.no_ents = false ) then
         for  i = 1 to wld.mdl_count-1
-            if ( mdl_draw(i) ) then
+            if ( brush(i).draw ) then
                 r_ignore_pvs = true
                 r_recursive_world_node int( mdl_buffer(i).headnode0 ), _
                               cam.pos, vis, r_ignore_pvs, _

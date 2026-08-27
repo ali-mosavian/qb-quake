@@ -326,7 +326,7 @@ sub d_draw_faces ( _
             mipidx = tex_inf_buff(tex).miptex
 
             liquid = mip_buff_inf(mipidx).liquid
-            zofs   = mdl_zofs( face_mdl(i) )
+            zofs   = brush( face_mdl(i) ).zofs
 
             ''
             '' Depth mode follows what this face belongs to. face_mdl is 0

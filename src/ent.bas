@@ -124,11 +124,8 @@ sub ent_load_teleports ( _
     dim mdlnum as integer
 
     redim tele( ENT_MAXTELE ) as Teleporter
-    redim mdl_draw( 63 ) as integer
-    redim mdl_solid( 63 ) as integer
-    redim mdl_zofs( 63 ) as single
+    redim brush( 63 ) as BrushModel
     redim face_mdl( wld.tri_count ) as integer
-    redim mdl_node( 63 ) as integer
     redim plat( ENT_MAXTELE ) as PlatEnt
 
     tele_count = 0
@@ -139,9 +136,9 @@ sub ent_load_teleports ( _
 
     '' every submodel draws and blocks unless something claims it as a trigger
     for  i = 0 to 63
-        mdl_draw(i)  = true
-        mdl_solid(i) = true
-        mdl_zofs(i)  = 0.0
+        brush(i).draw  = true
+        brush(i).solid = true
+        brush(i).zofs  = 0.0
     next i
 
     ''
@@ -213,7 +210,7 @@ sub ent_load_teleports ( _
                         '' Quake positions the brush raised, so a lift at rest
                         '' is one full travel below where the map drew it.
                         plat( plat_count ).state = ENT_PLAT_DOWN
-                        mdl_zofs( mdlnum ) = -plat( plat_count ).travel
+                        brush( mdlnum ).zofs = -plat( plat_count ).travel
 
                         plat_count = plat_count + 1
                     end if
@@ -229,8 +226,8 @@ sub ent_load_teleports ( _
                 s$ = ent_value( strm(), strm_cnt, "model" )
                 if ( left$( s$, 1 ) = "*" ) then
                     trig_model( trig_count ) = val( mid$( s$, 2 ) )
-                    mdl_draw( trig_model( trig_count ) )  = false
-                    mdl_solid( trig_model( trig_count ) ) = false
+                    brush( trig_model( trig_count ) ).draw  = false
+                    brush( trig_model( trig_count ) ).solid = false
                     trig_count = trig_count + 1
                 end if
             end if
@@ -339,7 +336,7 @@ function ent_plat_touched ( _
     '' Above its surface and within a body's height of it. Anything higher is
     '' someone on a walkway over the shaft, not a passenger.
     ''
-    top = plat(p).maxs.z + mdl_zofs( plat(p).model )
+    top = plat(p).maxs.z + brush( plat(p).model ).zofs
 
     if ( pl.pos.z - PL_FEET# < top - 8.0  ) then exit function
     if ( pl.pos.z - PL_FEET# > top + 64.0 ) then exit function
@@ -389,19 +386,19 @@ sub ent_move_plats ( _
             goal = -plat(p).travel
         end if
 
-        was = mdl_zofs(m)
+        was = brush(m).zofs
 
-        if ( mdl_zofs(m) < goal ) then
+        if ( brush(m).zofs < goal ) then
             step_z = plat(p).speed * dt
-            mdl_zofs(m) = mdl_zofs(m) + step_z
-            if ( mdl_zofs(m) > goal ) then mdl_zofs(m) = goal
-        elseif ( mdl_zofs(m) > goal ) then
+            brush(m).zofs = brush(m).zofs + step_z
+            if ( brush(m).zofs > goal ) then brush(m).zofs = goal
+        elseif ( brush(m).zofs > goal ) then
             step_z = plat(p).speed * dt
-            mdl_zofs(m) = mdl_zofs(m) - step_z
-            if ( mdl_zofs(m) < goal ) then mdl_zofs(m) = goal
+            brush(m).zofs = brush(m).zofs - step_z
+            if ( brush(m).zofs < goal ) then brush(m).zofs = goal
         end if
 
-        moved = mdl_zofs(m) - was
+        moved = brush(m).zofs - was
 
         ''
         '' Carry the rider. Only upward: a descending plat drops out from under
@@ -456,7 +453,7 @@ sub ent_place_models ( _
     dim m as integer
 
     for  m = 1 to nmodels-1
-        mdl_node(m) = ent_find_node( m, models(), nodes(), planes() )
+        brush(m).node = ent_find_node( m, models(), nodes(), planes() )
     next m
 
 end sub
@@ -492,8 +489,8 @@ function ent_find_node ( _
     x1 = models(m).maxs.x
     y0 = models(m).mins.y
     y1 = models(m).maxs.y
-    z0 = models(m).mins.z + mdl_zofs(m)
-    z1 = models(m).maxs.z + mdl_zofs(m)
+    z0 = models(m).mins.z + brush(m).zofs
+    z1 = models(m).maxs.z + brush(m).zofs
 
     nodenr = 0
 

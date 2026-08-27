@@ -39,6 +39,28 @@ type BspHeader
     models      as LumpEntry
 end type
 
+'' A world submodel at run time -- doors, lifts, trigger volumes. Submodel
+'' above is the record on disk; this is what moves and what gets decided per
+'' frame. Four arrays indexed by the same submodel number, so one type.
+type BrushModel
+    draw        as integer      '' emitted this frame. A trigger volume is
+                                '' not: its brush exists to be walked into,
+                                '' and drawing it hangs a slab of teleport
+                                '' texture in mid air.
+    solid       as integer      '' stops the player. Not the same question as
+                                '' draw -- a func_illusionary is drawn and not
+                                '' solid -- though every entity in dm3ish
+                                '' answers both the same way.
+    zofs        as single       '' how far it has moved from where the map put
+                                '' it, along z, the only axis anything in
+                                '' dm3ish travels. The renderer adds it to
+                                '' every vertex; the collision subtracts it
+                                '' from the traced point. Same thing from
+                                '' either end.
+    node        as integer      '' world node it sorts at. Bit 15 set means
+                                '' the box fell inside one leaf.
+end type
+
 type Submodel
     mins        as Vec3
     maxs        as Vec3
@@ -551,6 +573,7 @@ declare sub mod_link_anims ( )
 declare sub vid_init ( )
 declare sub in_init ( )
 declare sub s_stop_music ( )
+
 
 declare sub pl_clip_velocity ( _
     v as Vec3, _

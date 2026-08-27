@@ -460,6 +460,15 @@ for HOW LONG it took.
   produces nothing. An empty RUN.OUT with an ERROR.LOG beside it is a
   runtime error, not a hang.
 
+**A viz window takes keystrokes.** `autolock=true` means a stray key
+reaches the guest, and the renderer's toggles are single letters -- `L`
+flips lightmaps, `B` culling, `F1`/`F2` mip and perspective. A screenshot
+that looks wrong may be a toggle, not a regression: read the status bar
+before believing it. `L lm off` with `Hit / built 0/0` is the lightmap
+toggle, not broken lightmaps.
+
+**Drive DOSBox hands-on, do not wait on files**
+
 ## Benchmarking a change to the frontend
 
 **Use `-nodraw`.** It runs the BSP walk, PVS and visibility and skips

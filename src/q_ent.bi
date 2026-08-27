@@ -25,31 +25,14 @@ end type
 '' COMMON can only declare an array as name(), with no bound, so this is
 '' REDIMmed in ent_load_teleports rather than sized here.
 ''
+'' Per-submodel run-time state. See BrushModel for what each field means.
+common shared /ent_s/ brush() as BrushModel
+
 common shared /ent_s/ tele() as Teleporter
 common shared /ent_s/ tele_count as integer
 
-''
-'' Whether each submodel is drawn. A func_plat is; a trigger volume is not --
-'' its brush exists to be walked into, not looked at, and drawing it would
-'' hang a slab of teleport texture in mid air.
-''
-common shared /ent_s/ mdl_draw() as integer
 
-''
-'' Whether a submodel stops the player. A trigger does not; a lift does. Not
-'' the same question as whether it is drawn -- a func_illusionary would be
-'' drawn and not solid -- so they are separate flags even though every
-'' entity in dm3ish answers both the same way.
-''
-common shared /ent_s/ mdl_solid() as integer
 
-''
-'' How far each submodel has moved from where the map put it, along z, which
-'' is the only axis anything in dm3ish travels. The renderer adds it to every
-'' vertex of the entity's faces and the collision subtracts it from the point
-'' being traced, which is the same thing seen from either end.
-''
-common shared /ent_s/ mdl_zofs() as single
 
 ''
 '' Which submodel owns each face, so the renderer can find the offset without
@@ -77,15 +60,6 @@ end type
 common shared /ent_s/ plat() as PlatEnt
 common shared /ent_s/ plat_count as integer
 
-''
-'' Where in the world's back-to-front order each submodel is drawn: the
-'' deepest world node whose plane its box does not straddle. Recomputed
-'' every frame because a lift moves, and because -1 offsets move with it.
-''
-'' Bit 15 set means the box fell entirely inside one leaf, and the walk
-'' emits it there instead.
-''
-common shared /ent_s/ mdl_node() as integer
 
 ''
 '' ent.bas. Declared here: these name MapState, PlayerState and Env.

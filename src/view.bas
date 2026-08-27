@@ -252,7 +252,7 @@ sub v_update_camera ( byval dt as single )
             end if
 
             pl_move fwd, strafe, dir_x, dir_y, jump, dt, _
-                    pl, cam, wld.mdl_count, mdl_buffer(), mdl_solid(), mdl_zofs(), _
+                    pl, cam, wld.mdl_count, mdl_buffer(), brush(), _
                     nds_buffer(), pln_buffer()
         end if
         
