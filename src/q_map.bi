@@ -20,19 +20,72 @@
 ''
 const LOAD_STEPS = 14
 
-type MapState
+'' The BSP file while it is open. Only the loaders touch this; mod_close
+'' shuts it before the first frame.
+type MapFile
+    handle      as integer
     head        as BspHeader       '' the on-disk lump directory
-    file        as integer      '' open handle, owned by model.bas
-    num_tex      as long         '' counts, all derived from the header
-    tri_count   as long
-    vtx_count   as long
-    edg_count   as long
-    lef_count   as long
-    nds_count   as long
-    texi_count  as long
-    clp_count   as long         '' collision hull nodes
-    mdl_count   as long         '' submodels: the world is 0, brush entities
+end type
+
+'' How big the map is. All of it derived from the lump directory.
+type MapCount
+    faces       as long
+    verts       as long
+    edges       as long
+    leaves      as long
+    nodes       as long
+    tex_infos   as long
+    clips       as long         '' collision hull nodes
+    models      as long         '' submodels: the world is 0, brush entities
                                 '' such as doors and teleport triggers follow
+    textures    as long
+end type
+
+'' uglArr stores. Each backs one BASIC array, bound once at load and
+'' subscripted natively from then on.
+type MapStore
+    faces       as long
+    nodes       as long
+    leaves      as long
+    clips       as long
+end type
+
+type GeomStore
+    dc          as long         '' one face record per lookup, through PAGE_SLOT
+    rows        as integer
+end type
+
+type LightStore
+    atlas       as long         '' every luxel in the map, one 8-bit EMS dc
+    size        as long         '' bytes on disk
+    loaded      as long         '' bytes that actually arrived
+end type
+
+type ColorMap
+    dc          as long
+    size        as long
+end type
+
+'' memAlloc'd rather than a uGL store: r_bsp reaches it by DEF SEG and an
+'' offset rather than as an array.
+type VisLump
+    ptr         as long
+    size        as long
+end type
+
+''
+'' Everything about the loaded map that is not an array. One of these is
+'' passed to the loaders and then to the frame; the arrays it describes are
+'' declared in main.bas, because REDIM forces them to module level.
+''
+type World
+    file        as MapFile
+    count       as MapCount
+    store       as MapStore
+    geom        as GeomStore
+    light       as LightStore
+    cmap        as ColorMap
+    pvs         as VisLump
 end type
 
 ''
@@ -44,7 +97,7 @@ type LoadState
     dc          as long         '' the temporary 320x200 loading DC
 end type
 
-common shared /map_s/ wld as MapState
+common shared /map_s/ wld as World
 '' ldr is NOT here any more. screen.bas draws the loading screen and is
 '' the only module that touches it; loaders report through scr_load_step.
 
@@ -164,7 +217,6 @@ common shared /surf/ gv_buf() as integer
 '' shared because the data genuinely is.
 '' ===================================================================
 ''
-common shared /world/ h_nds as long
 common shared /world/ mdl_buffer() as Submodel, pln_buffer() as Plane, nds_buffer() as Node
 ''
 '' lfc_buffer and pvs_buffer_b are NOT here any more. r_bsp.bas is their
@@ -204,7 +256,6 @@ common shared /surf/ tex_inf_buff() as TexInfo, poly_flag() as integer
 '' is what actually fails first.
 ''
 '' The faces. 55,160 bytes on e1m1, the largest single item left.
-common shared /surf/ h_tri as long
 
 ''
 '' Lightmaps. The luxels are one 8-bit atlas in a single EMS dc, loaded by
@@ -291,10 +342,10 @@ const MEM_MARKS = 20
 ''
 
 ''
-'' model.bas. Declared here: these name MapState.
+'' model.bas. Declared here: these name World.
 ''
 declare sub mod_alloc ( _
-    wld as MapState, _
+    wld as World, _
     faces() as Face, _
     texinf() as TexInfo, _
     planes() as Plane, _
@@ -303,20 +354,20 @@ declare sub mod_alloc ( _
     ord() as integer, _
     pflag() as integer _
 )
-declare sub mod_close ( wld as MapState )
-declare sub mod_load_clipnodes ( wld as MapState )
+declare sub mod_close ( wld as World )
+declare sub mod_load_clipnodes ( wld as World )
 declare sub mod_load_faces ( _
-    wld as MapState, _
+    wld as World, _
     faces() as Face _
 )
-declare sub mod_load_leafs ( wld as MapState )
-declare sub mod_load_marksurfaces ( wld as MapState )
+declare sub mod_load_leafs ( wld as World )
+declare sub mod_load_marksurfaces ( wld as World )
 declare sub mod_load_nodes ( _
-    wld as MapState, _
+    wld as World, _
     nodes() as Node _
 )
 declare sub mod_open ( _
-    wld as MapState, _
+    wld as World, _
     env as Env, _
     models() as Submodel _
 )

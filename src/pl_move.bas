@@ -41,7 +41,6 @@ option explicit
 '' binds this stub, and nothing outside needs to see either.
 ''
 dim shared clp_buffer() as ClipNode
-dim shared h_clp as long
 
 
 
@@ -747,11 +746,11 @@ sub pl_load_hulls ( byval cnt as long )
     '' hole for the allocations that come after. The far heap is the
     '' fragmented pool; DOS memory is not.
     ''
-    h_clp = uglArrNew&( UGL.MEM, len( clp_buffer(0) ), cnt, 0 )
-    if ( h_clp = 0 ) then
-        h_clp = uglArrNew&( UGL.EMS, len( clp_buffer(0) ), cnt, PAGE_SLOT )
+    wld.store.clips = uglArrNew&( UGL.MEM, len( clp_buffer(0) ), cnt, 0 )
+    if ( wld.store.clips = 0 ) then
+        wld.store.clips = uglArrNew&( UGL.EMS, len( clp_buffer(0) ), cnt, PAGE_SLOT )
     end if
-    if ( h_clp = 0 ) then sys_error "0x0033, no room for the clip hulls"
+    if ( wld.store.clips = 0 ) then sys_error "0x0033, no room for the clip hulls"
 
     '' Hands the descriptor over. NOT ceremony: this is what takes it out
     '' of the far heap's chain, and only BASIC can do that correctly. Left
@@ -763,7 +762,7 @@ sub pl_load_hulls ( byval cnt as long )
     if ( fileOpen%( f, "clip.pag", F4READ ) = 0 ) then
         sys_error "0x0034, clip.pag missing"
     end if
-    if ( uglArrLoad%( f, h_clp ) = 0 ) then
+    if ( uglArrLoad%( f, wld.store.clips ) = 0 ) then
         fileClose f
         sys_error "0x0035, clip.pag short or unreadable"
     end if
@@ -774,7 +773,7 @@ sub pl_load_hulls ( byval cnt as long )
     '' the descriptor at the entire block and every subscript works from
     '' here on with no further calls.
     ''
-    mapped = uglArrMap&( h_clp, clp_buffer(), 0 )
+    mapped = uglArrMap&( wld.store.clips, clp_buffer(), 0 )
 end sub
 
 '' Clipnode record size, for the bench report.

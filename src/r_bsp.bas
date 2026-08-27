@@ -40,7 +40,6 @@ option explicit
 '' a share -- so the loader hands over the sizes and r_bsp does the rest.
 ''
 dim shared lef_buffer() as Leaf
-dim shared h_lef as long
 dim shared lfc_buffer() as integer
 dim shared pvs_buffer_b() as integer
 
@@ -689,11 +688,11 @@ sub r_load_leaves ( byval cnt as long )
     '' array out of it leaves a larger contiguous hole behind even when the
     '' total free does not change.
     ''
-    h_lef = uglArrNew&( UGL.MEM, len( lef_buffer(0) ), cnt, 0 )
-    if ( h_lef = 0 ) then
-        h_lef = uglArrNew&( UGL.EMS, len( lef_buffer(0) ), cnt, PAGE_SLOT )
+    wld.store.leaves = uglArrNew&( UGL.MEM, len( lef_buffer(0) ), cnt, 0 )
+    if ( wld.store.leaves = 0 ) then
+        wld.store.leaves = uglArrNew&( UGL.EMS, len( lef_buffer(0) ), cnt, PAGE_SLOT )
     end if
-    if ( h_lef = 0 ) then sys_error "0x0036, no room for the leaves"
+    if ( wld.store.leaves = 0 ) then sys_error "0x0036, no room for the leaves"
 
     '' Hands the descriptor over. NOT ceremony: this is what takes it out
     '' of the far heap's chain, and only BASIC can do that correctly. Left
@@ -705,7 +704,7 @@ sub r_load_leaves ( byval cnt as long )
     if ( fileOpen%( f, "leaves.pag", F4READ ) = 0 ) then
         sys_error "0x0037, leaves.pag missing"
     end if
-    if ( uglArrLoad%( f, h_lef ) = 0 ) then
+    if ( uglArrLoad%( f, wld.store.leaves ) = 0 ) then
         fileClose f
         sys_error "0x0038, leaves.pag short or unreadable"
     end if
@@ -716,7 +715,7 @@ sub r_load_leaves ( byval cnt as long )
     '' the descriptor at the entire block and every subscript works from
     '' here on with no further calls.
     ''
-    mapped = uglArrMap&( h_lef, lef_buffer(), 0 )
+    mapped = uglArrMap&( wld.store.leaves, lef_buffer(), 0 )
 end sub
 
 ''::::::::::

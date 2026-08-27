@@ -111,7 +111,7 @@ end sub
 ''       Must run while the map file is still open, so before mod_close.
 ''::::::::::
 sub ent_load_teleports ( _
-    wld as MapState, _
+    wld as World, _
     models() as Submodel _
 )
     dim entity as string
@@ -125,7 +125,7 @@ sub ent_load_teleports ( _
 
     redim tele( ENT_MAXTELE ) as Teleporter
     redim brush( 63 ) as BrushModel
-    redim face_mdl( wld.tri_count ) as integer
+    redim face_mdl( wld.count.faces ) as integer
     redim plat( ENT_MAXTELE ) as PlatEnt
 
     tele_count = 0
@@ -145,19 +145,19 @@ sub ent_load_teleports ( _
     '' Which submodel owns each face. The world's faces come first and the
     '' submodels' follow in order, so this is a walk rather than a search.
     ''
-    for  i = 0 to wld.tri_count-1
+    for  i = 0 to wld.count.faces-1
         face_mdl(i) = 0
     next i
 
-    for  j = 1 to wld.mdl_count-1
+    for  j = 1 to wld.count.models-1
         for  k = models(j).first_face to models(j).first_face + models(j).num_faces - 1
-            if ( k >= 0 and k <= wld.tri_count-1 ) then face_mdl(k) = j
+            if ( k >= 0 and k <= wld.count.faces-1 ) then face_mdl(k) = j
         next k
     next j
 
-    entity$ = space$( wld.head.entities.size )
-    seek #wld.file, wld.head.entities.offs+1
-    get #wld.file,, entity$
+    entity$ = space$( wld.file.head.entities.size )
+    seek #wld.file.handle, wld.file.head.entities.offs+1
+    get #wld.file.handle,, entity$
 
     ''
     '' Walk the text a block at a time, the same way mod_find_spawn does.
@@ -196,7 +196,7 @@ sub ent_load_teleports ( _
                 if ( left$( s$, 1 ) = "*" ) then
                     mdlnum = val( mid$( s$, 2 ) )
 
-                    if ( mdlnum > 0 and mdlnum <= wld.mdl_count-1 ) then
+                    if ( mdlnum > 0 and mdlnum <= wld.count.models-1 ) then
                         plat( plat_count ).model  = mdlnum
                         plat( plat_count ).speed  = val( ent_value( strm(), strm_cnt, "speed" ) )
                         plat( plat_count ).travel = val( ent_value( strm(), strm_cnt, "height" ) )
@@ -246,7 +246,7 @@ sub ent_load_teleports ( _
             if ( rtrim$(trig_target(j)) = rtrim$(dest_name(k)) ) then
                 mdlnum = trig_model(j)
 
-                if ( mdlnum > 0 and mdlnum <= wld.mdl_count-1 ) then
+                if ( mdlnum > 0 and mdlnum <= wld.count.models-1 ) then
                     tele( tele_count ).mins = models(mdlnum).mins
                     tele( tele_count ).maxs = models(mdlnum).maxs
                     tele( tele_count ).dest = dest_org(k)

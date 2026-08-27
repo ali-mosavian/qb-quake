@@ -154,7 +154,7 @@ dim shared z_dc as long
     
     host_init 
     if ( env.dump_set ) then
-        sb_dump env.dump_face, env.dump_mip, wld.tri_count, _
+        sb_dump env.dump_face, env.dump_mip, wld.count.faces, _
                 tri_buffer(), tex_inf_buff(), gv_buf(), h_rawtx_dc()
     else
         host_main
@@ -260,7 +260,7 @@ sub host_init
     mod_close wld
     sys_mem_mark "mapclose"
 
-    sc_init wld.tri_count
+    sc_init wld.count.faces
     sys_mem_mark "surfcache"
 
     t_tex = timer
@@ -726,7 +726,7 @@ sub host_tick ( byval dt as single )
     ent_move_plats dt, pl
 
     '' where each mover ended up, so the draw order can place it
-    ent_place_models wld.mdl_count, mdl_buffer(), nds_buffer(), pln_buffer()
+    ent_place_models wld.count.models, mdl_buffer(), nds_buffer(), pln_buffer()
 
     '' map time, which drives every texture animation
     rdr.anim_time = rdr.anim_time + dt
@@ -791,7 +791,7 @@ sub host_render ( _
     ''
     '' Walk BSP tree
     ''
-    r_draw_world 0, wld.mdl_count, wld.lef_count, wld.tri_count, cam.pos, vis, _
+    r_draw_world 0, wld.count.models, wld.count.leaves, wld.count.faces, cam.pos, vis, _
                  mdl_buffer(), brush(), nds_buffer(), pln_buffer(), _
                  poly_flag(), order_list(), frustum(), bit_array()
 
@@ -809,7 +809,7 @@ sub host_render ( _
     '' is fill, which paging does not affect.
     if ( env.no_draw ) then exit sub
 
-    d_draw_faces h_dst_dc, mtx_fin, xresh, yresh, wld.tri_count, _
+    d_draw_faces h_dst_dc, mtx_fin, xresh, yresh, wld.count.faces, _
                  cam.pos, rdr, env, vis.frame_stamp, vis.ord_count, _
                  tri_buffer(), tex_inf_buff(), gv_buf(), face_mdl(), brush(), _
                  pln_buffer(), nds_buffer(), mip_buff_inf(), _
@@ -901,7 +901,7 @@ sub host_bench_report ( _
     print #benchf, "sc_live " + ltrim$(str$( scs.live ))
     print #benchf, "sc_evict " + ltrim$(str$( scs.evict ))
     print #benchf, "sc_flush " + ltrim$(str$( scs.flushes ))
-    print #benchf, "sc_test " + ltrim$(str$( sc_selftest( wld.tri_count ) ))
+    print #benchf, "sc_test " + ltrim$(str$( sc_selftest( wld.count.faces ) ))
     print #benchf, "peak_z " + ltrim$(str$( pl.peak_z ))
     print #benchf, "ticks " + ltrim$(str$( host_ticks ))
     ''
@@ -924,7 +924,7 @@ sub host_bench_report ( _
                        " " + ltrim$(str$( df )) + " " + ltrim$(str$( ddf ))
     next mi
     print #benchf, "clp_rec " + ltrim$(str$( pl_hull_rec ))
-    print #benchf, "clp_cnt " + ltrim$(str$( wld.clp_count ))
+    print #benchf, "clp_cnt " + ltrim$(str$( wld.count.clips ))
     print #benchf, "water_level " + ltrim$(str$( pl.water_level ))
     print #benchf, "water_type " + ltrim$(str$( pl.water_type ))
     print #benchf, "anim_time " + ltrim$(str$( rdr.anim_time ))

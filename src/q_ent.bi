@@ -62,7 +62,7 @@ common shared /ent_s/ plat_count as integer
 
 
 ''
-'' ent.bas. Declared here: these name MapState, PlayerState and Env.
+'' ent.bas. Declared here: these name World, PlayerState and Env.
 ''
 declare sub ent_check_teleport ( _
     pl as PlayerState, _
@@ -75,7 +75,7 @@ declare function ent_find_node ( _
     planes() as Plane _
 ) as integer
 declare sub ent_load_teleports ( _
-    wld as MapState, _
+    wld as World, _
     models() as Submodel _
 )
 declare sub ent_move_plats ( _
