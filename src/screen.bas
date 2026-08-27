@@ -998,6 +998,7 @@ end sub
 ''       "press f1 to disable" on every row cost more space than the rows.
 ''::::::::::
 sub scr_draw_hud ( h_dst_dc as long )
+    dim scs as scstat
     dim l as integer, r as integer
     dim lx as integer, rx as integer, cw as integer
     dim yy as integer, ftr as string
@@ -1041,6 +1042,9 @@ sub scr_draw_hud ( h_dst_dc as long )
         '' hitch is made of, so it leads, and the worst frame is kept
         '' because an average over a run hides exactly that spike.
         ''
+        '' one crossing into d_surf for the whole panel
+        sc_stats scs
+
         hud_panel h_dst_dc, lx, 90, cw, 78, "SURFACE CACHE"
 
         ''
@@ -1049,11 +1053,11 @@ sub scr_draw_hud ( h_dst_dc as long )
         '' rather than waiting to be read. Commercial HUDs surface alerts;
         '' logs wait to be read.
         ''
-        if ( sc_evict > hud_pevict or sc_flushes > hud_pflush ) then
+        if ( scs.evict > hud_pevict or scs.flushes > hud_pflush ) then
             hud_flash = 12
         end if
-        hud_pevict = sc_evict
-        hud_pflush = sc_flushes
+        hud_pevict = scs.evict
+        hud_pflush = scs.flushes
         if ( hud_flash > 0 ) then
             if ( (hud_flash and 2) <> 0 ) then
                 uglRect h_dst_dc, lx, 90, lx+cw, 90+78, hc_bad
@@ -1062,18 +1066,18 @@ sub scr_draw_hud ( h_dst_dc as long )
         end if
 
         hud_row h_dst_dc, lx, cw, 96, "Hit / built", _
-                ltrim$(str$( sc_hits )) + "/" + ltrim$(str$( sc_builds ))
-        hud_row h_dst_dc, lx, cw, 104, "Worst frame", ltrim$(str$( sc_bpeak ))
-        hud_row h_dst_dc, lx, cw, 112, "Resident", ltrim$(str$( sc_live ))
-        hud_row h_dst_dc, lx, cw, 120, "Evicted", ltrim$(str$( sc_evict ))
-        hud_row h_dst_dc, lx, cw, 128, "Flushes", ltrim$(str$( sc_flushes ))
+                ltrim$(str$( scs.hits )) + "/" + ltrim$(str$( scs.builds ))
+        hud_row h_dst_dc, lx, cw, 104, "Worst frame", ltrim$(str$( scs.bpeak ))
+        hud_row h_dst_dc, lx, cw, 112, "Resident", ltrim$(str$( scs.live ))
+        hud_row h_dst_dc, lx, cw, 120, "Evicted", ltrim$(str$( scs.evict ))
+        hud_row h_dst_dc, lx, cw, 128, "Flushes", ltrim$(str$( scs.flushes ))
         '' the store as a proportion of what it can hold, which a bare
         '' kilobyte count never conveys
         draw_string h_dst_dc, lx+5, 136, "Store"
         hud_bar h_dst_dc, lx+cw-GRAPH_N-5, 136, GRAPH_N, 6, _
-                sc_peak * 100.0 / 4194304.0
-        draw_string h_dst_dc, lx+5, 146, "builds " + ltrim$(str$( sc_bpeak ))
-        hud_graph h_dst_dc, lx+cw-GRAPH_N-5, 145, 17, g_bld(), sc_bpeak
+                scs.peak * 100.0 / 4194304.0
+        draw_string h_dst_dc, lx+5, 146, "builds " + ltrim$(str$( scs.bpeak ))
+        hud_graph h_dst_dc, lx+cw-GRAPH_N-5, 145, 17, g_bld(), scs.bpeak
 
         ''
         '' right: the map, which never changes while it is loaded
@@ -1249,16 +1253,10 @@ sub scr_count_frame
     rdr.tris = 0
     rdr.polys = 0
 
-    '' Per-frame cache counters. The peak is kept before the reset because a
-    '' hitch is one bad frame, and an average over the run hides it.
-    if ( sc_builds > sc_bpeak ) then sc_bpeak = sc_builds
-
-    '' history, before the counters are cleared
-    g_bld(g_head) = sc_builds
+    '' The cache closes its own frame now and reports what it built; the
+    '' HUD only keeps the history graph, which is the HUD's business.
+    g_bld(g_head) = sc_frame_end%
     g_fps(g_head) = g_fsec
     g_head = (g_head + 1) mod GRAPH_N
-
-    sc_hits = 0
-    sc_builds = 0
 
 end sub

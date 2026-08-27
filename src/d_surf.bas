@@ -145,6 +145,21 @@ dim shared lm_flat(0) as integer
 '' uglNewView/uglSetView do the aiming; see their note in ugl.bi for why a
 '' view costs so much less than a DC of its own.
 ''
+''
+'' THE CACHE COUNTERS. Owned here, not in COMMON: this module and d_poly
+'' are the only writers, and the two readers want a picture of the cache,
+'' not nine separate variables. sc_stats gives them one.
+''
+dim shared sc_made as integer
+dim shared sc_flushes as long
+dim shared sc_peak as long
+dim shared sc_hits as integer
+dim shared sc_builds as integer
+dim shared sc_bpeak as integer
+dim shared sc_live as long
+dim shared sc_evict as long
+dim shared sc_tbuilds as long
+
 dim shared sc_hnd as long               '' the DC that owns every surface's bytes
 dim shared sc_next as long              '' bump pointer within it
 dim shared sc_cap as long               '' how big it is
@@ -1146,6 +1161,11 @@ sub sb_build ( byval dc as long, byval tex as long, _
                byval sw as integer, byval sh as integer )
     dim mt as long
 
+    '' Counted here rather than at the call site: this IS the build, so the
+    '' counter cannot drift away from the thing it counts.
+    sc_builds  = sc_builds + 1
+    sc_tbuilds = sc_tbuilds + 1
+
 
     dim au as long, av as long, du as long, dv as long
     dim aw as integer, msk as integer
@@ -1259,3 +1279,37 @@ sub sb_fetch ( byval face as integer )
           (clng( varptr( gv_buf(0) ) ) and 65535&)
     memCopy dst, gp + clng( tri_buffer(face).geom_ofs ), clng( gn )
 end sub
+
+''::::::::::
+'' name: sc_stats
+'' desc: Fills a scstat with the current counters. One crossing instead of
+''       nine, and the counters stay this module's.
+''::::::::::
+sub sc_stats ( s as scstat )
+    s.hits    = sc_hits
+    s.builds  = sc_builds
+    s.bpeak   = sc_bpeak
+    s.made    = sc_made
+    s.live    = sc_live
+    s.evict   = sc_evict
+    s.flushes = sc_flushes
+    s.peak    = sc_peak
+    s.tbuilds = sc_tbuilds
+end sub
+
+''::::::::::
+'' name: sc_frame_end
+'' desc: Closes the frame's counters and returns what it built. The peak is
+''       kept BEFORE the reset because a hitch is one bad frame and an
+''       average over the run hides it.
+''
+''       This ran in the HUD's end-of-frame code, which meant the overlay
+''       was doing the cache's bookkeeping -- and doing it only when the
+''       overlay was compiled in.
+''::::::::::
+function sc_frame_end% ()
+    sc_frame_end% = sc_builds
+    if ( sc_builds > sc_bpeak ) then sc_bpeak = sc_builds
+    sc_hits   = 0
+    sc_builds = 0
+end function

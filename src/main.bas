@@ -818,6 +818,7 @@ end sub
 ''       the finished image.
 ''::::::::::
 sub host_bench_report ( frame_no as long, h_dst_dc as long )
+    dim scs as scstat
     dim dv as long
     dim df as long
     dim ddv as long
@@ -865,18 +866,19 @@ sub host_bench_report ( frame_no as long, h_dst_dc as long )
     print #benchf, "lmread " + ltrim$(str$( lm_read ))
     print #benchf, "geomrows " + ltrim$(str$( geom_rows ))
     print #benchf, "cmsize " + ltrim$(str$( cm_bytes& ))
-    print #benchf, "scmade " + ltrim$(str$( sc_made ))
-    print #benchf, "scems " + ltrim$(str$( sc_peak ))
+        sc_stats scs
+    print #benchf, "scmade " + ltrim$(str$( scs.made ))
+    print #benchf, "scems " + ltrim$(str$( scs.peak ))
     ''
     '' Cache behaviour. scworst is the most surfaces built in any ONE
     '' frame, which is what a hitch is made of -- a run-wide total says
     '' nothing about whether they arrived together or spread out.
     ''
-    print #benchf, "scbuilt " + ltrim$(str$( sc_tbuilds ))
-    print #benchf, "scworst " + ltrim$(str$( sc_bpeak ))
-    print #benchf, "sclive " + ltrim$(str$( sc_live ))
-    print #benchf, "scevict " + ltrim$(str$( sc_evict ))
-    print #benchf, "scflush " + ltrim$(str$( sc_flushes ))
+    print #benchf, "scbuilt " + ltrim$(str$( scs.tbuilds ))
+    print #benchf, "scworst " + ltrim$(str$( scs.bpeak ))
+    print #benchf, "sclive " + ltrim$(str$( scs.live ))
+    print #benchf, "scevict " + ltrim$(str$( scs.evict ))
+    print #benchf, "scflush " + ltrim$(str$( scs.flushes ))
     print #benchf, "sctest " + ltrim$(str$( sc_selftest% ))
     print #benchf, "peakz " + ltrim$(str$( pl.peak_z ))
     print #benchf, "ticks " + ltrim$(str$( host_ticks ))

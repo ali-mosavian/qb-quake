@@ -181,6 +181,24 @@ end type
 '' so no block is ever orphaned, and class membership never moves -- which is
 '' what makes same-class eviction always fit.
 ''
+''
+'' A snapshot of the cache counters. One call fills it, so the HUD does not
+'' make seven separate crossings a frame and the counters themselves stay
+'' inside d_surf.bas.
+''
+type scstat
+    hits        as integer      '' per FRAME -- a build costs milliseconds,
+    builds      as integer      '' so what hitches is how many land in one
+    bpeak       as integer      '' frame. bpeak is the worst frame seen,
+                                '' which is what a hitch is actually made of.
+    made        as integer      '' slots created at init
+    live        as long         '' blocks currently resident
+    evict       as long         '' blocks thrown out over the run
+    flushes     as long         '' whole-cache flushes over the run
+    peak        as long         '' high-water bytes in the cache DC
+    tbuilds     as long         '' builds over the whole run
+end type
+
 type scslot
     blk         as integer      '' index into the block table, -1 for none
     tag         as integer      '' generation * 4 + mip the CONTENT holds
@@ -465,6 +483,8 @@ declare sub mod_alloc ( )
 
 declare sub mod_load_faces ( )
 declare sub mod_load_lightmaps ( )
+declare sub sc_stats ( s as scstat )
+declare function sc_frame_end% ( )
 declare function cm_map& ( )
 declare function cm_ready% ( )
 declare function cm_bytes& ( )

@@ -225,14 +225,10 @@ common shared /map_a/ z_dc as long
 ''
 common shared /map_a/ sc_slot() as scslot
 
-common shared /map_a/ sc_gen as integer, sc_ok as integer, sc_made as integer
-common shared /map_a/ sc_flushes as long, sc_peak as long
+common shared /map_a/ sc_gen as integer, sc_ok as integer
 ''
-'' Cache behaviour, for the stats overlay. sc_hits and sc_builds are per
-'' FRAME -- a build costs milliseconds, so what makes the renderer hitch is
-'' how many land in one frame, not how many happen over a run. sc_bpeak is
-'' the worst frame seen, which is the number a hitch is actually made of.
+'' The counters are NOT here any more. d_surf.bas keeps them and hands
+'' out a scstat snapshot; screen.bas and main.bas read that instead of
+'' nine shared longs, and the per-frame roll that used to live in the
+'' HUD went back to the cache as sc_frame_end.
 ''
-common shared /map_a/ sc_hits as integer, sc_builds as integer
-common shared /map_a/ sc_bpeak as integer
-common shared /map_a/ sc_live as long, sc_evict as long, sc_tbuilds as long
