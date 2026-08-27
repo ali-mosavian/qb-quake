@@ -1369,7 +1369,7 @@ sub scr_count_frame ( _
         '' loading and the first surface builds, so it is not a frame rate
         '' the renderer ever sustains
         if ( scr.bench_secs > 0 ) then
-            if ( fps_low = 0 or fps1 < fps_low ) then fps_low = fps1
+            if ( ft.fps_low = 0 or fps1 < ft.fps_low ) then ft.fps_low = fps1
         end if
         g_fsec = fps1
         fps1 = 0

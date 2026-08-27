@@ -316,7 +316,7 @@ function sys_frame_time ( ) as single
     '' worst frame is the clamp rather than the renderer, and the reported
     '' best is one timer tick. Record the truth before flattening it.
     ''
-    sys_raw_dt = dt
+    ft.raw_dt = dt
 
     if ( dt < 0.001  ) then dt = 0.001
     if ( dt > 0.1    ) then dt = 0.1

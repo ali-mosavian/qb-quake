@@ -102,15 +102,20 @@ const CP_LOOKAHEAD = 160.0
 '' turned at a rate that depended on the frame rate -- faster where the
 '' renderer was quick, slower where it struggled, which is backwards.
 const CP_TURN = 4.0
-common shared /scr_s/ cp_x() as integer, cp_y() as integer, cp_z() as integer
-common shared /scr_s/ cp_n as integer, cp_i as integer, cp_t as single
-common shared /scr_s/ cp_dirx as single, cp_diry as single
-common shared /scr_s/ cp_lastx as single, cp_lasty as single
-common shared /scr_s/ cp_stuck as integer
-common shared /scr_s/ cp_init as integer
-common shared /scr_s/ cp_lx as single, cp_ly as single
-common shared /scr_s/ fps_low as integer
-common shared /scr_s/ cp_done as integer
+type CamPath
+    n           as integer    '' points in the path
+    i           as integer    '' the point being walked toward
+    t           as single     '' seconds spent on this leg
+    dir_x       as single     '' steering direction, carried between ticks
+    dir_y       as single
+    last_x      as single     '' previous position, for the stuck test
+    last_y      as single
+    stuck       as integer
+    started     as integer
+    look_x      as single     '' eased aim point, CP_LOOKAHEAD ahead
+    look_y      as single
+    done        as integer
+end type
 
 ''
 '' Per-FRAME timing. bench_secs counts whole seconds, so on a 143 frame
@@ -118,9 +123,19 @@ common shared /scr_s/ cp_done as integer
 '' a peak and a low quantised to whatever happened to fall either side of
 '' a second boundary. Frame times measure the thing directly.
 ''
-common shared /scr_s/ ft_min as single, ft_max as single, ft_sum as single
-common shared /scr_s/ ft_n as long
-common shared /scr_s/ sys_raw_dt as single
+type FrameTimes
+    min         as single
+    max         as single
+    sum         as single
+    n           as long
+    fps_low     as integer
+    raw_dt      as single     '' this frame's dt, before the clamps
+end type
+
+'' The path itself stays loose: arrays cannot be TYPE members.
+common shared /scr_s/ cp_x() as integer, cp_y() as integer, cp_z() as integer
+common shared /scr_s/ cp as CamPath
+common shared /scr_s/ ft as FrameTimes
 
 ''
 '' screen.bas. Declared here: these name ScreenState and friends.

@@ -212,7 +212,7 @@ sub v_update_camera ( byval dt as single )
             ''
             if ( env.cam_path ) then
                 cp_advance
-                if ( cp_dirx <> 0.0 or cp_diry <> 0.0 ) then
+                if ( cp.dir_x <> 0.0 or cp.dir_y <> 0.0 ) then
                     ''
                     '' Face the way we are going. The view and the walk
                     '' come from ONE vector -- looking somewhere the player
@@ -223,30 +223,30 @@ sub v_update_camera ( byval dt as single )
                     '' of cutting; the waypoints are 32 units apart and an
                     '' instant turn at each reads as a flinch.
                     ''
-                    if ( cp_lx = 0.0 and cp_ly = 0.0 ) then
-                        cp_lx = cp_dirx
-                        cp_ly = cp_diry
+                    if ( cp.look_x = 0.0 and cp.look_y = 0.0 ) then
+                        cp.look_x = cp.dir_x
+                        cp.look_y = cp.dir_y
                     else
                         '' dt-scaled, clamped: a long frame must not
                         '' overshoot the target direction
                         t = CP_TURN * dt
                         if ( t > 1.0 ) then t = 1.0
-                        cp_lx = cp_lx + (cp_dirx - cp_lx) * t
-                        cp_ly = cp_ly + (cp_diry - cp_ly) * t
+                        cp.look_x = cp.look_x + (cp.dir_x - cp.look_x) * t
+                        cp.look_y = cp.look_y + (cp.dir_y - cp.look_y) * t
                     end if
-                    dir_l = sqr( cp_lx*cp_lx + cp_ly*cp_ly )
+                    dir_l = sqr( cp.look_x*cp.look_x + cp.look_y*cp.look_y )
                     if ( dir_l > 0.001 ) then
-                        cp_lx = cp_lx / dir_l
-                        cp_ly = cp_ly / dir_l
+                        cp.look_x = cp.look_x / dir_l
+                        cp.look_y = cp.look_y / dir_l
                     end if
 
                     '' renderer z is bsp y, and keep the view level
-                    cam.look_at.x = cp_lx
+                    cam.look_at.x = cp.look_x
                     cam.look_at.y = 0.0
-                    cam.look_at.z = cp_ly
+                    cam.look_at.z = cp.look_y
 
-                    dir_x  = cp_lx
-                    dir_y  = cp_ly
+                    dir_x  = cp.look_x
+                    dir_y  = cp.look_y
                     fwd    = 1.0
                     strafe = 0.0
                 end if
