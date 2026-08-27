@@ -167,7 +167,9 @@ common shared /map_a/ h_tri as long
 '' up there and took conventional memory instead, which is what stopped
 '' that map loading.
 ''
-common shared /map_a/ lm_atlas as long, lm_size as long, lm_read as long
+'' The atlas handle is NOT here any more. model.bas loads it and owns
+'' LM_SLOT with it; sb_build asks for a scanline through lm_map rather
+'' than mapping a slot it does not own.
 ''
 '' The depth buffer. World faces write through it without testing -- the
 '' BSP walk already hands them over front to back, so a test would only

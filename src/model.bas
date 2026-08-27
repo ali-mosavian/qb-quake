@@ -52,6 +52,21 @@ const CM_SLOT = 3
 dim shared cm_dc as long
 dim shared cm_size as long
 
+''
+'' THE LIGHTMAP ATLAS. Owned here for the same reason as the colormap:
+'' mod_load_lightmaps creates it, and its one reader wants a scanline
+'' out of it rather than the handle.
+''
+'' LM_SLOT comes along, because which EMS slot a resource is mapped into
+'' is a property of the resource, not of whoever reads it. Note it is 2,
+'' the same as GEOM_SLOT, NODE_SLOT and CLIP_SLOT -- worth having those
+'' collisions visible in one file.
+''
+const LM_SLOT = 2
+dim shared lm_atlas as long
+dim shared lm_size as long
+dim shared lm_read as long
+
 dim shared ledg_count as long
 dim shared lfc_count as long
 dim shared pln_count as long
@@ -633,3 +648,25 @@ function cm_bytes& ()
     cm_bytes& = cm_size
 end function
 
+''::::::::::
+'' name: lm_map
+'' desc: One scanline of the luxel atlas, mapped, as a far pointer. The
+''       packer keeps a face's whole rect inside one scanline, so a single
+''       mapping reaches all of it.
+''::::::::::
+function lm_map& ( byval row as integer )
+    lm_map& = uglMapEx&( lm_atlas, row, LM_SLOT )
+end function
+
+''::::::::::
+'' name: lm_bytes / lm_got
+'' desc: Atlas size on disk, and how much of it actually loaded, for the
+''       bench report.
+''::::::::::
+function lm_bytes& ()
+    lm_bytes& = lm_size
+end function
+
+function lm_got& ()
+    lm_got& = lm_read
+end function
