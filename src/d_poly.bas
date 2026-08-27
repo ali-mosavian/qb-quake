@@ -80,7 +80,9 @@ sub d_clip_z ( _
     ot_cnt as integer, _
     in_vtx() as u3dVector4f, _
     in_uv() as TexCoord, _
-    in_cnt as integer _
+    in_cnt as integer, _
+    byval z_near as single, _
+    byval z_far as single _
 )
 
     dim n as integer
@@ -92,7 +94,7 @@ sub d_clip_z ( _
         src1 = n
         src2 = (n + 1) mod in_cnt
         
-        if ( in_vtx(src1).w >= env.z_near ) then
+        if ( in_vtx(src1).w >= z_near ) then
             ot_vtx(dsti).x = in_vtx(src1).x
             ot_vtx(dsti).y = in_vtx(src1).y
             ot_vtx(dsti).z = in_vtx(src1).z
@@ -102,21 +104,21 @@ sub d_clip_z ( _
             
             dsti = dsti + 1 
             
-            if ( in_vtx(src2).w >= env.z_near ) then
+            if ( in_vtx(src2).w >= z_near ) then
                 goto continuenfa
             end if
         else
-            if ( in_vtx(src2).w < env.z_near ) then
+            if ( in_vtx(src2).w < z_near ) then
                 goto continuenfa
             end if
         end if
 
-        scl = ((env.z_near - in_vtx(src1).w) / (in_vtx(src2).w - in_vtx(src1).w))
+        scl = ((z_near - in_vtx(src1).w) / (in_vtx(src2).w - in_vtx(src1).w))
      
         ot_vtx(dsti).x = in_vtx(src1).x + (in_vtx(src2).x-in_vtx(src1).x)*scl
         ot_vtx(dsti).y = in_vtx(src1).y + (in_vtx(src2).y-in_vtx(src1).y)*scl
         ot_vtx(dsti).z = in_vtx(src1).z
-        ot_vtx(dsti).w = env.z_near        
+        ot_vtx(dsti).w = z_near        
         ot_uv(dsti).u = in_uv(src1).u + (in_uv(src2).u-in_uv(src1).u)*scl
         ot_uv(dsti).v = in_uv(src1).v + (in_uv(src2).v-in_uv(src1).v)*scl
     
@@ -133,7 +135,7 @@ continuenfa:
         src1 = n
         src2 = (n + 1) mod ot_cnt
         
-        if ( ot_vtx(src1).w <= env.z_far ) then
+        if ( ot_vtx(src1).w <= z_far ) then
             in_vtx(dsti).x = ot_vtx(src1).x
             in_vtx(dsti).y = ot_vtx(src1).y
             in_vtx(dsti).z = ot_vtx(src1).z
@@ -143,21 +145,21 @@ continuenfa:
             
             dsti = dsti + 1 
             
-            if ( ot_vtx(src2).w <= env.z_far ) then
+            if ( ot_vtx(src2).w <= z_far ) then
                 goto continuenfb
             end if
         else
-            if ( ot_vtx(src2).w > env.z_far ) then
+            if ( ot_vtx(src2).w > z_far ) then
                 goto continuenfb
             end if
         end if
 
-        scl = ((env.z_far - ot_vtx(src1).w) / (ot_vtx(src2).w - ot_vtx(src1).w))
+        scl = ((z_far - ot_vtx(src1).w) / (ot_vtx(src2).w - ot_vtx(src1).w))
      
         in_vtx(dsti).x = ot_vtx(src1).x + (ot_vtx(src2).x-ot_vtx(src1).x)*scl
         in_vtx(dsti).y = ot_vtx(src1).y + (ot_vtx(src2).y-ot_vtx(src1).y)*scl
         in_vtx(dsti).z = ot_vtx(src1).z
-        in_vtx(dsti).w = env.z_far        
+        in_vtx(dsti).w = z_far        
         in_uv(dsti).u = ot_uv(src1).u + (ot_uv(src2).u-ot_uv(src1).u)*scl
         in_uv(dsti).v = ot_uv(src1).v + (ot_uv(src2).v-ot_uv(src1).v)*scl
     
@@ -187,7 +189,24 @@ sub d_draw_faces ( _
     h_dst_dc as long, _
     mtx_fin as u3dMtrx, _
     xresh as single, _
-    yresh as single _
+    yresh as single, _
+    campos as u3dVector3f, _
+    rdr as RenderState, _
+    env as Env, _
+    byval frame_stamp as integer, _
+    byval ord_count as integer, _
+    tri_buffer() as Face, _
+    tex_inf_buff() as TexInfo, _
+    gv_buf() as integer, _
+    face_mdl() as integer, _
+    brush() as BrushModel, _
+    pln_buffer() as Plane, _
+    nds_buffer() as Node, _
+    mip_buff_inf() as MipTex, _
+    h_rawtx_dc() as long, _
+    h_textr_dc() as long, _
+    order_list() as integer, _
+    poly_flag() as integer _
 )
     dim dp as single
     dim polycnt as integer
@@ -251,7 +270,7 @@ sub d_draw_faces ( _
     gv_dst = clng( varseg( gv_buf(0) ) ) * 65536& + _
              (clng( varptr( gv_buf(0) ) ) and 65535&)
 
-    for mi = 0 to vis.ord_count-1
+    for mi = 0 to ord_count-1
         m = order_list(mi)
             
         '' One map per ordered node, then the face loop below maps
@@ -271,7 +290,7 @@ sub d_draw_faces ( _
             '' -- which is precisely what Quake's C writes as `continue` in
             '' this same loop. It takes the face body from column 20 to 12.
             ''
-            if ( poly_flag(i) <> vis.frame_stamp ) then goto next_face
+            if ( poly_flag(i) <> frame_stamp ) then goto next_face
 
                 
             ''
@@ -297,7 +316,7 @@ sub d_draw_faces ( _
             '' one map per face: it covers planeid, side, geom_row,
             '' geom_ofs and texinfoid, and nothing between them remaps this
             '' array (the geometry window is a different store entirely).
-            dp = r_cam_plane_dist( cam.pos, pln_buffer( tri_buffer(i).planeid ) )
+            dp = r_cam_plane_dist( campos, pln_buffer( tri_buffer(i).planeid ) )
                       
             if ( tri_buffer(i).side ) then dp = -dp
                 
@@ -481,7 +500,7 @@ sub d_draw_faces ( _
             ''
             u3dMtrxByVec4 polyb(0), len( polyb(0) ), mtx_fin, _
                           polyb(0), len( polyb(0) ), vcnt
-            d_clip_z poly(), uvbuff(), polycnt, polyb(), uvbuffb(), vcnt
+            d_clip_z poly(), uvbuff(), polycnt, polyb(), uvbuffb(), vcnt, env.z_near, env.z_far
 
 			''
 			'' If more then 2 vertices, rasterize

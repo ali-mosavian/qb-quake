@@ -454,13 +454,6 @@ declare sub in_handle_toggles ( )
 
 declare sub v_open_script ( )
 declare function in_keystroke ( key_down as integer ) as integer
-declare sub d_init_turb ( )
-declare sub d_draw_faces ( _
-    h_dst_dc as long, _
-    mtx_fin as u3dMtrx, _
-    xresh as single, _
-    yresh as single _
-)
 declare sub scr_draw_hud ( h_dst_dc as long )
 declare sub vid_update ( _
     h_dst_dc as long, _
@@ -593,6 +586,7 @@ declare function pl_point_contents ( _
     planes() as Plane _
 ) as integer
 
+declare sub d_init_turb ( )
 declare function r_plane_dist ( _
     p as Vec3, _
     pl as Plane _
@@ -780,12 +774,4 @@ declare sub scr_screenshot ( _
 )
 
                          
-declare sub d_clip_z ( _
-    ot_vtx() as u3dVector4f, _
-    ot_uv() as TexCoord, _
-    ot_cnt as integer, _
-    in_vtx() as u3dVector4f, _
-    in_uv() as TexCoord, _
-    in_cnt as integer _
-)
                                                     
