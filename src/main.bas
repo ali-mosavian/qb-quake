@@ -154,7 +154,8 @@ dim shared z_dc as long
     
     host_init 
     if ( env.dump_set ) then
-        sb_dump env.dump_face, env.dump_mip
+        sb_dump env.dump_face, env.dump_mip, wld.tri_count, _
+                tri_buffer(), tex_inf_buff(), gv_buf(), h_rawtx_dc()
     else
         host_main
     end if
@@ -258,7 +259,7 @@ sub host_init
     mod_close
     sys_mem_mark "mapclose"
 
-    sc_init
+    sc_init wld.tri_count
     sys_mem_mark "surfcache"
 
     t_tex = timer
@@ -805,7 +806,7 @@ sub host_render ( _
     '' is fill, which paging does not affect.
     if ( env.no_draw ) then exit sub
 
-    d_draw_faces h_dst_dc, mtx_fin, xresh, yresh, _
+    d_draw_faces h_dst_dc, mtx_fin, xresh, yresh, wld.tri_count, _
                  cam.pos, rdr, env, vis.frame_stamp, vis.ord_count, _
                  tri_buffer(), tex_inf_buff(), gv_buf(), face_mdl(), brush(), _
                  pln_buffer(), nds_buffer(), mip_buff_inf(), _
@@ -897,7 +898,7 @@ sub host_bench_report ( _
     print #benchf, "sclive " + ltrim$(str$( scs.live ))
     print #benchf, "scevict " + ltrim$(str$( scs.evict ))
     print #benchf, "scflush " + ltrim$(str$( scs.flushes ))
-    print #benchf, "sctest " + ltrim$(str$( sc_selftest ))
+    print #benchf, "sctest " + ltrim$(str$( sc_selftest( wld.tri_count ) ))
     print #benchf, "peakz " + ltrim$(str$( pl.peak_z ))
     print #benchf, "ticks " + ltrim$(str$( host_ticks ))
     ''
