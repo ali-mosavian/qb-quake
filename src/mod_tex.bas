@@ -61,8 +61,7 @@ sub mod_load_texinfo
     bload "texinf.bld", varptr( tex_inf_buff(0) )
     def seg
 
-    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
-    scr_load_tick
+    scr_load_step
     
     seek #wld.file, wld.head.miptex.offs+1
     get #wld.file,, wld.numtex

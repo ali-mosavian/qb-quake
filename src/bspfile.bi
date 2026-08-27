@@ -418,7 +418,7 @@ declare sub draw_bar ( _
     percent as single _
 )
 declare sub scr_load_tick ( )
-declare sub mod_close ( )
+declare sub scr_load_step ( )
 declare sub scr_mip_tick ( percent as single )
 declare sub host_init ( )
 declare sub host_main ( )
@@ -468,40 +468,14 @@ declare sub vid_init_ugl ( )
 declare sub s_init ( )
 declare sub s_start_music ( )
 declare sub draw_init_font ( )
-declare sub mod_open ( )
 declare sub scr_begin_loading ( )
-declare sub mod_find_spawn ( )
-declare sub mod_alloc ( )
 
-declare sub mod_load_faces ( )
-declare sub mod_load_lightmaps ( )
-declare function mod_geom_map ( byval row as integer ) as long
-declare function mod_geom_rows ( ) as integer
-declare function mod_pvs_base ( ) as long
 declare function host_z_on ( ) as integer
-declare function mod_lm_map ( byval row as integer ) as long
-declare function mod_lm_bytes ( ) as long
-declare function mod_lm_got ( ) as long
-declare function mod_cm_map ( ) as long
-declare function mod_cm_ready ( ) as integer
-declare function mod_cm_bytes ( ) as long
-declare sub mod_load_colormap ( )
-declare sub mod_load_facevtx ( )
-declare sub mod_load_leafs ( )
-declare sub mod_load_marksurfaces ( )
-declare sub mod_load_nodes ( )
-declare sub mod_load_planes ( )
-declare sub mod_load_submodels ( )
-declare sub mod_load_visibility ( )
-declare sub mod_load_clipnodes ( )
 
 ''
 '' ent.bas -- entities
 ''
 
-declare sub mod_load_texinfo ( )
-declare sub mod_load_textures ( )
-declare sub mod_link_anims ( )
 declare sub vid_init ( )
 declare sub in_init ( )
 declare sub s_stop_music ( )
@@ -804,3 +778,29 @@ declare sub r_set_frustum ( _
     frustum() as DiskPlane, _
     mtx as u3dMtrx _
 )
+
+''
+'' mod_tex.bas
+''
+declare sub mod_load_texinfo ( )
+declare sub mod_load_textures ( )
+declare sub mod_link_anims ( )
+
+''
+'' model.bas
+''
+declare function mod_cm_bytes ( ) as long
+declare function mod_cm_map ( ) as long
+declare function mod_cm_ready ( ) as integer
+declare function mod_geom_map ( byval row as integer ) as long
+declare function mod_geom_rows ( ) as integer
+declare function mod_lm_bytes ( ) as long
+declare function mod_lm_got ( ) as long
+declare function mod_lm_map ( byval row as integer ) as long
+declare sub mod_load_colormap ( )
+declare sub mod_load_facevtx ( gv_buf() as integer )
+declare sub mod_load_lightmaps ( )
+declare sub mod_load_planes ( planes() as Plane )
+declare sub mod_load_submodels ( models() as Submodel )
+declare sub mod_load_visibility ( )
+declare function mod_pvs_base ( ) as long

@@ -51,9 +51,9 @@ option explicit
 '$include: 'q_vis.bi'
 '$include: 'q_draw.bi'
 '$include: 'q_scr.bi'
+'$include: 'q_map.bi'
 '$include: 'q_cam.bi'
 '$include: 'q_pl.bi'
-'$include: 'q_map.bi'
 '$include: 'q_ent.bi'
 Declare Sub cp_load ( )
 Declare Sub cp_advance ( )
@@ -224,29 +224,30 @@ sub host_init
     '' map file and the loading screen
     t_sub = timer
 
-    mod_open
+    mod_open wld, env, mdl_buffer()
     sys_mem_mark "mapopen"
     scr_begin_loading
-    mod_find_spawn
+    mod_find_spawn wld, cam
     pl_init pl, cam, env
-    mod_alloc
+    mod_alloc wld, tri_buffer(), tex_inf_buff(), pln_buffer(), _
+              nds_buffer(), mdl_buffer(), order_list(), poly_flag()
     sys_mem_mark "bsparrays"
 
     t_map = timer
 
 
     '' level lumps
-    mod_load_faces
+    mod_load_faces wld, tri_buffer()
     mod_load_lightmaps
     sys_mem_mark "lmtable"
-    mod_load_facevtx
-    mod_load_leafs
-    mod_load_marksurfaces
-    mod_load_nodes
-    mod_load_planes
-    mod_load_submodels
+    mod_load_facevtx gv_buf()
+    mod_load_leafs wld
+    mod_load_marksurfaces wld
+    mod_load_nodes wld, nds_buffer()
+    mod_load_planes pln_buffer()
+    mod_load_submodels mdl_buffer()
     mod_load_visibility
-    mod_load_clipnodes
+    mod_load_clipnodes wld
     sys_mem_mark "clipnodes"
     ent_load_teleports wld, mdl_buffer()
 
@@ -256,7 +257,7 @@ sub host_init
     mod_load_texinfo
     mod_load_textures
     sys_mem_mark "textures"
-    mod_close
+    mod_close wld
     sys_mem_mark "mapclose"
 
     sc_init wld.tri_count

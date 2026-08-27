@@ -185,6 +185,13 @@ dim shared fps1 as integer
 ''       Takes no arguments -- loadDC and loading are both /qmapS/ --
 ''       which is why the fourteen callers reduce to a bare call.
 '' :::::::::::::
+'' One loading step done: advance the bar and redraw it. The loaders used
+'' to do this arithmetic themselves, which is how ldr reached all fourteen.
+sub scr_load_step
+    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
+    scr_load_tick
+end sub
+
 sub scr_load_tick
     draw_spinner
     draw_bar ldr.dc, LOADBAR_X, LOADBAR_Y, LOADBAR_W, LOADBAR_H, ldr.pct
