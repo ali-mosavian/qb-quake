@@ -67,15 +67,15 @@ const PL_FEET#       = 24.0
 ''
 type TraceResult
     frac        as single
-    end_pos     as vec3
-    norm        as vec3
+    end_pos     as Vec3
+    norm        as Vec3
     all_solid   as integer      '' the whole sweep was inside solid
     start_solid as integer      '' it began inside solid
 end type
 
 type PlayerState
-    pos         as vec3         '' BSP space, Z up -- NOT the renderer's Y up
-    vel         as vec3
+    pos         as Vec3         '' BSP space, Z up -- NOT the renderer's Y up
+    vel         as Vec3
     on_ground   as integer
     noclip      as integer      '' true = the old free-fly camera, no physics
     peak_z      as single      '' highest z reached, so -jump is checkable

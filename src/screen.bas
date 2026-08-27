@@ -1088,7 +1088,7 @@ end sub
 ''       "press f1 to disable" on every row cost more space than the rows.
 ''::::::::::
 sub scr_draw_hud ( h_dst_dc as long )
-    dim scs as scstat
+    dim scs as CacheStats
     dim l as integer, r as integer
     dim lx as integer, rx as integer, cw as integer
     dim yy as integer, ftr as string

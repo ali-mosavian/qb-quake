@@ -40,7 +40,7 @@ option explicit
 '' create from its bind removes that: pl_load_hulls makes the store and
 '' binds this stub, and nothing outside needs to see either.
 ''
-dim shared clp_buffer() as clipnode
+dim shared clp_buffer() as ClipNode
 dim shared h_clp as long
 
 
@@ -64,7 +64,7 @@ dim shared tr as TraceResult
 ''::::::::::
 function pl_hull_contents ( _
     byval node as integer, _
-    p as vec3 _
+    p as Vec3 _
 ) as integer
     dim mc as long
     dim d as single
@@ -104,7 +104,7 @@ end function
 ''       turns it into the leaf index -- the same convention
 ''       r_recursive_world_node walks.
 ''::::::::::
-function pl_point_contents ( p as vec3 ) as integer
+function pl_point_contents ( p as Vec3 ) as integer
     dim mp as long
     dim nodenr as integer
     dim pid as integer
@@ -140,7 +140,7 @@ end function
 ''       wading feel different from swimming.
 ''::::::::::
 sub pl_water_level
-    dim p as vec3
+    dim p as Vec3
     dim c as integer
 
     pl.water_level = 0
@@ -181,13 +181,13 @@ function pl_hull_check ( _
     byval node as integer, _
     byval p1f as single, _
     byval p2f as single, _
-    p1 as vec3, _
-    p2 as vec3 _
+    p1 as Vec3, _
+    p2 as Vec3 _
 ) as integer
     dim pid as integer
     dim t1 as single, t2 as single
     dim frac as single, midf as single
-    dim midp as vec3
+    dim midp as Vec3
     dim side as integer, other as integer
     dim mc as long
 
@@ -306,13 +306,13 @@ end function
 ''       is the exception: each walk sets it, so it is gathered by hand.
 ''::::::::::
 sub pl_trace ( _
-    start as vec3, _
-    fin as vec3 _
+    start as Vec3, _
+    fin as Vec3 _
 )
     dim dummy as integer
     dim i as integer
     dim any_solid as integer
-    dim s2 as vec3, f2 as vec3
+    dim s2 as Vec3, f2 as Vec3
 
     tr.frac        = 1.0
     tr.end_pos     = fin
@@ -357,8 +357,8 @@ end sub
 ''       turns a head-on stop into a slide along the wall.
 ''::::::::::
 sub pl_clip_velocity ( _
-    v as vec3, _
-    norm as vec3 _
+    v as Vec3, _
+    norm as Vec3 _
 )
     dim backoff as single
 
@@ -384,13 +384,13 @@ end sub
 ''       and a dead end stops.
 ''::::::::::
 sub pl_slide_move ( _
-    org as vec3, _
-    vel as vec3, _
+    org as Vec3, _
+    vel as Vec3, _
     byval dt as single _
 )
     dim bump as integer
     dim time_left as single
-    dim fin as vec3
+    dim fin as Vec3
 
     time_left = dt
 
@@ -437,12 +437,12 @@ end sub
 ''       lip, because a 16 unit stair and a wall are the same thing to a trace.
 ''::::::::::
 sub pl_step_move ( _
-    org as vec3, _
-    vel as vec3, _
+    org as Vec3, _
+    vel as Vec3, _
     byval dt as single _
 )
-    dim flat_pos as vec3, flat_vel as vec3
-    dim up_pos as vec3, down_pos as vec3
+    dim flat_pos as Vec3, flat_vel as Vec3
+    dim up_pos as Vec3, down_pos as Vec3
     dim climbed as single
 
     '' the ordinary slide, kept in case the step attempt is worse
@@ -508,7 +508,7 @@ end sub
 ''       player would stand on vertical surfaces.
 ''::::::::::
 sub pl_gravity ( byval dt as single )
-    dim below as vec3
+    dim below as Vec3
     dim speed as single
 
     below   = pl.pos
@@ -699,7 +699,7 @@ sub pl_load_hulls ( byval cnt as long )
     dim f as FILE
     dim mapped as long
 
-    redim clp_buffer(0) as clipnode
+    redim clp_buffer(0) as ClipNode
 
     ''
     '' MEM, not EMS. These hulls are walked several times a frame, and EMS

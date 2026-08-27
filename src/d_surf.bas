@@ -149,7 +149,7 @@ dim shared lm_flat(0) as integer
 '' are the only writers, and the two readers want a picture of the cache,
 '' not nine separate variables. sc_stats gives them one.
 ''
-dim shared sc_slot() as scslot
+dim shared sc_slot() as CacheSlot
 dim shared sc_gen as integer
 dim shared sc_ok as integer
 
@@ -466,7 +466,7 @@ sub sc_init
     sc_evict = 0
     sc_tbuilds = 0
 
-    redim sc_slot(wld.tri_count-1) as scslot
+    redim sc_slot(wld.tri_count-1) as CacheSlot
     redim sc_desc(SC_NCLS-1) as long
 
     redim sc_lhead(SC_NORD-1) as integer
@@ -1198,7 +1198,7 @@ sub sb_build ( _
     dim tms as integer, tmt as integer
     dim o as long
     dim mi as integer, recip as single
-    dim sbp as SBPARM
+    dim sbp as SurfBuild
     dim lseg as long, lofs16 as long
 
     aw = 64 \ (2 ^ mip)
@@ -1307,7 +1307,7 @@ end sub
 '' desc: Fills a scstat with the current counters. One crossing instead of
 ''       nine, and the counters stay this module's.
 ''::::::::::
-sub sc_stats ( s as scstat )
+sub sc_stats ( s as CacheStats )
     s.hits    = sc_hits
     s.builds  = sc_builds
     s.bpeak   = sc_bpeak

@@ -21,7 +21,7 @@
 const LOAD_STEPS = 14
 
 type MapState
-    head        as header       '' the on-disk lump directory
+    head        as BspHeader       '' the on-disk lump directory
     file        as integer      '' open handle, owned by model.bas
     numtex      as long         '' counts, all derived from the header
     tri_count   as long
@@ -64,7 +64,7 @@ common shared /map_s/ ldr as LoadState
 '' d_poly fills and d_surf reads. That is a handoff, not shared state.
 '' ===================================================================
 ''
-common shared /surf/ tri_buffer() as face2
+common shared /surf/ tri_buffer() as Face
 '' The leaves are NOT here any more -- r_bsp.bas owns them and loads
 '' them; pl_move asks rb_leaf_contents for the one field it wants.
 
@@ -164,7 +164,7 @@ common shared /surf/ gv_buf() as integer
 '' ===================================================================
 ''
 common shared /world/ h_nds as long
-common shared /world/ mdl_buffer() as model, pln_buffer() as plane2, nds_buffer() as nodeb
+common shared /world/ mdl_buffer() as Submodel, pln_buffer() as Plane, nds_buffer() as Node
 ''
 '' lfc_buffer and pvs_buffer_b are NOT here any more. r_bsp.bas is their
 '' only run-time reader; they looked shared only because model.bas loaded
@@ -181,7 +181,7 @@ common shared /surf/ order_list() as integer
 '' The visibility lump is NOT here any more. model.bas allocates it and
 '' hands out its base through pvs_base; pvs_size never left that module
 '' at all, so it needs no accessor.
-common shared /surf/ tex_inf_buff() as texinfo2, poly_flag() as integer
+common shared /surf/ tex_inf_buff() as TexInfo, poly_flag() as integer
 
 ''
 '' The collision hulls. Separate trees from the render nodes: same planes,

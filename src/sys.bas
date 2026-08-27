@@ -174,7 +174,7 @@ sub sys_init_tables
     '' DIM, so they must be sized here or the first write is out of range.
     ''
     redim bitarray( 15 ) as integer
-    redim frustum( 5 ) as plane
+    redim frustum( 5 ) as DiskPlane
 
     dim i as integer
 

@@ -33,6 +33,18 @@ is not a reason; measure it the way that number was measured.
 carrying a `2` or a `b` suffix means the distinction it is drawing was never
 given a word.
 
+**Disk record vs runtime record is `Disk` + the name.** The BSP file's
+layout and the narrowed thing kept in memory are two types, and the suffix
+scheme -- `leaf`/`leaf2`, `node`/`nodeb`, `cliptmp`/`clipnode` (reversed
+from the others, which nobody could have guessed) -- never said which was
+which. `DiskLeaf` loads, `Leaf` is what the renderer walks. This is Quake's
+own `dleaf_t`/`mleaf_t` split with words instead of letters.
+
+**Renaming a type is not renaming an identifier.** A type appears only as
+`type X` or `as X`, and `tools/qbtype.py` rewrites exactly those.
+`model` was simultaneously a type, a parameter of `r_draw_world` and a
+field of `PlatEnt`; a general identifier rename corrupts the last two.
+
 **Quake-style subsystem prefix on every procedure.** `pl_move.bas` is the
 model: `pl_trace`, `pl_gravity`, `pl_hull_check`. The prefix names the
 subsystem, not the file -- `d_surf.bas` carries both `sc_` (the cache) and

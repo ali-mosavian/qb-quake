@@ -25,4 +25,4 @@ type VisState
 end type
 
 common shared /vis_s/ vis as VisState
-common shared /vis_a/ bitarray() as integer, frustum() as plane
+common shared /vis_a/ bitarray() as integer, frustum() as DiskPlane
