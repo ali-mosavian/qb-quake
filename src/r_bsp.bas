@@ -32,6 +32,15 @@ option explicit
 '' camera can see from, and a door or a lift is not part of that -- so
 '' the test is skipped and the frustum decides alone.
 ''
+''
+'' THE MARKSURFACE LIST AND THE PVS BITS. Owned here: this module is the
+'' only code that reads either at run time. They sat in COMMON because
+'' model.bas allocated and BLOADed them, which is a load-time write, not
+'' a share -- so the loader hands over the sizes and r_bsp does the rest.
+''
+dim shared lfc_buffer() as integer
+dim shared pvs_buffer_b() as integer
+
 dim shared r_ignore_pvs as integer
 '$dynamic
 dim shared pvs_leaf as integer
@@ -522,4 +531,33 @@ sub r_draw_brush_model ( byval m as integer )
     r_recursive_world_node int( mdl_buffer(m).headnode0 )
     r_ignore_pvs = false
 
+end sub
+
+''::::::::::
+'' name: rb_load_lfaces
+'' desc: Sizes and loads the marksurface list from its lump byte count.
+''       The elements are plain integers, so the count is the lump over
+''       len() of one -- taken here, where the array actually lives.
+''::::::::::
+sub rb_load_lfaces ( byval lumpbytes as long )
+    dim n as long
+
+    n = lumpbytes \ len( lfc_buffer(0) )
+    redim lfc_buffer( n-1 ) as integer
+
+    def seg = varseg( lfc_buffer(0) )
+    bload "lface.bld", varptr( lfc_buffer(0) )
+    def seg
+end sub
+
+''::::::::::
+'' name: rb_alloc_pvs
+'' desc: One visibility bit per leaf.
+''
+''       Sized to the map, not a fixed 4096: r_mark_leaves indexes this
+''       0..lef_count-1, and a run can carry past the last leaf -- in real
+''       mode that writes over whatever follows the array.
+''::::::::::
+sub rb_alloc_pvs ( byval nleafs as long )
+    redim pvs_buffer_b( nleafs-1 ) as integer
 end sub

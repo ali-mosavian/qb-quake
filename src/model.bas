@@ -68,7 +68,6 @@ dim shared lm_size as long
 dim shared lm_read as long
 
 dim shared ledg_count as long
-dim shared lfc_count as long
 dim shared pln_count as long
 
 
@@ -89,7 +88,6 @@ sub mod_open
     wld.edg_count = wld.head.edges.size \ 4
     ledg_count = wld.head.ledges.size \ 4
     wld.lef_count = wld.head.leaves.size \ len( leaftmp )
-    lfc_count = wld.head.lface.size \ len( lfc_buffer(0) )
     pln_count = wld.head.planes.size \ len( planetmp )
     wld.nds_count = wld.head.nodes.size \ len( nodetmp )
     wld.mdl_count = wld.head.models.size \ len( mdl_buffer(0) )
@@ -169,21 +167,19 @@ sub mod_alloc
 
     '' ONE element; uglArrNew1D takes it over in mod_load_leafs
     redim lef_buffer(0) as leaf2
-    redim lfc_buffer(lfc_count-1) as integer
     redim pln_buffer(pln_count-1) as plane2
     '' ONE element. uglArrNew1D takes the descriptor over in
     '' mod_load_nodes and the tree lives in EMS -- see q_map.bi.
     redim nds_buffer(0) as nodeb
     redim mdl_buffer(wld.mdl_count-1) as model
     redim order_list(wld.nds_count-1) as integer
-    '' Sized to the map like every buffer above it, not a fixed 4096: r_bsp.bas
-    '' indexes pvs_buffer_b 0..wld.lef_count-1 and poly_flag by face index
-    '' 0..wld.tri_count-1 (see its own comment: "a run can carry past the last
-    '' leaf; in real mode that writes over whatever follows the array"). e3m6
-    '' has 6,985 faces -- a fixed 4096 was too SMALL for poly_flag there, an
-    '' out-of-bounds write waiting to happen, not just wasted space on the
-    '' smaller maps.
-    redim pvs_buffer_b( wld.lef_count-1 ) as integer
+    '' r_bsp sizes its own PVS bits; it states why over there.
+    rb_alloc_pvs wld.lef_count
+
+    '' Sized to the map, not a fixed 4096: poly_flag is indexed by face
+    '' 0..wld.tri_count-1, and e3m6 has 6,985 faces -- a fixed 4096 was too
+    '' SMALL there, an out-of-bounds write waiting to happen, not just
+    '' wasted space on the smaller maps.
     redim poly_flag( wld.tri_count-1 ) as integer
     redim tex_inf_buff(wld.texi_count-1) as texinfo2
 
@@ -441,9 +437,9 @@ end sub
 '' name: mod_load_marksurfaces
 ''::::::::::
 sub mod_load_marksurfaces
-    def seg = varseg( lfc_buffer(0) )
-    bload "lface.bld", varptr( lfc_buffer(0) )
-    def seg
+    '' r_bsp owns the list -- it is the only reader. All it needs is how
+    '' many bytes the lump holds.
+    rb_load_lfaces wld.head.lface.size
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     scr_load_tick

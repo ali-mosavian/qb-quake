@@ -52,7 +52,7 @@ common shared /map_s/ ldr as LoadState
 '' array, so these stay loose.
 ''
 common shared /map_a/ tri_buffer() as face2
-common shared /map_a/ lef_buffer() as leaf2, lfc_buffer() as integer
+common shared /map_a/ lef_buffer() as leaf2
 
 ''
 '' The geometry store. Every face's corner positions written out flat, in
@@ -119,7 +119,12 @@ common shared /map_a/ gv_buf() as integer
 ''
 common shared /map_a/ h_nds as long
 common shared /map_a/ mdl_buffer() as model, pln_buffer() as plane2, nds_buffer() as nodeb
-common shared /map_a/ order_list() as integer, pvs_buffer_b() as integer
+''
+'' lfc_buffer and pvs_buffer_b are NOT here any more. r_bsp.bas is their
+'' only run-time reader; they looked shared only because model.bas loaded
+'' them, so r_bsp loads them itself now.
+''
+common shared /map_a/ order_list() as integer
 ''
 '' The compressed visibility lump, in a memAlloc'd block rather than an
 '' array. It is walked once per frame -- and only when the camera changes
