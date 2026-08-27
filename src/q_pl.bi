@@ -77,7 +77,7 @@ type PlayerState
     pos         as Vec3         '' BSP space, Z up -- NOT the renderer's Y up
     vel         as Vec3
     on_ground   as integer
-    noclip      as integer      '' true = the old free-fly camera, no physics
+    no_clip      as integer      '' true = the old free-fly camera, no physics
     peak_z      as single      '' highest z reached, so -jump is checkable
     water_level as integer      '' 0 dry, 1 feet, 2 waist, 3 eyes under
     water_type  as integer      '' CONTENTS_WATER, _SLIME or _LAVA
@@ -92,7 +92,7 @@ declare sub pl_gravity ( _
     byval dt as single, _
     pl as PlayerState, _
     tr as TraceResult, _
-    byval nmodels as integer, _
+    byval model_count as integer, _
     models() as Submodel, _
     brush() as BrushModel, _
     clip() as ClipNode, _
@@ -122,7 +122,7 @@ declare sub pl_move ( _
     byval dt as single, _
     pl as PlayerState, _
     cam as CamState, _
-    byval nmodels as integer, _
+    byval model_count as integer, _
     models() as Submodel, _
     brush() as BrushModel, _
     nodes() as Node, _
@@ -133,7 +133,7 @@ declare sub pl_slide_move ( _
     vel as Vec3, _
     byval dt as single, _
     tr as TraceResult, _
-    byval nmodels as integer, _
+    byval model_count as integer, _
     models() as Submodel, _
     brush() as BrushModel, _
     clip() as ClipNode, _
@@ -145,7 +145,7 @@ declare sub pl_step_move ( _
     byval dt as single, _
     pl as PlayerState, _
     tr as TraceResult, _
-    byval nmodels as integer, _
+    byval model_count as integer, _
     models() as Submodel, _
     brush() as BrushModel, _
     clip() as ClipNode, _
@@ -155,7 +155,7 @@ declare sub pl_trace ( _
     start as Vec3, _
     fin as Vec3, _
     tr as TraceResult, _
-    byval nmodels as integer, _
+    byval model_count as integer, _
     models() as Submodel, _
     brush() as BrushModel, _
     clip() as ClipNode, _

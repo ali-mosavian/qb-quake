@@ -317,7 +317,7 @@ sub host_main
     '' min/max/bmin/bmax/extn went with the lightmap extent computation in
     '' the draw loop, which produced values nothing read.
     ''
-    dim polyvert as integer
+    dim poly_vert as integer
     ''
     '' Per-face texture axes with the texture size folded in, and the
     '' per-vertex projection the triangle fan shares. See the draw loop.
@@ -350,13 +350,13 @@ sub host_main
     hz = tmrMs2Freq&( 1000 )
     tmrNew env.sec_timer, TMR.AUTOINIT, hz    
     
-    if ( env.usepag = false ) then
+    if ( env.use_paging = false ) then
         h_dst_dc = env.h_back_bdc
     else        
         h_dst_dc = env.h_video_dc
     end if        
     
-    u3dMtrxPersp mtx_prj, env.camfov, 320.0/240.0, env.z_near, env.z_far
+    u3dMtrxPersp mtx_prj, env.cam_fov, 320.0/240.0, env.z_near, env.z_far
 
     ''
     '' Depth buffer, matching the destination. EMS: 320x200 of depth is
@@ -374,11 +374,11 @@ sub host_main
         zz = uglZScale&( 65535.0 * env.z_near )
     end if
     
-    rdr.usemips = -1
+    rdr.use_mips = -1
     '' follows -lm: with no lightmap data loaded there is nothing to toggle
     rdr.lightmap = env.use_lm
-    rdr.rendmode = 0
-    cam.fpsview = -1
+    rdr.rend_mode = 0
+    cam.fps_view = -1
     ''
     '' On by default. The cull is a single sign test against the face's own
     '' plane, and a sealed level cannot show a back face, so enabling it must
@@ -391,7 +391,7 @@ sub host_main
     redim cp_x(CP_MAX) as integer
     redim cp_y(CP_MAX) as integer
     redim cp_z(CP_MAX) as integer
-    if ( env.campath ) then cp_load
+    if ( env.cam_path ) then cp_load
     vis.bad_order = env.bad_order
     vis.no_ents   = env.no_ents
     
@@ -409,7 +409,7 @@ sub host_main
     	''
     	'' Clear DC
     	''
-        if ( env.disclear = true ) then
+        if ( env.clear_screen = true ) then
             uglClear h_dst_dc, 0
         end if
 
@@ -455,7 +455,7 @@ sub host_main
         ''
         frame_no = frame_no + 1
         '' -campath ends when the route does, whatever -bench says
-        if ( env.campath and cp_done ) then
+        if ( env.cam_path and cp_done ) then
             host_bench_report frame_no, h_dst_dc
             exit do
         end if
@@ -769,7 +769,7 @@ sub host_render ( _
     '' watch what the PVS and the frustum actually throw away. Do not
     '' "fix" it by moving ExtractFrustum below this block.
     ''
-    if ( cam.fpsview = false ) then 
+    if ( cam.fps_view = false ) then 
         cam_pos_b.x = 351.0
         cam_pos_b.y = 2119.0
         cam_pos_b.z = -552.0            
@@ -793,7 +793,7 @@ sub host_render ( _
     ''
     r_draw_world 0, wld.mdl_count, wld.lef_count, wld.tri_count, cam.pos, vis, _
                  mdl_buffer(), brush(), nds_buffer(), pln_buffer(), _
-                 poly_flag(), order_list(), frustum(), bitarray()
+                 poly_flag(), order_list(), frustum(), bit_array()
 
     
     
@@ -854,55 +854,55 @@ sub host_bench_report ( _
     open "bench.txt" for output as #benchf
     print #benchf, "frames " + ltrim$(str$( frame_no ))
     print #benchf, "seconds " + ltrim$(str$( scr.bench_secs ))
-    print #benchf, "lastfps " + ltrim$(str$( scr.fps ))
-    print #benchf, "peakfps " + ltrim$(str$( scr.fps_peak ))
-    print #benchf, "lowfps " + ltrim$(str$( fps_low ))
-    print #benchf, "cppts " + ltrim$(str$( cp_n ))
+    print #benchf, "last_fps " + ltrim$(str$( scr.fps ))
+    print #benchf, "peak_fps " + ltrim$(str$( scr.fps_peak ))
+    print #benchf, "low_fps " + ltrim$(str$( fps_low ))
+    print #benchf, "cp_pts " + ltrim$(str$( cp_n ))
     ''
     '' Frame times in milliseconds, and the rates they imply. These are the
     '' numbers to compare: fastest frame, slowest frame, mean over the run.
     ''
     if ( ft_n > 0 ) then
-        print #benchf, "ftmin " + ltrim$(str$( ft_min * 1000.0 ))
-        print #benchf, "ftmax " + ltrim$(str$( ft_max * 1000.0 ))
-        print #benchf, "ftmean " + ltrim$(str$( (ft_sum / ft_n) * 1000.0 ))
-        print #benchf, "ftn " + ltrim$(str$( ft_n ))
+        print #benchf, "ft_min " + ltrim$(str$( ft_min * 1000.0 ))
+        print #benchf, "ft_max " + ltrim$(str$( ft_max * 1000.0 ))
+        print #benchf, "ft_mean " + ltrim$(str$( (ft_sum / ft_n) * 1000.0 ))
+        print #benchf, "ft_n " + ltrim$(str$( ft_n ))
         if ( ft_min > 0.0 ) then _
-            print #benchf, "fpsbest " + ltrim$(str$( 1.0 / ft_min ))
+            print #benchf, "fps_best " + ltrim$(str$( 1.0 / ft_min ))
         if ( ft_max > 0.0 ) then _
-            print #benchf, "fpsworst " + ltrim$(str$( 1.0 / ft_max ))
+            print #benchf, "fps_worst " + ltrim$(str$( 1.0 / ft_max ))
         if ( ft_sum > 0.0 ) then _
-            print #benchf, "fpsmean " + ltrim$(str$( ft_n / ft_sum ))
+            print #benchf, "fps_mean " + ltrim$(str$( ft_n / ft_sum ))
     end if
     print #benchf, "polys " + ltrim$(str$( rdr.polys ))
     print #benchf, "tris " + ltrim$(str$( rdr.tris ))
     print #benchf, "px " + ltrim$(str$( pl.pos.x ))
     print #benchf, "py " + ltrim$(str$( pl.pos.y ))
     print #benchf, "pz " + ltrim$(str$( pl.pos.z ))
-    print #benchf, "onground " + ltrim$(str$( pl.on_ground ))
+    print #benchf, "on_ground " + ltrim$(str$( pl.on_ground ))
     print #benchf, "vz " + ltrim$(str$( pl.vel.z ))
     print #benchf, "dt " + ltrim$(str$( scr.frame_time ))
-    print #benchf, "tickhz " + ltrim$(str$( sys_tick_hz ))
-    print #benchf, "memavail " + ltrim$(str$( memAvail& ))
-    print #benchf, "lmsize " + ltrim$(str$( mod_lm_bytes ))
-    print #benchf, "lmread " + ltrim$(str$( mod_lm_got ))
-    print #benchf, "geomrows " + ltrim$(str$( mod_geom_rows ))
-    print #benchf, "cmsize " + ltrim$(str$( mod_cm_bytes ))
+    print #benchf, "tick_hz " + ltrim$(str$( sys_tick_hz ))
+    print #benchf, "mem_avail " + ltrim$(str$( memAvail& ))
+    print #benchf, "lm_size " + ltrim$(str$( mod_lm_bytes ))
+    print #benchf, "lm_read " + ltrim$(str$( mod_lm_got ))
+    print #benchf, "geom_rows " + ltrim$(str$( mod_geom_rows ))
+    print #benchf, "cm_size " + ltrim$(str$( mod_cm_bytes ))
         sc_stats scs
-    print #benchf, "scmade " + ltrim$(str$( scs.made ))
-    print #benchf, "scems " + ltrim$(str$( scs.peak ))
+    print #benchf, "sc_made " + ltrim$(str$( scs.made ))
+    print #benchf, "sc_ems " + ltrim$(str$( scs.peak ))
     ''
     '' Cache behaviour. scworst is the most surfaces built in any ONE
     '' frame, which is what a hitch is made of -- a run-wide total says
     '' nothing about whether they arrived together or spread out.
     ''
-    print #benchf, "scbuilt " + ltrim$(str$( scs.tbuilds ))
-    print #benchf, "scworst " + ltrim$(str$( scs.bpeak ))
-    print #benchf, "sclive " + ltrim$(str$( scs.live ))
-    print #benchf, "scevict " + ltrim$(str$( scs.evict ))
-    print #benchf, "scflush " + ltrim$(str$( scs.flushes ))
-    print #benchf, "sctest " + ltrim$(str$( sc_selftest( wld.tri_count ) ))
-    print #benchf, "peakz " + ltrim$(str$( pl.peak_z ))
+    print #benchf, "sc_built " + ltrim$(str$( scs.total_builds ))
+    print #benchf, "sc_worst " + ltrim$(str$( scs.bpeak ))
+    print #benchf, "sc_live " + ltrim$(str$( scs.live ))
+    print #benchf, "sc_evict " + ltrim$(str$( scs.evict ))
+    print #benchf, "sc_flush " + ltrim$(str$( scs.flushes ))
+    print #benchf, "sc_test " + ltrim$(str$( sc_selftest( wld.tri_count ) ))
+    print #benchf, "peak_z " + ltrim$(str$( pl.peak_z ))
     print #benchf, "ticks " + ltrim$(str$( host_ticks ))
     ''
     '' Where conventional memory went. Deltas, not absolutes: what matters
@@ -923,14 +923,14 @@ sub host_bench_report ( _
                        " " + ltrim$(str$( dv )) + " " + ltrim$(str$( ddv )) + _
                        " " + ltrim$(str$( df )) + " " + ltrim$(str$( ddf ))
     next mi
-    print #benchf, "clprec " + ltrim$(str$( pl_hull_rec ))
-    print #benchf, "clpcnt " + ltrim$(str$( wld.clp_count ))
-    print #benchf, "waterlevel " + ltrim$(str$( pl.water_level ))
-    print #benchf, "watertype " + ltrim$(str$( pl.water_type ))
-    print #benchf, "animtime " + ltrim$(str$( rdr.anim_time ))
+    print #benchf, "clp_rec " + ltrim$(str$( pl_hull_rec ))
+    print #benchf, "clp_cnt " + ltrim$(str$( wld.clp_count ))
+    print #benchf, "water_level " + ltrim$(str$( pl.water_level ))
+    print #benchf, "water_type " + ltrim$(str$( pl.water_type ))
+    print #benchf, "anim_time " + ltrim$(str$( rdr.anim_time ))
     if ( plat_count > 0 ) then
-        print #benchf, "platzofs " + ltrim$(str$( brush( plat(0).model ).zofs ))
-        print #benchf, "platstate " + ltrim$(str$( plat(0).state ))
+        print #benchf, "plat_zofs " + ltrim$(str$( brush( plat(0).model ).zofs ))
+        print #benchf, "plat_state " + ltrim$(str$( plat(0).state ))
     end if
     close #benchf
 

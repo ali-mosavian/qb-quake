@@ -30,13 +30,13 @@ const TURB_RATE#     = 40.74
 
 type RenderState
     backface    as integer      '' cull toggle
-    usemips     as integer      '' mip toggle
+    use_mips     as integer      '' mip toggle
     lightmap    as integer      '' lightmap toggle. Only the per-frame gate
                                 '' in d_poly reads it, so switching it off
                                 '' costs nothing and leaves every built
                                 '' surface resident -- switching back on is
                                 '' instant, with no rebuild
-    rendmode    as integer      '' 0 perspective, 1 affine, 2 wireframe
+    rend_mode    as integer      '' 0 perspective, 1 affine, 2 wireframe
     polys       as integer      '' per-frame counters, cleared by scr_count_frame
     tris        as integer
     anim_time   as single       '' seconds since the map started. Simulation
@@ -71,7 +71,7 @@ declare sub d_draw_faces ( _
     mtx_fin as u3dMtrx, _
     xresh as single, _
     yresh as single, _
-    byval nfaces as long, _
+    byval face_count as long, _
     campos as u3dVector3f, _
     rdr as RenderState, _
     env as Env, _

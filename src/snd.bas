@@ -23,7 +23,7 @@ option explicit
 '' The loading screen's MOD, private to this module: s_start_music opens
 '' it and s_stop_music frees it. The one that plays during the walkthrough
 '' is mymod, which main.bas needs, so that one is shared.
-dim shared loadmod as UGMMOD
+dim shared load_mod as UGMMOD
 
 
 
@@ -162,7 +162,7 @@ sub s_start_music
         ''
         '' Load mod
         ''    
-        if ( modNew( loadmod, mod.ems, "base.dat::mods/flim.mod" ) = false ) then
+        if ( modNew( load_mod, mod.ems, "base.dat::mods/flim.mod" ) = false ) then
             sys_error "0x1005, Could not load mod..."
         end if
             
@@ -174,7 +174,7 @@ sub s_start_music
         ''
         '' Loading music
         ''
-        modPlay loadmod
+        modPlay load_mod
     end if
 
 end sub
@@ -190,7 +190,7 @@ end sub
 sub s_stop_music
     if ( env.sound = true ) then
         modStop
-        modDel loadmod
+        modDel load_mod
     end if
 
 end sub

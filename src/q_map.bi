@@ -23,7 +23,7 @@ const LOAD_STEPS = 14
 type MapState
     head        as BspHeader       '' the on-disk lump directory
     file        as integer      '' open handle, owned by model.bas
-    numtex      as long         '' counts, all derived from the header
+    num_tex      as long         '' counts, all derived from the header
     tri_count   as long
     vtx_count   as long
     edg_count   as long

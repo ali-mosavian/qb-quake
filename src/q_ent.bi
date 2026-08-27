@@ -83,7 +83,7 @@ declare sub ent_move_plats ( _
     pl as PlayerState _
 )
 declare sub ent_place_models ( _
-    byval nmodels as integer, _
+    byval model_count as integer, _
     models() as Submodel, _
     nodes() as Node, _
     planes() as Plane _

@@ -25,14 +25,14 @@ option explicit
 
 '$dynamic
 dim shared fce as DiskFace                  '' fields the renderer keeps, discard
-dim shared nodetmp as DiskNode              '' the rest. Also the len() source for
-dim shared leaftmp as DiskLeaf              '' the lump counts in bspOpen.
-dim shared planetmp as DiskPlane
-dim shared clptmp as DiskClipNode           '' clipnode narrowed the live type;
+dim shared node_tmp as DiskNode              '' the rest. Also the len() source for
+dim shared leaf_tmp as DiskLeaf              '' the lump counts in bspOpen.
+dim shared plane_tmp as DiskPlane
+dim shared clip_tmp as DiskClipNode           '' clipnode narrowed the live type;
                                          '' this stays the on-disk 8 bytes
 dim shared vtxtmp as DiskVertex            '' vtx_buffer narrowed to Q13.3; this
                                          '' stays the on-disk 12 float bytes
-dim shared texinfotmp as DiskTexInfo       '' tex_inf_buff dropped flags and
+dim shared tex_info_tmp as DiskTexInfo       '' tex_inf_buff dropped flags and
                                          '' narrowed miptex; this stays the
                                          '' on-disk 40 bytes
 ''
@@ -100,14 +100,14 @@ sub mod_open ( _
     wld.vtx_count = wld.head.vertices.size \ len( vtxtmp )
     wld.edg_count = wld.head.edges.size \ 4
     ledg_count = wld.head.ledges.size \ 4
-    wld.lef_count = wld.head.leaves.size \ len( leaftmp )
-    pln_count = wld.head.planes.size \ len( planetmp )
-    wld.nds_count = wld.head.nodes.size \ len( nodetmp )
+    wld.lef_count = wld.head.leaves.size \ len( leaf_tmp )
+    pln_count = wld.head.planes.size \ len( plane_tmp )
+    wld.nds_count = wld.head.nodes.size \ len( node_tmp )
     wld.mdl_count = wld.head.models.size \ len( models(0) )
-    wld.texi_count = wld.head.texinfo.size \ len( texinfotmp )
-    wld.clp_count = wld.head.clipnode.size \ len( clptmp )
-    seek #wld.file, wld.head.miptex.offs+1
-    get #wld.file,, wld.numtex    
+    wld.texi_count = wld.head.tex_info.size \ len( tex_info_tmp )
+    wld.clp_count = wld.head.clip_node.size \ len( clip_tmp )
+    seek #wld.file, wld.head.mip_tex.offs+1
+    get #wld.file,, wld.num_tex    
 
 end sub
 
@@ -118,53 +118,63 @@ end sub
 '' name: mod_find_spawn
 '' desc: Scans the entity lump for info_player_start.
 ''::::::::::
+sub mod_spawn_from_block ( _
+    block as string, _
+    cam as CamState _
+)
+    dim strm(50) as string
+    dim strm_cnt as integer
+    dim j as integer
+
+    if ( instr( block, "info_player_start" ) = 0 ) then exit sub
+
+    com_tokenize strm(), strm_cnt, " {}" + chr$(34) + chr$(10) + chr$(13), block
+
+    for  j = 0 to strm_cnt-1
+        if ( strm(j) = "origin" ) then
+            '' BSP is Z-up and the camera is Y-up, so y and z swap here
+            cam.pos.x = val( strm(j+1) )
+            cam.pos.z = val( strm(j+2) )
+            cam.pos.y = val( strm(j+3) )
+        end if
+
+        if ( strm(j) = "angle" ) then cam.start_angle = val( strm(j+1) )
+    next j
+
+end sub
+
+
+
+
+''::::::::::
+'' name: mod_find_spawn
+'' desc: Scans the entity lump for the spawn point. Braces delimit the
+''       blocks; each complete one goes to mod_spawn_from_block, which
+''       decides whether it is the one we want.
+''::::::::::
 sub mod_find_spawn ( _
     wld as MapState, _
     cam as CamState _
 )
-    dim i as integer
     dim entity as string
+    dim ch as string
+    dim i as integer, open_at as integer
 
     entity$ = space$( wld.head.entities.size )
     seek #wld.file, wld.head.entities.offs+1
     get #wld.file,, entity$
-    
-    dim strm(50) as string
-    dim strm_cnt as integer
-    dim char as string, class as string
-    dim new as integer, fchar as integer, j as integer
 
-    for  i = 1 to len( entity$ )    
-        char$ = mid$( entity$, i, 1 )
+    for  i = 1 to len( entity$ )
+        ch$ = mid$( entity$, i, 1 )
 
-        if char$ = "{" then 
-            new = 1
-            fchar = i
+        if ( ch$ = "{" ) then open_at = i
+
+        if ( ch$ = "}" and open_at > 0 ) then
+            mod_spawn_from_block mid$( entity$, open_at, i-open_at+1 ), cam
+            open_at = 0
         end if
-            
-        if char$ = "}" then 
-            if new = 1 then
-                class$ = mid$( entity$, fchar, i-fchar+1 )
-                
-                if instr( class$, "info_player_start" ) then
-                    com_tokenize strm(), strm_cnt, " {}"+chr$(34)+chr$(10)+chr$(13), class$
-                    
-                    for j = 0 to strm_cnt-1
-                        if strm(j) = "origin" then
-                            cam.pos.x = val(strm(j+1))
-                            cam.pos.z = val(strm(j+2))
-                            cam.pos.y = val(strm(j+3))
-                        end if
-                        
-                        if strm(j) = "angle" then
-                            cam.start_angle = val(strm(j+1))                            
-                        end if                        
-                    next j
-                end if
-            end if
-        end if    
     next i
-    
+
     scr_load_step
 
 end sub

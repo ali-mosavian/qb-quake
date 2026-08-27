@@ -778,7 +778,7 @@ function draw_load_font ( _
         
         for y = 0 to 7
             for  x = 0 to 7
-                if ( char(bit\16) and bitarray(15-bit and 15) ) then
+                if ( char(bit\16) and bit_array(15-bit and 15) ) then
                     col = colb
                 else
                     col = trn                         
@@ -1192,10 +1192,10 @@ sub scr_draw_hud ( h_dst_dc as long )
         '' one footer line for every toggle, in the order of the keys
         ''
         ftr = "F1 mip "
-        if ( rdr.usemips ) then ftr = ftr + "ON " else ftr = ftr + "off"
-        if ( rdr.rendmode = 0 ) then
+        if ( rdr.use_mips ) then ftr = ftr + "ON " else ftr = ftr + "off"
+        if ( rdr.rend_mode = 0 ) then
             ftr = ftr + "   F2 perspective"
-        elseif ( rdr.rendmode = 1 ) then
+        elseif ( rdr.rend_mode = 1 ) then
             ftr = ftr + "   F2 affine     "
         else
             ftr = ftr + "   F2 wireframe  "
@@ -1239,7 +1239,7 @@ sub scr_screenshot ( _
     dim pad as integer
     dim rowlen as integer
     dim imgsz as long
-    dim offbits as long
+    dim off_bits as long
     dim palbuf(255) as tRGB
     dim row as string
     dim buf as string
@@ -1250,7 +1250,7 @@ sub scr_screenshot ( _
 
     rowlen  = w + pad
     imgsz   = clng(rowlen) * clng(h)
-    offbits = 14 + 40 + 1024
+    off_bits = 14 + 40 + 1024
 
     uglPalGetBuff 0, 256, palbuf(0)
 
@@ -1260,7 +1260,7 @@ sub scr_screenshot ( _
     ''
     '' BITMAPFILEHEADER
     ''
-    buf = "BM" + mkl$( offbits + imgsz ) + mki$(0) + mki$(0) + mkl$( offbits )
+    buf = "BM" + mkl$( off_bits + imgsz ) + mki$(0) + mki$(0) + mkl$( off_bits )
     put #f, , buf
 
     ''

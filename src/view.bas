@@ -74,14 +74,14 @@ sub v_update_camera ( byval dt as single )
 	''
 	'' mode script_play run through the bezier curves
 	''                
-    if ( env.cammode = 1 ) then
+    if ( env.cam_mode = 1 ) then
         pa = pa + 1
         if ( crr_pnt+3 <= cnt_pnts and last_point=false ) then
-            if ( pa > env.caminterp ) then
+            if ( pa > env.cam_interp ) then
                 
                         
-                ugluCubicBez3D ppos(0), cbzp(crr_pnt), env.caminterp
-                ugluCubicBez3D plok(0), cbzl(crr_pnt), env.caminterp
+                ugluCubicBez3D ppos(0), cbzp(crr_pnt), env.cam_interp
+                ugluCubicBez3D plok(0), cbzl(crr_pnt), env.cam_interp
                 
                 pa = 0
                 crr_pnt = crr_pnt+3
@@ -90,10 +90,10 @@ sub v_update_camera ( byval dt as single )
             if ( crr_pnt <> cnt_pnts and (not last_point) ) then
                 pa = 0
                 last_point = true
-                ugluCubicBez3D ppos(0), cbzp(cnt_pnts-4), env.caminterp
-                ugluCubicBez3D plok(0), cbzl(cnt_pnts-4), env.caminterp
+                ugluCubicBez3D ppos(0), cbzp(cnt_pnts-4), env.cam_interp
+                ugluCubicBez3D plok(0), cbzl(cnt_pnts-4), env.cam_interp
                 
-            elseif ( pa > env.caminterp ) then
+            elseif ( pa > env.cam_interp ) then
                 crr_pnt = 0
                 last_point = false
                 env.keyboard.esc = true
@@ -112,7 +112,7 @@ sub v_update_camera ( byval dt as single )
     ''
     '' Mode: freelook or script_edit
     ''
-    if ( env.cammode = 0 or env.cammode = 2 ) then            
+    if ( env.cam_mode = 0 or env.cam_mode = 2 ) then            
         if env.mouse.x < 1 then  mousepos env.x_res-4, env.mouse.y
         if env.mouse.x > env.x_res-3 then  mousepos 1, env.mouse.y
         
@@ -160,7 +160,7 @@ sub v_update_camera ( byval dt as single )
         '' speed because pl_move clamps to PL_MAXSPEED.
         ''
 
-        if ( pl.noclip ) then
+        if ( pl.no_clip ) then
             ''
             '' Also per second, not per frame. This used to advance a flat 3
             '' units every frame, so the camera flew at whatever speed the
@@ -209,7 +209,7 @@ sub v_update_camera ( byval dt as single )
             '' and step-up are then the game's, not an approximation, and a
             '' wall stops the walk exactly as it stops a player.
             ''
-            if ( env.campath ) then
+            if ( env.cam_path ) then
                 cp_advance
                 if ( cp_dirx <> 0.0 or cp_diry <> 0.0 ) then
                     ''
@@ -256,7 +256,7 @@ sub v_update_camera ( byval dt as single )
                     nds_buffer(), pln_buffer()
         end if
         
-        if ( env.keyboard.n and env.cammode = 2 ) then
+        if ( env.keyboard.n and env.cam_mode = 2 ) then
             print #cam.script_file, cam.pos.x, cam.pos.y, cam.pos.z
             print #cam.script_file, cam.look_at.x, cam.look_at.y, cam.look_at.z
             
@@ -287,14 +287,14 @@ end sub
 sub v_open_script ( )
     dim i as integer
 
-    redim ppos( env.caminterp ) as PNT3D
-    redim plok( env.caminterp ) as PNT3D
+    redim ppos( env.cam_interp ) as PNT3D
+    redim plok( env.cam_interp ) as PNT3D
     redim cbzp( 10 ) as PNT3D
     redim cbzl( 10 ) as PNT3D
 
-    if ( env.cammode = 1 ) then
+    if ( env.cam_mode = 1 ) then
         cam.script_file = freefile
-        open env.camscrpt for input as #cam.script_file
+        open env.cam_script for input as #cam.script_file
         do
             input #cam.script_file, cbzp(i).x, cbzp(i).y, cbzp(i).z
             input #cam.script_file, cbzl(i).x, cbzl(i).y, cbzl(i).z
@@ -304,13 +304,13 @@ sub v_open_script ( )
         cam.script_file = 0
         cnt_pnts = i-1
 
-        ugluCubicBez3D ppos(0), cbzp(crr_pnt), env.caminterp
-        ugluCubicBez3D plok(0), cbzl(crr_pnt), env.caminterp
+        ugluCubicBez3D ppos(0), cbzp(crr_pnt), env.cam_interp
+        ugluCubicBez3D plok(0), cbzl(crr_pnt), env.cam_interp
         crr_pnt = crr_pnt + 3
 
-    elseif ( env.cammode = 2 ) then
+    elseif ( env.cam_mode = 2 ) then
         cam.script_file = freefile
-        open env.camscrpt for output as #cam.script_file
+        open env.cam_script for output as #cam.script_file
     end if
 
 end sub
