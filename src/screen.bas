@@ -152,6 +152,7 @@ dim shared h_font_char(255) as long
 
 '' The loading stage line, redrawn in place rather than appended down the
 '' screen the way the old bare draw_string did it.
+dim shared ldr as LoadState
 dim shared ldr_stage as string * 28
 '$dynamic
 '' 768 bytes, and DGROUP has nowhere near that spare -- see the note on
@@ -187,6 +188,15 @@ dim shared fps1 as integer
 '' :::::::::::::
 '' One loading step done: advance the bar and redraw it. The loaders used
 '' to do this arithmetic themselves, which is how ldr reached all fourteen.
+'' Part of one step, for a loader that reports progress within it.
+sub scr_load_part ( _
+    byval frac as single, _
+    byval redraw as integer _
+)
+    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)*frac
+    if ( redraw ) then scr_load_tick
+end sub
+
 sub scr_load_step
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     scr_load_tick
@@ -665,7 +675,7 @@ end sub
 ''       scr_load_tick repaints only the bars and the percentage, which is
 ''       what keeps ~200 ticks cheap.
 ''::::::::::
-sub scr_load_chrome
+sub scr_load_chrome ( env as Env )
     dim ttl as string, sub1 as string, ftr as string
     dim plate_x as integer, plate_w as integer
 
@@ -727,7 +737,9 @@ end sub
 '':::::::::
 function draw_load_font ( _
     flname as string, _
-    colb as long _
+    colb as long, _
+    env as Env, _
+    bit_array() as integer _
 ) as integer
     dim col as long
     dim trn as long
@@ -1094,7 +1106,14 @@ end sub
 ''       behaving. The key hints moved to one footer line -- repeating
 ''       "press f1 to disable" on every row cost more space than the rows.
 ''::::::::::
-sub scr_draw_hud ( h_dst_dc as long )
+sub scr_draw_hud ( _
+    h_dst_dc as long, _
+    env as Env, _
+    scr as ScreenState, _
+    rdr as RenderState, _
+    vis as VisState, _
+    wld as MapState _
+)
     dim scs as CacheStats
     dim l as integer, r as integer
     dim lx as integer, rx as integer, cw as integer
@@ -1229,7 +1248,8 @@ end sub
 ''::::::::::
 sub scr_screenshot ( _
     flname as string, _
-    byval dc as long _
+    byval dc as long, _
+    env as Env _
 )
     dim f as integer
     dim x as integer
@@ -1296,8 +1316,11 @@ sub scr_screenshot ( _
 end sub
 
 ''::::::::::
-sub draw_init_font
-    if ( not draw_load_font( "base.dat::font/4x6.fnt", 254 ) ) then
+sub draw_init_font ( _
+    env as Env, _
+    bit_array() as integer _
+)
+    if ( not draw_load_font( "base.dat::font/4x6.fnt", 254, env, bit_array() ) ) then
         sys_error "0x0000, Could not load font..."
     end if    
 
@@ -1307,7 +1330,7 @@ end sub
 '' name: scr_begin_loading
 '' desc: Mode 13h for the duration of loading only.
 ''::::::::::
-sub scr_begin_loading
+sub scr_begin_loading ( env as Env )
     ldr.dc = uglSetVideoDC( UGL.8BIT, 320, 200, 1 )
     if ( ldr.dc = false ) then
         sys_error "0x3001, Could not set loading video mode"
@@ -1315,7 +1338,7 @@ sub scr_begin_loading
 
     '' palette before chrome: everything below indexes into its ramps
     scr_load_palette
-    scr_load_chrome
+    scr_load_chrome env
     scr_load_stage "starting up"
     scr_load_tick
 
@@ -1331,7 +1354,11 @@ end sub
 '' desc: One frame has been drawn. Rolls fps once a second, and clears the
 ''       counters the next frame will accumulate into.
 ''::::::::::
-sub scr_count_frame
+sub scr_count_frame ( _
+    env as Env, _
+    scr as ScreenState, _
+    rdr as RenderState _
+)
 
     fps1 = fps1 + 1
 

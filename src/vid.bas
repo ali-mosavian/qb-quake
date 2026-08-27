@@ -22,6 +22,8 @@ option explicit
 '$include: 'mod.bi'
 '$include: 'q_env.bi'
 '$include: 'q_draw.bi'
+'$include: 'q_map.bi'
+'$include: 'q_vis.bi'
 '$include: 'q_scr.bi'
 '$include: 'q_snd.bi'
 

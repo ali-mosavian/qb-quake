@@ -409,17 +409,6 @@ const DEG2RAD# = 3.14159265359 / 180.0
 
 '' defined in main.bas, called from model.bas -- within one module
 '' BASIC auto-declares, across modules it needs this.
-declare sub draw_bar ( _
-    h_dc as long, _
-    x as integer, _
-    y as integer, _
-    wdt as integer, _
-    hgt as integer, _
-    percent as single _
-)
-declare sub scr_load_tick ( )
-declare sub scr_load_step ( )
-declare sub scr_mip_tick ( percent as single )
 declare sub host_init ( )
 declare sub host_main ( )
 declare sub host_shutdown ( )
@@ -447,12 +436,10 @@ declare sub in_handle_toggles ( )
 
 declare sub v_open_script ( )
 declare function in_keystroke ( key_down as integer ) as integer
-declare sub scr_draw_hud ( h_dst_dc as long )
 declare sub vid_update ( _
     h_dst_dc as long, _
     page as integer _
 )
-declare sub scr_count_frame ( )
 declare sub in_screenshot_key ( h_dst_dc as long )
 
 '' Startup steps, in the order doInit runs them. Each is entered once,
@@ -467,8 +454,6 @@ declare function sys_mem_fre ( byval i as integer ) as long
 declare sub vid_init_ugl ( )
 declare sub s_init ( )
 declare sub s_start_music ( )
-declare sub draw_init_font ( )
-declare sub scr_begin_loading ( )
 
 declare function host_z_on ( ) as integer
 
@@ -610,127 +595,7 @@ declare sub com_tokenize ( _
     token_list as string, _
     stream as string _
 )
-declare function draw_load_font ( _
-    flname as string, _
-    col as long _
-) as integer
-declare sub scr_load_palette ( )
-declare sub bg_band ( _
-    x0 as integer, _
-    x1 as integer, _
-    y0 as integer, _
-    y1 as integer _
-)
-declare sub draw_spinner ( )
-declare sub bevel ( _
-    x0 as integer, _
-    y0 as integer, _
-    x1 as integer, _
-    y1 as integer, _
-    hi as integer, _
-    lo as integer, _
-    raised as integer _
-)
-declare sub rivet ( _
-    x as integer, _
-    y as integer _
-)
-declare sub draw_logo ( _
-    text as string, _
-    x as integer, _
-    y as integer, _
-    sc as integer _
-)
-declare sub hud_panel ( _
-    dc as long, _
-    x as integer, _
-    y as integer, _
-    w as integer, _
-    h as integer, _
-    title as string _
-)
-declare sub hud_row ( _
-    dc as long, _
-    x as integer, _
-    w as integer, _
-    y as integer, _
-    label as string, _
-    value as string _
-)
-declare sub hud_bar ( _
-    dc as long, _
-    x as integer, _
-    y as integer, _
-    w as integer, _
-    h as integer, _
-    percent as single _
-)
-declare sub scr_hud_colors ( )
-declare sub hud_shade ( _
-    dc as long, _
-    x0 as integer, _
-    y0 as integer, _
-    x1 as integer, _
-    y1 as integer, _
-    rw as integer _
-)
-declare sub hud_num ( _
-    dc as long, _
-    x as integer, _
-    y as integer, _
-    sc as integer, _
-    txt as string, _
-    col as integer _
-)
-declare sub hud_vu ( _
-    dc as long, _
-    x as integer, _
-    y as integer, _
-    w as integer, _
-    h as integer, _
-    percent as single, _
-    ch as integer _
-)
-declare sub hud_graph ( _
-    dc as long, _
-    x as integer, _
-    y as integer, _
-    h as integer, _
-    buf() as integer, _
-    mx as integer _
-)
-declare sub scr_load_chrome ( )
-declare sub scr_load_stage ( msg as string )
-declare sub draw_string_scl ( _
-    dc as long, _
-    x as integer, _
-    y as integer, _
-    scale as single, _
-    text as string _
-)
-declare sub draw_string_r ( _
-    dc as long, _
-    xright as integer, _
-    y as integer, _
-    text as string _
-)
-declare sub draw_pct ( _
-    dc as long, _
-    xright as integer, _
-    y as integer, _
-    percent as single _
-)
-declare sub draw_string ( _
-    dc as long, _
-    x as integer, _
-    y as integer, _
-    text as string _
-)
                             
-declare sub scr_screenshot ( _
-    flname as string, _
-    byval dc as long _
-)
 
                          
                                                     
@@ -804,3 +669,150 @@ declare sub mod_load_planes ( planes() as Plane )
 declare sub mod_load_submodels ( models() as Submodel )
 declare sub mod_load_visibility ( )
 declare function mod_pvs_base ( ) as long
+
+''
+'' screen.bas
+''
+declare sub bevel ( _
+    x0 as integer, _
+    y0 as integer, _
+    x1 as integer, _
+    y1 as integer, _
+    hi as integer, _
+    lo as integer, _
+    raised as integer _
+)
+declare sub bg_band ( _
+    x0 as integer, _
+    x1 as integer, _
+    y0 as integer, _
+    y1 as integer _
+)
+declare sub draw_bar ( _
+    h_dc as long, _
+    x as integer, _
+    y as integer, _
+    wdt as integer, _
+    hgt as integer, _
+    percent as single _
+)
+declare sub draw_init_font ( _
+    env as Env, _
+    bit_array() as integer _
+)
+declare function draw_load_font ( _
+    flname as string, _
+    colb as long, _
+    env as Env, _
+    bit_array() as integer _
+) as integer
+declare sub draw_logo ( _
+    text as string, _
+    x as integer, _
+    y as integer, _
+    sc as integer _
+)
+declare sub draw_pct ( _
+    dc as long, _
+    xright as integer, _
+    y as integer, _
+    percent as single _
+)
+declare sub draw_spinner ( )
+declare sub draw_string ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    text as string _
+)
+declare sub draw_string_r ( _
+    dc as long, _
+    xright as integer, _
+    y as integer, _
+    text as string _
+)
+declare sub draw_string_scl ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    scale as single, _
+    text as string _
+)
+declare sub hud_bar ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    w as integer, _
+    h as integer, _
+    percent as single _
+)
+declare sub hud_graph ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    h as integer, _
+    buf() as integer, _
+    mx as integer _
+)
+declare sub hud_num ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    sc as integer, _
+    txt as string, _
+    col as integer _
+)
+declare sub hud_panel ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    w as integer, _
+    h as integer, _
+    title as string _
+)
+declare sub hud_row ( _
+    dc as long, _
+    x as integer, _
+    w as integer, _
+    y as integer, _
+    label as string, _
+    value as string _
+)
+declare sub hud_shade ( _
+    dc as long, _
+    x0 as integer, _
+    y0 as integer, _
+    x1 as integer, _
+    y1 as integer, _
+    rw as integer _
+)
+declare sub hud_vu ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    w as integer, _
+    h as integer, _
+    percent as single, _
+    ch as integer _
+)
+declare sub rivet ( _
+    x as integer, _
+    y as integer _
+)
+declare sub scr_begin_loading ( env as Env )
+declare sub scr_hud_colors ( )
+declare sub scr_load_chrome ( env as Env )
+declare sub scr_load_palette ( )
+declare sub scr_load_part ( _
+    byval frac as single, _
+    byval redraw as integer _
+)
+declare sub scr_load_stage ( msg as string )
+declare sub scr_load_step ( )
+declare sub scr_load_tick ( )
+declare sub scr_mip_tick ( percent as single )
+declare sub scr_screenshot ( _
+    flname as string, _
+    byval dc as long, _
+    env as Env _
+)
