@@ -790,7 +790,9 @@ sub host_render ( _
     ''
     '' Walk BSP tree
     ''
-    r_draw_world 0
+    r_draw_world 0, wld.mdl_count, wld.lef_count, wld.tri_count, cam.pos, vis, _
+                 mdl_buffer(), brush(), nds_buffer(), pln_buffer(), _
+                 poly_flag(), order_list(), frustum(), bitarray()
 
     
     
