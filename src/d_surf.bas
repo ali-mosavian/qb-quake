@@ -116,7 +116,6 @@ const SC_STORE#  = 4194304#      '' 256 * 16384
 '' where uglBuildSurf's own rdAccess/wrAccess land the texture and the
 '' destination surface, so the atlas takes 2 and survives the whole build.
 ''
-const LM_SLOT    = 2
 ''
 '' Atlas width, mirroring LM_ATLAS_W in tools/mkassets.py -- the two move
 '' together, the same rule the .bld lumps live by. A face's luxel rect is
@@ -1196,11 +1195,9 @@ sub sb_build ( byval dc as long, byval tex as long, _
     lmh = gv_buf(GEOM_LMOFS + 5)
 
     ''
-    '' The luxels live in one EMS atlas dc. Map the face's scanline into
-    '' LM_SLOT and point at its rect inside the mapped window. The packer
-    '' keeps a face's whole rect within one scanline, so this single
-    '' mapping reaches all of it, and uglBuildSurf's own texture and
-    '' destination go to slots 0 and 1 without disturbing it.
+    '' The luxels live in one EMS atlas dc. lm_map hands back the face's
+    '' scanline and this points at the rect inside it; uglBuildSurf's own
+    '' texture and destination go to slots 0 and 1 without disturbing it.
     ''
     '' An unlit face has no rect at all. It used to compute a pointer from
     '' the -1 sentinel and read whatever that landed on; point it at one
@@ -1213,7 +1210,7 @@ sub sb_build ( byval dc as long, byval tex as long, _
         lmw    = 1
         lmh    = 1
     else
-        lmp    = uglMapEx&( lm_atlas, lmy, LM_SLOT )
+        lmp    = lm_map&( lmy )
         lseg   = clng( sb_seg%( lmp ) )
         lofs16 = (lmp and 65535&) + lmx
     end if
