@@ -864,7 +864,7 @@ sub host_bench_report ( frame_no as long, h_dst_dc as long )
     print #benchf, "lmsize " + ltrim$(str$( lm_size ))
     print #benchf, "lmread " + ltrim$(str$( lm_read ))
     print #benchf, "geomrows " + ltrim$(str$( geom_rows ))
-    print #benchf, "cmsize " + ltrim$(str$( cm_size ))
+    print #benchf, "cmsize " + ltrim$(str$( cm_bytes& ))
     print #benchf, "scmade " + ltrim$(str$( sc_made ))
     print #benchf, "scems " + ltrim$(str$( sc_peak ))
     ''

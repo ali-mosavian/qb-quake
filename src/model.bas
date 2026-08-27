@@ -35,6 +35,23 @@ dim shared vtxtmp as vertex            '' vtx_buffer narrowed to Q13.3; this
 dim shared texinfotmp as texinfo       '' tex_inf_buff dropped flags and
                                          '' narrowed miptex; this stays the
                                          '' on-disk 40 bytes
+''
+'' THE COLORMAP. Owned here -- mod_load_colormap is what creates it, and
+'' the two readers (sb_build, hud_shade) want the same thing from it: a
+'' pointer to the mapped table. They get that from cm_map, so CM_SLOT
+'' stops being a constant three modules have to agree about.
+''
+'' One row of 16,384, which is one EMS page, so a single uglMapEx reaches
+'' the whole table and the rows the builder indexes flat really are
+'' contiguous. CM_SLOT borrows the depth buffer's: a surface build is not
+'' a scanline, nothing writes depth during one, and the depth publish
+'' remaps its slot on every scanline anyway, so it repairs itself with no
+'' explicit restore.
+''
+const CM_SLOT = 3
+dim shared cm_dc as long
+dim shared cm_size as long
+
 dim shared ledg_count as long
 dim shared lfc_count as long
 dim shared pln_count as long
@@ -588,3 +605,31 @@ sub mod_close
     close #wld.file
     wld.file = 0
 end sub
+
+''::::::::::
+'' name: cm_map
+'' desc: The colormap, mapped, as a far pointer. Mapped per call and never
+''       held: CM_SLOT is the depth buffer's, so anything that touched
+''       depth in between has already taken it back.
+''::::::::::
+function cm_map& ()
+    cm_map& = uglMapEx&( cm_dc, 0, CM_SLOT )
+end function
+
+''::::::::::
+'' name: cm_ready
+'' desc: Whether a full table actually loaded. Callers that can fall back
+''       -- hud_shade draws an opaque slab instead -- ask this first.
+''::::::::::
+function cm_ready% ()
+    cm_ready% = ( cm_size >= 16384 )
+end function
+
+''::::::::::
+'' name: cm_bytes
+'' desc: Table size, for the bench report.
+''::::::::::
+function cm_bytes& ()
+    cm_bytes& = cm_size
+end function
+

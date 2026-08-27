@@ -214,16 +214,10 @@ common shared /map_a/ z_dc as long
 '' longer fits: measured, it came back out of conventional memory and cost
 '' exactly what the array had.
 ''
-'' One row of 16,384, which is one EMS page, so a single uglMapEx reaches
-'' the whole table and the rows the builder indexes flat really are
-'' contiguous. CM_SLOT borrows the depth buffer's: a surface build is not
-'' a scanline, nothing writes depth during one, and the depth publish
-'' remaps its slot on every scanline anyway, so it repairs itself with no
-'' explicit restore.
+'' The colormap is NOT here any more. model.bas loads it and owns the
+'' dc, the size and CM_SLOT; d_surf and screen ask for it through
+'' cm_map/cm_ready rather than mapping a slot they do not own.
 ''
-const CM_SLOT = 3
-
-common shared /map_a/ cm_dc as long, cm_size as long
 ''
 '' Surface cache state. In COMMON rather than d_surf.bas's own DIM SHARED
 '' because DIM SHARED is scoped to the module that writes it, and the
