@@ -52,7 +52,11 @@ dim shared pvs_leaf as integer
 '' file needs declaring first. Module-local, so this does not belong in
 '' bspfile.bi with the cross-module declarations.
 ''
-declare sub r_recursive_world_node ( byval nodenr as integer )
+declare sub r_recursive_world_node ( byval nodenr as integer, cpos as u3dVector3f, _
+                                     vs as VisState, byval ign as integer, _
+                                     nds() as nodeb, pln() as plane2, lef() as leaf2, _
+                                     lfc() as integer, pvsb() as integer, _
+                                     pflag() as integer, ord() as integer, fru() as plane )
 
 
 
@@ -60,23 +64,40 @@ declare sub r_recursive_world_node ( byval nodenr as integer )
 '' ==========================================================================
 ''  BSP WALK
 '' ==========================================================================
-function r_classify_point ( nodenr as integer ) as integer
-    dim dp as single
-    dim pid as integer
-    dim mp as long
+''::::::::::
+'' name: point_dist_to_plane
+'' desc: Signed distance from a RENDERER-space point to a BSP-space plane.
+''
+''       The axes swap here, and only here. The renderer is Y-up and the
+''       BSP is Z-up, so the dot product pairs y with norm.z and z with
+''       norm.y. That swap used to be spelled out at three call sites --
+''       transpose one of them and you get a cull that is wrong only on
+''       some geometry.
+''
+''       SINGLE, not double. Returning double here rounded two faces onto
+''       the other side of their plane on the bench path -- 297 triangles
+''       where every previous run drew 299. The callers hold the result in
+''       a single, so the extra precision only moved the boundary.
+''::::::::::
+function point_dist_to_plane! ( pt as u3dVector3f, pl as plane2 )
+    point_dist_to_plane! = pt.x*pl.norm.x + _
+                           pt.y*pl.norm.z + _
+                           pt.z*pl.norm.y - pl.dist
+end function
 
-    pid = nds_buffer(nodenr).planeid
-
-    dp = cam.pos.x*pln_buffer(pid).norm.x + _
-          cam.pos.y*pln_buffer(pid).norm.z + _
-          cam.pos.z*pln_buffer(pid).norm.y
-          
-    if ( (dp-pln_buffer(pid).dist) > 0.0 ) then
-        r_classify_point = -1
-    else
-        r_classify_point = 0
+''::::::::::
+'' name: point_side_of_node
+'' desc: Which side of a node's splitting plane a point falls on:
+''       -1 in front, 0 behind. Takes the point it is classifying and the
+''       tables it needs, so it says what it does on what it is given.
+''::::::::::
+function point_side_of_node% ( byval node_idx as integer, pt as u3dVector3f, _
+                               nodes() as nodeb, planes() as plane2 )
+    if ( point_dist_to_plane!( pt, planes( nodes(node_idx).planeid ) ) > 0.0 ) then
+        point_side_of_node% = -1
+        exit function
     end if
-    
+    point_side_of_node% = 0
 end function
 
 
@@ -105,7 +126,10 @@ sub r_emit_entities ( byval nodenr as integer )
         if ( mdl_draw(m) and mdl_node(m) = nodenr ) then
             vis.ent_left = vis.ent_left - 1
             r_ignore_pvs = true
-            r_recursive_world_node int( mdl_buffer(m).headnode0 )
+            r_recursive_world_node int( mdl_buffer(m).headnode0 ), _
+                              cam.pos, vis, r_ignore_pvs, _
+                              nds_buffer(), pln_buffer(), lef_buffer(), lfc_buffer(), _
+                              pvs_buffer_b(), poly_flag(), order_list(), frustum()
             r_ignore_pvs = false
         end if
     next m
@@ -114,7 +138,10 @@ end sub
 
 
 
-sub r_recursive_world_node ( byval nodenr as integer ) static
+sub r_recursive_world_node ( byval nodenr as integer, cpos as u3dVector3f, vs as VisState, _
+                             byval ign as integer, nds() as nodeb, pln() as plane2, _
+                             lef() as leaf2, lfc() as integer, pvsb() as integer, _
+                             pflag() as integer, ord() as integer, fru() as plane ) static
     dim dp as single
     dim frst as integer, last as integer, i as integer
     dim pid as integer, side as integer
@@ -134,14 +161,14 @@ sub r_recursive_world_node ( byval nodenr as integer ) static
 	    ''
 	    '' Check pvs and bounding volume
 	    ''
-	    if ( (r_ignore_pvs or pvs_buffer_b(not nodenr)) and _
-	         r_cull_box( lef_buffer(not nodenr).bound, frustum() ) ) then
+	    if ( (ign or pvsb(not nodenr)) and _
+	         r_cull_box( lef(not nodenr).bound, fru() ) ) then
 	    
-	        frst = lef_buffer(not nodenr).lfaceid
-	        last = frst+lef_buffer(not nodenr).lfacenum
+	        frst = lef(not nodenr).lfaceid
+	        last = frst+lef(not nodenr).lfacenum
 	        
 	        for  i = frst to last-1	            
-	            poly_flag(lfc_buffer(i)) = vis.frame_stamp
+	            pflag(lfc(i)) = vs.frame_stamp
 	        next i
 	        
 	        
@@ -153,11 +180,11 @@ sub r_recursive_world_node ( byval nodenr as integer ) static
     	    '' on arrival at that leaf. Anything larger straddles a plane
     	    '' and is emitted at a node instead, further down.
     	    ''
-    	    if ( vis.ent_left ) then r_emit_entities nodenr
+    	    if ( vs.ent_left ) then r_emit_entities nodenr
 
-    	    vis.drw_leafs = vis.drw_leafs + 1
+    	    vs.drw_leafs = vs.drw_leafs + 1
         else 
-            vis.cul_leafs = vis.cul_leafs + 1
+            vs.cul_leafs = vs.cul_leafs + 1
         end if
         
 	    exit sub
@@ -166,16 +193,11 @@ sub r_recursive_world_node ( byval nodenr as integer ) static
 
     '' .bound goes in BY REFERENCE, so r_cull_box reads it straight out of
     '' the EMS window. That holds only because r_cull_box maps nothing.
-    if ( not r_cull_box( nds_buffer(nodenr).bound, frustum() ) ) then
+    if ( not r_cull_box( nds(nodenr).bound, fru() ) ) then
         exit sub
     end if
     
-    pid = nds_buffer(nodenr).planeid
-    dp  = cam.pos.x*pln_buffer(pid).norm.x + _
-          cam.pos.y*pln_buffer(pid).norm.z + _
-          cam.pos.z*pln_buffer(pid).norm.y
-          
-    if ( dp-pln_buffer(pid).dist >= 0.0 ) then
+    if ( point_dist_to_plane!( cpos, pln( nds(nodenr).planeid ) ) >= 0.0 ) then
         side = 1
     else
         side = 0
@@ -189,11 +211,11 @@ sub r_recursive_world_node ( byval nodenr as integer ) static
     		
         '' No map here: the one at the top of the sub still holds -- the
         '' cull and the plane maths between them do not touch the slot.
-        r_recursive_world_node nds_buffer(nodenr).child1
-        if ( vis.ent_left ) then r_emit_entities nodenr
-	    order_list(vis.ord_count) = nodenr
-	    vis.ord_count = vis.ord_count + 1
-        r_recursive_world_node nds_buffer(nodenr).child0
+        r_recursive_world_node nds(nodenr).child1, cpos, vs, ign, nds(), pln(), lef(), lfc(), pvsb(), pflag(), ord(), fru()
+        if ( vs.ent_left ) then r_emit_entities nodenr
+	    ord(vs.ord_count) = nodenr
+	    vs.ord_count = vs.ord_count + 1
+        r_recursive_world_node nds(nodenr).child0, cpos, vs, ign, nds(), pln(), lef(), lfc(), pvsb(), pflag(), ord(), fru()
         
     else
         ''
@@ -202,11 +224,11 @@ sub r_recursive_world_node ( byval nodenr as integer ) static
 	    ''
     		
         '' likewise: still covered by the map at the top of the sub
-        r_recursive_world_node nds_buffer(nodenr).child0        
-        if ( vis.ent_left ) then r_emit_entities nodenr
-	    order_list(vis.ord_count) = nodenr
-	    vis.ord_count = vis.ord_count + 1        
-        r_recursive_world_node nds_buffer(nodenr).child1
+        r_recursive_world_node nds(nodenr).child0, cpos, vs, ign, nds(), pln(), lef(), lfc(), pvsb(), pflag(), ord(), fru()        
+        if ( vs.ent_left ) then r_emit_entities nodenr
+	    ord(vs.ord_count) = nodenr
+	    vs.ord_count = vs.ord_count + 1        
+        r_recursive_world_node nds(nodenr).child1, cpos, vs, ign, nds(), pln(), lef(), lfc(), pvsb(), pflag(), ord(), fru()
     end if
     
 
@@ -259,7 +281,10 @@ sub r_draw_world ( model as integer )
     ''
     '' Traverse tree
     ''
-    r_recursive_world_node int(mdl_buffer(model).headnode0)
+    r_recursive_world_node int( mdl_buffer(model).headnode0 ), _
+                              cam.pos, vis, r_ignore_pvs, _
+                              nds_buffer(), pln_buffer(), lef_buffer(), lfc_buffer(), _
+                              pvs_buffer_b(), poly_flag(), order_list(), frustum()
 
     ''
     '' -badorder reproduces what this used to do: every brush entity appended
@@ -270,7 +295,10 @@ sub r_draw_world ( model as integer )
         for  i = 1 to wld.mdl_count-1
             if ( mdl_draw(i) ) then
                 r_ignore_pvs = true
-                r_recursive_world_node int( mdl_buffer(i).headnode0 )
+                r_recursive_world_node int( mdl_buffer(i).headnode0 ), _
+                              cam.pos, vis, r_ignore_pvs, _
+                              nds_buffer(), pln_buffer(), lef_buffer(), lfc_buffer(), _
+                              pvs_buffer_b(), poly_flag(), order_list(), frustum()
                 r_ignore_pvs = false
             end if
         next i
@@ -439,9 +467,9 @@ sub r_mark_leaves ( byval nodenr as integer )
     '' Find the node that the camera is in
     ''
     while not ( nodenr and &h8000 )
-        '' r_classify_point maps nodenr itself and nothing since has
+        '' point_side_of_node maps nodenr itself and nothing since has
         '' remapped, so the children are readable without a second call
-        if ( r_classify_point( nodenr ) ) then
+        if ( point_side_of_node%( nodenr, cam.pos, nds_buffer(), pln_buffer() ) ) then
             nodenr = nds_buffer(nodenr).child0
         else
             nodenr = nds_buffer(nodenr).child1
@@ -530,7 +558,10 @@ end sub
 sub r_draw_brush_model ( byval m as integer )
 
     r_ignore_pvs = true
-    r_recursive_world_node int( mdl_buffer(m).headnode0 )
+    r_recursive_world_node int( mdl_buffer(m).headnode0 ), _
+                              cam.pos, vis, r_ignore_pvs, _
+                              nds_buffer(), pln_buffer(), lef_buffer(), lfc_buffer(), _
+                              pvs_buffer_b(), poly_flag(), order_list(), frustum()
     r_ignore_pvs = false
 
 end sub
