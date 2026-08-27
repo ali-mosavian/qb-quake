@@ -110,7 +110,10 @@ end sub
 ''
 ''       Must run while the map file is still open, so before mod_close.
 ''::::::::::
-sub ent_load_teleports
+sub ent_load_teleports ( _
+    wld as MapState, _
+    models() as Submodel _
+)
     dim entity as string
     dim strm(50) as string
     dim strm_cnt as integer
@@ -150,7 +153,7 @@ sub ent_load_teleports
     next i
 
     for  j = 1 to wld.mdl_count-1
-        for  k = mdl_buffer(j).firstface to mdl_buffer(j).firstface + mdl_buffer(j).numfaces - 1
+        for  k = models(j).firstface to models(j).firstface + models(j).numfaces - 1
             if ( k >= 0 and k <= wld.tri_count-1 ) then face_mdl(k) = j
         next k
     next j
@@ -200,12 +203,12 @@ sub ent_load_teleports
                         plat( plat_count ).model  = mdlnum
                         plat( plat_count ).speed  = val( ent_value( strm(), strm_cnt, "speed" ) )
                         plat( plat_count ).travel = val( ent_value( strm(), strm_cnt, "height" ) )
-                        plat( plat_count ).mins   = mdl_buffer(mdlnum).mins
-                        plat( plat_count ).maxs   = mdl_buffer(mdlnum).maxs
+                        plat( plat_count ).mins   = models(mdlnum).mins
+                        plat( plat_count ).maxs   = models(mdlnum).maxs
 
                         if ( plat( plat_count ).speed  <= 0.0 ) then plat( plat_count ).speed  = 150.0
                         if ( plat( plat_count ).travel <= 0.0 ) then _
-                            plat( plat_count ).travel = mdl_buffer(mdlnum).maxs.z - mdl_buffer(mdlnum).mins.z
+                            plat( plat_count ).travel = models(mdlnum).maxs.z - models(mdlnum).mins.z
 
                         '' Quake positions the brush raised, so a lift at rest
                         '' is one full travel below where the map drew it.
@@ -247,8 +250,8 @@ sub ent_load_teleports
                 mdlnum = trig_model(j)
 
                 if ( mdlnum > 0 and mdlnum <= wld.mdl_count-1 ) then
-                    tele( tele_count ).mins = mdl_buffer(mdlnum).mins
-                    tele( tele_count ).maxs = mdl_buffer(mdlnum).maxs
+                    tele( tele_count ).mins = models(mdlnum).mins
+                    tele( tele_count ).maxs = models(mdlnum).maxs
                     tele( tele_count ).dest = dest_org(k)
                     tele( tele_count ).yaw  = dest_yaw(k)
                     tele_count = tele_count + 1
@@ -272,7 +275,10 @@ end sub
 ''       than the player, and testing the origin alone lets a fast enough
 ''       player pass through one without ever having their centre inside it.
 ''::::::::::
-sub ent_check_teleport
+sub ent_check_teleport ( _
+    pl as PlayerState, _
+    env as Env _
+)
     dim i as integer
     dim pmin as Vec3, pmax as Vec3
 
@@ -316,7 +322,10 @@ end sub
 ''       it. Quake builds a trigger brush around the plat for this; the box is
 ''       close enough and needs nothing from the compiler.
 ''::::::::::
-function ent_plat_touched ( byval p as integer ) as integer
+function ent_plat_touched ( _
+    byval p as integer, _
+    pl as PlayerState _
+) as integer
     dim top as single
 
     ent_plat_touched = false
@@ -354,7 +363,10 @@ end function
 ''       and telefrags what it cannot push; this carries the one entity that
 ''       exists.
 ''::::::::::
-sub ent_move_plats ( byval dt as single )
+sub ent_move_plats ( _
+    byval dt as single, _
+    pl as PlayerState _
+)
     dim p as integer
     dim m as integer
     dim goal as single, step_z as single, moved as single, was as single
@@ -363,7 +375,7 @@ sub ent_move_plats ( byval dt as single )
     for  p = 0 to plat_count-1
         m = plat(p).model
 
-        riding = ent_plat_touched( p )
+        riding = ent_plat_touched( p, pl )
 
         if ( riding ) then
             plat(p).state = ENT_PLAT_UP
@@ -412,30 +424,12 @@ end sub
 ''       pl_point_contents, stopping one step earlier: that wants what is at
 ''       the point, this wants where the point is.
 ''::::::::::
-function ent_point_leaf ( p as Vec3 ) as integer
-    dim mp as long
-    dim nodenr as integer
-    dim pid as integer
-    dim d as single
-
-    nodenr = 0
-
-    do while ( (nodenr and &h8000) = 0 )
-        pid = nds_buffer(nodenr).planeid
-
-        d = p.x*pln_buffer(pid).norm.x + _
-            p.y*pln_buffer(pid).norm.y + _
-            p.z*pln_buffer(pid).norm.z - pln_buffer(pid).dist
-
-        if ( d >= 0.0 ) then
-            nodenr = nds_buffer(nodenr).child0
-        else
-            nodenr = nds_buffer(nodenr).child1
-        end if
-    loop
-
-    ent_point_leaf = not nodenr
-
+function ent_point_leaf ( _
+    p as Vec3, _
+    nodes() as Node, _
+    planes() as Plane _
+) as integer
+    ent_point_leaf = r_point_leaf( p, nodes(), planes() )
 end function
 
 
@@ -453,11 +447,16 @@ end function
 ''       because the walk reaches leaves in depth order, so "first" means
 ''       "furthest", and everything the entity should hide gets drawn after it.
 ''::::::::::
-sub ent_place_models
+sub ent_place_models ( _
+    byval nmodels as integer, _
+    models() as Submodel, _
+    nodes() as Node, _
+    planes() as Plane _
+)
     dim m as integer
 
-    for  m = 1 to wld.mdl_count-1
-        mdl_node(m) = ent_find_node(m)
+    for  m = 1 to nmodels-1
+        mdl_node(m) = ent_find_node( m, models(), nodes(), planes() )
     next m
 
 end sub
@@ -476,7 +475,12 @@ end sub
 ''
 ''       Returns a leaf, bit 15 set, when the box fits inside one.
 ''::::::::::
-function ent_find_node ( byval m as integer ) as integer
+function ent_find_node ( _
+    byval m as integer, _
+    models() as Submodel, _
+    nodes() as Node, _
+    planes() as Plane _
+) as integer
     dim mp as long
     dim nodenr as integer, pid as integer
     dim dnear as single, dfar as single
@@ -484,54 +488,54 @@ function ent_find_node ( byval m as integer ) as integer
     dim y0 as single, y1 as single
     dim z0 as single, z1 as single
 
-    x0 = mdl_buffer(m).mins.x
-    x1 = mdl_buffer(m).maxs.x
-    y0 = mdl_buffer(m).mins.y
-    y1 = mdl_buffer(m).maxs.y
-    z0 = mdl_buffer(m).mins.z + mdl_zofs(m)
-    z1 = mdl_buffer(m).maxs.z + mdl_zofs(m)
+    x0 = models(m).mins.x
+    x1 = models(m).maxs.x
+    y0 = models(m).mins.y
+    y1 = models(m).maxs.y
+    z0 = models(m).mins.z + mdl_zofs(m)
+    z1 = models(m).maxs.z + mdl_zofs(m)
 
     nodenr = 0
 
     do while ( (nodenr and &h8000) = 0 )
-        pid = nds_buffer(nodenr).planeid
+        pid = nodes(nodenr).planeid
 
         ''
         '' The box corner furthest along the normal and the one furthest
         '' against it. If both land on the same side of the plane, so does
         '' every other corner.
         ''
-        if ( pln_buffer(pid).norm.x >= 0.0 ) then
-            dnear = pln_buffer(pid).norm.x * x0
-            dfar  = pln_buffer(pid).norm.x * x1
+        if ( planes(pid).norm.x >= 0.0 ) then
+            dnear = planes(pid).norm.x * x0
+            dfar  = planes(pid).norm.x * x1
         else
-            dnear = pln_buffer(pid).norm.x * x1
-            dfar  = pln_buffer(pid).norm.x * x0
+            dnear = planes(pid).norm.x * x1
+            dfar  = planes(pid).norm.x * x0
         end if
 
-        if ( pln_buffer(pid).norm.y >= 0.0 ) then
-            dnear = dnear + pln_buffer(pid).norm.y * y0
-            dfar  = dfar  + pln_buffer(pid).norm.y * y1
+        if ( planes(pid).norm.y >= 0.0 ) then
+            dnear = dnear + planes(pid).norm.y * y0
+            dfar  = dfar  + planes(pid).norm.y * y1
         else
-            dnear = dnear + pln_buffer(pid).norm.y * y1
-            dfar  = dfar  + pln_buffer(pid).norm.y * y0
+            dnear = dnear + planes(pid).norm.y * y1
+            dfar  = dfar  + planes(pid).norm.y * y0
         end if
 
-        if ( pln_buffer(pid).norm.z >= 0.0 ) then
-            dnear = dnear + pln_buffer(pid).norm.z * z0
-            dfar  = dfar  + pln_buffer(pid).norm.z * z1
+        if ( planes(pid).norm.z >= 0.0 ) then
+            dnear = dnear + planes(pid).norm.z * z0
+            dfar  = dfar  + planes(pid).norm.z * z1
         else
-            dnear = dnear + pln_buffer(pid).norm.z * z1
-            dfar  = dfar  + pln_buffer(pid).norm.z * z0
+            dnear = dnear + planes(pid).norm.z * z1
+            dfar  = dfar  + planes(pid).norm.z * z0
         end if
 
-        dnear = dnear - pln_buffer(pid).dist
-        dfar  = dfar  - pln_buffer(pid).dist
+        dnear = dnear - planes(pid).dist
+        dfar  = dfar  - planes(pid).dist
 
         if ( dnear >= 0.0 ) then
-            nodenr = nds_buffer(nodenr).child0
+            nodenr = nodes(nodenr).child0
         elseif ( dfar < 0.0 ) then
-            nodenr = nds_buffer(nodenr).child1
+            nodenr = nodes(nodenr).child1
         else
             exit do
         end if

@@ -91,6 +91,11 @@ why single and not double, which trap this avoids. `r_plane_dist` had a
 fourteen-line header over three lines of arithmetic; two lines of it were
 worth keeping.
 
+**Drop a global the moment it stops being read.** Passing data instead of
+reaching for it only pays once the declaration goes; a `COMMON` entry that
+every procedure now receives as a parameter is worse than before, because it
+looks live. Re-check the block after each conversion.
+
 **Comments are short, and say what the code cannot.** No banner block on a
 function whose name already says it. Comment the swap, the trap, the reason
 for `single` -- not the obvious. `r_plane_dist` carried fourteen lines over

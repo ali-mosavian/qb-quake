@@ -30,6 +30,7 @@ option explicit
 '$include: 'q_vis.bi'
 '$include: 'q_draw.bi'
 '$include: 'q_cam.bi'
+'$include: 'q_pl.bi'
 '$include: 'q_ent.bi'
 
 '$static
@@ -296,7 +297,7 @@ sub d_draw_faces ( _
             '' one map per face: it covers planeid, side, geom_row,
             '' geom_ofs and texinfoid, and nothing between them remaps this
             '' array (the geometry window is a different store entirely).
-            dp = r_plane_dist( cam.pos, pln_buffer( tri_buffer(i).planeid ) )
+            dp = r_cam_plane_dist( cam.pos, pln_buffer( tri_buffer(i).planeid ) )
                       
             if ( tri_buffer(i).side ) then dp = -dp
                 

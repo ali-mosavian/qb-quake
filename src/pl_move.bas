@@ -27,8 +27,8 @@ option explicit
 '$include: 'q_env.bi'
 '$include: 'q_map.bi'
 '$include: 'q_cam.bi'
-'$include: 'q_ent.bi'
 '$include: 'q_pl.bi'
+'$include: 'q_ent.bi'
 
 ''
 '' THE COLLISION HULLS. Owned here, not in COMMON: this module is the only
@@ -110,29 +110,12 @@ function pl_point_contents ( _
     nodes() as Node, _
     planes() as Plane _
 ) as integer
-    dim mp as long
-    dim nodenr as integer
-    dim pid as integer
-    dim d as single
+    dim leafnr as integer
 
-    nodenr = 0
-
-    do while ( (nodenr and &h8000) = 0 )
-        pid = nodes(nodenr).planeid
-
-        d = p.x*planes(pid).norm.x + _
-            p.y*planes(pid).norm.y + _
-            p.z*planes(pid).norm.z - planes(pid).dist
-
-        if ( d >= 0.0 ) then
-            nodenr = nodes(nodenr).child0
-        else
-            nodenr = nodes(nodenr).child1
-        end if
-    loop
-
-    pl_point_contents = r_leaf_contents( not nodenr )
-
+    '' hoisted: BC will not take a call with array arguments inside
+    '' another call's argument list
+    leafnr = r_point_leaf( p, nodes(), planes() )
+    pl_point_contents = r_leaf_contents( leafnr )
 end function
 
 
@@ -323,6 +306,8 @@ sub pl_trace ( _
     tr as TraceResult, _
     byval nmodels as integer, _
     models() as Submodel, _
+    solid() as integer, _
+    zofs() as single, _
     clip() as ClipNode, _
     planes() as Plane _
 )
@@ -343,11 +328,11 @@ sub pl_trace ( _
     any_solid = tr.all_solid
 
     for  i = 1 to nmodels-1
-        if ( mdl_solid(i) ) then
+        if ( solid(i) ) then
             s2 = start
             f2 = fin
-            s2.z = s2.z - mdl_zofs(i)
-            f2.z = f2.z - mdl_zofs(i)
+            s2.z = s2.z - zofs(i)
+            f2.z = f2.z - zofs(i)
 
             tr.all_solid = true
             dummy = pl_hull_check( int( models(i).headnode1 ), 0.0, 1.0, s2, f2, tr, clip(), planes() )
@@ -407,6 +392,8 @@ sub pl_slide_move ( _
     tr as TraceResult, _
     byval nmodels as integer, _
     models() as Submodel, _
+    solid() as integer, _
+    zofs() as single, _
     clip() as ClipNode, _
     planes() as Plane _
 )
@@ -423,7 +410,7 @@ sub pl_slide_move ( _
         fin.y = org.y + vel.y*time_left
         fin.z = org.z + vel.z*time_left
 
-        pl_trace org, fin, tr, nmodels, models(), clip(), planes()
+        pl_trace org, fin, tr, nmodels, models(), solid(), zofs(), clip(), planes()
 
         ''
         '' Started inside solid. Refusing to move is the safe answer: moving
@@ -466,6 +453,8 @@ sub pl_step_move ( _
     tr as TraceResult, _
     byval nmodels as integer, _
     models() as Submodel, _
+    solid() as integer, _
+    zofs() as single, _
     clip() as ClipNode, _
     planes() as Plane _
 )
@@ -476,7 +465,7 @@ sub pl_step_move ( _
     '' the ordinary slide, kept in case the step attempt is worse
     flat_pos = org
     flat_vel = vel
-    pl_slide_move flat_pos, flat_vel, dt, tr, nmodels, models(), clip(), planes()
+    pl_slide_move flat_pos, flat_vel, dt, tr, nmodels, models(), solid(), zofs(), clip(), planes()
 
     ''
     '' Ground, or water. Standing on something is the usual reason to be
@@ -494,7 +483,7 @@ sub pl_step_move ( _
     '' lift, move, and drop back
     up_pos = org
     up_pos.z = up_pos.z + PL_STEP#
-    pl_trace org, up_pos, tr, nmodels, models(), clip(), planes()
+    pl_trace org, up_pos, tr, nmodels, models(), solid(), zofs(), clip(), planes()
     if ( tr.all_solid ) then
         org = flat_pos
         vel = flat_vel
@@ -502,11 +491,11 @@ sub pl_step_move ( _
     end if
     up_pos = tr.end_pos
 
-    pl_slide_move up_pos, vel, dt, tr, nmodels, models(), clip(), planes()
+    pl_slide_move up_pos, vel, dt, tr, nmodels, models(), solid(), zofs(), clip(), planes()
 
     down_pos   = up_pos
     down_pos.z = down_pos.z - PL_STEP#
-    pl_trace up_pos, down_pos, tr, nmodels, models(), clip(), planes()
+    pl_trace up_pos, down_pos, tr, nmodels, models(), solid(), zofs(), clip(), planes()
     if ( tr.all_solid = false ) then up_pos = tr.end_pos
 
     ''
@@ -541,6 +530,8 @@ sub pl_gravity ( _
     tr as TraceResult, _
     byval nmodels as integer, _
     models() as Submodel, _
+    solid() as integer, _
+    zofs() as single, _
     clip() as ClipNode, _
     planes() as Plane _
 )
@@ -550,7 +541,7 @@ sub pl_gravity ( _
     below   = pl.pos
     below.z = below.z - 1.0
 
-    pl_trace pl.pos, below, tr, nmodels, models(), clip(), planes()
+    pl_trace pl.pos, below, tr, nmodels, models(), solid(), zofs(), clip(), planes()
 
     ''
     '' Swimming: no ground, and a slow sink instead of a fall. Checked before
@@ -634,6 +625,8 @@ sub pl_move ( _
     cam as CamState, _
     byval nmodels as integer, _
     models() as Submodel, _
+    solid() as integer, _
+    zofs() as single, _
     nodes() as Node, _
     planes() as Plane _
 )
@@ -689,7 +682,7 @@ sub pl_move ( _
 
     pl_water_level pl, nodes(), planes()
 
-    pl_gravity dt, pl, tr, nmodels, models(), clp_buffer(), planes()
+    pl_gravity dt, pl, tr, nmodels, models(), solid(), zofs(), clp_buffer(), planes()
 
     ''
     '' Jump. Only from the ground, and after pl_gravity, which is what
@@ -720,7 +713,7 @@ sub pl_move ( _
         pl.on_ground = false
     end if
 
-    pl_step_move pl.pos, pl.vel, dt, pl, tr, nmodels, models(), clp_buffer(), planes()
+    pl_step_move pl.pos, pl.vel, dt, pl, tr, nmodels, models(), solid(), zofs(), clp_buffer(), planes()
 
     if ( pl.pos.z > pl.peak_z ) then pl.peak_z = pl.pos.z
 

@@ -108,7 +108,7 @@ common shared /scr_s/ cp_dirx as single, cp_diry as single
 common shared /scr_s/ cp_lastx as single, cp_lasty as single
 common shared /scr_s/ cp_stuck as integer
 common shared /scr_s/ cp_init as integer
-common shared /scr_s/ cp_lx as single, cp_ly as single, cp_lz as single
+common shared /scr_s/ cp_lx as single, cp_ly as single
 common shared /scr_s/ fps_low as integer
 common shared /scr_s/ cp_done as integer
 

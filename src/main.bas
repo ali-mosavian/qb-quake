@@ -247,7 +247,7 @@ sub host_init
     mod_load_visibility
     mod_load_clipnodes
     sys_mem_mark "clipnodes"
-    ent_load_teleports
+    ent_load_teleports wld, mdl_buffer()
 
     t_lump = timer
 
@@ -718,13 +718,13 @@ sub host_tick ( byval dt as single )
     v_update_camera dt
 
     '' and anything the world does to the player as a result of moving
-    ent_check_teleport
+    ent_check_teleport pl, env
 
     '' movers, after the player has moved and before anything is drawn
-    ent_move_plats dt
+    ent_move_plats dt, pl
 
     '' where each mover ended up, so the draw order can place it
-    ent_place_models
+    ent_place_models wld.mdl_count, mdl_buffer(), nds_buffer(), pln_buffer()
 
     '' map time, which drives every texture animation
     rdr.anim_time = rdr.anim_time + dt
