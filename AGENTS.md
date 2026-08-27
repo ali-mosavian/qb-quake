@@ -91,6 +91,13 @@ why single and not double, which trap this avoids. `r_plane_dist` had a
 fourteen-line header over three lines of arithmetic; two lines of it were
 worth keeping.
 
+**A parameter shadows a `COMMON SHARED` of the same name.** Verified, not
+assumed: `pl_init` was called with a scratch `PlayerState` while the global
+`pl.pos.x` was set to -999. The parameter came back with the spawn position
+and the global was untouched. So a signature may reuse the global's name and
+the body needs no edit -- which is what made converting `pl_move` and `ent`
+a change to signatures and call sites only.
+
 **Drop a global the moment it stops being read.** Passing data instead of
 reaching for it only pays once the declaration goes; a `COMMON` entry that
 every procedure now receives as a parameter is worse than before, because it
