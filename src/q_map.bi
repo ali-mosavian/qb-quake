@@ -346,8 +346,5 @@ const MEM_MARKS = 20
 ''
 '' Procedures whose signatures can be read from here.
 ''
-declare function mod_cm_map ( wld as World ) as long
-declare function mod_geom_map ( _
-    wld as World, _
-    byval row as integer _
-) as long
+
+

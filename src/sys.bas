@@ -25,19 +25,27 @@ option explicit
 '$include: 'q_vis.bi'
 '$include: 'q_draw.bi'
 '$include: 'q_scr.bi'
+'$include: 'q_cam.bi'
+'$include: 'q_pl.bi'
+'$include: 'q_ent.bi'
 '$include: 'q_snd.bi'
+'$include: 'q_game.bi'
 
 ''
 '' This module's own procedures.
 ''
-declare sub sys_parse_args ( env as Env )
+declare sub sys_parse_args ( _
+    g as Game _
+)
 declare sub sys_init_tables ( _
-    env as Env, _
+    g as Game, _
     bit_array() as integer, _
     frustum() as DiskPlane _
 )
 declare sub sys_time_init ( )
-declare function sys_frame_time ( ft as FrameTimes ) as single
+declare function sys_frame_time ( _
+    g as Game _
+) as single
 declare function sys_tick_hz ( ) as single
 declare function sys_mem_count ( ) as integer
 declare function sys_mem_tag ( byval i as integer ) as string
@@ -50,8 +58,8 @@ declare function sys_mem_fre ( byval i as integer ) as long
 '' table is finite, and it ran out when they all got everything.
 ''
 declare sub com_parse_config ( _
-    filename as string, _
-    env as Env _
+    g as Game, _
+    filename as string _
 )
 declare sub host_shutdown ( )
 '' for sys_raw_dt: the benchmark's unclamped frame delta lives in /scr_s/
@@ -91,7 +99,9 @@ dim shared tick_hz as single
 '' name: sys_parse_args
 '' desc: A map on the command line, and the ini beside it.
 ''::::::::::
-sub sys_parse_args ( env as Env )
+sub sys_parse_args ( _
+    g as Game _
+)
     dim argv(16) as string
     dim argc as integer
     dim cl as string
@@ -112,73 +122,73 @@ sub sys_parse_args ( env as Env )
     '' off is what lets anything else share the command line.
     ''
     com_tokenize argv(), argc, " ", cl
-    env.map_name = argv(0)
-    env.bench_frames = 0
+    g.env.map_name = argv(0)
+    g.env.bench_frames = 0
 
     for  i = 1 to argc-1
         if ( lcase$(argv(i)) = "-bench" and i+1 <= argc-1 ) then
-            env.bench_frames = val( argv(i+1) )
+            g.env.bench_frames = val( argv(i+1) )
         end if
         if ( lcase$(argv(i)) = "-walk" ) then
-            env.bench_walk = true
+            g.env.bench_walk = true
         end if
         if ( lcase$(argv(i)) = "-jump" ) then
-            env.bench_jump = true
+            g.env.bench_jump = true
         end if
         if ( lcase$(argv(i)) = "-strafe" ) then
-            env.bench_strafe = true
+            g.env.bench_strafe = true
         end if
         if ( lcase$(argv(i)) = "-at" and i+3 <= argc-1 ) then
-            env.start_x   = val( argv(i+1) )
-            env.start_y   = val( argv(i+2) )
-            env.start_z   = val( argv(i+3) )
-            env.start_set = true
+            g.env.start_x   = val( argv(i+1) )
+            g.env.start_y   = val( argv(i+2) )
+            g.env.start_z   = val( argv(i+3) )
+            g.env.start_set = true
         end if
         if ( lcase$(argv(i)) = "-noents" ) then
-            env.no_ents = true
+            g.env.no_ents = true
         end if
         if ( lcase$(argv(i)) = "-badorder" ) then
-            env.bad_order = true
+            g.env.bad_order = true
         end if
         if ( lcase$(argv(i)) = "-polytp" ) then
-            env.poly_tp = true
+            g.env.poly_tp = true
         end if
         if ( lcase$(argv(i)) = "-noz" ) then
-            env.no_z = true
+            g.env.no_z = true
         end if
         if ( lcase$(argv(i)) = "-nostats" ) then
-            env.no_stats = true
+            g.env.no_stats = true
         end if
         if ( lcase$(argv(i)) = "-campath" ) then
-            env.cam_path = true
+            g.env.cam_path = true
         end if
         if ( lcase$(argv(i)) = "-nodraw" ) then
-            env.no_draw  = true
-            env.no_stats = true     '' the overlay is rasterising too
+            g.env.no_draw  = true
+            g.env.no_stats = true     '' the overlay is rasterising too
         end if
         if ( lcase$(argv(i)) = "-yaw" and i+1 <= argc-1 ) then
-            env.start_yaw = val( argv(i+1) )
-            env.yaw_set   = true
+            g.env.start_yaw = val( argv(i+1) )
+            g.env.yaw_set   = true
         end if
         if ( lcase$(argv(i)) = "-ticks" and i+1 <= argc-1 ) then
-            env.bench_ticks = val( argv(i+1) )
+            g.env.bench_ticks = val( argv(i+1) )
         end if
         if ( lcase$(argv(i)) = "-lm" ) then
-            env.use_lm = true
+            g.env.use_lm = true
         end if
         if ( lcase$(argv(i)) = "-benchsecs" and i+1 <= argc-1 ) then
-            env.bench_secs = val( argv(i+1) )
+            g.env.bench_secs = val( argv(i+1) )
         end if
         if ( lcase$(argv(i)) = "-dumpsurf" and i+2 <= argc-1 ) then
-            env.dump_set  = true
-            env.dump_face = val( argv(i+1) )
-            env.dump_mip  = val( argv(i+2) )
-            env.use_lm    = true        '' the surface cache is the point
+            g.env.dump_set  = true
+            g.env.dump_face = val( argv(i+1) )
+            g.env.dump_mip  = val( argv(i+2) )
+            g.env.use_lm    = true        '' the surface cache is the point
         end if
     next i
 
-    if ( (dir$( rtrim$(env.map_name) ) = "") ) then
-        print "File " + lcase$(rtrim$(env.map_name)) + " could not be found"
+    if ( (dir$( rtrim$(g.env.map_name) ) = "") ) then
+        print "File " + lcase$(rtrim$(g.env.map_name)) + " could not be found"
         host_shutdown
     end if
     
@@ -197,7 +207,7 @@ end sub
 '' desc: Reads stuff.ini and builds the bit mask table the PVS decoder indexes.
 ''::::::::::
 sub sys_init_tables ( _
-    env as Env, _
+    g as Game, _
     bit_array() as integer, _
     frustum() as DiskPlane _
 )
@@ -211,7 +221,7 @@ sub sys_init_tables ( _
 
     dim i as integer
 
-    com_parse_config "stuff.ini", env
+    com_parse_config g, "stuff.ini"
     
     for  i = 0 to 15
         bit_array(i) = clng(2^i)
@@ -325,7 +335,9 @@ end sub
 ''       the first after loading, say -- move the player far enough to pass
 ''       through a wall, since the sweep is only as long as dt makes it.
 ''::::::::::
-function sys_frame_time ( ft as FrameTimes ) as single
+function sys_frame_time ( _
+    g as Game _
+) as single
     dim tick as long
     dim dt as single
 
@@ -348,7 +360,7 @@ function sys_frame_time ( ft as FrameTimes ) as single
     '' worst frame is the clamp rather than the renderer, and the reported
     '' best is one timer tick. Record the truth before flattening it.
     ''
-    ft.raw_dt = dt
+    g.ft.raw_dt = dt
 
     if ( dt < 0.001  ) then dt = 0.001
     if ( dt > 0.1    ) then dt = 0.1

@@ -447,6 +447,18 @@ end type
 ''
 '' Procedures whose signatures can be read from here.
 ''
+
+''
+'' Procedures whose signatures can be read from here.
+''
+
+''
+'' Procedures whose signatures can be read from here.
+''
+
+''
+'' Procedures whose signatures can be read from here.
+''
 declare function r_point_leaf ( _
     p as Vec3, _
     nodes() as Node, _
@@ -467,10 +479,5 @@ declare sub com_tokenize ( _
 declare sub sc_stats ( s as CacheStats )
 declare sub scr_load_stage ( msg as string )
 declare sub scr_load_step ( )
-declare sub scr_screenshot ( _
-    flname as string, _
-    byval dc as long, _
-    env as Env _
-)
 declare sub sys_error ( msg as string )
 declare sub sys_mem_mark ( tag as string )

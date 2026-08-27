@@ -26,9 +26,14 @@ option explicit
 '$include: 'mod.bi'
 '$include: 'q_env.bi'
 '$include: 'q_map.bi'
+'$include: 'q_vis.bi'
+'$include: 'q_draw.bi'
+'$include: 'q_scr.bi'
 '$include: 'q_cam.bi'
 '$include: 'q_pl.bi'
 '$include: 'q_ent.bi'
+'$include: 'q_snd.bi'
+'$include: 'q_game.bi'
 
 ''
 '' This module's own procedures.
@@ -59,8 +64,8 @@ declare function pl_hull_check ( _
     planes() as Plane _
 ) as integer
 declare sub pl_gravity ( _
+    g as Game, _
     byval dt as single, _
-    pl as PlayerState, _
     tr as TraceResult, _
     byval model_count as integer, _
     models() as Submodel, _
@@ -80,10 +85,10 @@ declare sub pl_slide_move ( _
     planes() as Plane _
 )
 declare sub pl_step_move ( _
+    g as Game, _
     org as Vec3, _
     vel as Vec3, _
     byval dt as single, _
-    pl as PlayerState, _
     tr as TraceResult, _
     byval model_count as integer, _
     models() as Submodel, _
@@ -102,7 +107,7 @@ declare sub pl_trace ( _
     planes() as Plane _
 )
 declare sub pl_water_level ( _
-    pl as PlayerState, _
+    g as Game, _
     nodes() as Node, _
     planes() as Plane _
 )
@@ -111,26 +116,25 @@ declare sub pl_water_level ( _
 '' This module's own procedures.
 ''
 declare sub pl_init ( _
-    pl as PlayerState, _
-    cam as CamState, _
-    env as Env _
+    g as Game _
 )
 declare sub pl_move ( _
+    g as Game, _
     byval fwd as single, _
     byval strafe as single, _
     byval dir_x as single, _
     byval dir_y as single, _
     byval jump as integer, _
     byval dt as single, _
-    pl as PlayerState, _
-    cam as CamState, _
     byval model_count as integer, _
     models() as Submodel, _
     brush() as BrushModel, _
     nodes() as Node, _
     planes() as Plane _
 )
-declare sub pl_load_hulls ( wld as World )
+declare sub pl_load_hulls ( _
+    g as Game _
+)
 declare function pl_hull_rec ( ) as integer
 
 ''
@@ -237,31 +241,31 @@ end function
 ''       wading feel different from swimming.
 ''::::::::::
 sub pl_water_level ( _
-    pl as PlayerState, _
+    g as Game, _
     nodes() as Node, _
     planes() as Plane _
 )
     dim p as Vec3
     dim c as integer
 
-    pl.water_level = 0
-    pl.water_type  = CONTENTS_EMPTY
+    g.pl.water_level = 0
+    g.pl.water_type  = CONTENTS_EMPTY
 
-    p = pl.pos
-    p.z = pl.pos.z - PL_FEET# + 1.0
+    p = g.pl.pos
+    p.z = g.pl.pos.z - PL_FEET# + 1.0
     c = pl_point_contents( p, nodes(), planes() )
 
     if ( c > CONTENTS_WATER ) then exit sub          '' EMPTY or SOLID: dry
 
-    pl.water_type  = c
-    pl.water_level = 1
+    g.pl.water_type  = c
+    g.pl.water_level = 1
 
-    p.z = pl.pos.z
+    p.z = g.pl.pos.z
     if ( pl_point_contents( p, nodes(), planes() ) <= CONTENTS_WATER ) then
-        pl.water_level = 2
+        g.pl.water_level = 2
 
-        p.z = pl.pos.z + PL_EYE#
-        if ( pl_point_contents( p, nodes(), planes() ) <= CONTENTS_WATER ) then pl.water_level = 3
+        p.z = g.pl.pos.z + PL_EYE#
+        if ( pl_point_contents( p, nodes(), planes() ) <= CONTENTS_WATER ) then g.pl.water_level = 3
     end if
 
 end sub
@@ -553,10 +557,10 @@ end sub
 ''       lip, because a 16 unit stair and a wall are the same thing to a trace.
 ''::::::::::
 sub pl_step_move ( _
+    g as Game, _
     org as Vec3, _
     vel as Vec3, _
     byval dt as single, _
-    pl as PlayerState, _
     tr as TraceResult, _
     byval model_count as integer, _
     models() as Submodel, _
@@ -580,7 +584,7 @@ sub pl_step_move ( _
     '' dead -- they can neither walk up it nor swim over it, because the
     '' slide has already been clipped flat against the riser.
     ''
-    if ( pl.on_ground = false and pl.water_level < 2 ) then
+    if ( g.pl.on_ground = false and g.pl.water_level < 2 ) then
         org = flat_pos
         vel = flat_vel
         exit sub
@@ -631,8 +635,8 @@ end sub
 ''       player would stand on vertical surfaces.
 ''::::::::::
 sub pl_gravity ( _
+    g as Game, _
     byval dt as single, _
-    pl as PlayerState, _
     tr as TraceResult, _
     byval model_count as integer, _
     models() as Submodel, _
@@ -643,35 +647,35 @@ sub pl_gravity ( _
     dim below as Vec3
     dim speed as single
 
-    below   = pl.pos
+    below   = g.pl.pos
     below.z = below.z - 1.0
 
-    pl_trace pl.pos, below, tr, model_count, models(), brush(), clip(), planes()
+    pl_trace g.pl.pos, below, tr, model_count, models(), brush(), clip(), planes()
 
     ''
     '' Swimming: no ground, and a slow sink instead of a fall. Checked before
     '' the ground test because a floor underwater should not stop you
     '' floating -- otherwise the player walks along the bottom of a pool.
     ''
-    if ( pl.water_level >= 2 ) then
-        pl.on_ground = false
-        pl.vel.z = pl.vel.z - PL_WATERSINK#*dt
+    if ( g.pl.water_level >= 2 ) then
+        g.pl.on_ground = false
+        g.pl.vel.z = g.pl.vel.z - PL_WATERSINK#*dt
         exit sub
     end if
 
     if ( tr.frac < 1.0 and tr.norm.z > PL_GROUND_NRM# ) then
-        pl.on_ground = true
-        if ( pl.vel.z < 0.0 ) then pl.vel.z = 0.0
+        g.pl.on_ground = true
+        if ( g.pl.vel.z < 0.0 ) then g.pl.vel.z = 0.0
     else
-        pl.on_ground = false
-        pl.vel.z = pl.vel.z - PL_FALLACC#*dt
+        g.pl.on_ground = false
+        g.pl.vel.z = g.pl.vel.z - PL_FALLACC#*dt
     end if
 
-    speed = sqr( pl.vel.x*pl.vel.x + pl.vel.y*pl.vel.y + pl.vel.z*pl.vel.z )
+    speed = sqr( g.pl.vel.x*g.pl.vel.x + g.pl.vel.y*g.pl.vel.y + g.pl.vel.z*g.pl.vel.z )
     if ( speed > PL_MAXVEL# ) then
-        pl.vel.x = pl.vel.x * (PL_MAXVEL#/speed)
-        pl.vel.y = pl.vel.y * (PL_MAXVEL#/speed)
-        pl.vel.z = pl.vel.z * (PL_MAXVEL#/speed)
+        g.pl.vel.x = g.pl.vel.x * (PL_MAXVEL#/speed)
+        g.pl.vel.y = g.pl.vel.y * (PL_MAXVEL#/speed)
+        g.pl.vel.z = g.pl.vel.z * (PL_MAXVEL#/speed)
     end if
 
 end sub
@@ -686,25 +690,23 @@ end sub
 ''       origin, so the spawn height has to come down by that much.
 ''::::::::::
 sub pl_init ( _
-    pl as PlayerState, _
-    cam as CamState, _
-    env as Env _
+    g as Game _
 )
-    if ( env.start_set ) then
-        pl.pos.x = env.start_x
-        pl.pos.y = env.start_y
-        pl.pos.z = env.start_z
+    if ( g.env.start_set ) then
+        g.pl.pos.x = g.env.start_x
+        g.pl.pos.y = g.env.start_y
+        g.pl.pos.z = g.env.start_z
     else
-        pl.pos.x = cam.pos.x
-        pl.pos.y = cam.pos.z
-        pl.pos.z = cam.pos.y - PL_EYE#
+        g.pl.pos.x = g.cam.pos.x
+        g.pl.pos.y = g.cam.pos.z
+        g.pl.pos.z = g.cam.pos.y - PL_EYE#
     end if
 
-    pl.vel.x = 0.0
-    pl.vel.y = 0.0
-    pl.vel.z = 0.0
+    g.pl.vel.x = 0.0
+    g.pl.vel.y = 0.0
+    g.pl.vel.z = 0.0
 
-    pl.on_ground = false
+    g.pl.on_ground = false
 
 end sub
 
@@ -720,14 +722,13 @@ end sub
 ''       fwd and strafe are -1, 0 or 1.
 ''::::::::::
 sub pl_move ( _
+    g as Game, _
     byval fwd as single, _
     byval strafe as single, _
     byval dir_x as single, _
     byval dir_y as single, _
     byval jump as integer, _
     byval dt as single, _
-    pl as PlayerState, _
-    cam as CamState, _
     byval model_count as integer, _
     models() as Submodel, _
     brush() as BrushModel, _
@@ -739,54 +740,54 @@ sub pl_move ( _
 
     ''
     '' dir is the horizontal look direction in BSP space, passed in rather than
-    '' read from cam.look_at: that vector is a direction for part of
+    '' read from g.cam.look_at: that vector is a direction for part of
     '' v_update_camera and an absolute point for the rest, and depending on
     '' which half of the routine called us would be a trap.
     ''
-    pl.vel.x = pl.vel.x + (dir_x*fwd - dir_y*strafe) * PL_ACCEL# * dt
-    pl.vel.y = pl.vel.y + (dir_y*fwd + dir_x*strafe) * PL_ACCEL# * dt
+    g.pl.vel.x = g.pl.vel.x + (dir_x*fwd - dir_y*strafe) * PL_ACCEL# * dt
+    g.pl.vel.y = g.pl.vel.y + (dir_y*fwd + dir_x*strafe) * PL_ACCEL# * dt
 
     '' water drags in all three axes, ground friction only horizontally
-    if ( pl.water_level >= 3 ) then
+    if ( g.pl.water_level >= 3 ) then
         '' full drag only when fully under. At the surface the vertical
         '' component is left alone so a jump out is not damped away.
-        speed = sqr( pl.vel.x*pl.vel.x + pl.vel.y*pl.vel.y + pl.vel.z*pl.vel.z )
+        speed = sqr( g.pl.vel.x*g.pl.vel.x + g.pl.vel.y*g.pl.vel.y + g.pl.vel.z*g.pl.vel.z )
         if ( speed > 0.0 ) then
             newspeed = speed - speed*PL_WATERFRIC#*dt
             if ( newspeed < 0.0 ) then newspeed = 0.0
-            pl.vel.x = pl.vel.x * (newspeed/speed)
-            pl.vel.y = pl.vel.y * (newspeed/speed)
-            pl.vel.z = pl.vel.z * (newspeed/speed)
+            g.pl.vel.x = g.pl.vel.x * (newspeed/speed)
+            g.pl.vel.y = g.pl.vel.y * (newspeed/speed)
+            g.pl.vel.z = g.pl.vel.z * (newspeed/speed)
         end if
     end if
 
     '' ground friction, horizontal only
-    if ( pl.on_ground ) then
-        speed = sqr( pl.vel.x*pl.vel.x + pl.vel.y*pl.vel.y )
+    if ( g.pl.on_ground ) then
+        speed = sqr( g.pl.vel.x*g.pl.vel.x + g.pl.vel.y*g.pl.vel.y )
         if ( speed > 0.0 ) then
             drop     = speed * PL_FRICTION# * dt
             newspeed = speed - drop
             if ( newspeed < 0.0 ) then newspeed = 0.0
-            pl.vel.x = pl.vel.x * (newspeed/speed)
-            pl.vel.y = pl.vel.y * (newspeed/speed)
+            g.pl.vel.x = g.pl.vel.x * (newspeed/speed)
+            g.pl.vel.y = g.pl.vel.y * (newspeed/speed)
         end if
     end if
 
     '' and a ceiling on how fast walking can get
-    speed = sqr( pl.vel.x*pl.vel.x + pl.vel.y*pl.vel.y )
-    if ( pl.water_level >= 2 ) then
+    speed = sqr( g.pl.vel.x*g.pl.vel.x + g.pl.vel.y*g.pl.vel.y )
+    if ( g.pl.water_level >= 2 ) then
         if ( speed > PL_WATERSPEED# ) then
-            pl.vel.x = pl.vel.x * (PL_WATERSPEED#/speed)
-            pl.vel.y = pl.vel.y * (PL_WATERSPEED#/speed)
+            g.pl.vel.x = g.pl.vel.x * (PL_WATERSPEED#/speed)
+            g.pl.vel.y = g.pl.vel.y * (PL_WATERSPEED#/speed)
         end if
     elseif ( speed > PL_MAXSPEED# ) then
-        pl.vel.x = pl.vel.x * (PL_MAXSPEED#/speed)
-        pl.vel.y = pl.vel.y * (PL_MAXSPEED#/speed)
+        g.pl.vel.x = g.pl.vel.x * (PL_MAXSPEED#/speed)
+        g.pl.vel.y = g.pl.vel.y * (PL_MAXSPEED#/speed)
     end if
 
-    pl_water_level pl, nodes(), planes()
+    pl_water_level g, nodes(), planes()
 
-    pl_gravity dt, pl, tr, model_count, models(), brush(), clp_buffer(), planes()
+    pl_gravity g, dt, tr, model_count, models(), brush(), clp_buffer(), planes()
 
     ''
     '' Jump. Only from the ground, and after pl_gravity, which is what
@@ -796,38 +797,39 @@ sub pl_move ( _
     '' The velocity is set rather than added, so holding the key gives one
     '' jump of a fixed height instead of accumulating thrust.
     ''
-    if ( pl.water_level >= 3 ) then
+    if ( g.pl.water_level >= 3 ) then
         ''
         '' Fully under: the jump key swims, every tick rather than only
         '' from a surface.
         ''
-        if ( jump ) then pl.vel.z = PL_SWIM#
+        if ( jump ) then g.pl.vel.z = PL_SWIM#
 
-    elseif ( pl.water_level = 2 ) then
+    elseif ( g.pl.water_level = 2 ) then
         ''
         '' Head out, body in -- at the surface. Swim speed is not enough to
         '' leave the water here: the moment the waist clears it gravity
         '' comes back, and 100 up against 800 down is a six unit hop, which
         '' clears nothing. A jump from the surface is a real jump.
         ''
-        if ( jump ) then pl.vel.z = PL_JUMP#
+        if ( jump ) then g.pl.vel.z = PL_JUMP#
 
-    elseif ( jump and pl.on_ground ) then
-        pl.vel.z     = PL_JUMP#
-        pl.on_ground = false
+    elseif ( jump and g.pl.on_ground ) then
+        g.pl.vel.z     = PL_JUMP#
+        g.pl.on_ground = false
     end if
 
-    pl_step_move pl.pos, pl.vel, dt, pl, tr, model_count, models(), brush(), clp_buffer(), planes()
+    pl_step_move g, g.pl.pos, g.pl.vel, dt, tr, model_count, models(), brush(), _
+                  clp_buffer(), planes()
 
-    if ( pl.pos.z > pl.peak_z ) then pl.peak_z = pl.pos.z
+    if ( g.pl.pos.z > g.pl.peak_z ) then g.pl.peak_z = g.pl.pos.z
 
     ''
     '' Hand the eye back to the renderer, converting Z-up to Y-up. This is the
     '' only place the two spaces meet.
     ''
-    cam.pos.x = pl.pos.x
-    cam.pos.y = pl.pos.z + PL_EYE#
-    cam.pos.z = pl.pos.y
+    g.cam.pos.x = g.pl.pos.x
+    g.cam.pos.y = g.pl.pos.z + PL_EYE#
+    g.cam.pos.z = g.pl.pos.y
 
 end sub
 
@@ -838,7 +840,9 @@ end sub
 ''       which passes the count and nothing else -- it does not need to
 ''       know where the hulls live.
 ''::::::::::
-sub pl_load_hulls ( wld as World )
+sub pl_load_hulls ( _
+    g as Game _
+)
     dim f as FILE
     dim mapped as long
 
@@ -856,11 +860,11 @@ sub pl_load_hulls ( wld as World )
     '' hole for the allocations that come after. The far heap is the
     '' fragmented pool; DOS memory is not.
     ''
-    wld.store.clips = uglArrNew&( UGL.MEM, len( clp_buffer(0) ), wld.count.clips, 0 )
-    if ( wld.store.clips = 0 ) then
-        wld.store.clips = uglArrNew&( UGL.EMS, len( clp_buffer(0) ), wld.count.clips, PAGE_SLOT )
+    g.wld.store.clips = uglArrNew&( UGL.MEM, len( clp_buffer(0) ), g.wld.count.clips, 0 )
+    if ( g.wld.store.clips = 0 ) then
+        g.wld.store.clips = uglArrNew&( UGL.EMS, len( clp_buffer(0) ), g.wld.count.clips, PAGE_SLOT )
     end if
-    if ( wld.store.clips = 0 ) then sys_error "0x0033, no room for the clip hulls"
+    if ( g.wld.store.clips = 0 ) then sys_error "0x0033, no room for the clip hulls"
 
     '' Hands the descriptor over. NOT ceremony: this is what takes it out
     '' of the far heap's chain, and only BASIC can do that correctly. Left
@@ -872,7 +876,7 @@ sub pl_load_hulls ( wld as World )
     if ( fileOpen%( f, "clip.pag", F4READ ) = 0 ) then
         sys_error "0x0034, clip.pag missing"
     end if
-    if ( uglArrLoad%( f, wld.store.clips ) = 0 ) then
+    if ( uglArrLoad%( f, g.wld.store.clips ) = 0 ) then
         fileClose f
         sys_error "0x0035, clip.pag short or unreadable"
     end if
@@ -883,7 +887,7 @@ sub pl_load_hulls ( wld as World )
     '' the descriptor at the entire block and every subscript works from
     '' here on with no further calls.
     ''
-    mapped = uglArrMap&( wld.store.clips, clp_buffer(), 0 )
+    mapped = uglArrMap&( g.wld.store.clips, clp_buffer(), 0 )
 end sub
 
 '' Clipnode record size, for the bench report.

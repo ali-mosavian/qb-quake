@@ -27,12 +27,17 @@ option explicit
 '$include: 'q_vis.bi'
 '$include: 'q_draw.bi'
 '$include: 'q_scr.bi'
+'$include: 'q_cam.bi'
+'$include: 'q_pl.bi'
+'$include: 'q_ent.bi'
+'$include: 'q_snd.bi'
+'$include: 'q_game.bi'
 
 ''
 '' This module's own procedures.
 ''
 declare sub hud_shade ( _
-    wld as World, _
+    g as Game, _
     dc as long, _
     x0 as integer, _
     y0 as integer, _
@@ -41,9 +46,9 @@ declare sub hud_shade ( _
     rw as integer _
 )
 declare function draw_load_font ( _
+    g as Game, _
     flname as string, _
     colb as long, _
-    env as Env, _
     bit_array() as integer _
 ) as integer
 declare sub bevel ( _
@@ -125,13 +130,13 @@ declare sub hud_num ( _
     col as integer _
 )
 declare sub hud_panel ( _
+    g as Game, _
     dc as long, _
     x as integer, _
     y as integer, _
     w as integer, _
     h as integer, _
-    title as string, _
-    wld as World _
+    title as string _
 )
 declare sub hud_row ( _
     dc as long, _
@@ -155,7 +160,9 @@ declare sub rivet ( _
     y as integer _
 )
 declare sub draw_spinner ( )
-declare sub scr_load_chrome ( env as Env )
+declare sub scr_load_chrome ( _
+    g as Game _
+)
 declare sub scr_load_palette ( )
 declare sub scr_load_tick ( )
 
@@ -167,26 +174,21 @@ declare sub scr_load_part ( _
     byval redraw as integer _
 )
 declare sub scr_draw_hud ( _
-    h_dst_dc as long, _
-    env as Env, _
-    scr as ScreenState, _
-    rdr as RenderState, _
-    vis as VisState, _
-    wld as World _
+    g as Game, _
+    h_dst_dc as long _
 )
 declare sub draw_init_font ( _
-    env as Env, _
+    g as Game, _
     bit_array() as integer _
 )
 declare sub scr_count_frame ( _
-    env as Env, _
-    ft as FrameTimes, _
-    scr as ScreenState, _
-    rdr as RenderState _
+    g as Game _
 )
 declare sub scr_mip_tick ( percent as single )
 declare sub scr_hud_colors ( )
-declare sub scr_begin_loading ( env as Env )
+declare sub scr_begin_loading ( _
+    g as Game _
+)
 
 ''
 '' Declared here, not in a header: this module is the only caller, and a
@@ -194,7 +196,9 @@ declare sub scr_begin_loading ( env as Env )
 '' table is finite, and it ran out when they all got everything.
 ''
 declare function sc_frame_end ( ) as integer
-declare function mod_cm_ready ( wld as World ) as integer
+declare function mod_cm_ready ( _
+    g as Game _
+) as integer
 
 ''
 '' Loading screen geometry. Private to this module on purpose: the bar is
@@ -843,7 +847,9 @@ end sub
 ''       scr_load_tick repaints only the bars and the percentage, which is
 ''       what keeps ~200 ticks cheap.
 ''::::::::::
-sub scr_load_chrome ( env as Env )
+sub scr_load_chrome ( _
+    g as Game _
+)
     dim ttl as string, sub1 as string, ftr as string
     dim plate_x as integer, plate_w as integer
 
@@ -877,7 +883,7 @@ sub scr_load_chrome ( env as Env )
     '' The map on a MAIN-style banner: grey riveted metal, so the orange
     '' name carries against it.
     ''
-    sub1 = rtrim$( env.map_name )
+    sub1 = rtrim$( g.env.map_name )
     plate_w = len(sub1)*4 + 26
     plate_x = (320 - plate_w) \ 2
     uglRectF ldr.dc, plate_x, PAN_Y-19, plate_x+plate_w, PAN_Y-4, C_METAL
@@ -904,9 +910,9 @@ end sub
 
 '':::::::::
 function draw_load_font ( _
+    g as Game, _
     flname as string, _
     colb as long, _
-    env as Env, _
     bit_array() as integer _
 ) as integer
     dim col as long
@@ -920,7 +926,7 @@ function draw_load_font ( _
     
     trn = uglColor8( 7, 0, 3 )    
     
-    if ( not uglNewMult( h_font_char(), 256, UGL.EMS, env.c_fmt, 8, 8 ) ) then
+    if ( not uglNewMult( h_font_char(), 256, UGL.EMS, g.env.c_fmt, 8, 8 ) ) then
         draw_load_font = 0
         exit function
     end if        
@@ -1055,7 +1061,7 @@ end sub
 ''       loaded, so the overlay never depends on -lm's data being there.
 ''::::::::::
 sub hud_shade ( _
-    wld as World, _
+    g as Game, _
     dc as long, _
     x0 as integer, _
     y0 as integer, _
@@ -1064,7 +1070,7 @@ sub hud_shade ( _
     rw as integer _
 )
 
-    if ( mod_cm_ready( wld ) = 0 ) then
+    if ( mod_cm_ready( g ) = 0 ) then
         uglRectF dc, x0, y0, x1, y1, hc_slab
         exit sub
     end if
@@ -1075,26 +1081,26 @@ sub hud_shade ( _
     '' Hoisted into a variable because BASIC will not take a Function
     '' call in a Sub's argument list here.
     dim cmp as long
-    cmp = mod_cm_map( wld )
+    cmp = mod_cm_map ( g )
     uglShadeRect dc, x0, y0, x1, y1, cmp, rw
 end sub
 
 
 sub hud_panel ( _
+    g as Game, _
     dc as long, _
     x as integer, _
     y as integer, _
     w as integer, _
     h as integer, _
-    title as string, _
-    wld as World _
+    title as string _
 )
     ''
     '' Tinted glass, then the slab's furniture: the scene stays visible
     '' under the panel, darkened three-quarters of the way down Quake's
     '' colormap, with the bevel and rivets on top saying where it ends.
     ''
-    hud_shade wld, dc, x, y, x+w, y+h, 46
+    hud_shade g, dc, x, y, x+w, y+h, 46
     uglHLine dc, x, y, x+w, hc_slabhi
     uglVLine dc, x, y, y+h, hc_slabhi
     uglHLine dc, x, y+h, x+w, hc_slablo
@@ -1277,12 +1283,8 @@ end sub
 ''       "press f1 to disable" on every row cost more space than the rows.
 ''::::::::::
 sub scr_draw_hud ( _
-    h_dst_dc as long, _
-    env as Env, _
-    scr as ScreenState, _
-    rdr as RenderState, _
-    vis as VisState, _
-    wld as World _
+    g as Game, _
+    h_dst_dc as long _
 )
     dim scs as CacheStats
     dim l as integer, r as integer
@@ -1292,13 +1294,13 @@ sub scr_draw_hud ( _
 
     cw = 146
     lx = 3
-    rx = env.x_res - cw - 3
+    rx = g.env.x_res - cw - 3
 
-    if ( scr.stats ) then
+    if ( g.scr.stats ) then
         ''
         '' left, top: this frame
         ''
-        hud_panel h_dst_dc, lx, 6, cw, 76, "RENDER", wld
+        hud_panel g, h_dst_dc, lx, 6, cw, 76, "RENDER"
 
         ''
         '' The frame rate is the number a player actually watches, so it
@@ -1306,20 +1308,20 @@ sub scr_draw_hud ( _
         '' threshold -- readable from across the room in a way a fourth
         '' right-aligned row never was.
         ''
-        if ( scr.fps >= 30 ) then
+        if ( g.scr.fps >= 30 ) then
             fcol = hc_good
-        elseif ( scr.fps >= 15 ) then
+        elseif ( g.scr.fps >= 15 ) then
             fcol = hc_warn
         else
             fcol = hc_bad
         end if
-        hud_num h_dst_dc, lx+6, 13, 2, ltrim$(str$( scr.fps )), fcol
+        hud_num h_dst_dc, lx+6, 13, 2, ltrim$(str$( g.scr.fps )), fcol
         draw_string h_dst_dc, lx+34, 18, "fps"
 
-        hud_row h_dst_dc, lx, cw, 30, "Polygons", ltrim$(str$( rdr.polys ))
-        hud_row h_dst_dc, lx, cw, 38, "Triangles", ltrim$(str$( rdr.tris ))
+        hud_row h_dst_dc, lx, cw, 30, "Polygons", ltrim$(str$( g.rdr.polys ))
+        hud_row h_dst_dc, lx, cw, 38, "Triangles", ltrim$(str$( g.rdr.tris ))
         hud_row h_dst_dc, lx, cw, 46, "Leaves drawn/culled", _
-                ltrim$(str$( vis.drw_leafs )) + "/" + ltrim$(str$( vis.cul_leafs ))
+                ltrim$(str$( g.vis.drw_leafs )) + "/" + ltrim$(str$( g.vis.cul_leafs ))
         draw_string h_dst_dc, lx+5, 60, "fps 60"
         hud_graph h_dst_dc, lx+cw-GRAPH_N-5, 59, 17, g_fps(), 60
 
@@ -1331,7 +1333,7 @@ sub scr_draw_hud ( _
         '' one crossing into d_surf for the whole panel
         sc_stats scs
 
-        hud_panel h_dst_dc, lx, 90, cw, 78, "SURFACE CACHE", wld
+        hud_panel g, h_dst_dc, lx, 90, cw, 78, "SURFACE CACHE"
 
         ''
         '' Warning flash: evictions and flushes are the events being
@@ -1368,39 +1370,39 @@ sub scr_draw_hud ( _
         ''
         '' right: the map, which never changes while it is loaded
         ''
-        hud_panel h_dst_dc, rx, 6, cw, 56, "WORLD", wld
+        hud_panel g, h_dst_dc, rx, 6, cw, 56, "WORLD"
         hud_row h_dst_dc, rx, cw, 12, "Resolution", _
-                ltrim$(str$( env.x_res )) + "x" + ltrim$(str$( env.y_res ))
-        hud_row h_dst_dc, rx, cw, 20, "Vertices", ltrim$(str$( wld.count.verts ))
-        hud_row h_dst_dc, rx, cw, 28, "Edges", ltrim$(str$( wld.count.edges ))
-        hud_row h_dst_dc, rx, cw, 36, "Faces", ltrim$(str$( wld.count.faces ))
-        hud_row h_dst_dc, rx, cw, 44, "Nodes", ltrim$(str$( wld.count.nodes ))
-        hud_row h_dst_dc, rx, cw, 52, "Leaves", ltrim$(str$( wld.count.leaves ))
+                ltrim$(str$( g.env.x_res )) + "x" + ltrim$(str$( g.env.y_res ))
+        hud_row h_dst_dc, rx, cw, 20, "Vertices", ltrim$(str$( g.wld.count.verts ))
+        hud_row h_dst_dc, rx, cw, 28, "Edges", ltrim$(str$( g.wld.count.edges ))
+        hud_row h_dst_dc, rx, cw, 36, "Faces", ltrim$(str$( g.wld.count.faces ))
+        hud_row h_dst_dc, rx, cw, 44, "Nodes", ltrim$(str$( g.wld.count.nodes ))
+        hud_row h_dst_dc, rx, cw, 52, "Leaves", ltrim$(str$( g.wld.count.leaves ))
 
         ''
         '' one footer line for every toggle, in the order of the keys
         ''
         ftr = "F1 mip "
-        if ( rdr.use_mips ) then ftr = ftr + "ON " else ftr = ftr + "off"
-        if ( rdr.rend_mode = 0 ) then
+        if ( g.rdr.use_mips ) then ftr = ftr + "ON " else ftr = ftr + "off"
+        if ( g.rdr.rend_mode = 0 ) then
             ftr = ftr + "   F2 perspective"
-        elseif ( rdr.rend_mode = 1 ) then
+        elseif ( g.rdr.rend_mode = 1 ) then
             ftr = ftr + "   F2 affine     "
         else
             ftr = ftr + "   F2 wireframe  "
         end if
         ftr = ftr + "   B cull "
-        if ( rdr.backface ) then ftr = ftr + "ON " else ftr = ftr + "off"
+        if ( g.rdr.backface ) then ftr = ftr + "ON " else ftr = ftr + "off"
         ftr = ftr + "   L lm "
-        if ( rdr.lightmap ) then ftr = ftr + "ON " else ftr = ftr + "off"
+        if ( g.rdr.lightmap ) then ftr = ftr + "ON " else ftr = ftr + "off"
         ftr = ftr + "   F12 hide"
 
-        yy = env.y_res - 9
-        uglRectF h_dst_dc, 0, yy-2, env.x_res, env.y_res, hc_bg
-        uglHLine h_dst_dc, 0, yy-2, env.x_res, hc_slabhi
+        yy = g.env.y_res - 9
+        uglRectF h_dst_dc, 0, yy-2, g.env.x_res, g.env.y_res, hc_bg
+        uglHLine h_dst_dc, 0, yy-2, g.env.x_res, hc_slabhi
         draw_string h_dst_dc, 4, yy, ftr
     else
-        yy = env.y_res - 9
+        yy = g.env.y_res - 9
         draw_string h_dst_dc, 4, yy, "F12 stats"
     end if
 
@@ -1408,18 +1410,18 @@ sub scr_draw_hud ( _
     '' VU meters, bottom right, above the footer rule
     ''
     sndMasterGetVU l, r
-    hud_vu h_dst_dc, env.x_res-76, env.y_res-24, 70, 4, l*100/255, 0
-    hud_vu h_dst_dc, env.x_res-76, env.y_res-18, 70, 4, r*100/255, 1
+    hud_vu h_dst_dc, g.env.x_res-76, g.env.y_res-24, 70, 4, l*100/255, 0
+    hud_vu h_dst_dc, g.env.x_res-76, g.env.y_res-18, 70, 4, r*100/255, 1
 
-    draw_string_r h_dst_dc, env.x_res-4, env.y_res-9, "powered by uGL"
+    draw_string_r h_dst_dc, g.env.x_res-4, g.env.y_res-9, "powered by uGL"
 end sub
 
 
 ''::::::::::
 sub scr_screenshot ( _
+    g as Game, _
     flname as string, _
-    byval dc as long, _
-    env as Env _
+    byval dc as long _
 )
     dim f as integer
     dim x as integer
@@ -1434,8 +1436,8 @@ sub scr_screenshot ( _
     dim row as string
     dim buf as string
 
-    w   = env.x_res
-    h   = env.y_res
+    w   = g.env.x_res
+    h   = g.env.y_res
     pad = (4 - (w mod 4)) mod 4
 
     rowlen  = w + pad
@@ -1487,10 +1489,10 @@ end sub
 
 ''::::::::::
 sub draw_init_font ( _
-    env as Env, _
+    g as Game, _
     bit_array() as integer _
 )
-    if ( not draw_load_font( "base.dat::font/4x6.fnt", 254, env, bit_array() ) ) then
+    if ( not draw_load_font( g, "base.dat::font/4x6.fnt", 254, bit_array() ) ) then
         sys_error "0x0000, Could not load font..."
     end if    
 
@@ -1500,7 +1502,9 @@ end sub
 '' name: scr_begin_loading
 '' desc: Mode 13h for the duration of loading only.
 ''::::::::::
-sub scr_begin_loading ( env as Env )
+sub scr_begin_loading ( _
+    g as Game _
+)
     ldr.dc = uglSetVideoDC( UGL.8BIT, 320, 200, 1 )
     if ( ldr.dc = false ) then
         sys_error "0x3001, Could not set loading video mode"
@@ -1508,7 +1512,7 @@ sub scr_begin_loading ( env as Env )
 
     '' palette before chrome: everything below indexes into its ramps
     scr_load_palette
-    scr_load_chrome env
+    scr_load_chrome g
     scr_load_stage "starting up"
     scr_load_tick
 
@@ -1525,31 +1529,28 @@ end sub
 ''       counters the next frame will accumulate into.
 ''::::::::::
 sub scr_count_frame ( _
-    env as Env, _
-    ft as FrameTimes, _
-    scr as ScreenState, _
-    rdr as RenderState _
+    g as Game _
 )
 
     fps1 = fps1 + 1
 
-    if env.sec_timer.counter > 0 then
-        scr.fps = fps1
-        if ( fps1 > scr.fps_peak ) then scr.fps_peak = fps1
+    if g.env.sec_timer.counter > 0 then
+        g.scr.fps = fps1
+        if ( fps1 > g.scr.fps_peak ) then g.scr.fps_peak = fps1
         '' low ignores the first completed second: it contains the tail of
         '' loading and the first surface builds, so it is not a frame rate
         '' the renderer ever sustains
-        if ( scr.bench_secs > 0 ) then
-            if ( ft.fps_low = 0 or fps1 < ft.fps_low ) then ft.fps_low = fps1
+        if ( g.scr.bench_secs > 0 ) then
+            if ( g.ft.fps_low = 0 or fps1 < g.ft.fps_low ) then g.ft.fps_low = fps1
         end if
         g_fsec = fps1
         fps1 = 0
-        env.sec_timer.counter = 0
-        scr.bench_secs = scr.bench_secs + 1
+        g.env.sec_timer.counter = 0
+        g.scr.bench_secs = g.scr.bench_secs + 1
     end if
 
-    rdr.tris = 0
-    rdr.polys = 0
+    g.rdr.tris = 0
+    g.rdr.polys = 0
 
     '' The cache closes its own frame now and reports what it built; the
     '' HUD only keeps the history graph, which is the HUD's business.

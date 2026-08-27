@@ -17,19 +17,29 @@ option explicit
 '$include: 'q_map.bi'
 '$include: 'q_vis.bi'
 '$include: 'q_draw.bi'
+'$include: 'q_scr.bi'
+'$include: 'q_cam.bi'
+'$include: 'q_pl.bi'
+'$include: 'q_ent.bi'
+'$include: 'q_snd.bi'
+'$include: 'q_game.bi'
 
 ''
 '' This module's own procedures.
 ''
-declare sub sc_flush ( wld as World )
-declare sub sc_reset ( wld as World )
+declare sub sc_flush ( _
+    g as Game _
+)
+declare sub sc_reset ( _
+    g as Game _
+)
 declare function sc_ftake ( _
     byval ord as integer, _
     byval gran as integer _
 ) as integer
 declare sub sb_fetch ( _
+    g as Game, _
     byval face as integer, _
-    wld as World, _
     tri_buffer() as Face, _
     gv_buf() as integer _
 )
@@ -61,18 +71,18 @@ declare function sc_find ( _
     byval h as integer _
 )
 declare function sc_alloc ( _
+    g as Game, _
     byval face as integer, _
     byval mip as integer, _
     byval w as integer, _
     byval h as integer, _
     byval fw as integer, _
-    byval fh as integer, _
-    wld as World _
+    byval fh as integer _
 )
 declare sub sb_dump ( _
+    g as Game, _
     byval face as integer, _
     byval mip as integer, _
-    wld as World, _
     tri_buffer() as Face, _
     tex_inf_buff() as TexInfo, _
     gv_buf() as integer, _
@@ -80,22 +90,26 @@ declare sub sb_dump ( _
     mip_buff_inf() as MipTex _
 )
 declare sub sb_build ( _
+    g as Game, _
     byval dc as long, _
     byval tex as long, _
     byval face as integer, _
     byval mip as integer, _
     byval sw as integer, _
     byval sh as integer, _
-    wld as World, _
     tri_buffer() as Face, _
     tex_inf_buff() as TexInfo, _
     gv_buf() as integer, _
     mip_buff_inf() as MipTex _
 )
 declare function sc_shift ( byval v as integer ) as integer
-declare sub sc_init ( wld as World )
+declare sub sc_init ( _
+    g as Game _
+)
 declare sub sc_shutdown ( )
-declare function sc_selftest ( wld as World ) as integer
+declare function sc_selftest ( _
+    g as Game _
+) as integer
 declare function sb_seg ( byval p as long ) as integer
 declare function sc_frame_end ( ) as integer
 declare function sc_ready ( ) as integer
@@ -107,7 +121,7 @@ declare function sc_held ( byval face as integer ) as integer
 '' table is finite, and it ran out when they all got everything.
 ''
 declare function mod_lm_map ( _
-    wld as World, _
+    g as Game, _
     byval row as integer _
 ) as long
 
@@ -545,7 +559,9 @@ end sub
 '' desc: Empties the pool. DCs are made on demand, so nothing is claimed
 ''       here beyond the bookkeeping.
 ''::::::::::
-sub sc_init ( wld as World )
+sub sc_init ( _
+    g as Game _
+)
     dim i as integer, j as integer
 
     sc_gen = 1
@@ -559,7 +575,7 @@ sub sc_init ( wld as World )
     sc_evict = 0
     sc_tbuilds = 0
 
-    redim sc_slot(wld.count.faces-1) as CacheSlot
+    redim sc_slot(g.wld.count.faces-1) as CacheSlot
     redim sc_desc(SC_NCLS-1) as long
 
     redim sc_lhead(SC_NORD-1) as integer
@@ -586,7 +602,7 @@ sub sc_init ( wld as World )
     '' has to be spelled out or every face would claim to own the first
     '' surface in the store.
     ''
-    for i = 0 to wld.count.faces-1
+    for i = 0 to g.wld.count.faces-1
         sc_slot(i).blk = -1
     next i
 
@@ -646,7 +662,9 @@ end function
 ''       class. The DCs themselves are kept -- they cost EMS, not
 ''       correctness, and making them again is the expensive part.
 ''::::::::::
-sub sc_flush ( wld as World )
+sub sc_flush ( _
+    g as Game _
+)
     dim i as integer
 
     sc_next = 0
@@ -663,7 +681,7 @@ sub sc_flush ( wld as World )
         sc_fhead(i) = -1
     next i
     sc_rfree = -1
-    for i = 0 to wld.count.faces-1
+    for i = 0 to g.wld.count.faces-1
         sc_slot(i).blk = -1
     next i
     sc_bcnt = 0
@@ -725,13 +743,13 @@ end function
 ''       if the surface is larger than the filler can address or EMS is out.
 ''::::::::::
 function sc_alloc ( _
+    g as Game, _
     byval face as integer, _
     byval mip as integer, _
     byval w as integer, _
     byval h as integer, _
     byval fw as integer, _
-    byval fh as integer, _
-    wld as World _
+    byval fh as integer _
 )
     dim a as integer, b as integer, cidx as integer, bord as integer
     dim dc as long
@@ -874,7 +892,7 @@ function sc_alloc ( _
         end if
         if ( blk < 0 ) then
             '' the backstop, and it should now be unreachable
-            sc_flush wld
+            sc_flush g
             sc_alloc = 0
             exit function
         end if
@@ -906,10 +924,12 @@ end function
 '' desc: Drops every slot without giving up the DCs, for when the map
 ''       changes and the face numbering with it.
 ''::::::::::
-sub sc_reset ( wld as World )
+sub sc_reset ( _
+    g as Game _
+)
     dim i as integer
 
-    for i = 0 to wld.count.faces-1
+    for i = 0 to g.wld.count.faces-1
         sc_slot(i).tag = 0
         sc_slot(i).blk = -1
     next i
@@ -949,7 +969,9 @@ end sub
 ''       faces get distinct surfaces, a flush retires every slot, and bytes
 ''       written to a cached DC read back.
 ''::::::::::
-function sc_selftest ( wld as World ) as integer
+function sc_selftest ( _
+    g as Game _
+) as integer
     dim d0 as long, d1 as long, d2 as long
     dim i as integer, gen0 as integer, made0 as integer
     dim wr(31) as integer, rd(31) as integer
@@ -961,7 +983,7 @@ function sc_selftest ( wld as World ) as integer
         exit function
     end if
 
-    sc_reset wld
+    sc_reset g
 
     '' 224 rounds to 256, 112 to 128, 20 to 32
     if ( sc_shift( 224 ) <> 8 ) then sc_selftest = -2 : exit function
@@ -970,10 +992,10 @@ function sc_selftest ( wld as World ) as integer
     if ( sc_shift( 16 ) <> 4 ) then sc_selftest = -5 : exit function
 
     '' 224x224 pads to 256x256 = 64K, four pages: it must be refused
-    if ( sc_alloc( 9, 0, 224, 224, 224, 224, wld ) <> 0 ) then sc_selftest = -6 : exit function
+    if ( sc_alloc( g, 9, 0, 224, 224, 224, 224 ) <> 0 ) then sc_selftest = -6 : exit function
     '' 112x112 pads to 128x128 = 16,384, exactly one page: it must not be
-    d0 = sc_alloc( 0, 0, 112, 112, 112, 112, wld )
-    d1 = sc_alloc( 1, 0, 112, 96, 112, 96, wld )
+    d0 = sc_alloc ( g, 0, 0, 112, 112, 112, 112 )
+    d1 = sc_alloc ( g, 1, 0, 112, 96, 112, 96 )
     if ( d0 = 0 ) then sc_selftest = -7 : exit function
     if ( d1 = 0 ) then sc_selftest = -8 : exit function
     '' both round to 128x128, so they share a view and differ only in where
@@ -1006,12 +1028,12 @@ function sc_selftest ( wld as World ) as integer
     '' a flush must retire the slots and hand the DCs back, not make more
     gen0 = sc_gen
     made0 = sc_made
-    sc_flush wld
+    sc_flush g
     if ( sc_gen = gen0 ) then sc_selftest = -13 : exit function
     if ( sc_find( 0, 0, 112, 112 ) <> 0 ) then sc_selftest = -14 : exit function
 
     '' a flush rewinds the store and makes no new view
-    d2 = sc_alloc( 5, 0, 112, 112, 112, 112, wld )
+    d2 = sc_alloc ( g, 5, 0, 112, 112, 112, 112 )
     if ( d2 <> d0 ) then sc_selftest = -15 : exit function
     if ( sc_made <> made0 ) then sc_selftest = -16 : exit function
     if ( sc_slot(5).blk < 0 ) then sc_selftest = -23 : exit function
@@ -1025,12 +1047,12 @@ function sc_selftest ( wld as World ) as integer
     '' happens, that a HIT changes who gets evicted, and that eviction
     '' takes exactly one surface rather than the whole store.
     ''
-    sc_reset wld
+    sc_reset g
 
     '' fill one class: three faces, three distinct blocks
-    d0 = sc_alloc( 0, 0, 112, 112, 112, 112, wld )
-    d1 = sc_alloc( 1, 0, 112, 112, 112, 112, wld )
-    d2 = sc_alloc( 2, 0, 112, 112, 112, 112, wld )
+    d0 = sc_alloc ( g, 0, 0, 112, 112, 112, 112 )
+    d1 = sc_alloc ( g, 1, 0, 112, 112, 112, 112 )
+    d2 = sc_alloc ( g, 2, 0, 112, 112, 112, 112 )
     if ( d0 = 0 or d1 = 0 or d2 = 0 ) then sc_selftest = -24 : exit function
     '' PROBE: three allocations should be three new blocks. Separate codes --
     '' a single packed number turned out to have two valid decodes.
@@ -1050,7 +1072,7 @@ function sc_selftest ( wld as World ) as integer
     ofs0 = clng( sc_slot(0).blk )
     live0 = sc_live
     flush0 = sc_flushes
-    if ( sc_alloc( 0, 1, 56, 56, 112, 112, wld ) = 0 ) then sc_selftest = -29 : exit function
+    if ( sc_alloc( g, 0, 1, 56, 56, 112, 112 ) = 0 ) then sc_selftest = -29 : exit function
     if ( clng( sc_slot(0).blk ) <> ofs0 ) then sc_selftest = -30 : exit function
     if ( sc_live <> live0 ) then sc_selftest = -31 : exit function
 
@@ -1069,16 +1091,16 @@ function sc_selftest ( wld as World ) as integer
     '' since 0 XOR 1 is 2^0. Growing both faces frees both, and the second
     '' free must merge them into one order-1 block.
     ''
-    sc_reset wld
-    if ( sc_alloc( 0, 0, 16, 16, 16, 16, wld ) = 0 ) then sc_selftest = -40 : exit function
-    if ( sc_alloc( 1, 0, 16, 16, 16, 16, wld ) = 0 ) then sc_selftest = -41 : exit function
+    sc_reset g
+    if ( sc_alloc( g, 0, 0, 16, 16, 16, 16 ) = 0 ) then sc_selftest = -40 : exit function
+    if ( sc_alloc( g, 1, 0, 16, 16, 16, 16 ) = 0 ) then sc_selftest = -41 : exit function
     '' grow both: each takes a new order-2 block and hands its order-0 back
-    if ( sc_alloc( 0, 0, 32, 32, 32, 32, wld ) = 0 ) then sc_selftest = -42 : exit function
-    if ( sc_alloc( 1, 0, 32, 32, 32, 32, wld ) = 0 ) then sc_selftest = -43 : exit function
+    if ( sc_alloc( g, 0, 0, 32, 32, 32, 32 ) = 0 ) then sc_selftest = -42 : exit function
+    if ( sc_alloc( g, 1, 0, 32, 32, 32, 32 ) = 0 ) then sc_selftest = -43 : exit function
 
     next0 = sc_next
     '' 32x16 is 512 bytes, order 1: only the MERGED pair can serve it
-    if ( sc_alloc( 2, 0, 32, 16, 32, 16, wld ) = 0 ) then sc_selftest = -44 : exit function
+    if ( sc_alloc( g, 2, 0, 32, 16, 32, 16 ) = 0 ) then sc_selftest = -44 : exit function
     if ( sc_next <> next0 ) then sc_selftest = -45 : exit function
 
     ''
@@ -1087,14 +1109,14 @@ function sc_selftest ( wld as World ) as integer
     '' A freed order-2 block must be halved to serve an order-0 request
     '' rather than the store being grown again.
     ''
-    sc_reset wld
-    if ( sc_alloc( 0, 0, 32, 32, 32, 32, wld ) = 0 ) then sc_selftest = -46 : exit function
-    if ( sc_alloc( 0, 0, 64, 64, 64, 64, wld ) = 0 ) then sc_selftest = -47 : exit function
+    sc_reset g
+    if ( sc_alloc( g, 0, 0, 32, 32, 32, 32 ) = 0 ) then sc_selftest = -46 : exit function
+    if ( sc_alloc( g, 0, 0, 64, 64, 64, 64 ) = 0 ) then sc_selftest = -47 : exit function
     next0 = sc_next
-    if ( sc_alloc( 1, 0, 16, 16, 16, 16, wld ) = 0 ) then sc_selftest = -48 : exit function
+    if ( sc_alloc( g, 1, 0, 16, 16, 16, 16 ) = 0 ) then sc_selftest = -48 : exit function
     if ( sc_next <> next0 ) then sc_selftest = -49 : exit function
 
-    sc_reset wld
+    sc_reset g
     sc_selftest = 1
 end function
 
@@ -1202,9 +1224,9 @@ end function
 ''       floor-divided by the mip, padded up to the size class.
 ''::::::::::
 sub sb_dump ( _
+    g as Game, _
     byval face as integer, _
     byval mip as integer, _
-    wld as World, _
     tri_buffer() as Face, _
     tex_inf_buff() as TexInfo, _
     gv_buf() as integer, _
@@ -1222,8 +1244,8 @@ sub sb_dump ( _
     dim fh as integer
     dim row as string
 
-    if ( face < 0 or face > wld.count.faces - 1 ) then
-        print "dumpsurf: face"; face; "out of range 0.."; wld.count.faces - 1
+    if ( face < 0 or face > g.wld.count.faces - 1 ) then
+        print "dumpsurf: face"; face; "out of range 0.."; g.wld.count.faces - 1
         exit sub
     end if
 
@@ -1233,7 +1255,7 @@ sub sb_dump ( _
     '' renderer uses, so the sb_build call below reads exactly what it
     '' would have read mid-frame.
     ''
-    sb_fetch face, wld, tri_buffer(), gv_buf()
+    sb_fetch g, face, tri_buffer(), gv_buf()
     lmw = gv_buf(GEOM_LMOFS + 4)
     lmh = gv_buf(GEOM_LMOFS + 5)
 
@@ -1250,14 +1272,14 @@ sub sb_dump ( _
 
     mi = tex_inf_buff( tri_buffer(face).tex_info_id ).mip_tex
 
-    dc = sc_alloc( face, mip, sw, sh, pw, ph, wld )
+    dc = sc_alloc ( g, face, mip, sw, sh, pw, ph )
     if ( dc = 0 ) then
         print "dumpsurf: sc_alloc failed for face"; face; "mip"; mip
         exit sub
     end if
 
-    sb_build dc, h_rawtx_dc( mi*4 + mip ), face, mip, pw, ph, _
-             wld, tri_buffer(), tex_inf_buff(), gv_buf(), mip_buff_inf()
+    sb_build g, dc, h_rawtx_dc( mi*4 + mip ), face, mip, pw, ph, tri_buffer(), _
+              tex_inf_buff(), gv_buf(), mip_buff_inf()
 
     fh = freefile
     open "surfdump.bin" for binary as #fh
@@ -1277,13 +1299,13 @@ end sub
 
 ''::::::::::
 sub sb_build ( _
+    g as Game, _
     byval dc as long, _
     byval tex as long, _
     byval face as integer, _
     byval mip as integer, _
     byval sw as integer, _
     byval sh as integer, _
-    wld as World, _
     tri_buffer() as Face, _
     tex_inf_buff() as TexInfo, _
     gv_buf() as integer, _
@@ -1341,7 +1363,7 @@ sub sb_build ( _
         lmw    = 1
         lmh    = 1
     else
-        lmp    = mod_lm_map( wld, lmy )
+        lmp = mod_lm_map ( g, lmy )
         lseg   = clng( sb_seg( lmp ) )
         lofs16 = (lmp and 65535&) + lmx
     end if
@@ -1362,7 +1384,7 @@ sub sb_build ( _
     '' though only lmw of each is ours.
     ''
     sbp.lm_stride = clng( sb_pot( lmw ) )
-    sbp.cmap_ptr = mod_cm_map( wld )
+    sbp.cmap_ptr = mod_cm_map( g )
     sbp.au0 = au
     sbp.av0 = av
     sbp.du  = du
@@ -1394,8 +1416,8 @@ end sub
 ''       need the record -- currently just -dumpsurf.
 ''::::::::::
 sub sb_fetch ( _
+    g as Game, _
     byval face as integer, _
-    wld as World, _
     tri_buffer() as Face, _
     gv_buf() as integer _
 )
@@ -1407,7 +1429,7 @@ sub sb_fetch ( _
         gn = GEOM_W - tri_buffer(face).geom_ofs
     end if
 
-    gp = mod_geom_map( wld, tri_buffer(face).geom_row )
+    gp = mod_geom_map ( g, tri_buffer(face).geom_row )
     dst = clng( varseg( gv_buf(0) ) ) * 65536& + _
           (clng( varptr( gv_buf(0) ) ) and 65535&)
     memCopy dst, gp + clng( tri_buffer(face).geom_ofs ), clng( gn )
