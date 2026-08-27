@@ -286,11 +286,7 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
             '' one map per face: it covers planeid, side, geom_row,
             '' geom_ofs and texinfoid, and nothing between them remaps this
             '' array (the geometry window is a different store entirely).
-            pid = tri_buffer(i).planeid
-            dp  = cam.pos.x*pln_buffer(pid).norm.x + _
-                  cam.pos.y*pln_buffer(pid).norm.z + _
-                  cam.pos.z*pln_buffer(pid).norm.y - _
-                  pln_buffer(pid).dist
+            dp = point_dist_to_plane!( cam.pos, pln_buffer( tri_buffer(i).planeid ) )
                       
             if ( tri_buffer(i).side ) then dp = -dp
                 

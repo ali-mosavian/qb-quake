@@ -552,6 +552,9 @@ declare sub mod_link_anims ( )
 declare sub vid_init ( )
 declare sub in_init ( )
 declare sub s_stop_music ( )
+declare function point_dist_to_plane! ( pt as u3dVector3f, pl as plane2 )
+declare function point_side_of_node% ( byval node_idx as integer, pt as u3dVector3f, _
+                                       nodes() as nodeb, planes() as plane2 )
 declare function r_cull_box ( bbox as bboundbox, frustum() as plane ) as integer
 declare sub r_set_frustum ( frustum() as plane, mtx as u3dMtrx )
 declare sub com_parse_config ( filename as string )
