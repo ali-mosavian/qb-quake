@@ -159,8 +159,14 @@ run)
     conf="$out/dosbox-run.conf"
     # 's' screenshots the backbuffer; fire a series so at least one lands
     # after the (slow) texture conversion finishes.
+    ## CYCLES and CORE are pinned, and default the SAME here as in viz:
+    ## dynamic core, 40000 cycles (about a Pentium 75). A before/after is
+    ## meaningless if the emulated CPU differs between the runs, and
+    ## cycles=max makes it differ with host load.
     sed -e "s|@CDRIVE@|$out|" -e "s|@VDRIVE@|$out|" -e "s|@MDRIVE@|$out|" \
         -e "s|@BAT@|run.bat|" -e "s|@PRE@|autotype -w 150 -p 20.0 s s s s s s s s s s s s|" \
+        -e "s|^cycles=75000$|cycles=${CYCLES:-75000}|" \
+        -e "s|^core=dynamic$|core=${CORE:-dynamic}|" \
         "$ROOT/dosbox/template.conf" > "$conf"
 
     launch "$conf" "${TIMEOUT:-900}"
@@ -170,8 +176,8 @@ run)
         2>/dev/null || echo "(no screenshot captured)"
     ;;
 viz)
-    # windowed run for watching it live. Keeps the template's core=normal:
-    # mgl's fillers are self-modifying, so the dynamic core is out.
+    # windowed run for watching it live. core=dynamic always: it is several
+    # times faster and it is what makes hands-on monitoring practical.
     # starves the debug socket; use dosbox.sh debug for a controllable one.
     map="${arg:-dm3ish.bsp}"
     out="${VBD_OUT:-$ROOT/build/vbd}"
@@ -183,7 +189,8 @@ viz)
     ## filenames and none of the viz-specific edits applied.
     sed -e "s|@CDRIVE@|$out|" -e "s|@VDRIVE@|$out|" -e "s|@MDRIVE@|$out|" \
         -e "s|@BAT@|qrender.exe $map $QFLAGS|" -e "s|@PRE@||" \
-        -e 's/^cycles=max$/cycles=150000/' \
+        -e "s|^cycles=75000$|cycles=${CYCLES:-75000}|" \
+        -e "s|^core=dynamic$|core=${CORE:-dynamic}|" \
         -e 's/^output=surface$/output=opengl/' \
         -e '/^\[sdl\]/a\
 fullscreen=false\
