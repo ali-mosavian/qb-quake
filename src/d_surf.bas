@@ -1214,9 +1214,7 @@ sub sb_build ( byval dc as long, byval tex as long, _
     '' though only lmw of each is ours.
     ''
     sbp.lmstride = clng( sb_pot%( lmw ) )
-    '' Mapped per build, not held: the slot is the depth buffer's, and
-    '' anything that touched depth in between would have taken it back
-    sbp.cmapptr = uglMapEx&( cm_dc, 0, CM_SLOT )
+    sbp.cmapptr = cm_map&
     sbp.au0 = au
     sbp.av0 = av
     sbp.du  = du
