@@ -227,7 +227,7 @@ sub host_init
     sys_mem_mark "mapopen"
     scr_begin_loading
     mod_find_spawn
-    pl_init
+    pl_init pl, cam, env
     mod_alloc
     sys_mem_mark "bsparrays"
 

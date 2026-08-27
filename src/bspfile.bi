@@ -429,49 +429,6 @@ declare sub in_handle_toggles ( )
 ''
 '' pl_move.bas -- player physics
 ''
-declare sub pl_load_hulls ( byval cnt as long )
-declare function pl_hull_rec ( ) as integer
-declare function pl_hull_contents ( _
-    byval node as integer, _
-    p as Vec3 _
-) as integer
-declare function pl_hull_check ( _
-    byval node as integer, _
-    byval p1f as single, _
-    byval p2f as single, _
-    p1 as Vec3, _
-    p2 as Vec3 _
-) as integer
-declare sub pl_trace ( _
-    start as Vec3, _
-    fin as Vec3 _
-)
-declare sub pl_clip_velocity ( _
-    v as Vec3, _
-    norm as Vec3 _
-)
-declare sub pl_slide_move ( _
-    org as Vec3, _
-    vel as Vec3, _
-    byval dt as single _
-)
-declare sub pl_step_move ( _
-    org as Vec3, _
-    vel as Vec3, _
-    byval dt as single _
-)
-declare function pl_point_contents ( p as Vec3 ) as integer
-declare sub pl_water_level ( )
-declare sub pl_gravity ( byval dt as single )
-declare sub pl_init ( )
-declare sub pl_move ( _
-    byval fwd as single, _
-    byval strafe as single, _
-    byval dir_x as single, _
-    byval dir_y as single, _
-    byval jump as integer, _
-    byval dt as single _
-)
 
 declare sub v_open_script ( )
 declare function in_keystroke ( key_down as integer ) as integer
@@ -612,6 +569,24 @@ declare sub mod_link_anims ( )
 declare sub vid_init ( )
 declare sub in_init ( )
 declare sub s_stop_music ( )
+declare sub pl_clip_velocity ( _
+    v as Vec3, _
+    norm as Vec3 _
+)
+declare function pl_hull_contents ( _
+    byval node as integer, _
+    p as Vec3, _
+    clip() as ClipNode, _
+    planes() as Plane _
+) as integer
+declare function pl_hull_rec ( ) as integer
+declare sub pl_load_hulls ( byval cnt as long )
+declare function pl_point_contents ( _
+    p as Vec3, _
+    nodes() as Node, _
+    planes() as Plane _
+) as integer
+
 declare function r_plane_dist ( _
     pt as u3dVector3f, _
     pl as Plane _

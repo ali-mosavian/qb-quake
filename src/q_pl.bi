@@ -84,3 +84,81 @@ type PlayerState
 end type
 
 common shared /pl_s/ pl as PlayerState
+
+''
+'' pl_move.bas. Declared here, not in bspfile.bi: these take PlayerState
+'' and TraceResult, which are defined above.
+''
+declare sub pl_gravity ( _
+    byval dt as single, _
+    pl as PlayerState, _
+    tr as TraceResult, _
+    byval nmodels as integer, _
+    models() as Submodel, _
+    clip() as ClipNode, _
+    planes() as Plane _
+)
+declare function pl_hull_check ( _
+    byval node as integer, _
+    byval p1f as single, _
+    byval p2f as single, _
+    p1 as Vec3, _
+    p2 as Vec3, _
+    tr as TraceResult, _
+    clip() as ClipNode, _
+    planes() as Plane _
+) as integer
+declare sub pl_init ( _
+    pl as PlayerState, _
+    cam as CamState, _
+    env as Env _
+)
+declare sub pl_move ( _
+    byval fwd as single, _
+    byval strafe as single, _
+    byval dir_x as single, _
+    byval dir_y as single, _
+    byval jump as integer, _
+    byval dt as single, _
+    pl as PlayerState, _
+    cam as CamState, _
+    byval nmodels as integer, _
+    models() as Submodel, _
+    nodes() as Node, _
+    planes() as Plane _
+)
+declare sub pl_slide_move ( _
+    org as Vec3, _
+    vel as Vec3, _
+    byval dt as single, _
+    tr as TraceResult, _
+    byval nmodels as integer, _
+    models() as Submodel, _
+    clip() as ClipNode, _
+    planes() as Plane _
+)
+declare sub pl_step_move ( _
+    org as Vec3, _
+    vel as Vec3, _
+    byval dt as single, _
+    pl as PlayerState, _
+    tr as TraceResult, _
+    byval nmodels as integer, _
+    models() as Submodel, _
+    clip() as ClipNode, _
+    planes() as Plane _
+)
+declare sub pl_trace ( _
+    start as Vec3, _
+    fin as Vec3, _
+    tr as TraceResult, _
+    byval nmodels as integer, _
+    models() as Submodel, _
+    clip() as ClipNode, _
+    planes() as Plane _
+)
+declare sub pl_water_level ( _
+    pl as PlayerState, _
+    nodes() as Node, _
+    planes() as Plane _
+)
