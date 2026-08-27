@@ -171,8 +171,8 @@ HandleErr:
     ef = freefile
     open "errmem.txt" for output as #ef
     print #ef, "err " + ltrim$(str$( err )) + " erl " + ltrim$(str$( erl ))
-    for mi = 0 to sys_mem_count%-1
-        print #ef, "mem " + sys_mem_tag$(mi) + " " + ltrim$(str$( sys_mem_fre&(mi) ))
+    for mi = 0 to sys_mem_count-1
+        print #ef, "mem " + sys_mem_tag(mi) + " " + ltrim$(str$( sys_mem_fre(mi) ))
     next mi
     close #ef
 
@@ -869,10 +869,10 @@ sub host_bench_report ( frame_no as long, h_dst_dc as long )
     print #benchf, "dt " + ltrim$(str$( scr.frame_time ))
     print #benchf, "tickhz " + ltrim$(str$( sys_tick_hz ))
     print #benchf, "memavail " + ltrim$(str$( memAvail& ))
-    print #benchf, "lmsize " + ltrim$(str$( lm_bytes& ))
-    print #benchf, "lmread " + ltrim$(str$( lm_got& ))
-    print #benchf, "geomrows " + ltrim$(str$( geom_nrows% ))
-    print #benchf, "cmsize " + ltrim$(str$( cm_bytes& ))
+    print #benchf, "lmsize " + ltrim$(str$( mod_lm_bytes ))
+    print #benchf, "lmread " + ltrim$(str$( mod_lm_got ))
+    print #benchf, "geomrows " + ltrim$(str$( mod_geom_rows ))
+    print #benchf, "cmsize " + ltrim$(str$( mod_cm_bytes ))
         sc_stats scs
     print #benchf, "scmade " + ltrim$(str$( scs.made ))
     print #benchf, "scems " + ltrim$(str$( scs.peak ))
@@ -886,7 +886,7 @@ sub host_bench_report ( frame_no as long, h_dst_dc as long )
     print #benchf, "sclive " + ltrim$(str$( scs.live ))
     print #benchf, "scevict " + ltrim$(str$( scs.evict ))
     print #benchf, "scflush " + ltrim$(str$( scs.flushes ))
-    print #benchf, "sctest " + ltrim$(str$( sc_selftest% ))
+    print #benchf, "sctest " + ltrim$(str$( sc_selftest ))
     print #benchf, "peakz " + ltrim$(str$( pl.peak_z ))
     print #benchf, "ticks " + ltrim$(str$( host_ticks ))
     ''
@@ -894,21 +894,21 @@ sub host_bench_report ( frame_no as long, h_dst_dc as long )
     '' is which stage took the bite, and a running total drifts with DOS's
     '' own overhead between the marks.
     ''
-    for mi = 0 to sys_mem_count%-1
-        dv = sys_mem_val&(mi)
-        df = sys_mem_fre&(mi)
+    for mi = 0 to sys_mem_count-1
+        dv = sys_mem_val(mi)
+        df = sys_mem_fre(mi)
         if ( mi = 0 ) then
             ddv = 0
             ddf = 0
         else
-            ddv = sys_mem_val&(mi-1) - dv
-            ddf = sys_mem_fre&(mi-1) - df
+            ddv = sys_mem_val(mi-1) - dv
+            ddf = sys_mem_fre(mi-1) - df
         end if
-        print #benchf, "mem " + sys_mem_tag$(mi) + _
+        print #benchf, "mem " + sys_mem_tag(mi) + _
                        " " + ltrim$(str$( dv )) + " " + ltrim$(str$( ddv )) + _
                        " " + ltrim$(str$( df )) + " " + ltrim$(str$( ddf ))
     next mi
-    print #benchf, "clprec " + ltrim$(str$( pl_hull_rec% ))
+    print #benchf, "clprec " + ltrim$(str$( pl_hull_rec ))
     print #benchf, "clpcnt " + ltrim$(str$( wld.clp_count ))
     print #benchf, "waterlevel " + ltrim$(str$( pl.water_level ))
     print #benchf, "watertype " + ltrim$(str$( pl.water_type ))
@@ -927,6 +927,6 @@ end sub
 ''       for it; d_poly hoists this once a frame rather than testing a
 ''       shared handle per face.
 ''::::::::::
-function z_on% ()
-    z_on% = ( z_dc <> 0 )
+function host_z_on () as integer
+    host_z_on = ( z_dc <> 0 )
 end function

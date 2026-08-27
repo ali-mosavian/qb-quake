@@ -123,7 +123,7 @@ function pl_point_contents ( p as vec3 ) as integer
         end if
     loop
 
-    pl_point_contents = rb_leaf_contents%( not nodenr )
+    pl_point_contents = r_leaf_contents( not nodenr )
 
 end function
 
@@ -721,6 +721,6 @@ end sub
 '' desc: Record size, for the bench report -- so main.bas can quote it
 ''       without reaching into this module's array.
 ''::::::::::
-function pl_hull_rec% ()
-    pl_hull_rec% = len( clp_buffer(0) )
+function pl_hull_rec () as integer
+    pl_hull_rec = len( clp_buffer(0) )
 end function

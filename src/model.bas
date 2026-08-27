@@ -182,7 +182,7 @@ sub mod_alloc
     redim mdl_buffer(wld.mdl_count-1) as model
     redim order_list(wld.nds_count-1) as integer
     '' r_bsp sizes its own PVS bits; it states why over there.
-    rb_alloc_pvs wld.lef_count
+    r_alloc_pvs wld.lef_count
 
     '' Sized to the map, not a fixed 4096: poly_flag is indexed by face
     '' 0..wld.tri_count-1, and e3m6 has 6,985 faces -- a fixed 4096 was too
@@ -399,7 +399,7 @@ sub mod_load_leafs
 
     '' r_bsp owns the leaves -- it is the heaviest reader and the only one
     '' that needs the array itself. All the loader passes is the count.
-    rb_load_leaves wld.lef_count
+    r_load_leaves wld.lef_count
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     scr_load_tick
@@ -414,7 +414,7 @@ end sub
 sub mod_load_marksurfaces
     '' r_bsp owns the list -- it is the only reader. All it needs is how
     '' many bytes the lump holds.
-    rb_load_lfaces wld.head.lface.size
+    r_load_lfaces wld.head.lface.size
 
     ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
     scr_load_tick
@@ -598,8 +598,8 @@ end sub
 ''       held: CM_SLOT is the depth buffer's, so anything that touched
 ''       depth in between has already taken it back.
 ''::::::::::
-function cm_map& ()
-    cm_map& = uglMapEx&( cm_dc, 0, CM_SLOT )
+function mod_cm_map () as long
+    mod_cm_map = uglMapEx&( cm_dc, 0, CM_SLOT )
 end function
 
 ''::::::::::
@@ -607,16 +607,16 @@ end function
 '' desc: Whether a full table actually loaded. Callers that can fall back
 ''       -- hud_shade draws an opaque slab instead -- ask this first.
 ''::::::::::
-function cm_ready% ()
-    cm_ready% = ( cm_size >= 16384 )
+function mod_cm_ready () as integer
+    mod_cm_ready = ( cm_size >= 16384 )
 end function
 
 ''::::::::::
 '' name: cm_bytes
 '' desc: Table size, for the bench report.
 ''::::::::::
-function cm_bytes& ()
-    cm_bytes& = cm_size
+function mod_cm_bytes () as long
+    mod_cm_bytes = cm_size
 end function
 
 ''::::::::::
@@ -625,8 +625,8 @@ end function
 ''       packer keeps a face's whole rect inside one scanline, so a single
 ''       mapping reaches all of it.
 ''::::::::::
-function lm_map& ( byval row as integer )
-    lm_map& = uglMapEx&( lm_atlas, row, PAGE_SLOT )
+function mod_lm_map ( byval row as integer ) as long
+    mod_lm_map = uglMapEx&( lm_atlas, row, PAGE_SLOT )
 end function
 
 ''::::::::::
@@ -634,12 +634,12 @@ end function
 '' desc: Atlas size on disk, and how much of it actually loaded, for the
 ''       bench report.
 ''::::::::::
-function lm_bytes& ()
-    lm_bytes& = lm_size
+function mod_lm_bytes () as long
+    mod_lm_bytes = lm_size
 end function
 
-function lm_got& ()
-    lm_got& = lm_read
+function mod_lm_got () as long
+    mod_lm_got = lm_read
 end function
 
 ''::::::::::
@@ -648,16 +648,16 @@ end function
 ''       builder keeps a face's whole record inside one row, so the row
 ''       end is also the end of the mapped window.
 ''::::::::::
-function geom_map& ( byval row as integer )
-    geom_map& = uglMapEx&( geom_dc, row, PAGE_SLOT )
+function mod_geom_map ( byval row as integer ) as long
+    mod_geom_map = uglMapEx&( geom_dc, row, PAGE_SLOT )
 end function
 
 ''::::::::::
 '' name: geom_nrows
 '' desc: How many rows the store has, for the bench report.
 ''::::::::::
-function geom_nrows% ()
-    geom_nrows% = geom_rows
+function mod_geom_rows () as integer
+    mod_geom_rows = geom_rows
 end function
 
 ''::::::::::
@@ -665,6 +665,6 @@ end function
 '' desc: Far pointer to the visibility lump. Fixed for the whole run, so
 ''       callers hoist it rather than asking per leaf.
 ''::::::::::
-function pvs_base& ()
-    pvs_base& = pvs_ptr
+function mod_pvs_base () as long
+    mod_pvs_base = pvs_ptr
 end function

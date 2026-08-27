@@ -429,10 +429,10 @@ declare sub sys_time_init ( )
 declare function sys_frame_time ( ) as single
 declare function sys_tick_hz ( ) as single
 declare sub r_mark_leaves ( byval nodenr as integer )
-declare sub rb_load_leaves ( byval cnt as long )
-declare function rb_leaf_contents% ( byval leafnr as integer )
-declare sub rb_load_lfaces ( byval lumpbytes as long )
-declare sub rb_alloc_pvs ( byval nleafs as long )
+declare sub r_load_leaves ( byval cnt as long )
+declare function r_leaf_contents ( byval leafnr as integer ) as integer
+declare sub r_load_lfaces ( byval lumpbytes as long )
+declare sub r_alloc_pvs ( byval nleafs as long )
 declare sub r_draw_world ( model as integer )
 declare sub r_draw_brush_model ( byval m as integer )
 declare sub v_update_camera ( byval dt as single )
@@ -441,7 +441,7 @@ declare sub in_handle_toggles ( )
 '' pl_move.bas -- player physics
 ''
 declare sub pl_load_hulls ( byval cnt as long )
-declare function pl_hull_rec% ( )
+declare function pl_hull_rec ( ) as integer
 declare function pl_hull_contents ( byval node as integer, p as vec3 ) as integer
 declare function pl_hull_check ( byval node as integer, byval p1f as single, _
                                  byval p2f as single, p1 as vec3, p2 as vec3 ) as integer
@@ -472,10 +472,10 @@ declare sub in_screenshot_key ( h_dst_dc as long )
 declare sub sys_parse_args ( )
 declare sub sys_init_tables ( )
 declare sub sys_mem_mark ( tag as string )
-declare function sys_mem_count% ( )
-declare function sys_mem_tag$ ( byval i as integer )
-declare function sys_mem_val& ( byval i as integer )
-declare function sys_mem_fre& ( byval i as integer )
+declare function sys_mem_count ( ) as integer
+declare function sys_mem_tag ( byval i as integer ) as string
+declare function sys_mem_val ( byval i as integer ) as long
+declare function sys_mem_fre ( byval i as integer ) as long
 declare sub vid_init_ugl ( )
 declare sub s_init ( )
 declare sub s_start_music ( )
@@ -488,40 +488,39 @@ declare sub mod_alloc ( )
 declare sub mod_load_faces ( )
 declare sub mod_load_lightmaps ( )
 declare sub sc_stats ( s as scstat )
-declare function sc_frame_end% ( )
-declare function geom_map& ( byval row as integer )
-declare function geom_nrows% ( )
-declare function pvs_base& ( )
-declare function z_on% ( )
-declare function lm_map& ( byval row as integer )
-declare function lm_bytes& ( )
-declare function lm_got& ( )
-declare function cm_map& ( )
-declare function cm_ready% ( )
-declare function cm_bytes& ( )
+declare function sc_frame_end ( ) as integer
+declare function mod_geom_map ( byval row as integer ) as long
+declare function mod_geom_rows ( ) as integer
+declare function mod_pvs_base ( ) as long
+declare function host_z_on ( ) as integer
+declare function mod_lm_map ( byval row as integer ) as long
+declare function mod_lm_bytes ( ) as long
+declare function mod_lm_got ( ) as long
+declare function mod_cm_map ( ) as long
+declare function mod_cm_ready ( ) as integer
+declare function mod_cm_bytes ( ) as long
 declare sub mod_load_colormap ( )
 declare sub sc_init ( )
-declare function sc_ready% ( )
-declare function sc_held% ( byval face as integer )
-declare function sc_store_open% ( )
-declare function sc_probe_atb% ( byval dc as long )
+declare function sc_ready ( ) as integer
+declare function sc_held ( byval face as integer ) as integer
+declare function sc_store_open ( ) as integer
 declare sub sc_point ( byval dc as long, byval ofs as long, byval rows as integer )
-declare function sc_grab& ( byval sz as long )
-declare function sc_shift% ( byval v as integer )
-declare function sc_mipfloor% ( byval extw as integer, byval exth as integer )
+declare function sc_grab ( byval sz as long ) as long
+declare function sc_shift ( byval v as integer ) as integer
+declare function sc_mipfloor ( byval extw as integer, byval exth as integer ) as integer
 declare sub sc_flush ( )
-declare function sc_find& ( byval face as integer, byval mip as integer, byval w as integer, byval h as integer )
-declare function sc_alloc& ( byval face as integer, byval mip as integer, byval w as integer, byval h as integer, byval fw as integer, byval fh as integer )
+declare function sc_find ( byval face as integer, byval mip as integer, byval w as integer, byval h as integer ) as long
+declare function sc_alloc ( byval face as integer, byval mip as integer, byval w as integer, byval h as integer, byval fw as integer, byval fh as integer ) as long
 declare sub sc_lru_unlink ( byval b as integer )
 declare sub sc_lru_touch ( byval b as integer )
 declare sub sc_reset ( )
 declare sub sc_shutdown ( )
-declare function sc_selftest% ( )
-declare function sb_seg% ( byval p as long )
+declare function sc_selftest ( ) as integer
+declare function sb_seg ( byval p as long ) as integer
 declare sub sb_fetch ( byval face as integer )
-declare function sb_i% ( byval o as long )
-declare function sb_u& ( byval o as long )
-declare function sb_pot% ( byval v as integer )
+declare function sb_i ( byval o as long ) as integer
+declare function sb_u ( byval o as long ) as long
+declare function sb_pot ( byval v as integer ) as integer
 declare sub sb_dump ( byval face as integer, byval mip as integer )
 declare sub sb_build ( byval dc as long, byval tex as long, byval face as integer, byval mip as integer, byval sw as integer, byval sh as integer )
 declare sub mod_load_facevtx ( )
@@ -552,9 +551,9 @@ declare sub mod_link_anims ( )
 declare sub vid_init ( )
 declare sub in_init ( )
 declare sub s_stop_music ( )
-declare function point_dist_to_plane! ( pt as u3dVector3f, pl as plane2 )
-declare function point_side_of_node% ( byval node_idx as integer, pt as u3dVector3f, _
-                                       nodes() as nodeb, planes() as plane2 )
+declare function r_plane_dist ( pt as u3dVector3f, pl as plane2 ) as single
+declare function r_node_side ( byval node_idx as integer, pt as u3dVector3f, _
+                              nodes() as nodeb, planes() as plane2 ) as integer
 declare function r_cull_box ( bbox as bboundbox, frustum() as plane ) as integer
 declare sub r_set_frustum ( frustum() as plane, mtx as u3dMtrx )
 declare sub com_parse_config ( filename as string )

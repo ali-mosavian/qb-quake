@@ -216,7 +216,7 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
 
     '' Asked once, not per face: whether a depth buffer exists cannot change
     '' inside a frame.
-    z_avail = z_on%
+    z_avail = host_z_on
     turbph = rdr.anim_time * TURB_RATE#
 
 
@@ -230,7 +230,7 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
     '' Clearing this turns every face below into a plain textured one,
     '' which is exactly what an unlit face already does.
     lm_use = 0
-    if ( env.use_lm and rdr.lightmap and sc_ready% <> 0 ) then lm_use = -1
+    if ( env.use_lm and rdr.lightmap and sc_ready <> 0 ) then lm_use = -1
 
     ''
     '' Where memCopy puts a face's record. Hoisted: VARSEG/VARPTR on a
@@ -286,7 +286,7 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
             '' one map per face: it covers planeid, side, geom_row,
             '' geom_ofs and texinfoid, and nothing between them remaps this
             '' array (the geometry window is a different store entirely).
-            dp = point_dist_to_plane!( cam.pos, pln_buffer( tri_buffer(i).planeid ) )
+            dp = r_plane_dist( cam.pos, pln_buffer( tri_buffer(i).planeid ) )
                       
             if ( tri_buffer(i).side ) then dp = -dp
                 
@@ -303,7 +303,7 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
             '' the mapped EMS window, and a fixed-size copy from a record
             '' near it would read off the page.
             ''
-            gp = geom_map&( tri_buffer(i).geom_row )
+            gp = mod_geom_map( tri_buffer(i).geom_row )
             gn = GEOM_MAXREC
             if ( tri_buffer(i).geom_ofs + gn > GEOM_W ) then
                 gn = GEOM_W - tri_buffer(i).geom_ofs
@@ -561,7 +561,7 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
             if ( lm_on ) then
                 lm_mip = miplevel
                 if ( rdr.usemips = 0 ) then lm_mip = 0
-                lm_floor = sc_mipfloor%( lm_extw, lm_exth )
+                lm_floor = sc_mipfloor( lm_extw, lm_exth )
                 if ( lm_mip < lm_floor ) then lm_mip = lm_floor
 
                 ''
@@ -578,7 +578,7 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
                 '' before a flush would pin the mip to a surface that is no
                 '' longer there.
                 ''
-                lm_cm = sc_held%( i )
+                lm_cm = sc_held( i )
                 if ( lm_cm >= 0 ) then
                     if ( abs( lm_mip - lm_cm ) <= 1 ) then lm_mip = lm_cm
                     if ( lm_mip < lm_floor ) then lm_mip = lm_floor
@@ -598,9 +598,9 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
                 if ( lm_fw < 1 ) then lm_fw = 1
                 if ( lm_fh < 1 ) then lm_fh = 1
 
-                lm_dc = sc_find&( i, lm_mip, lm_sw, lm_sh )
+                lm_dc = sc_find( i, lm_mip, lm_sw, lm_sh )
                 if ( lm_dc = 0 ) then
-                    lm_dc = sc_alloc&( i, lm_mip, lm_sw, lm_sh, lm_fw, lm_fh )
+                    lm_dc = sc_alloc( i, lm_mip, lm_sw, lm_sh, lm_fw, lm_fh )
                     if ( lm_dc <> 0 ) then
                         ''
                         '' Build the DC's WHOLE padded extent, not just the
@@ -612,8 +612,8 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
                         '' extra columns come out edge-extended.
                         ''
                         sb_build lm_dc, h_rawtx_dc(mipidx*4 + lm_mip), _
-                                 i, lm_mip, 2 ^ sc_shift%( lm_sw ), _
-                                 2 ^ sc_shift%( lm_sh )
+                                 i, lm_mip, 2 ^ sc_shift( lm_sw ), _
+                                 2 ^ sc_shift( lm_sh )
                     end if
                 end if
 
@@ -625,8 +625,8 @@ sub d_draw_faces ( h_dst_dc as long, mtx_fin as u3dMtrx, _
                     '' perspective mode the coordinates are already over w,
                     '' so the origin has to be scaled by w to match.
                     ''
-                    lm_su = 1.0 / ((2 ^ lm_mip) * (2 ^ sc_shift%( lm_sw )))
-                    lm_sv = 1.0 / ((2 ^ lm_mip) * (2 ^ sc_shift%( lm_sh )))
+                    lm_su = 1.0 / ((2 ^ lm_mip) * (2 ^ sc_shift( lm_sw )))
+                    lm_sv = 1.0 / ((2 ^ lm_mip) * (2 ^ sc_shift( lm_sh )))
                     if ( rdr.rendmode = 0 ) then
                         for  j = 0 to polycnt-1
                             prj_u(j) = (prj_u(j) - lm_tms*prj_w(j)) * lm_su

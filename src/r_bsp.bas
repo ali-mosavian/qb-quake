@@ -79,8 +79,8 @@ declare sub r_recursive_world_node ( byval nodenr as integer, cpos as u3dVector3
 ''       where every previous run drew 299. The callers hold the result in
 ''       a single, so the extra precision only moved the boundary.
 ''::::::::::
-function point_dist_to_plane! ( pt as u3dVector3f, pl as plane2 )
-    point_dist_to_plane! = pt.x*pl.norm.x + _
+function r_plane_dist ( pt as u3dVector3f, pl as plane2 ) as single
+    r_plane_dist = pt.x*pl.norm.x + _
                            pt.y*pl.norm.z + _
                            pt.z*pl.norm.y - pl.dist
 end function
@@ -91,13 +91,13 @@ end function
 ''       -1 in front, 0 behind. Takes the point it is classifying and the
 ''       tables it needs, so it says what it does on what it is given.
 ''::::::::::
-function point_side_of_node% ( byval node_idx as integer, pt as u3dVector3f, _
+function r_node_side ( byval node_idx as integer, pt as u3dVector3f, _
                                nodes() as nodeb, planes() as plane2 )
-    if ( point_dist_to_plane!( pt, planes( nodes(node_idx).planeid ) ) > 0.0 ) then
-        point_side_of_node% = -1
+    if ( r_plane_dist( pt, planes( nodes(node_idx).planeid ) ) > 0.0 ) then
+        r_node_side = -1
         exit function
     end if
-    point_side_of_node% = 0
+    r_node_side = 0
 end function
 
 
@@ -197,7 +197,7 @@ sub r_recursive_world_node ( byval nodenr as integer, cpos as u3dVector3f, vs as
         exit sub
     end if
     
-    if ( point_dist_to_plane!( cpos, pln( nds(nodenr).planeid ) ) >= 0.0 ) then
+    if ( r_plane_dist( cpos, pln( nds(nodenr).planeid ) ) >= 0.0 ) then
         side = 1
     else
         side = 0
@@ -469,7 +469,7 @@ sub r_mark_leaves ( byval nodenr as integer )
     while not ( nodenr and &h8000 )
         '' point_side_of_node maps nodenr itself and nothing since has
         '' remapped, so the children are readable without a second call
-        if ( point_side_of_node%( nodenr, cam.pos, nds_buffer(), pln_buffer() ) ) then
+        if ( r_node_side( nodenr, cam.pos, nds_buffer(), pln_buffer() ) ) then
             nodenr = nds_buffer(nodenr).child0
         else
             nodenr = nds_buffer(nodenr).child1
@@ -493,8 +493,8 @@ sub r_mark_leaves ( byval nodenr as integer )
         
     '' memAlloc is paragraph-aligned, so the block's own offset is zero
     '' and v is the offset within it exactly as the lump stores it
-    v = v + (pvs_base& and 65535&)
-    def seg = sb_seg%( pvs_base& )
+    v = v + (mod_pvs_base and 65535&)
+    def seg = sb_seg( mod_pvs_base )
     
     if ( lef_buffer( not nodenr ).vislist = -1 ) then
         for  i = 0 to wld.lef_count-1
@@ -572,7 +572,7 @@ end sub
 ''       The elements are plain integers, so the count is the lump over
 ''       len() of one -- taken here, where the array actually lives.
 ''::::::::::
-sub rb_load_lfaces ( byval lumpbytes as long )
+sub r_load_lfaces ( byval lumpbytes as long )
     dim n as long
 
     n = lumpbytes \ len( lfc_buffer(0) )
@@ -591,7 +591,7 @@ end sub
 ''       0..lef_count-1, and a run can carry past the last leaf -- in real
 ''       mode that writes over whatever follows the array.
 ''::::::::::
-sub rb_alloc_pvs ( byval nleafs as long )
+sub r_alloc_pvs ( byval nleafs as long )
     redim pvs_buffer_b( nleafs-1 ) as integer
 end sub
 
@@ -600,7 +600,7 @@ end sub
 '' desc: Builds the leaf store and binds it. The loader passes the count
 ''       and nothing else -- where the leaves live is this module's.
 ''::::::::::
-sub rb_load_leaves ( byval cnt as long )
+sub r_load_leaves ( byval cnt as long )
     dim f as FILE
     dim mapped as long
 
@@ -646,6 +646,6 @@ end sub
 ''       node tree itself and needs exactly this at the end of it, which
 ''       is not reason enough for the whole array to be shared.
 ''::::::::::
-function rb_leaf_contents% ( byval leafnr as integer )
-    rb_leaf_contents% = lef_buffer( leafnr ).cont
+function r_leaf_contents ( byval leafnr as integer ) as integer
+    r_leaf_contents = lef_buffer( leafnr ).cont
 end function
