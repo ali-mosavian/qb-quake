@@ -25,6 +25,9 @@ option explicit
 '$include: 'q_scr.bi'
 '$include: 'q_cam.bi'
 '$include: 'q_pl.bi'
+'$include: 'q_ent.bi'
+'$include: 'q_snd.bi'
+'$include: 'q_game.bi'
 
 ''
 '' This module's own procedures.
@@ -35,17 +38,15 @@ declare function in_keystroke ( key_down as integer ) as integer
 '' This module's own procedures.
 ''
 declare sub in_handle_toggles ( _
-    env as Env, _
-    pl as PlayerState, _
-    cam as CamState, _
-    rdr as RenderState, _
-    scr as ScreenState _
+    g as Game _
 )
 declare sub in_screenshot_key ( _
-    byval h_dst_dc as long, _
-    env as Env _
+    g as Game, _
+    byval h_dst_dc as long _
 )
-declare sub in_init ( env as Env )
+declare sub in_init ( _
+    g as Game _
+)
 
 
 '' Screenshot counter: without it every shot overwrote scrn0.bmp.
@@ -60,15 +61,17 @@ dim shared screenie as integer
 '' name: in_init
 '' desc: Mouse, keyboard and the one second timer.
 ''::::::::::
-sub in_init ( env as Env )
-    if ( mouseInit( env.h_video_dc, env.mouse ) = FALSE ) then
+sub in_init ( _
+    g as Game _
+)
+    if ( mouseInit( g.env.h_video_dc, g.env.mouse ) = FALSE ) then
         sys_error "0x0006, Could not init mouse..."
     end if  
     
     ''
     '' Init keyboard
     ''
-    kbdInit env.keyboard
+    kbdInit g.env.keyboard
     
     ''
     '' Init timer
@@ -116,20 +119,16 @@ end function
 '' desc: The render-mode keys. One line each now.
 ''::::::::::
 sub in_handle_toggles ( _
-    env as Env, _
-    pl as PlayerState, _
-    cam as CamState, _
-    rdr as RenderState, _
-    scr as ScreenState _
+    g as Game _
 )
 
-    if ( in_keystroke( env.keyboard.f1  ) ) then rdr.use_mips  = not rdr.use_mips
-    if ( in_keystroke( env.keyboard.f2  ) ) then rdr.rend_mode = (rdr.rend_mode + 1) mod 3
-    if ( in_keystroke( env.keyboard.f3  ) ) then cam.fps_view  = not cam.fps_view
-    if ( in_keystroke( env.keyboard.f12 ) ) then scr.stats    = not scr.stats
-    if ( in_keystroke( env.keyboard.b   ) ) then rdr.backface = not rdr.backface
-    if ( in_keystroke( env.keyboard.l   ) ) then rdr.lightmap = not rdr.lightmap
-    if ( in_keystroke( env.keyboard.f4  ) ) then pl.no_clip    = not pl.no_clip
+    if ( in_keystroke( g.env.keyboard.f1  ) ) then g.rdr.use_mips  = not g.rdr.use_mips
+    if ( in_keystroke( g.env.keyboard.f2  ) ) then g.rdr.rend_mode = (g.rdr.rend_mode + 1) mod 3
+    if ( in_keystroke( g.env.keyboard.f3  ) ) then g.cam.fps_view  = not g.cam.fps_view
+    if ( in_keystroke( g.env.keyboard.f12 ) ) then g.scr.stats    = not g.scr.stats
+    if ( in_keystroke( g.env.keyboard.b   ) ) then g.rdr.backface = not g.rdr.backface
+    if ( in_keystroke( g.env.keyboard.l   ) ) then g.rdr.lightmap = not g.rdr.lightmap
+    if ( in_keystroke( g.env.keyboard.f4  ) ) then g.pl.no_clip    = not g.pl.no_clip
 
 end sub
 
@@ -144,15 +143,15 @@ end sub
 ''       handling rather than in the present path.
 ''::::::::::
 sub in_screenshot_key ( _
-    byval h_dst_dc as long, _
-    env as Env _
+    g as Game, _
+    byval h_dst_dc as long _
 )
 
     ''
     '' F5, not S: S walks backwards now.
     ''
-    if ( env.keyboard.f5 ) then
-        scr_screenshot "scrn" + ltrim$(rtrim$(str$( screenie ))) + ".bmp", h_dst_dc, env
+    if ( g.env.keyboard.f5 ) then
+        scr_screenshot g, "scrn" + ltrim$(rtrim$(str$( screenie ))) + ".bmp", h_dst_dc
         screenie = screenie + 1
     end if
 

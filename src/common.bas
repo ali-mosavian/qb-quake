@@ -19,6 +19,15 @@ option explicit
 '$include: 'snd.bi'
 '$include: 'mod.bi'
 '$include: 'q_env.bi'
+'$include: 'q_map.bi'
+'$include: 'q_vis.bi'
+'$include: 'q_draw.bi'
+'$include: 'q_scr.bi'
+'$include: 'q_cam.bi'
+'$include: 'q_pl.bi'
+'$include: 'q_ent.bi'
+'$include: 'q_snd.bi'
+'$include: 'q_game.bi'
 
 ''
 '' This module's own procedures.
@@ -44,8 +53,8 @@ declare sub com_check_args ( _
 '' This module's own procedures.
 ''
 declare sub com_parse_config ( _
-    filename as string, _
-    env as Env _
+    g as Game, _
+    filename as string _
 )
 
 
@@ -153,8 +162,8 @@ end sub
 
 
 sub com_parse_config ( _
-    filename as string, _
-    env as Env _
+    g as Game, _
+    filename as string _
 )
 
     const xres_flag = 1
@@ -185,7 +194,7 @@ sub com_parse_config ( _
     
     open filename for input as #file
     
-    env.c_fmt = UGL.8BIT    
+    g.env.c_fmt = UGL.8BIT    
             
     do 
         line input #file, raw_line
@@ -198,49 +207,49 @@ sub com_parse_config ( _
                 case "//"
                 
                 case "display.xres"                
-                    env.x_res = val( com_arg( strm(), strm_cnt, line_num ) )
+                    g.env.x_res = val( com_arg( strm(), strm_cnt, line_num ) )
                     flags = flags or xres_flag
                     
                 case "display.yres"
-                    env.y_res = val( com_arg( strm(), strm_cnt, line_num ) )
+                    g.env.y_res = val( com_arg( strm(), strm_cnt, line_num ) )
                     flags = flags or yres_flag
                     
                     
                 case "display.clear"
-                    env.clear_screen = com_yesno( strm(), strm_cnt, line_num )
+                    g.env.clear_screen = com_yesno( strm(), strm_cnt, line_num )
                     flags = flags or clear_flag
                                         
                 case "display.pages"
-                    env.pages = val( com_arg( strm(), strm_cnt, line_num ) )
+                    g.env.pages = val( com_arg( strm(), strm_cnt, line_num ) )
                     flags = flags or page_flag
                     
                 case "display.usepaging"
-                    env.use_paging = com_yesno( strm(), strm_cnt, line_num )
+                    g.env.use_paging = com_yesno( strm(), strm_cnt, line_num )
                     flags = flags or usepg_flag
                                     
                 case "world.frustum.zn"                
-                    env.z_near = val( com_arg( strm(), strm_cnt, line_num ) )
+                    g.env.z_near = val( com_arg( strm(), strm_cnt, line_num ) )
                     flags = flags or zn_flag
                                     
                 case "world.frustum.zf"                
-                    env.z_far = val( com_arg( strm(), strm_cnt, line_num ) )
+                    g.env.z_far = val( com_arg( strm(), strm_cnt, line_num ) )
                     flags = flags or zf_flag
                                     
                 case "world.camera.script"
-                    env.cam_script = com_arg( strm(), strm_cnt, line_num )
+                    g.env.cam_script = com_arg( strm(), strm_cnt, line_num )
                     flags = flags or cmscr_flag
                     
                 case "world.camera.interp"
-                    env.cam_interp = val( com_arg( strm(), strm_cnt, line_num ) )
+                    g.env.cam_interp = val( com_arg( strm(), strm_cnt, line_num ) )
                     flags = flags or cminp_flag
                     
                 case "world.camera.mode"
                     if ( com_arg( strm(), strm_cnt, line_num ) = "freelook" ) then
-                        env.cam_mode = 0
+                        g.env.cam_mode = 0
                     elseif ( com_arg( strm(), strm_cnt, line_num ) = "script_play" ) then
-                        env.cam_mode = 1
+                        g.env.cam_mode = 1
                     elseif ( com_arg( strm(), strm_cnt, line_num ) = "script_edit" ) then
-                        env.cam_mode = 2
+                        g.env.cam_mode = 2
                     else
                         sys_error "Unknown syntax at line #" + str$(line_num)                                                
                     end if                    
@@ -248,11 +257,11 @@ sub com_parse_config ( _
                     flags = flags or cmmde_flag
                     
                 case "world.camera.fov"
-                    env.cam_fov = val( com_arg( strm(), strm_cnt, line_num ) )
+                    g.env.cam_fov = val( com_arg( strm(), strm_cnt, line_num ) )
                     flags = flags or fov_flag
                     
                 case "sound.enabled"
-                    env.sound = com_yesno( strm(), strm_cnt, line_num )
+                    g.env.sound = com_yesno( strm(), strm_cnt, line_num )
                     flags = flags or sound_flag
                 case else
                     sys_error "Unknown command, " + raw_line

@@ -9,7 +9,7 @@ definition is broken.
 import io, re, glob, sys
 
 ORDER = ['bspfile.bi', 'q_env.bi', 'q_map.bi', 'q_vis.bi', 'q_draw.bi',
-         'q_scr.bi', 'q_cam.bi', 'q_pl.bi', 'q_ent.bi', 'q_snd.bi']
+         'q_scr.bi', 'q_cam.bi', 'q_pl.bi', 'q_ent.bi', 'q_snd.bi', 'q_game.bi']
 
 
 def type_home():

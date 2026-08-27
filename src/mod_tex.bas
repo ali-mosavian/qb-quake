@@ -28,14 +28,20 @@ option explicit
 '$include: 'mod.bi'
 '$include: 'q_env.bi'
 '$include: 'q_map.bi'
+'$include: 'q_vis.bi'
 '$include: 'q_draw.bi'
+'$include: 'q_scr.bi'
+'$include: 'q_cam.bi'
+'$include: 'q_pl.bi'
+'$include: 'q_ent.bi'
 '$include: 'q_snd.bi'
+'$include: 'q_game.bi'
 
 ''
 '' This module's own procedures.
 ''
 declare sub mod_link_anims ( _
-    wld as World, _
+    g as Game, _
     mip_buff_inf() as MipTex _
 )
 
@@ -43,17 +49,14 @@ declare sub mod_link_anims ( _
 '' This module's own procedures.
 ''
 declare sub mod_load_texinfo ( _
-    wld as World, _
-    env as Env, _
+    g as Game, _
     tex_info() as TexInfo, _
     h_textr_dc() as long, _
     mip_buff_inf() as MipTex, _
     h_rawtx_dc() as long _
 )
 declare sub mod_load_textures ( _
-    wld as World, _
-    env as Env, _
-    pal as long, _
+    g as Game, _
     h_textr_dc() as long, _
     mip_buff_inf() as MipTex, _
     h_rawtx_dc() as long _
@@ -84,8 +87,7 @@ dim shared t_mip_inf( 1 ) as DiskMipTex
 '' desc: Reads the miptex directory and sizes the texture tables.
 ''::::::::::
 sub mod_load_texinfo ( _
-    wld as World, _
-    env as Env, _
+    g as Game, _
     tex_info() as TexInfo, _
     h_textr_dc() as long, _
     mip_buff_inf() as MipTex, _
@@ -97,7 +99,7 @@ sub mod_load_texinfo ( _
     '' with no elements. It carried a real bound, so size it here.
     ''
     redim h_textr_dc( 256*4 ) as long
-    if ( env.use_lm ) then
+    if ( g.env.use_lm ) then
         redim h_rawtx_dc( 256*4 ) as long
     end if
 
@@ -109,14 +111,14 @@ sub mod_load_texinfo ( _
 
     scr_load_step
     
-    seek #wld.file.handle, wld.file.head.mip_tex.offs+1
-    get #wld.file.handle,, wld.count.textures
+    seek #g.wld.file.handle, g.wld.file.head.mip_tex.offs+1
+    get #g.wld.file.handle,, g.wld.count.textures
     
-    redim t_mip_inf( wld.count.textures-1 ) as DiskMipTex
-    redim mip_buff_inf( wld.count.textures-1 ) as MipTex
+    redim t_mip_inf( g.wld.count.textures-1 ) as DiskMipTex
+    redim mip_buff_inf( g.wld.count.textures-1 ) as MipTex
     
-    for  i = 0 to wld.count.textures-1
-        get #wld.file.handle,, tex_offs(i)
+    for  i = 0 to g.wld.count.textures-1
+        get #g.wld.file.handle,, tex_offs(i)
     next i    
     
 
@@ -136,9 +138,7 @@ end sub
 ''       numtex, so it is one routine.
 ''::::::::::
 sub mod_load_textures ( _
-    wld as World, _
-    env as Env, _
-    pal as long, _
+    g as Game, _
     h_textr_dc() as long, _
     mip_buff_inf() as MipTex, _
     h_rawtx_dc() as long _
@@ -151,18 +151,18 @@ sub mod_load_textures ( _
     '' The palette is still read here because videoOpen installs it and frees
     '' it. Nothing in this routine looks at its contents any more.
     ''
-    pal = uglPalLoad( "base.dat::color/palette.lmp", PALRGB )
+    g.pal = uglPalLoad( "base.dat::color/palette.lmp", PALRGB )
 
     scr_load_stage "textures"
 
-    for  i = 0 to wld.count.textures-1
+    for  i = 0 to g.wld.count.textures-1
         ''
         '' Per-texture header only: the renderer scales texture axes by the
         '' reciprocal of the ORIGINAL texture size, so those dimensions are
         '' still needed even though the pixels come from the bmps.
         ''
-        seek #wld.file.handle, wld.file.head.mip_tex.offs+tex_offs(i)+1
-        get #wld.file.handle,, t_mip_inf(i)
+        seek #g.wld.file.handle, g.wld.file.head.mip_tex.offs+tex_offs(i)+1
+        get #g.wld.file.handle,, t_mip_inf(i)
 
         mip_buff_inf(i).hght = 1.0 / t_mip_inf(i).hght
         mip_buff_inf(i).wdth = 1.0 / t_mip_inf(i).wdth
@@ -211,7 +211,7 @@ sub mod_load_textures ( _
             '' applied on the way in -- feeding it those would treat a
             '' brightened index as a raw one. See mkassets.py's r*/t* note.
             ''
-            if ( env.use_lm ) then
+            if ( g.env.use_lm ) then
                 bmp_file = "r" + right$( "00" + ltrim$(str$( i )), 3 ) + _
                           "m" + ltrim$(str$( j )) + ".bmp"
                 dc = uglNewBMPEx( UGL.EMS, UGL.8BIT, bmp_file, BMPOPT.NO332 )
@@ -224,10 +224,10 @@ sub mod_load_textures ( _
             if ( (i and 15) = 0 ) then scr_mip_tick (j+1)*25
         next j
 
-        scr_load_part 1.0/wld.count.textures, ((i and 15) = 0)
+        scr_load_part 1.0/g.wld.count.textures, ((i and 15) = 0)
     next i
 
-    mod_link_anims wld, mip_buff_inf()
+    mod_link_anims g, mip_buff_inf()
 
 
     uglRestore
@@ -252,14 +252,14 @@ end sub
 ''       this is exercised only by maps that do.
 ''::::::::::
 sub mod_link_anims ( _
-    wld as World, _
+    g as Game, _
     mip_buff_inf() as MipTex _
 )
     dim i as integer, j as integer
     dim chain0 as integer, n as integer
     dim suffix as string
 
-    for  i = 0 to wld.count.textures-1
+    for  i = 0 to g.wld.count.textures-1
         if ( left$( t_mip_inf(i).name, 1 ) = "+" ) then
 
             '' already claimed by an earlier frame's chain
@@ -269,7 +269,7 @@ sub mod_link_anims ( _
             chain0 = i
             n    = 0
 
-            for  j = i to wld.count.textures-1
+            for  j = i to g.wld.count.textures-1
                 if ( left$( t_mip_inf(j).name, 1 ) = "+" ) then
                     if ( mid$( rtrim$(t_mip_inf(j).name), 3 ) = suffix$ ) then
                         n = n + 1

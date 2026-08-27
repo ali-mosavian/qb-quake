@@ -17,7 +17,15 @@ option explicit
 '$include: 'snd.bi'
 '$include: 'mod.bi'
 '$include: 'q_env.bi'
+'$include: 'q_map.bi'
+'$include: 'q_vis.bi'
+'$include: 'q_draw.bi'
+'$include: 'q_scr.bi'
+'$include: 'q_cam.bi'
+'$include: 'q_pl.bi'
+'$include: 'q_ent.bi'
 '$include: 'q_snd.bi'
+'$include: 'q_game.bi'
 
 ''
 '' This module's own procedures.
@@ -28,12 +36,15 @@ declare sub s_get_blaster ( _
     ldma as integer, _
     hdma as integer _
 )
-declare sub s_init ( env as Env )
-declare sub s_start_music ( _
-    env as Env, _
-    mymod as UGMMOD _
+declare sub s_init ( _
+    g as Game _
 )
-declare sub s_stop_music ( env as Env )
+declare sub s_start_music ( _
+    g as Game _
+)
+declare sub s_stop_music ( _
+    g as Game _
+)
 
 
 '' The loading screen's MOD, private to this module: s_start_music opens
@@ -119,13 +130,15 @@ end sub
 '' name: s_init
 '' desc: Autodetects an SB16, falls back to the BLASTER variable.
 ''::::::::::
-sub s_init ( env as Env )
+sub s_init ( _
+    g as Game _
+)
     dim port as integer
     dim irq as integer
     dim ldma as integer
     dim hdma as integer
 
-    if ( env.sound = true ) then
+    if ( g.env.sound = true ) then
         if ( sndInit( false, false, false, false ) = false ) then
             
             s_get_blaster port, irq, ldma, hdma
@@ -170,10 +183,9 @@ end sub
 '' desc: Starts the module that plays over the loading screen.
 ''::::::::::
 sub s_start_music ( _
-    env as Env, _
-    mymod as UGMMOD _
+    g as Game _
 )
-    if ( env.sound = true ) then
+    if ( g.env.sound = true ) then
         if ( modInit = false ) then
             sys_error "0x1004, Could not init mod module..."
         end if
@@ -185,7 +197,7 @@ sub s_start_music ( _
             sys_error "0x1005, Could not load mod..."
         end if
             
-        if ( modNew( mymod, mod.ems, "base.dat::mods/mainfrm.mod" ) = false ) then
+        if ( modNew( g.mymod, mod.ems, "base.dat::mods/mainfrm.mod" ) = false ) then
             sys_error "0x1005, Could not load mod..."
         end if
         
@@ -206,8 +218,10 @@ end sub
 ''::::::::::
 '' name: s_stop_music
 ''::::::::::
-sub s_stop_music ( env as Env )
-    if ( env.sound = true ) then
+sub s_stop_music ( _
+    g as Game _
+)
+    if ( g.env.sound = true ) then
         modStop
         modDel load_mod
     end if

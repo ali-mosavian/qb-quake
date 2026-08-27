@@ -23,9 +23,14 @@ option explicit
 '$include: 'mod.bi'
 '$include: 'q_env.bi'
 '$include: 'q_map.bi'
+'$include: 'q_vis.bi'
+'$include: 'q_draw.bi'
+'$include: 'q_scr.bi'
 '$include: 'q_cam.bi'
 '$include: 'q_pl.bi'
 '$include: 'q_ent.bi'
+'$include: 'q_snd.bi'
+'$include: 'q_game.bi'
 
 ''
 '' This module's own procedures.
@@ -54,8 +59,8 @@ declare sub ent_vec ( _
     v as Vec3 _
 )
 declare function ent_plat_touched ( _
+    g as Game, _
     byval p as integer, _
-    pl as PlayerState, _
     brush() as BrushModel, _
     plat() as PlatEnt _
 ) as integer
@@ -64,27 +69,22 @@ declare function ent_plat_touched ( _
 '' This module's own procedures.
 ''
 declare sub ent_load_teleports ( _
-    wld as World, _
+    g as Game, _
     models() as Submodel, _
     brush() as BrushModel, _
     tele() as Teleporter, _
     face_mdl() as integer, _
-    plat() as PlatEnt, _
-    tele_count as integer, _
-    plat_count as integer _
+    plat() as PlatEnt _
 )
 declare sub ent_check_teleport ( _
-    pl as PlayerState, _
-    env as Env, _
-    tele() as Teleporter, _
-    byval tele_count as integer _
+    g as Game, _
+    tele() as Teleporter _
 )
 declare sub ent_move_plats ( _
+    g as Game, _
     byval dt as single, _
-    pl as PlayerState, _
     brush() as BrushModel, _
-    plat() as PlatEnt, _
-    byval plat_count as integer _
+    plat() as PlatEnt _
 )
 declare sub ent_place_models ( _
     byval model_count as integer, _
@@ -178,14 +178,12 @@ end sub
 ''       Must run while the map file is still open, so before mod_close.
 ''::::::::::
 sub ent_load_teleports ( _
-    wld as World, _
+    g as Game, _
     models() as Submodel, _
     brush() as BrushModel, _
     tele() as Teleporter, _
     face_mdl() as integer, _
-    plat() as PlatEnt, _
-    tele_count as integer, _
-    plat_count as integer _
+    plat() as PlatEnt _
 )
     dim entity as string
     dim strm(50) as string
@@ -198,14 +196,14 @@ sub ent_load_teleports ( _
 
     redim tele( ENT_MAXTELE ) as Teleporter
     redim brush( 63 ) as BrushModel
-    redim face_mdl( wld.count.faces ) as integer
+    redim face_mdl( g.wld.count.faces ) as integer
     redim plat( ENT_MAXTELE ) as PlatEnt
 
-    tele_count = 0
+    g.tele_count = 0
     dest_count = 0
     trig_count = 0
 
-    plat_count = 0
+    g.plat_count = 0
 
     '' every submodel draws and blocks unless something claims it as a trigger
     for  i = 0 to 63
@@ -218,19 +216,19 @@ sub ent_load_teleports ( _
     '' Which submodel owns each face. The world's faces come first and the
     '' submodels' follow in order, so this is a walk rather than a search.
     ''
-    for  i = 0 to wld.count.faces-1
+    for  i = 0 to g.wld.count.faces-1
         face_mdl(i) = 0
     next i
 
-    for  j = 1 to wld.count.models-1
+    for  j = 1 to g.wld.count.models-1
         for  k = models(j).first_face to models(j).first_face + models(j).num_faces - 1
-            if ( k >= 0 and k <= wld.count.faces-1 ) then face_mdl(k) = j
+            if ( k >= 0 and k <= g.wld.count.faces-1 ) then face_mdl(k) = j
         next k
     next j
 
-    entity$ = space$( wld.file.head.entities.size )
-    seek #wld.file.handle, wld.file.head.entities.offs+1
-    get #wld.file.handle,, entity$
+    entity$ = space$( g.wld.file.head.entities.size )
+    seek #g.wld.file.handle, g.wld.file.head.entities.offs+1
+    get #g.wld.file.handle,, entity$
 
     ''
     '' Walk the text a block at a time, the same way mod_find_spawn does.
@@ -264,28 +262,28 @@ sub ent_load_teleports ( _
 
                 dest_count = dest_count + 1
 
-            elseif ( s$ = "func_plat" and plat_count < ENT_MAXTELE ) then
+            elseif ( s$ = "func_plat" and g.plat_count < ENT_MAXTELE ) then
                 s$ = ent_value( strm(), strm_cnt, "model" )
                 if ( left$( s$, 1 ) = "*" ) then
                     mdlnum = val( mid$( s$, 2 ) )
 
-                    if ( mdlnum > 0 and mdlnum <= wld.count.models-1 ) then
-                        plat( plat_count ).model  = mdlnum
-                        plat( plat_count ).speed  = val( ent_value( strm(), strm_cnt, "speed" ) )
-                        plat( plat_count ).travel = val( ent_value( strm(), strm_cnt, "height" ) )
-                        plat( plat_count ).mins   = models(mdlnum).mins
-                        plat( plat_count ).maxs   = models(mdlnum).maxs
+                    if ( mdlnum > 0 and mdlnum <= g.wld.count.models-1 ) then
+                        plat( g.plat_count ).model  = mdlnum
+                        plat( g.plat_count ).speed  = val( ent_value( strm(), strm_cnt, "speed" ) )
+                        plat( g.plat_count ).travel = val( ent_value( strm(), strm_cnt, "height" ) )
+                        plat( g.plat_count ).mins   = models(mdlnum).mins
+                        plat( g.plat_count ).maxs   = models(mdlnum).maxs
 
-                        if ( plat( plat_count ).speed  <= 0.0 ) then plat( plat_count ).speed  = 150.0
-                        if ( plat( plat_count ).travel <= 0.0 ) then _
-                            plat( plat_count ).travel = models(mdlnum).maxs.z - models(mdlnum).mins.z
+                        if ( plat( g.plat_count ).speed  <= 0.0 ) then plat( g.plat_count ).speed  = 150.0
+                        if ( plat( g.plat_count ).travel <= 0.0 ) then _
+                            plat( g.plat_count ).travel = models(mdlnum).maxs.z - models(mdlnum).mins.z
 
                         '' Quake positions the brush raised, so a lift at rest
                         '' is one full travel below where the map drew it.
-                        plat( plat_count ).state = ENT_PLAT_DOWN
-                        brush( mdlnum ).zofs = -plat( plat_count ).travel
+                        plat( g.plat_count ).state = ENT_PLAT_DOWN
+                        brush( mdlnum ).zofs = -plat( g.plat_count ).travel
 
-                        plat_count = plat_count + 1
+                        g.plat_count = g.plat_count + 1
                     end if
                 end if
 
@@ -319,12 +317,12 @@ sub ent_load_teleports ( _
             if ( rtrim$(trig_target(j)) = rtrim$(dest_name(k)) ) then
                 mdlnum = trig_model(j)
 
-                if ( mdlnum > 0 and mdlnum <= wld.count.models-1 ) then
-                    tele( tele_count ).mins = models(mdlnum).mins
-                    tele( tele_count ).maxs = models(mdlnum).maxs
-                    tele( tele_count ).dest = dest_org(k)
-                    tele( tele_count ).yaw  = dest_yaw(k)
-                    tele_count = tele_count + 1
+                if ( mdlnum > 0 and mdlnum <= g.wld.count.models-1 ) then
+                    tele( g.tele_count ).mins = models(mdlnum).mins
+                    tele( g.tele_count ).maxs = models(mdlnum).maxs
+                    tele( g.tele_count ).dest = dest_org(k)
+                    tele( g.tele_count ).yaw  = dest_yaw(k)
+                    g.tele_count = g.tele_count + 1
                 end if
 
                 exit for
@@ -346,39 +344,37 @@ end sub
 ''       player pass through one without ever having their centre inside it.
 ''::::::::::
 sub ent_check_teleport ( _
-    pl as PlayerState, _
-    env as Env, _
-    tele() as Teleporter, _
-    byval tele_count as integer _
+    g as Game, _
+    tele() as Teleporter _
 )
     dim i as integer
     dim pmin as Vec3, pmax as Vec3
 
-    if ( pl.no_clip ) then exit sub
+    if ( g.pl.no_clip ) then exit sub
 
-    pmin.x = pl.pos.x - 16.0
-    pmin.y = pl.pos.y - 16.0
-    pmin.z = pl.pos.z - PL_FEET#
-    pmax.x = pl.pos.x + 16.0
-    pmax.y = pl.pos.y + 16.0
-    pmax.z = pl.pos.z + 32.0
+    pmin.x = g.pl.pos.x - 16.0
+    pmin.y = g.pl.pos.y - 16.0
+    pmin.z = g.pl.pos.z - PL_FEET#
+    pmax.x = g.pl.pos.x + 16.0
+    pmax.y = g.pl.pos.y + 16.0
+    pmax.z = g.pl.pos.z + 32.0
 
-    for  i = 0 to tele_count-1
+    for  i = 0 to g.tele_count-1
         if ( pmax.x >= tele(i).mins.x and pmin.x <= tele(i).maxs.x and _
              pmax.y >= tele(i).mins.y and pmin.y <= tele(i).maxs.y and _
              pmax.z >= tele(i).mins.z and pmin.z <= tele(i).maxs.z ) then
 
-            pl.pos   = tele(i).dest
-            pl.vel.x = 0.0
-            pl.vel.y = 0.0
-            pl.vel.z = 0.0
+            g.pl.pos   = tele(i).dest
+            g.pl.vel.x = 0.0
+            g.pl.vel.y = 0.0
+            g.pl.vel.z = 0.0
 
             ''
             '' Face the way the destination says. The camera reads its angle
             '' from the mouse, so the mouse is what has to move -- the same
             '' trick host_main uses to apply the spawn angle.
             ''
-            mousePos (env.x_res-1) * tele(i).yaw/360.0, 110
+            mousePos (g.env.x_res-1) * tele(i).yaw/360.0, 110
 
             exit sub
         end if
@@ -395,8 +391,8 @@ end sub
 ''       close enough and needs nothing from the compiler.
 ''::::::::::
 function ent_plat_touched ( _
+    g as Game, _
     byval p as integer, _
-    pl as PlayerState, _
     brush() as BrushModel, _
     plat() as PlatEnt _
 ) as integer
@@ -404,10 +400,10 @@ function ent_plat_touched ( _
 
     ent_plat_touched = false
 
-    if ( pl.pos.x + 16.0 < plat(p).mins.x ) then exit function
-    if ( pl.pos.x - 16.0 > plat(p).maxs.x ) then exit function
-    if ( pl.pos.y + 16.0 < plat(p).mins.y ) then exit function
-    if ( pl.pos.y - 16.0 > plat(p).maxs.y ) then exit function
+    if ( g.pl.pos.x + 16.0 < plat(p).mins.x ) then exit function
+    if ( g.pl.pos.x - 16.0 > plat(p).maxs.x ) then exit function
+    if ( g.pl.pos.y + 16.0 < plat(p).mins.y ) then exit function
+    if ( g.pl.pos.y - 16.0 > plat(p).maxs.y ) then exit function
 
     ''
     '' Above its surface and within a body's height of it. Anything higher is
@@ -415,8 +411,8 @@ function ent_plat_touched ( _
     ''
     top = plat(p).maxs.z + brush( plat(p).model ).zofs
 
-    if ( pl.pos.z - PL_FEET# < top - 8.0  ) then exit function
-    if ( pl.pos.z - PL_FEET# > top + 64.0 ) then exit function
+    if ( g.pl.pos.z - PL_FEET# < top - 8.0  ) then exit function
+    if ( g.pl.pos.z - PL_FEET# > top + 64.0 ) then exit function
 
     ent_plat_touched = true
 
@@ -438,21 +434,20 @@ end function
 ''       exists.
 ''::::::::::
 sub ent_move_plats ( _
+    g as Game, _
     byval dt as single, _
-    pl as PlayerState, _
     brush() as BrushModel, _
-    plat() as PlatEnt, _
-    byval plat_count as integer _
+    plat() as PlatEnt _
 )
     dim p as integer
     dim m as integer
     dim goal as single, step_z as single, moved as single, was as single
     dim riding as integer
 
-    for  p = 0 to plat_count-1
+    for  p = 0 to g.plat_count-1
         m = plat(p).model
 
-        riding = ent_plat_touched( p, pl, brush(), plat() )
+        riding = ent_plat_touched ( g, p, brush(), plat() )
 
         if ( riding ) then
             plat(p).state = ENT_PLAT_UP
@@ -487,7 +482,7 @@ sub ent_move_plats ( _
         '' shaft on the last step of the descent.
         ''
         if ( riding and moved > 0.0 ) then
-            pl.pos.z = pl.pos.z + moved
+            g.pl.pos.z = g.pl.pos.z + moved
         end if
     next p
 

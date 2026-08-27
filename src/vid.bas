@@ -25,20 +25,23 @@ option explicit
 '$include: 'q_vis.bi'
 '$include: 'q_draw.bi'
 '$include: 'q_scr.bi'
+'$include: 'q_cam.bi'
+'$include: 'q_pl.bi'
+'$include: 'q_ent.bi'
 '$include: 'q_snd.bi'
+'$include: 'q_game.bi'
 
 ''
 '' This module's own procedures.
 ''
 declare sub vid_update ( _
+    g as Game, _
     h_dst_dc as long, _
-    page as integer, _
-    env as Env _
+    page as integer _
 )
 declare sub vid_init_ugl ( )
 declare sub vid_init ( _
-    env as Env, _
-    pal as long _
+    g as Game _
 )
 
 ''
@@ -71,19 +74,18 @@ end sub
 '' desc: Final video mode, backbuffer and the Quake palette.
 ''::::::::::
 sub vid_init ( _
-    env as Env, _
-    pal as long _
+    g as Game _
 )
     dim pages as integer
 
-    if ( env.use_paging = true ) then
-        pages = env.pages
+    if ( g.env.use_paging = true ) then
+        pages = g.env.pages
     else
         pages = 1
     end if
             
-    env.h_video_dc = uglSetVideoDC( env.c_fmt, env.x_res, env.y_res, pages )
-    if ( env.h_video_dc = FALSE ) then 
+    g.env.h_video_dc = uglSetVideoDC( g.env.c_fmt, g.env.x_res, g.env.y_res, pages )
+    if ( g.env.h_video_dc = FALSE ) then 
         sys_error "0x0001, Could not set video mode..."
     end if
     
@@ -91,9 +93,9 @@ sub vid_init ( _
     ''
     '' Create a backbuffer
     '' 
-    if ( env.use_paging = false ) then
-        env.h_back_bdc = uglNew( ugl.mem, env.c_fmt, env.x_res, env.y_res )
-        if ( env.h_back_bdc = FALSE ) then 
+    if ( g.env.use_paging = false ) then
+        g.env.h_back_bdc = uglNew( ugl.mem, g.env.c_fmt, g.env.x_res, g.env.y_res )
+        if ( g.env.h_back_bdc = FALSE ) then 
             sys_error "0x0002, Could not create a backbuffer..."
         end if
     end if     
@@ -102,8 +104,8 @@ sub vid_init ( _
     ''
     '' Load quake palette
     ''    
-    uglPalSet 0, 256, pal
-    memFree pal
+    uglPalSet 0, 256, g.pal
+    memFree g.pal
 
     '' the overlay best-fits its colours against the palette that is now
     '' live -- it has to run after the set, and exactly once
@@ -120,9 +122,9 @@ end sub
 '' Once per frame, at the end of it.
 ''::::::::::
 sub vid_update ( _
+    g as Game, _
     h_dst_dc as long, _
-    page as integer, _
-    env as Env _
+    page as integer _
 )
     ''
     '' Present only. This used to also poll the screenshot key, tally frames
@@ -130,12 +132,12 @@ sub vid_update ( _
     '' three of them nothing to do with video. Input polling in the present
     '' path is the odd one: pressing a key had to wait for a blit.
     ''
-    if ( env.use_paging = false ) then
-        uglPut env.h_video_dc, 0, 0, env.h_back_bdc
+    if ( g.env.use_paging = false ) then
+        uglPut g.env.h_video_dc, 0, 0, g.env.h_back_bdc
     else
         uglSetVisPage page
-        uglSetWrkPage (page+1) mod env.pages
-        page = (page+1) mod env.pages
+        uglSetWrkPage (page+1) mod g.env.pages
+        page = (page+1) mod g.env.pages
     end if
 
 end sub

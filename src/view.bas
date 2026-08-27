@@ -26,14 +26,15 @@ option explicit
 '$include: 'q_cam.bi'
 '$include: 'q_pl.bi'
 '$include: 'q_ent.bi'
+'$include: 'q_snd.bi'
+'$include: 'q_game.bi'
 
 ''
 '' cp_advance lives in main.bas; this is its only caller.
 ''
 declare sub cp_advance ( _
+    g as Game, _
     byval dt as single, _
-    pl as PlayerState, _
-    cp as CamPath, _
     cp_x() as integer, _
     cp_y() as integer, _
     cp_z() as integer _
@@ -43,12 +44,8 @@ declare sub cp_advance ( _
 '' This module's own procedures.
 ''
 declare sub v_update_camera ( _
+    g as Game, _
     byval dt as single, _
-    wld as World, _
-    env as Env, _
-    pl as PlayerState, _
-    cam as CamState, _
-    cp as CamPath, _
     cp_x() as integer, _
     cp_y() as integer, _
     cp_z() as integer, _
@@ -58,8 +55,7 @@ declare sub v_update_camera ( _
     nodes() as Node _
 )
 declare sub v_open_script ( _
-    env as Env, _
-    cam as CamState _
+    g as Game _
 )
 
 ''
@@ -68,14 +64,13 @@ declare sub v_open_script ( _
 '' table is finite, and it ran out when they all got everything.
 ''
 declare sub pl_move ( _
+    g as Game, _
     byval fwd as single, _
     byval strafe as single, _
     byval dir_x as single, _
     byval dir_y as single, _
     byval jump as integer, _
     byval dt as single, _
-    pl as PlayerState, _
-    cam as CamState, _
     byval model_count as integer, _
     models() as Submodel, _
     brush() as BrushModel, _
@@ -119,12 +114,8 @@ dim shared last_point as integer
 '' renderer state for why the draw loop is not carved up the same way.
 ''::::::::::
 sub v_update_camera ( _
+    g as Game, _
     byval dt as single, _
-    wld as World, _
-    env as Env, _
-    pl as PlayerState, _
-    cam as CamState, _
-    cp as CamPath, _
     cp_x() as integer, _
     cp_y() as integer, _
     cp_z() as integer, _
@@ -144,14 +135,14 @@ sub v_update_camera ( _
 	''
 	'' mode script_play run through the bezier curves
 	''                
-    if ( env.cam_mode = 1 ) then
+    if ( g.env.cam_mode = 1 ) then
         pa = pa + 1
         if ( crr_pnt+3 <= cnt_pnts and last_point=false ) then
-            if ( pa > env.cam_interp ) then
+            if ( pa > g.env.cam_interp ) then
                 
                         
-                ugluCubicBez3D ppos(0), cbzp(crr_pnt), env.cam_interp
-                ugluCubicBez3D plok(0), cbzl(crr_pnt), env.cam_interp
+                ugluCubicBez3D ppos(0), cbzp(crr_pnt), g.env.cam_interp
+                ugluCubicBez3D plok(0), cbzl(crr_pnt), g.env.cam_interp
                 
                 pa = 0
                 crr_pnt = crr_pnt+3
@@ -160,44 +151,44 @@ sub v_update_camera ( _
             if ( crr_pnt <> cnt_pnts and (not last_point) ) then
                 pa = 0
                 last_point = true
-                ugluCubicBez3D ppos(0), cbzp(cnt_pnts-4), env.cam_interp
-                ugluCubicBez3D plok(0), cbzl(cnt_pnts-4), env.cam_interp
+                ugluCubicBez3D ppos(0), cbzp(cnt_pnts-4), g.env.cam_interp
+                ugluCubicBez3D plok(0), cbzl(cnt_pnts-4), g.env.cam_interp
                 
-            elseif ( pa > env.cam_interp ) then
+            elseif ( pa > g.env.cam_interp ) then
                 crr_pnt = 0
                 last_point = false
-                env.keyboard.esc = true
+                g.env.keyboard.esc = true
             end if                    
         end if                
         
-        cam.pos.x = ppos(pa).x
-        cam.pos.y = ppos(pa).y
-        cam.pos.z = ppos(pa).z        
-        cam.look_at.x = cam.pos.x+plok(pa).x
-        cam.look_at.y = cam.pos.y+plok(pa).y
-        cam.look_at.z = cam.pos.z+plok(pa).z
+        g.cam.pos.x = ppos(pa).x
+        g.cam.pos.y = ppos(pa).y
+        g.cam.pos.z = ppos(pa).z        
+        g.cam.look_at.x = g.cam.pos.x+plok(pa).x
+        g.cam.look_at.y = g.cam.pos.y+plok(pa).y
+        g.cam.look_at.z = g.cam.pos.z+plok(pa).z
     end if
     
     
     ''
     '' Mode: freelook or script_edit
     ''
-    if ( env.cam_mode = 0 or env.cam_mode = 2 ) then            
-        if env.mouse.x < 1 then  mousepos env.x_res-4, env.mouse.y
-        if env.mouse.x > env.x_res-3 then  mousepos 1, env.mouse.y
+    if ( g.env.cam_mode = 0 or g.env.cam_mode = 2 ) then            
+        if g.env.mouse.x < 1 then  mousepos g.env.x_res-4, g.env.mouse.y
+        if g.env.mouse.x > g.env.x_res-3 then  mousepos 1, g.env.mouse.y
         
-        if env.mouse.y < 0        then  mousepos env.mouse.x, 0
-        if env.mouse.y > env.y_res then  mousepos env.mouse.x, env.y_res-1
+        if g.env.mouse.y < 0        then  mousepos g.env.mouse.x, 0
+        if g.env.mouse.y > g.env.y_res then  mousepos g.env.mouse.x, g.env.y_res-1
         
-        tmx = env.mouse.x + 1
-        tmy = env.mouse.y + 2
+        tmx = g.env.mouse.x + 1
+        tmy = g.env.mouse.y + 2
 
-        theta = 2 * 3.14159 * ((env.x_res-1)-tmx) / env.x_res
-        phi = 3.14159 * tmy / env.y_res
+        theta = 2 * 3.14159 * ((g.env.x_res-1)-tmx) / g.env.x_res
+        phi = 3.14159 * tmy / g.env.y_res
         
-        cam.look_at.x = cos( theta ) * sin( phi )
-        cam.look_at.y = cos( phi )
-        cam.look_at.z = sin( theta ) * sin( phi )
+        g.cam.look_at.x = cos( theta ) * sin( phi )
+        g.cam.look_at.y = cos( phi )
+        g.cam.look_at.z = sin( theta ) * sin( phi )
         
 
         ''
@@ -213,16 +204,16 @@ sub v_update_camera ( _
         fwd    = 0.0
         strafe = 0.0
 
-        if ( env.keyboard.w  ) then fwd    = fwd    + 1.0
-        if ( env.keyboard.s  ) then fwd    = fwd    - 1.0
-        if ( env.keyboard.a  ) then strafe = strafe + 1.0
-        if ( env.keyboard.d  ) then strafe = strafe - 1.0
+        if ( g.env.keyboard.w  ) then fwd    = fwd    + 1.0
+        if ( g.env.keyboard.s  ) then fwd    = fwd    - 1.0
+        if ( g.env.keyboard.a  ) then strafe = strafe + 1.0
+        if ( g.env.keyboard.d  ) then strafe = strafe - 1.0
 
-        if ( env.mouse.left  ) then fwd    = fwd    + 1.0
-        if ( env.mouse.right ) then fwd    = fwd    - 1.0
+        if ( g.env.mouse.left  ) then fwd    = fwd    + 1.0
+        if ( g.env.mouse.right ) then fwd    = fwd    - 1.0
 
-        if ( env.bench_walk   ) then fwd    = 1.0
-        if ( env.bench_strafe ) then strafe = 1.0
+        if ( g.env.bench_walk   ) then fwd    = 1.0
+        if ( g.env.bench_strafe ) then strafe = 1.0
 
         ''
         '' Pressing both of an opposing pair cancels, which falls out of the
@@ -230,36 +221,36 @@ sub v_update_camera ( _
         '' speed because pl_move clamps to PL_MAXSPEED.
         ''
 
-        if ( pl.no_clip ) then
+        if ( g.pl.no_clip ) then
             ''
             '' Also per second, not per frame. This used to advance a flat 3
             '' units every frame, so the camera flew at whatever speed the
             '' framerate happened to give it.
             ''
-            cam.pos.x = cam.pos.x + cam.look_at.x*PL_NOCLIP#*fwd*dt
-            cam.pos.y = cam.pos.y + cam.look_at.y*PL_NOCLIP#*fwd*dt
-            cam.pos.z = cam.pos.z + cam.look_at.z*PL_NOCLIP#*fwd*dt
+            g.cam.pos.x = g.cam.pos.x + g.cam.look_at.x*PL_NOCLIP#*fwd*dt
+            g.cam.pos.y = g.cam.pos.y + g.cam.look_at.y*PL_NOCLIP#*fwd*dt
+            g.cam.pos.z = g.cam.pos.z + g.cam.look_at.z*PL_NOCLIP#*fwd*dt
 
             ''
             '' Keep the player in step with the free camera, so switching
             '' back to walking carries on from here rather than snapping to
             '' wherever physics was last left.
             ''
-            pl.pos.x = cam.pos.x
-            pl.pos.y = cam.pos.z
-            pl.pos.z = cam.pos.y - PL_EYE#
-            pl.vel.x = 0.0
-            pl.vel.y = 0.0
-            pl.vel.z = 0.0
+            g.pl.pos.x = g.cam.pos.x
+            g.pl.pos.y = g.cam.pos.z
+            g.pl.pos.z = g.cam.pos.y - PL_EYE#
+            g.pl.vel.x = 0.0
+            g.pl.vel.y = 0.0
+            g.pl.vel.z = 0.0
         else
             ''
-            '' cam.look_at is still a direction here; it does not become an
+            '' g.cam.look_at is still a direction here; it does not become an
             '' absolute point until the bottom of this routine. Only its
             '' horizontal part steers walking, renormalised so that looking at
             '' the floor does not slow the player down.
             ''
-            dir_x = cam.look_at.x
-            dir_y = cam.look_at.z                    '' renderer z is bsp y
+            dir_x = g.cam.look_at.x
+            dir_y = g.cam.look_at.z                    '' renderer z is bsp y
             dir_l = sqr( dir_x*dir_x + dir_y*dir_y )
             if ( dir_l > 0.001 ) then
                 dir_x = dir_x / dir_l
@@ -270,8 +261,8 @@ sub v_update_camera ( _
             end if
 
             jump = 0
-            if ( env.keyboard.spcbar ) then jump = -1
-            if ( env.bench_jump       ) then jump = -1
+            if ( g.env.keyboard.spcbar ) then jump = -1
+            if ( g.env.bench_jump       ) then jump = -1
 
             ''
             '' -campath steers instead of positioning: the direction comes
@@ -279,9 +270,9 @@ sub v_update_camera ( _
             '' and step-up are then the game's, not an approximation, and a
             '' wall stops the walk exactly as it stops a player.
             ''
-            if ( env.cam_path ) then
-                cp_advance dt, pl, cp, cp_x(), cp_y(), cp_z()
-                if ( cp.dir_x <> 0.0 or cp.dir_y <> 0.0 ) then
+            if ( g.env.cam_path ) then
+                cp_advance g, dt, cp_x(), cp_y(), cp_z()
+                if ( g.cp.dir_x <> 0.0 or g.cp.dir_y <> 0.0 ) then
                     ''
                     '' Face the way we are going. The view and the walk
                     '' come from ONE vector -- looking somewhere the player
@@ -292,51 +283,50 @@ sub v_update_camera ( _
                     '' of cutting; the waypoints are 32 units apart and an
                     '' instant turn at each reads as a flinch.
                     ''
-                    if ( cp.look_x = 0.0 and cp.look_y = 0.0 ) then
-                        cp.look_x = cp.dir_x
-                        cp.look_y = cp.dir_y
+                    if ( g.cp.look_x = 0.0 and g.cp.look_y = 0.0 ) then
+                        g.cp.look_x = g.cp.dir_x
+                        g.cp.look_y = g.cp.dir_y
                     else
                         '' dt-scaled, clamped: a long frame must not
                         '' overshoot the target direction
                         t = CP_TURN * dt
                         if ( t > 1.0 ) then t = 1.0
-                        cp.look_x = cp.look_x + (cp.dir_x - cp.look_x) * t
-                        cp.look_y = cp.look_y + (cp.dir_y - cp.look_y) * t
+                        g.cp.look_x = g.cp.look_x + (g.cp.dir_x - g.cp.look_x) * t
+                        g.cp.look_y = g.cp.look_y + (g.cp.dir_y - g.cp.look_y) * t
                     end if
-                    dir_l = sqr( cp.look_x*cp.look_x + cp.look_y*cp.look_y )
+                    dir_l = sqr( g.cp.look_x*g.cp.look_x + g.cp.look_y*g.cp.look_y )
                     if ( dir_l > 0.001 ) then
-                        cp.look_x = cp.look_x / dir_l
-                        cp.look_y = cp.look_y / dir_l
+                        g.cp.look_x = g.cp.look_x / dir_l
+                        g.cp.look_y = g.cp.look_y / dir_l
                     end if
 
                     '' renderer z is bsp y, and keep the view level
-                    cam.look_at.x = cp.look_x
-                    cam.look_at.y = 0.0
-                    cam.look_at.z = cp.look_y
+                    g.cam.look_at.x = g.cp.look_x
+                    g.cam.look_at.y = 0.0
+                    g.cam.look_at.z = g.cp.look_y
 
-                    dir_x  = cp.look_x
-                    dir_y  = cp.look_y
+                    dir_x  = g.cp.look_x
+                    dir_y  = g.cp.look_y
                     fwd    = 1.0
                     strafe = 0.0
                 end if
             end if
 
-            pl_move fwd, strafe, dir_x, dir_y, jump, dt, _
-                    pl, cam, wld.count.models, models(), brush(), _
-                    nodes(), planes()
+            pl_move g, fwd, strafe, dir_x, dir_y, jump, dt, g.wld.count.models, models(), _
+                     brush(), nodes(), planes()
         end if
         
-        if ( env.keyboard.n and env.cam_mode = 2 ) then
-            print #cam.script_file, cam.pos.x, cam.pos.y, cam.pos.z
-            print #cam.script_file, cam.look_at.x, cam.look_at.y, cam.look_at.z
+        if ( g.env.keyboard.n and g.env.cam_mode = 2 ) then
+            print #g.cam.script_file, g.cam.pos.x, g.cam.pos.y, g.cam.pos.z
+            print #g.cam.script_file, g.cam.look_at.x, g.cam.look_at.y, g.cam.look_at.z
             
-            while ( env.keyboard.n )
+            while ( g.env.keyboard.n )
             wend
         end if
         
-        cam.look_at.x = cam.look_at.x + cam.pos.x 
-        cam.look_at.y = cam.look_at.y + cam.pos.y 
-        cam.look_at.z = cam.look_at.z + cam.pos.z
+        g.cam.look_at.x = g.cam.look_at.x + g.cam.pos.x 
+        g.cam.look_at.y = g.cam.look_at.y + g.cam.pos.y 
+        g.cam.look_at.z = g.cam.look_at.z + g.cam.pos.z
     end if
 end sub
 
@@ -355,35 +345,34 @@ end sub
 ''       opened on one from freefile -- the same bug the ini parser had.
 ''::::::::::
 sub v_open_script ( _
-    env as Env, _
-    cam as CamState _
+    g as Game _
 )
     dim i as integer
 
-    redim ppos( env.cam_interp ) as PNT3D
-    redim plok( env.cam_interp ) as PNT3D
+    redim ppos( g.env.cam_interp ) as PNT3D
+    redim plok( g.env.cam_interp ) as PNT3D
     redim cbzp( 10 ) as PNT3D
     redim cbzl( 10 ) as PNT3D
 
-    if ( env.cam_mode = 1 ) then
-        cam.script_file = freefile
-        open env.cam_script for input as #cam.script_file
+    if ( g.env.cam_mode = 1 ) then
+        g.cam.script_file = freefile
+        open g.env.cam_script for input as #g.cam.script_file
         do
-            input #cam.script_file, cbzp(i).x, cbzp(i).y, cbzp(i).z
-            input #cam.script_file, cbzl(i).x, cbzl(i).y, cbzl(i).z
+            input #g.cam.script_file, cbzp(i).x, cbzp(i).y, cbzp(i).z
+            input #g.cam.script_file, cbzl(i).x, cbzl(i).y, cbzl(i).z
             i = i + 1
-        loop until ( eof( cam.script_file ) )
-        close #cam.script_file
-        cam.script_file = 0
+        loop until ( eof( g.cam.script_file ) )
+        close #g.cam.script_file
+        g.cam.script_file = 0
         cnt_pnts = i-1
 
-        ugluCubicBez3D ppos(0), cbzp(crr_pnt), env.cam_interp
-        ugluCubicBez3D plok(0), cbzl(crr_pnt), env.cam_interp
+        ugluCubicBez3D ppos(0), cbzp(crr_pnt), g.env.cam_interp
+        ugluCubicBez3D plok(0), cbzl(crr_pnt), g.env.cam_interp
         crr_pnt = crr_pnt + 3
 
-    elseif ( env.cam_mode = 2 ) then
-        cam.script_file = freefile
-        open env.cam_script for output as #cam.script_file
+    elseif ( g.env.cam_mode = 2 ) then
+        g.cam.script_file = freefile
+        open g.env.cam_script for output as #g.cam.script_file
     end if
 
 end sub

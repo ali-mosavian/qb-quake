@@ -29,9 +29,12 @@ option explicit
 '$include: 'q_map.bi'
 '$include: 'q_vis.bi'
 '$include: 'q_draw.bi'
+'$include: 'q_scr.bi'
 '$include: 'q_cam.bi'
 '$include: 'q_pl.bi'
 '$include: 'q_ent.bi'
+'$include: 'q_snd.bi'
+'$include: 'q_game.bi'
 
 ''
 '' This module's own procedures.
@@ -51,14 +54,12 @@ declare sub d_clip_z ( _
 '' This module's own procedures.
 ''
 declare sub d_draw_faces ( _
+    g as Game, _
     h_dst_dc as long, _
     mtx_fin as u3dMtrx, _
     xresh as single, _
     yresh as single, _
-    wld as World, _
     campos as u3dVector3f, _
-    rdr as RenderState, _
-    env as Env, _
     byval frame_stamp as integer, _
     byval ord_count as integer, _
     tri_buffer() as Face, _
@@ -100,22 +101,22 @@ declare function sc_held ( byval face as integer ) as integer
 declare function sc_ready ( ) as integer
 declare function sc_shift ( byval v as integer ) as integer
 declare function sc_alloc ( _
+    g as Game, _
     byval face as integer, _
     byval mip as integer, _
     byval w as integer, _
     byval h as integer, _
     byval fw as integer, _
-    byval fh as integer, _
-    wld as World _
+    byval fh as integer _
 )
 declare sub sb_build ( _
+    g as Game, _
     byval dc as long, _
     byval tex as long, _
     byval face as integer, _
     byval mip as integer, _
     byval sw as integer, _
     byval sh as integer, _
-    wld as World, _
     tri_buffer() as Face, _
     tex_inf_buff() as TexInfo, _
     gv_buf() as integer, _
@@ -275,14 +276,12 @@ end sub
 ''  RASTER
 '' ==========================================================================
 sub d_draw_faces ( _
+    g as Game, _
     h_dst_dc as long, _
     mtx_fin as u3dMtrx, _
     xresh as single, _
     yresh as single, _
-    wld as World, _
     campos as u3dVector3f, _
-    rdr as RenderState, _
-    env as Env, _
     byval frame_stamp as integer, _
     byval ord_count as integer, _
     tri_buffer() as Face, _
@@ -337,7 +336,7 @@ sub d_draw_faces ( _
     '' Asked once, not per face: whether a depth buffer exists cannot change
     '' inside a frame.
     z_avail = host_z_on
-    turbph = rdr.anim_time * TURB_RATE#
+    turbph = g.rdr.anim_time * TURB_RATE#
 
 
     ''
@@ -345,12 +344,12 @@ sub d_draw_faces ( _
     '' reached by DEF SEG and an offset rather than as an array. The segment
     '' is fixed for the whole frame; only the offset moves.
     ''
-    '' rdr.lightmap as well as env.use_lm: the flag says whether the data
+    '' g.rdr.lightmap as well as g.env.use_lm: the flag says whether the data
     '' was loaded at all, the toggle says whether to use it right now.
     '' Clearing this turns every face below into a plain textured one,
     '' which is exactly what an unlit face already does.
     lm_use = 0
-    if ( env.use_lm and rdr.lightmap and sc_ready <> 0 ) then lm_use = -1
+    if ( g.env.use_lm and g.rdr.lightmap and sc_ready <> 0 ) then lm_use = -1
 
     ''
     '' Where memCopy puts a face's record. Hoisted: VARSEG/VARPTR on a
@@ -410,7 +409,7 @@ sub d_draw_faces ( _
                       
             if ( tri_buffer(i).side ) then dp = -dp
                 
-            if ( rdr.backface <> 0 and dp <= 0.01 ) then goto next_face
+            if ( g.rdr.backface <> 0 and dp <= 0.01 ) then goto next_face
 
                 	
 		''
@@ -423,7 +422,7 @@ sub d_draw_faces ( _
             '' the mapped EMS window, and a fixed-size copy from a record
             '' near it would read off the page.
             ''
-            gp = mod_geom_map( wld, tri_buffer(i).geom_row )
+            gp = mod_geom_map ( g, tri_buffer(i).geom_row )
             gn = GEOM_MAXREC
             if ( tri_buffer(i).geom_ofs + gn > GEOM_W ) then
                 gn = GEOM_W - tri_buffer(i).geom_ofs
@@ -534,7 +533,7 @@ sub d_draw_faces ( _
             ''
             if ( mip_buff_inf(mipidx).anim_count > 1 ) then
                 mipidx = mip_buff_inf(mipidx).anim_base + _
-                         (int( rdr.anim_time * 5.0 ) mod mip_buff_inf(mipidx).anim_count)
+                         (int( g.rdr.anim_time * 5.0 ) mod mip_buff_inf(mipidx).anim_count)
             end if
                     
             for  j = 0 to vcnt-1
@@ -590,7 +589,7 @@ sub d_draw_faces ( _
             ''
             u3dMtrxByVec4 polyb(0), len( polyb(0) ), mtx_fin, _
                           polyb(0), len( polyb(0) ), vcnt
-            d_clip_z poly(), uvbuff(), poly_cnt, polyb(), uv_buff_b(), vcnt, env.z_near, env.z_far
+            d_clip_z poly(), uvbuff(), poly_cnt, polyb(), uv_buff_b(), vcnt, g.env.z_near, g.env.z_far
 
 			''
 			'' If more then 2 vertices, rasterize
@@ -624,12 +623,12 @@ sub d_draw_faces ( _
             '' near-identical copies the mode branches used to
             '' carry.
             ''
-            if ( rdr.rend_mode = 0 ) then
+            if ( g.rdr.rend_mode = 0 ) then
                 for  j = 0 to poly_cnt-1
                     prj_u(j) = uv_buff_b(j).u * prj_w(j)
                     prj_v(j) = uv_buff_b(j).v * prj_w(j)
                 next j
-            elseif ( rdr.rend_mode = 1 ) then
+            elseif ( g.rdr.rend_mode = 1 ) then
                 for  j = 0 to poly_cnt-1
                     prj_u(j) = uv_buff_b(j).u
                     prj_v(j) = uv_buff_b(j).v
@@ -665,7 +664,7 @@ sub d_draw_faces ( _
                 mip_level = 0
             end if
 
-            if ( rdr.use_mips ) then
+            if ( g.rdr.use_mips ) then
                 tex_indx = mipidx*4+mip_level
             else
                 tex_indx = mipidx*4
@@ -680,7 +679,7 @@ sub d_draw_faces ( _
             src_dc = h_textr_dc(tex_indx)
             if ( lm_on ) then
                 lm_mip = mip_level
-                if ( rdr.use_mips = 0 ) then lm_mip = 0
+                if ( g.rdr.use_mips = 0 ) then lm_mip = 0
                 lm_floor = sc_mipfloor( lm_extw, lm_exth )
                 if ( lm_mip < lm_floor ) then lm_mip = lm_floor
 
@@ -720,7 +719,7 @@ sub d_draw_faces ( _
 
                 lm_dc = sc_find( i, lm_mip, lm_sw, lm_sh )
                 if ( lm_dc = 0 ) then
-                    lm_dc = sc_alloc( i, lm_mip, lm_sw, lm_sh, lm_fw, lm_fh, wld )
+                    lm_dc = sc_alloc ( g, i, lm_mip, lm_sw, lm_sh, lm_fw, lm_fh )
                     if ( lm_dc <> 0 ) then
                         ''
                         '' Build the DC's WHOLE padded extent, not just the
@@ -731,11 +730,9 @@ sub d_draw_faces ( _
                         '' sb_build clamps its luxel and atlas reads, so the
                         '' extra columns come out edge-extended.
                         ''
-                        sb_build lm_dc, h_rawtx_dc(mipidx*4 + lm_mip), _
-                                 i, lm_mip, 2 ^ sc_shift( lm_sw ), _
-                                 2 ^ sc_shift( lm_sh ), _
-                                 wld, tri_buffer(), tex_inf_buff(), gv_buf(), _
-                                 mip_buff_inf()
+                        sb_build g, lm_dc, h_rawtx_dc(mipidx*4 + lm_mip), i, lm_mip, _
+                                  2 ^ sc_shift( lm_sw ), 2 ^ sc_shift( lm_sh ), _
+                                  tri_buffer(), tex_inf_buff(), gv_buf(), mip_buff_inf()
                     end if
                 end if
 
@@ -749,7 +746,7 @@ sub d_draw_faces ( _
                     ''
                     lm_su = 1.0 / ((2 ^ lm_mip) * (2 ^ sc_shift( lm_sw )))
                     lm_sv = 1.0 / ((2 ^ lm_mip) * (2 ^ sc_shift( lm_sh )))
-                    if ( rdr.rend_mode = 0 ) then
+                    if ( g.rdr.rend_mode = 0 ) then
                         for  j = 0 to poly_cnt-1
                             prj_u(j) = (prj_u(j) - lm_tms*prj_w(j)) * lm_su
                             prj_v(j) = (prj_v(j) - lm_tmt*prj_w(j)) * lm_sv
@@ -779,7 +776,7 @@ sub d_draw_faces ( _
                 '' internal edges for the rasteriser to seam along.
                 '' Wireframe mode still fans, it wants the triangles.
                 ''
-                if ( env.poly_tp and poly_cnt <= 12 ) then
+                if ( g.env.poly_tp and poly_cnt <= 12 ) then
                     for  j = 0 to poly_cnt-1
                         pvtx(j).x = prj_x(j)
                         pvtx(j).y = prj_y(j)
@@ -789,7 +786,7 @@ sub d_draw_faces ( _
                     next j
 
                     uglPolyTP h_dst_dc, pvtx(0), poly_cnt, 0, src_dc
-                    rdr.tris = rdr.tris + (poly_cnt-2)
+                    g.rdr.tris = g.rdr.tris + (poly_cnt-2)
                     goto poly_done
                 end if
 
@@ -811,7 +808,7 @@ sub d_draw_faces ( _
                     vtx(j).v3.x = prj_x(p3)
                     vtx(j).v3.y = prj_y(p3)
 
-                    if ( rdr.rend_mode = 2 ) then
+                    if ( g.rdr.rend_mode = 2 ) then
                         uglTriF h_dst_dc, vtx(j), 200
                         uglLine h_dst_dc, vtx(j).v1.x, vtx(j).v1.y, vtx(j).v2.x, vtx(j).v2.y, 0
                         uglLine h_dst_dc, vtx(j).v2.x, vtx(j).v2.y, vtx(j).v3.x, vtx(j).v3.y, 0
@@ -824,20 +821,20 @@ sub d_draw_faces ( _
                         vtx(j).v3.u = prj_u(p3)
                         vtx(j).v3.v = prj_v(p3)
 
-                        if ( rdr.rend_mode = 0 ) then
+                        if ( g.rdr.rend_mode = 0 ) then
                             uglTriTP h_dst_dc, vtx(j), 0, src_dc
                         else
                             uglTriT h_dst_dc, vtx(j), 0, src_dc
                         end if
                     end if
 
-                    rdr.tris = rdr.tris + 1                                
+                    g.rdr.tris = g.rdr.tris + 1                                
                 next j
 
 poly_done:
             end if
 
-            rdr.polys = rdr.polys + 1
+            g.rdr.polys = g.rdr.polys + 1
 
 next_face:
         next ti
