@@ -22,3 +22,11 @@ type CamState
 end type
 
 common shared /cam_s/ cam as CamState
+
+''
+'' model.bas. Declared here: mod_find_spawn names CamState.
+''
+declare sub mod_find_spawn ( _
+    wld as MapState, _
+    cam as CamState _
+)

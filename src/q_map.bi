@@ -288,3 +288,34 @@ const MEM_MARKS = 20
 '' nine shared longs, and the per-frame roll that used to live in the
 '' HUD went back to the cache as sc_frame_end.
 ''
+
+''
+'' model.bas. Declared here: these name MapState.
+''
+declare sub mod_alloc ( _
+    wld as MapState, _
+    faces() as Face, _
+    texinf() as TexInfo, _
+    planes() as Plane, _
+    nodes() as Node, _
+    models() as Submodel, _
+    ord() as integer, _
+    pflag() as integer _
+)
+declare sub mod_close ( wld as MapState )
+declare sub mod_load_clipnodes ( wld as MapState )
+declare sub mod_load_faces ( _
+    wld as MapState, _
+    faces() as Face _
+)
+declare sub mod_load_leafs ( wld as MapState )
+declare sub mod_load_marksurfaces ( wld as MapState )
+declare sub mod_load_nodes ( _
+    wld as MapState, _
+    nodes() as Node _
+)
+declare sub mod_open ( _
+    wld as MapState, _
+    env as Env, _
+    models() as Submodel _
+)

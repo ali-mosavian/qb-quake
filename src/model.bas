@@ -86,7 +86,11 @@ dim shared pln_count as long
 '' name: mod_open
 '' desc: Opens the map, reads the header and derives every lump count.
 ''::::::::::
-sub mod_open
+sub mod_open ( _
+    wld as MapState, _
+    env as Env, _
+    models() as Submodel _
+)
     wld.file = freefile
     open rtrim$( env.map_name ) for binary as #wld.file
     
@@ -99,7 +103,7 @@ sub mod_open
     wld.lef_count = wld.head.leaves.size \ len( leaftmp )
     pln_count = wld.head.planes.size \ len( planetmp )
     wld.nds_count = wld.head.nodes.size \ len( nodetmp )
-    wld.mdl_count = wld.head.models.size \ len( mdl_buffer(0) )
+    wld.mdl_count = wld.head.models.size \ len( models(0) )
     wld.texi_count = wld.head.texinfo.size \ len( texinfotmp )
     wld.clp_count = wld.head.clipnode.size \ len( clptmp )
     seek #wld.file, wld.head.miptex.offs+1
@@ -114,7 +118,10 @@ end sub
 '' name: mod_find_spawn
 '' desc: Scans the entity lump for info_player_start.
 ''::::::::::
-sub mod_find_spawn
+sub mod_find_spawn ( _
+    wld as MapState, _
+    cam as CamState _
+)
     dim i as integer
     dim entity as string
 
@@ -158,8 +165,7 @@ sub mod_find_spawn
         end if    
     next i
     
-    ldr.pct = ldr.pct + 100.0/LOAD_STEPS
-    scr_load_tick    
+    scr_load_step
 
 end sub
 
@@ -170,17 +176,26 @@ end sub
 '' name: mod_alloc
 '' desc: Sizes every level buffer from the counts bspOpen derived.
 ''::::::::::
-sub mod_alloc
+sub mod_alloc ( _
+    wld as MapState, _
+    faces() as Face, _
+    texinf() as TexInfo, _
+    planes() as Plane, _
+    nodes() as Node, _
+    models() as Submodel, _
+    ord() as integer, _
+    pflag() as integer _
+)
     '' ONE element; uglArrNew1D takes it over in mod_load_faces
-    redim tri_buffer(0) as Face
+    redim faces(0) as Face
 
     '' ONE element; uglArrNew1D takes it over in mod_load_leafs
-    redim pln_buffer(pln_count-1) as Plane
+    redim planes(pln_count-1) as Plane
     '' ONE element. uglArrNew1D takes the descriptor over in
     '' mod_load_nodes and the tree lives in EMS -- see q_map.bi.
-    redim nds_buffer(0) as Node
-    redim mdl_buffer(wld.mdl_count-1) as Submodel
-    redim order_list(wld.nds_count-1) as integer
+    redim nodes(0) as Node
+    redim models(wld.mdl_count-1) as Submodel
+    redim ord(wld.nds_count-1) as integer
     '' r_bsp sizes its own PVS bits; it states why over there.
     r_alloc_pvs wld.lef_count
 
@@ -188,8 +203,8 @@ sub mod_alloc
     '' 0..wld.tri_count-1, and e3m6 has 6,985 faces -- a fixed 4096 was too
     '' SMALL there, an out-of-bounds write waiting to happen, not just
     '' wasted space on the smaller maps.
-    redim poly_flag( wld.tri_count-1 ) as integer
-    redim tex_inf_buff(wld.texi_count-1) as TexInfo
+    redim pflag( wld.tri_count-1 ) as integer
+    redim texinf(wld.texi_count-1) as TexInfo
 
 end sub
 
@@ -204,7 +219,10 @@ end sub
 ''::::::::::
 '' name: mod_load_faces
 ''::::::::::
-sub mod_load_faces
+sub mod_load_faces ( _
+    wld as MapState, _
+    faces() as Face _
+)
     dim f as FILE
     dim mapped as long
 
@@ -214,7 +232,7 @@ sub mod_load_faces
     '' cost an INT 67h each time. A MEM-backed store needs no slot at all,
     '' so it also cannot collide with the geometry window d_poly maps
     '' between these reads.
-    h_tri = uglArrNew&( UGL.MEM, len( tri_buffer(0) ), wld.tri_count, 0 )
+    h_tri = uglArrNew&( UGL.MEM, len( faces(0) ), wld.tri_count, 0 )
     if ( h_tri = 0 ) then sys_error "0x0039, no room for the faces"
 
     '' Hands the descriptor over. NOT ceremony: this is what takes
@@ -223,7 +241,7 @@ sub mod_load_faces
     '' aimed at memory it does not own and moves it -- the far
     '' heap is then corrupt. The variable still exists afterwards,
     '' which is what uglArrMap binds to.
-    erase tri_buffer
+    erase faces
 
 
     if ( fileOpen%( f, "faces.pag", F4READ ) = 0 ) then
@@ -240,10 +258,9 @@ sub mod_load_faces
     '' the descriptor at the entire block and every subscript works from
     '' here on with no further calls.
     ''
-    mapped = uglArrMap&( h_tri, tri_buffer(), 0 )
+    mapped = uglArrMap&( h_tri, faces(), 0 )
 
-    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
-    scr_load_tick
+    scr_load_step
 end sub
 
 
@@ -332,8 +349,7 @@ sub mod_load_lightmaps
         lm_read = 0
     end if
 
-    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
-    scr_load_tick
+    scr_load_step
 end sub
 
 
@@ -349,7 +365,7 @@ end sub
 '' that read it into an array first would defeat that at the worst
 '' possible moment -- while every other buffer is also allocated.
 ''
-sub mod_load_facevtx
+sub mod_load_facevtx ( gv_buf() as integer )
     dim f as FILE
     dim y as integer
     dim p as long
@@ -379,8 +395,7 @@ sub mod_load_facevtx
 
     fileClose f
 
-    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
-    scr_load_tick
+    scr_load_step
 end sub
 
 
@@ -394,15 +409,14 @@ end sub
 ''::::::::::
 '' name: mod_load_leafs
 ''::::::::::
-sub mod_load_leafs
+sub mod_load_leafs ( wld as MapState )
     scr_load_stage "bsp leaves"
 
     '' r_bsp owns the leaves -- it is the heaviest reader and the only one
     '' that needs the array itself. All the loader passes is the count.
     r_load_leaves wld.lef_count
 
-    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
-    scr_load_tick
+    scr_load_step
 end sub
 
 
@@ -411,13 +425,12 @@ end sub
 ''::::::::::
 '' name: mod_load_marksurfaces
 ''::::::::::
-sub mod_load_marksurfaces
+sub mod_load_marksurfaces ( wld as MapState )
     '' r_bsp owns the list -- it is the only reader. All it needs is how
     '' many bytes the lump holds.
     r_load_lfaces wld.head.lface.size
 
-    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
-    scr_load_tick
+    scr_load_step
 end sub
 
 
@@ -426,7 +439,10 @@ end sub
 ''::::::::::
 '' name: mod_load_nodes
 ''::::::::::
-sub mod_load_nodes
+sub mod_load_nodes ( _
+    wld as MapState, _
+    nodes() as Node _
+)
     dim f as FILE
     dim mapped as long
 
@@ -447,9 +463,9 @@ sub mod_load_nodes
     '' It still gets the tree out of BASIC's far heap, which is what FRE(-1)
     '' measures; memAlloc takes it from DOS (upper memory when there is
     '' room), not from the heap the BSP arrays compete for.
-    h_nds = uglArrNew&( UGL.MEM, len( nds_buffer(0) ), wld.nds_count, 0 )
+    h_nds = uglArrNew&( UGL.MEM, len( nodes(0) ), wld.nds_count, 0 )
     if ( h_nds = 0 ) then
-        h_nds = uglArrNew&( UGL.EMS, len( nds_buffer(0) ), wld.nds_count, PAGE_SLOT )
+        h_nds = uglArrNew&( UGL.EMS, len( nodes(0) ), wld.nds_count, PAGE_SLOT )
     end if
     if ( h_nds = 0 ) then sys_error "0x0030, no room for the node tree"
 
@@ -459,7 +475,7 @@ sub mod_load_nodes
     '' aimed at memory it does not own and moves it -- the far
     '' heap is then corrupt. The variable still exists afterwards,
     '' which is what uglArrMap binds to.
-    erase nds_buffer
+    erase nodes
 
     '' Hands the descriptor over: this is what takes it out of the far
     '' heap's chain, and only BASIC can do it correctly.
@@ -478,10 +494,9 @@ sub mod_load_nodes
     '' the descriptor at the entire block and every subscript works from
     '' here on with no further calls.
     ''
-    mapped = uglArrMap&( h_nds, nds_buffer(), 0 )
+    mapped = uglArrMap&( h_nds, nodes(), 0 )
 
-    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
-    scr_load_tick
+    scr_load_step
 end sub
 
 
@@ -490,14 +505,13 @@ end sub
 ''::::::::::
 '' name: mod_load_planes
 ''::::::::::
-sub mod_load_planes
+sub mod_load_planes ( planes() as Plane )
     scr_load_stage "planes"
-    def seg = varseg( pln_buffer(0) )
-    bload "planes.bld", varptr( pln_buffer(0) )
+    def seg = varseg( planes(0) )
+    bload "planes.bld", varptr( planes(0) )
     def seg
 
-    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
-    scr_load_tick
+    scr_load_step
 end sub
 
 
@@ -506,14 +520,13 @@ end sub
 ''::::::::::
 '' name: mod_load_submodels
 ''::::::::::
-sub mod_load_submodels
+sub mod_load_submodels ( models() as Submodel )
     scr_load_stage "submodels"
-    def seg = varseg( mdl_buffer(0) )
-    bload "models.bld", varptr( mdl_buffer(0) )
+    def seg = varseg( models(0) )
+    bload "models.bld", varptr( models(0) )
     def seg
 
-    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
-    scr_load_tick
+    scr_load_step
 end sub
 
 
@@ -530,7 +543,7 @@ end sub
 ''       consumer, and the dead declaration for it was deleted in the
 ''       first cleanup commit of this refactor.
 ''::::::::::
-sub mod_load_clipnodes
+sub mod_load_clipnodes ( wld as MapState )
     scr_load_stage "clip hulls"
 
     '' pl_move owns the hulls -- it is the only reader -- so it makes the
@@ -538,8 +551,7 @@ sub mod_load_clipnodes
     '' many there are.
     pl_load_hulls wld.clp_count
 
-    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
-    scr_load_tick
+    scr_load_step
 end sub
 
 
@@ -575,8 +587,7 @@ sub mod_load_visibility
 
     if ( pvs_ptr = 0 ) then sys_error "0x0014, visibility lump would not load"
 
-    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
-    scr_load_tick
+    scr_load_step
 end sub
 
 
@@ -587,7 +598,7 @@ end sub
 ''       that closed it, and the handle's lifetime spanned two modules
 ''       with nothing naming the contract.
 ''::::::::::
-sub mod_close
+sub mod_close ( wld as MapState )
     close #wld.file
     wld.file = 0
 end sub
