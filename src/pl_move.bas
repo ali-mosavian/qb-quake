@@ -52,7 +52,6 @@ dim shared h_clp as long
 '' and passing a UDT down every level of the recursion would copy it.
 ''
 '$static
-dim shared tr as TraceResult
 
 
 
@@ -64,23 +63,25 @@ dim shared tr as TraceResult
 ''::::::::::
 function pl_hull_contents ( _
     byval node as integer, _
-    p as Vec3 _
+    p as Vec3, _
+    clip() as ClipNode, _
+    planes() as Plane _
 ) as integer
     dim mc as long
     dim d as single
     dim pid as integer
 
     do while ( node >= 0 )
-        pid = clp_buffer(node).planenum
+        pid = clip(node).planenum
 
-        d = p.x*pln_buffer(pid).norm.x + _
-            p.y*pln_buffer(pid).norm.y + _
-            p.z*pln_buffer(pid).norm.z - pln_buffer(pid).dist
+        d = p.x*planes(pid).norm.x + _
+            p.y*planes(pid).norm.y + _
+            p.z*planes(pid).norm.z - planes(pid).dist
 
         if ( d >= 0.0 ) then
-            node = clp_buffer(node).front
+            node = clip(node).front
         else
-            node = clp_buffer(node).back
+            node = clip(node).back
         end if
     loop
 
@@ -104,7 +105,11 @@ end function
 ''       turns it into the leaf index -- the same convention
 ''       r_recursive_world_node walks.
 ''::::::::::
-function pl_point_contents ( p as Vec3 ) as integer
+function pl_point_contents ( _
+    p as Vec3, _
+    nodes() as Node, _
+    planes() as Plane _
+) as integer
     dim mp as long
     dim nodenr as integer
     dim pid as integer
@@ -113,16 +118,16 @@ function pl_point_contents ( p as Vec3 ) as integer
     nodenr = 0
 
     do while ( (nodenr and &h8000) = 0 )
-        pid = nds_buffer(nodenr).planeid
+        pid = nodes(nodenr).planeid
 
-        d = p.x*pln_buffer(pid).norm.x + _
-            p.y*pln_buffer(pid).norm.y + _
-            p.z*pln_buffer(pid).norm.z - pln_buffer(pid).dist
+        d = p.x*planes(pid).norm.x + _
+            p.y*planes(pid).norm.y + _
+            p.z*planes(pid).norm.z - planes(pid).dist
 
         if ( d >= 0.0 ) then
-            nodenr = nds_buffer(nodenr).child0
+            nodenr = nodes(nodenr).child0
         else
-            nodenr = nds_buffer(nodenr).child1
+            nodenr = nodes(nodenr).child1
         end if
     loop
 
@@ -139,7 +144,11 @@ end function
 ''       Three samples up the body, which is what Quake does and what lets
 ''       wading feel different from swimming.
 ''::::::::::
-sub pl_water_level
+sub pl_water_level ( _
+    pl as PlayerState, _
+    nodes() as Node, _
+    planes() as Plane _
+)
     dim p as Vec3
     dim c as integer
 
@@ -148,7 +157,7 @@ sub pl_water_level
 
     p = pl.pos
     p.z = pl.pos.z - PL_FEET# + 1.0
-    c = pl_point_contents( p )
+    c = pl_point_contents( p, nodes(), planes() )
 
     if ( c > CONTENTS_WATER ) then exit sub          '' EMPTY or SOLID: dry
 
@@ -156,11 +165,11 @@ sub pl_water_level
     pl.water_level = 1
 
     p.z = pl.pos.z
-    if ( pl_point_contents( p ) <= CONTENTS_WATER ) then
+    if ( pl_point_contents( p, nodes(), planes() ) <= CONTENTS_WATER ) then
         pl.water_level = 2
 
         p.z = pl.pos.z + PL_EYE#
-        if ( pl_point_contents( p ) <= CONTENTS_WATER ) then pl.water_level = 3
+        if ( pl_point_contents( p, nodes(), planes() ) <= CONTENTS_WATER ) then pl.water_level = 3
     end if
 
 end sub
@@ -182,7 +191,10 @@ function pl_hull_check ( _
     byval p1f as single, _
     byval p2f as single, _
     p1 as Vec3, _
-    p2 as Vec3 _
+    p2 as Vec3, _
+    tr as TraceResult, _
+    clip() as ClipNode, _
+    planes() as Plane _
 ) as integer
     dim pid as integer
     dim t1 as single, t2 as single
@@ -204,19 +216,19 @@ function pl_hull_check ( _
         exit function
     end if
 
-    pid = clp_buffer(node).planenum
-    t1 = p1.x*pln_buffer(pid).norm.x + p1.y*pln_buffer(pid).norm.y + _
-         p1.z*pln_buffer(pid).norm.z - pln_buffer(pid).dist
-    t2 = p2.x*pln_buffer(pid).norm.x + p2.y*pln_buffer(pid).norm.y + _
-         p2.z*pln_buffer(pid).norm.z - pln_buffer(pid).dist
+    pid = clip(node).planenum
+    t1 = p1.x*planes(pid).norm.x + p1.y*planes(pid).norm.y + _
+         p1.z*planes(pid).norm.z - planes(pid).dist
+    t2 = p2.x*planes(pid).norm.x + p2.y*planes(pid).norm.y + _
+         p2.z*planes(pid).norm.z - planes(pid).dist
 
     '' wholly on one side: recurse into that child alone
     if ( t1 >= 0.0 and t2 >= 0.0 ) then
-        pl_hull_check = pl_hull_check( clp_buffer(node).front, p1f, p2f, p1, p2 )
+        pl_hull_check = pl_hull_check( clip(node).front, p1f, p2f, p1, p2, tr, clip(), planes() )
         exit function
     end if
     if ( t1 < 0.0 and t2 < 0.0 ) then
-        pl_hull_check = pl_hull_check( clp_buffer(node).back, p1f, p2f, p1, p2 )
+        pl_hull_check = pl_hull_check( clip(node).back, p1f, p2f, p1, p2, tr, clip(), planes() )
         exit function
     end if
 
@@ -242,23 +254,23 @@ function pl_hull_check ( _
 
     '' the near half first: an earlier hit wins
     if ( side = 0 ) then
-        if ( pl_hull_check( clp_buffer(node).front, p1f, midf, p1, midp ) = false ) then
+        if ( pl_hull_check( clip(node).front, p1f, midf, p1, midp, tr, clip(), planes() ) = false ) then
             pl_hull_check = false
             exit function
         end if
         '' the recursion above moved the window; map before reading again
-        other = clp_buffer(node).back
+        other = clip(node).back
     else
-        if ( pl_hull_check( clp_buffer(node).back, p1f, midf, p1, midp ) = false ) then
+        if ( pl_hull_check( clip(node).back, p1f, midf, p1, midp, tr, clip(), planes() ) = false ) then
             pl_hull_check = false
             exit function
         end if
-        other = clp_buffer(node).front
+        other = clip(node).front
     end if
 
     '' far half is open: carry on through it
-    if ( pl_hull_contents( other, midp ) <> CONTENTS_SOLID ) then
-        pl_hull_check = pl_hull_check( other, midf, p2f, midp, p2 )
+    if ( pl_hull_contents( other, midp, clip(), planes() ) <> CONTENTS_SOLID ) then
+        pl_hull_check = pl_hull_check( other, midf, p2f, midp, p2, tr, clip(), planes() )
         exit function
     end if
 
@@ -274,13 +286,13 @@ function pl_hull_check ( _
         tr.end_pos = midp
 
         if ( side = 1 ) then
-            tr.norm.x = -pln_buffer(pid).norm.x
-            tr.norm.y = -pln_buffer(pid).norm.y
-            tr.norm.z = -pln_buffer(pid).norm.z
+            tr.norm.x = -planes(pid).norm.x
+            tr.norm.y = -planes(pid).norm.y
+            tr.norm.z = -planes(pid).norm.z
         else
-            tr.norm.x = pln_buffer(pid).norm.x
-            tr.norm.y = pln_buffer(pid).norm.y
-            tr.norm.z = pln_buffer(pid).norm.z
+            tr.norm.x = planes(pid).norm.x
+            tr.norm.y = planes(pid).norm.y
+            tr.norm.z = planes(pid).norm.z
         end if
     end if
 
@@ -307,7 +319,12 @@ end function
 ''::::::::::
 sub pl_trace ( _
     start as Vec3, _
-    fin as Vec3 _
+    fin as Vec3, _
+    tr as TraceResult, _
+    byval nmodels as integer, _
+    models() as Submodel, _
+    clip() as ClipNode, _
+    planes() as Plane _
 )
     dim dummy as integer
     dim i as integer
@@ -322,10 +339,10 @@ sub pl_trace ( _
     tr.start_solid = false
 
     tr.all_solid = true
-    dummy = pl_hull_check( int( mdl_buffer(0).headnode1 ), 0.0, 1.0, start, fin )
+    dummy = pl_hull_check( int( models(0).headnode1 ), 0.0, 1.0, start, fin, tr, clip(), planes() )
     any_solid = tr.all_solid
 
-    for  i = 1 to wld.mdl_count-1
+    for  i = 1 to nmodels-1
         if ( mdl_solid(i) ) then
             s2 = start
             f2 = fin
@@ -333,7 +350,7 @@ sub pl_trace ( _
             f2.z = f2.z - mdl_zofs(i)
 
             tr.all_solid = true
-            dummy = pl_hull_check( int( mdl_buffer(i).headnode1 ), 0.0, 1.0, s2, f2 )
+            dummy = pl_hull_check( int( models(i).headnode1 ), 0.0, 1.0, s2, f2, tr, clip(), planes() )
             if ( tr.all_solid ) then any_solid = true
         end if
     next i
@@ -386,7 +403,12 @@ end sub
 sub pl_slide_move ( _
     org as Vec3, _
     vel as Vec3, _
-    byval dt as single _
+    byval dt as single, _
+    tr as TraceResult, _
+    byval nmodels as integer, _
+    models() as Submodel, _
+    clip() as ClipNode, _
+    planes() as Plane _
 )
     dim bump as integer
     dim time_left as single
@@ -401,7 +423,7 @@ sub pl_slide_move ( _
         fin.y = org.y + vel.y*time_left
         fin.z = org.z + vel.z*time_left
 
-        pl_trace org, fin
+        pl_trace org, fin, tr, nmodels, models(), clip(), planes()
 
         ''
         '' Started inside solid. Refusing to move is the safe answer: moving
@@ -439,7 +461,13 @@ end sub
 sub pl_step_move ( _
     org as Vec3, _
     vel as Vec3, _
-    byval dt as single _
+    byval dt as single, _
+    pl as PlayerState, _
+    tr as TraceResult, _
+    byval nmodels as integer, _
+    models() as Submodel, _
+    clip() as ClipNode, _
+    planes() as Plane _
 )
     dim flat_pos as Vec3, flat_vel as Vec3
     dim up_pos as Vec3, down_pos as Vec3
@@ -448,7 +476,7 @@ sub pl_step_move ( _
     '' the ordinary slide, kept in case the step attempt is worse
     flat_pos = org
     flat_vel = vel
-    pl_slide_move flat_pos, flat_vel, dt
+    pl_slide_move flat_pos, flat_vel, dt, tr, nmodels, models(), clip(), planes()
 
     ''
     '' Ground, or water. Standing on something is the usual reason to be
@@ -466,7 +494,7 @@ sub pl_step_move ( _
     '' lift, move, and drop back
     up_pos = org
     up_pos.z = up_pos.z + PL_STEP#
-    pl_trace org, up_pos
+    pl_trace org, up_pos, tr, nmodels, models(), clip(), planes()
     if ( tr.all_solid ) then
         org = flat_pos
         vel = flat_vel
@@ -474,11 +502,11 @@ sub pl_step_move ( _
     end if
     up_pos = tr.end_pos
 
-    pl_slide_move up_pos, vel, dt
+    pl_slide_move up_pos, vel, dt, tr, nmodels, models(), clip(), planes()
 
     down_pos   = up_pos
     down_pos.z = down_pos.z - PL_STEP#
-    pl_trace up_pos, down_pos
+    pl_trace up_pos, down_pos, tr, nmodels, models(), clip(), planes()
     if ( tr.all_solid = false ) then up_pos = tr.end_pos
 
     ''
@@ -507,14 +535,22 @@ end sub
 ''       floor than wall, which is what PL_GROUND_NRM# measures -- otherwise the
 ''       player would stand on vertical surfaces.
 ''::::::::::
-sub pl_gravity ( byval dt as single )
+sub pl_gravity ( _
+    byval dt as single, _
+    pl as PlayerState, _
+    tr as TraceResult, _
+    byval nmodels as integer, _
+    models() as Submodel, _
+    clip() as ClipNode, _
+    planes() as Plane _
+)
     dim below as Vec3
     dim speed as single
 
     below   = pl.pos
     below.z = below.z - 1.0
 
-    pl_trace pl.pos, below
+    pl_trace pl.pos, below, tr, nmodels, models(), clip(), planes()
 
     ''
     '' Swimming: no ground, and a slow sink instead of a fall. Checked before
@@ -553,8 +589,11 @@ end sub
 ''       cam.pos is Y-up; pl.pos is Z-up; the eye sits PL_EYE# above the hull
 ''       origin, so the spawn height has to come down by that much.
 ''::::::::::
-sub pl_init
-
+sub pl_init ( _
+    pl as PlayerState, _
+    cam as CamState, _
+    env as Env _
+)
     if ( env.start_set ) then
         pl.pos.x = env.start_x
         pl.pos.y = env.start_y
@@ -590,9 +629,16 @@ sub pl_move ( _
     byval dir_x as single, _
     byval dir_y as single, _
     byval jump as integer, _
-    byval dt as single _
+    byval dt as single, _
+    pl as PlayerState, _
+    cam as CamState, _
+    byval nmodels as integer, _
+    models() as Submodel, _
+    nodes() as Node, _
+    planes() as Plane _
 )
     dim speed as single, drop as single, newspeed as single
+    dim tr as TraceResult
 
     ''
     '' dir is the horizontal look direction in BSP space, passed in rather than
@@ -641,9 +687,9 @@ sub pl_move ( _
         pl.vel.y = pl.vel.y * (PL_MAXSPEED#/speed)
     end if
 
-    pl_water_level
+    pl_water_level pl, nodes(), planes()
 
-    pl_gravity dt
+    pl_gravity dt, pl, tr, nmodels, models(), clp_buffer(), planes()
 
     ''
     '' Jump. Only from the ground, and after pl_gravity, which is what
@@ -674,7 +720,7 @@ sub pl_move ( _
         pl.on_ground = false
     end if
 
-    pl_step_move pl.pos, pl.vel, dt
+    pl_step_move pl.pos, pl.vel, dt, pl, tr, nmodels, models(), clp_buffer(), planes()
 
     if ( pl.pos.z > pl.peak_z ) then pl.peak_z = pl.pos.z
 
