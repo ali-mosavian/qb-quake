@@ -351,14 +351,6 @@ sub d_draw_faces ( _
     lm_use = 0
     if ( g.env.use_lm and g.rdr.lightmap and sc_ready <> 0 ) then lm_use = -1
 
-    ''
-    '' Where memCopy puts a face's record. Hoisted: VARSEG/VARPTR on a
-    '' DIM SHARED array cannot move, and working it out per face is a
-    '' cost per drawn face for an answer that never changes.
-    ''
-    gv_dst = clng( varseg( gv_buf(0) ) ) * 65536& + _
-             (clng( varptr( gv_buf(0) ) ) and 65535&)
-
     for mi = 0 to ord_count-1
         m = order_list(mi)
             
@@ -422,6 +414,17 @@ sub d_draw_faces ( _
             '' the mapped EMS window, and a fixed-size copy from a record
             '' near it would read off the page.
             ''
+            ''
+            '' Where memCopy puts the record. Taken per face, NOT hoisted
+            '' out of the loop: gv_buf is a far-heap array and the runtime
+            '' relocates it, so a pointer cached at entry can go stale
+            '' mid-frame. It did -- every copy after the move landed
+            '' somewhere else, gv_buf kept the first face's record, and
+            '' every face then shared one cached surface.
+            ''
+            gv_dst = clng( varseg( gv_buf(0) ) ) * 65536& + _
+                     (clng( varptr( gv_buf(0) ) ) and 65535&)
+
             gp = mod_geom_map ( g, tri_buffer(i).geom_row )
             gn = GEOM_MAXREC
             if ( tri_buffer(i).geom_ofs + gn > GEOM_W ) then
