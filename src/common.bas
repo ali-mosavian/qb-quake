@@ -207,13 +207,22 @@ sub com_parse_config ( _
                 case "//"
                 
                 case "display.xres"                
-                    g.env.x_res = val( com_arg( strm(), strm_cnt, line_num ) )
+                    g.env.scr_x_res = val( com_arg( strm(), strm_cnt, line_num ) )
                     flags = flags or xres_flag
                     
                 case "display.yres"
-                    g.env.y_res = val( com_arg( strm(), strm_cnt, line_num ) )
+                    g.env.scr_y_res = val( com_arg( strm(), strm_cnt, line_num ) )
                     flags = flags or yres_flag
                     
+                
+                '' Optional. Absent, the view fills the screen, which
+                '' is what every mode did before there was a choice.
+                
+                case "render.xres"
+                    g.env.x_res = val( com_arg( strm(), strm_cnt, line_num ) )
+                    
+                case "render.yres"
+                    g.env.y_res = val( com_arg( strm(), strm_cnt, line_num ) )
                     
                 case "display.clear"
                     g.env.clear_screen = com_yesno( strm(), strm_cnt, line_num )
@@ -282,6 +291,24 @@ sub com_parse_config ( _
     if ( flags <> all_flag ) then
         sys_error "Incorrect ini file..."
     end if    
+
+    
+    '' A view no bigger than the screen, centred on it. Clamped rather
+    '' than rejected: an oversized render.yres would otherwise blit off
+    '' the bottom of the mode and scribble past the video dc.
+    
+    if ( g.env.x_res <= 0 ) then g.env.x_res = g.env.scr_x_res
+    if ( g.env.y_res <= 0 ) then g.env.y_res = g.env.scr_y_res
+    if ( g.env.x_res > g.env.scr_x_res ) then g.env.x_res = g.env.scr_x_res
+    if ( g.env.y_res > g.env.scr_y_res ) then g.env.y_res = g.env.scr_y_res
+    
+    '' Where the view lands on the screen, and how big. Unscaled it is
+    '' its own size, one backbuffer pixel to one screen pixel.
+    
+    g.env.view_w = g.env.x_res
+    g.env.view_h = g.env.y_res
+    g.env.view_x = (g.env.scr_x_res - g.env.view_w) \ 2
+    g.env.view_y = (g.env.scr_y_res - g.env.view_h) \ 2
 
 end sub
 

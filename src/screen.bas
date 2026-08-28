@@ -1081,6 +1081,14 @@ sub hud_shade ( _
     '' Hoisted into a variable because BASIC will not take a Function
     '' call in a Sub's argument list here.
     dim cmp as long
+    ''
+    '' The colormap pointer is handed straight into the call, unpinned.
+    '' That is only sound because dc is the MEM backbuffer: a MEM
+    '' destination needs no EMS window, so nothing in there acquires a
+    '' slot and the pool cannot take the colormap's out from under us.
+    '' Point this at an EMS dc and it needs mod_cm_lock around it, the
+    '' way sb_build does.
+    ''
     cmp = mod_cm_map ( g )
     uglShadeRect dc, x0, y0, x1, y1, cmp, rw
 end sub
@@ -1291,10 +1299,20 @@ sub scr_draw_hud ( _
     dim lx as integer, rx as integer, cw as integer
     dim yy as integer, ftr as string
     dim fcol as integer
+    dim wide as integer
 
     cw = 146
     lx = 3
     rx = g.env.x_res - cw - 3
+
+    ''
+    '' Two columns need 2*cw and the gaps between them. A view too
+    '' narrow for that used to draw the right one straight over the
+    '' left, which is what a 150-wide render did. Drop it instead:
+    '' the right column is the map's static counts, and the left is
+    '' what changes per frame.
+    ''
+    wide = ( rx > lx + cw )
 
     if ( g.scr.stats ) then
         ''
@@ -1370,14 +1388,16 @@ sub scr_draw_hud ( _
         ''
         '' right: the map, which never changes while it is loaded
         ''
-        hud_panel g, h_dst_dc, rx, 6, cw, 56, "WORLD"
-        hud_row h_dst_dc, rx, cw, 12, "Resolution", _
-                ltrim$(str$( g.env.x_res )) + "x" + ltrim$(str$( g.env.y_res ))
-        hud_row h_dst_dc, rx, cw, 20, "Vertices", ltrim$(str$( g.wld.count.verts ))
-        hud_row h_dst_dc, rx, cw, 28, "Edges", ltrim$(str$( g.wld.count.edges ))
-        hud_row h_dst_dc, rx, cw, 36, "Faces", ltrim$(str$( g.wld.count.faces ))
-        hud_row h_dst_dc, rx, cw, 44, "Nodes", ltrim$(str$( g.wld.count.nodes ))
-        hud_row h_dst_dc, rx, cw, 52, "Leaves", ltrim$(str$( g.wld.count.leaves ))
+        if ( wide ) then
+            hud_panel g, h_dst_dc, rx, 6, cw, 56, "WORLD"
+            hud_row h_dst_dc, rx, cw, 12, "Resolution", _
+                    ltrim$(str$( g.env.x_res )) + "x" + ltrim$(str$( g.env.y_res ))
+            hud_row h_dst_dc, rx, cw, 20, "Vertices", ltrim$(str$( g.wld.count.verts ))
+            hud_row h_dst_dc, rx, cw, 28, "Edges", ltrim$(str$( g.wld.count.edges ))
+            hud_row h_dst_dc, rx, cw, 36, "Faces", ltrim$(str$( g.wld.count.faces ))
+            hud_row h_dst_dc, rx, cw, 44, "Nodes", ltrim$(str$( g.wld.count.nodes ))
+            hud_row h_dst_dc, rx, cw, 52, "Leaves", ltrim$(str$( g.wld.count.leaves ))
+        end if
 
         ''
         '' one footer line for every toggle, in the order of the keys
@@ -1409,11 +1429,13 @@ sub scr_draw_hud ( _
     ''
     '' VU meters, bottom right, above the footer rule
     ''
-    sndMasterGetVU l, r
-    hud_vu h_dst_dc, g.env.x_res-76, g.env.y_res-24, 70, 4, l*100/255, 0
-    hud_vu h_dst_dc, g.env.x_res-76, g.env.y_res-18, 70, 4, r*100/255, 1
+    if ( wide ) then
+        sndMasterGetVU l, r
+        hud_vu h_dst_dc, g.env.x_res-76, g.env.y_res-24, 70, 4, l*100/255, 0
+        hud_vu h_dst_dc, g.env.x_res-76, g.env.y_res-18, 70, 4, r*100/255, 1
 
-    draw_string_r h_dst_dc, g.env.x_res-4, g.env.y_res-9, "powered by uGL"
+        draw_string_r h_dst_dc, g.env.x_res-4, g.env.y_res-9, "powered by uGL"
+    end if
 end sub
 
 

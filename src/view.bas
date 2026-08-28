@@ -174,17 +174,19 @@ sub v_update_camera ( _
     '' Mode: freelook or script_edit
     ''
     if ( g.env.cam_mode = 0 or g.env.cam_mode = 2 ) then            
-        if g.env.mouse.x < 1 then  mousepos g.env.x_res-4, g.env.mouse.y
-        if g.env.mouse.x > g.env.x_res-3 then  mousepos 1, g.env.mouse.y
+        '' screen coordinates throughout: the mouse spans the MODE, not
+        '' the view, so a smaller view must not shrink the look range
+        if g.env.mouse.x < 1 then  mousepos g.env.scr_x_res-4, g.env.mouse.y
+        if g.env.mouse.x > g.env.scr_x_res-3 then  mousepos 1, g.env.mouse.y
         
         if g.env.mouse.y < 0        then  mousepos g.env.mouse.x, 0
-        if g.env.mouse.y > g.env.y_res then  mousepos g.env.mouse.x, g.env.y_res-1
+        if g.env.mouse.y > g.env.scr_y_res then  mousepos g.env.mouse.x, g.env.scr_y_res-1
         
         tmx = g.env.mouse.x + 1
         tmy = g.env.mouse.y + 2
 
-        theta = 2 * 3.14159 * ((g.env.x_res-1)-tmx) / g.env.x_res
-        phi = 3.14159 * tmy / g.env.y_res
+        theta = 2 * 3.14159 * ((g.env.scr_x_res-1)-tmx) / g.env.scr_x_res
+        phi = 3.14159 * tmy / g.env.scr_y_res
         
         g.cam.look_at.x = cos( theta ) * sin( phi )
         g.cam.look_at.y = cos( phi )

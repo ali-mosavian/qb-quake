@@ -10,6 +10,14 @@ type Vec3i
     z           as integer
 end type
 
+''
+'' What the screen is physically, whatever its pixel count. Every
+'' mode here is shown on a 4:3 display, which is why a 320x200
+'' mode's pixels are not square.
+''
+const DISPLAY_W = 4.0
+const DISPLAY_H = 3.0
+
 type Bounds
     min         as Vec3i
     max         as Vec3i
@@ -322,8 +330,22 @@ type Env
     fps_timer   as TMR                      '' expires every frame
     sec_timer   as TMR                      '' /       every second
     
+    ''
+    '' The RENDER target, which need not be the video mode. Everything
+    '' that draws -- the projection, the backbuffer, the hud, a
+    '' screenshot -- is this size; only the mode and the mouse are the
+    '' screen's. A smaller view centred on a 320x200 screen costs
+    '' proportionally less backbuffer: 150x150 is 22,500 bytes of
+    '' conventional memory against 64,000.
+    ''
     x_res       as integer
     y_res       as integer
+    scr_x_res   as integer      '' the video mode itself
+    scr_y_res   as integer
+    view_x      as integer      '' where the view sits on it, centred
+    view_y      as integer
+    view_w      as integer      '' and how big it is drawn -- the same
+    view_h      as integer      '' as x_res/y_res unless scaled
     c_fmt       as integer
     pages       as integer
     use_paging      as integer

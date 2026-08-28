@@ -374,7 +374,7 @@ sub ent_check_teleport ( _
             '' from the mouse, so the mouse is what has to move -- the same
             '' trick host_main uses to apply the spawn angle.
             ''
-            mousePos (g.env.x_res-1) * tele(i).yaw/360.0, 110
+            mousePos (g.env.scr_x_res-1) * tele(i).yaw/360.0, 110
 
             exit sub
         end if
