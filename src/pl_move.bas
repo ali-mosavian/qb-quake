@@ -860,9 +860,9 @@ sub pl_load_hulls ( _
     '' hole for the allocations that come after. The far heap is the
     '' fragmented pool; DOS memory is not.
     ''
-    g.wld.store.clips = uglArrNew&( UGL.MEM, len( clp_buffer(0) ), g.wld.count.clips, 0 )
+    g.wld.store.clips = uglArrNew( UGL.MEM, len( clp_buffer(0) ), g.wld.count.clips )
     if ( g.wld.store.clips = 0 ) then
-        g.wld.store.clips = uglArrNew&( UGL.EMS, len( clp_buffer(0) ), g.wld.count.clips, PAGE_SLOT )
+        g.wld.store.clips = uglArrNew( UGL.EMS, len( clp_buffer(0) ), g.wld.count.clips )
     end if
     if ( g.wld.store.clips = 0 ) then sys_error "0x0033, no room for the clip hulls"
 
@@ -876,7 +876,7 @@ sub pl_load_hulls ( _
     if ( fileOpen%( f, "clip.pag", F4READ ) = 0 ) then
         sys_error "0x0034, clip.pag missing"
     end if
-    if ( uglArrLoad%( f, g.wld.store.clips ) = 0 ) then
+    if ( uglArrLoad( f, g.wld.store.clips ) = 0 ) then
         fileClose f
         sys_error "0x0035, clip.pag short or unreadable"
     end if
@@ -887,7 +887,7 @@ sub pl_load_hulls ( _
     '' the descriptor at the entire block and every subscript works from
     '' here on with no further calls.
     ''
-    mapped = uglArrMap&( g.wld.store.clips, clp_buffer(), 0 )
+    mapped = uglArrMap( g.wld.store.clips, clp_buffer(), 0, 0 )
 end sub
 
 '' Clipnode record size, for the bench report.
