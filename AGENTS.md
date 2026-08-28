@@ -7,6 +7,39 @@ Hard-won things, mostly the kind that cost an hour before they cost a minute.
 These are not suggestions. Apply them to anything you touch, and do not
 introduce new violations even where the surrounding code still has them.
 
+**Never wait blind on DOSBox. Drive it.** This is a MUST, not a
+preference, and it is the single most expensive rule to ignore in this
+repo -- it has cost hours, repeatedly, in one session alone.
+
+A run that has not returned tells you NOTHING. `timeout N` and then
+guessing is not a diagnosis. The moment a run does not come back, attach
+and look:
+
+    dosbox_status        -- is the CPU even running? cpuRunning/debuggerFrozen
+    dosbox_screenshot    -- then Read the png. Loading screen? Black? Error?
+    dosbox_text_screen   -- text mode
+    dosbox_where         -- WHICH ROUTINE, by name, once a MAP is loaded
+    dosbox_regs          -- sampled twice: do CS:EIP move? moving = slow, not hung
+
+Check the screen and the running state REGULARLY while a run is in
+flight, not once at the end. A picture answers in one glance what a
+timeout cannot answer at all, and `dosbox_where` names the routine
+outright.
+
+Two traps that make the blind approach worse than useless:
+
+- **Every inspection FREEZES the CPU and does not resume it.** A
+  screenshot of a frozen guest is black and means nothing. Resume with
+  `dosbox_continue` (it times out waiting for a stop that never comes --
+  that is fine) and check `dosbox_status` before believing any reading.
+- **A stale `process_exit` notification holds a newly launched program
+  frozen.** Always confirm `cpuRunning` before concluding anything.
+
+**Link with `/MAP` so the debugger can name things.** Without it
+`qrender.map` carries segments only and the best the debugger can say is
+`LMEM+0x943`; with it there are 2,545 publics and the same address comes
+back as `B$FCompactMove`. `tools/dosbox.sh` passes it.
+
 **There is no `COMMON` any more.** Every array is declared once in
 `main.bas` with `dim`, and travels as a parameter. The blocks that used to
 hold them -- `/map_a/`, `/world/`, `/surf/`, `/ent_s/`, `/drw_a/`,
@@ -343,6 +376,38 @@ which finally does what it always looked like it did.
 **MASM logical-line limit is 512 chars** including continuations. Expanding
 tabs to spaces in µGL's asm pushed a `local` block over it.
 
+**A far pointer to a BASIC array cannot be hoisted out of a loop.** The
+runtime relocates far-heap arrays, so `VARSEG`/`VARPTR` are only good until
+the next thing that allocates. `d_poly` computed
+
+    gv_dst = clng( varseg( gv_buf(0) ) ) * 65536& + _
+             (clng( varptr( gv_buf(0) ) ) and 65535&)
+
+once per frame, on the comment's reasoning that "VARSEG/VARPTR on a DIM
+SHARED array cannot move" -- which stopped being true when `gv_buf` became a
+parameter. It moved mid-frame. Every `memCopy` after the move landed on the
+old address, `gv_buf` kept the FIRST face's record, and so every face read
+one lightmap header, asked for one surface size, and shared a single cached
+surface. Whole faces drew flat black.
+
+Take the address per face. Two `VARSEG`/`VARPTR` on a drawn face cost
+nothing measurable, and `D_POLY_CODE` came out 100 bytes SMALLER.
+
+The tell was that it hid completely from every isolated test: `-dumpsurf`
+built byte-perfect surfaces, the atlas read back byte-perfect through its
+views, the unlit path was pixel-identical, and the assets were identical to
+the reference's -- because none of those go through the cached pointer. What
+found it was tracing the same per-face values out of BOTH builds and diffing
+the traces; `geom_row`, `geom_ofs` and the source pointer matched, and only
+the copied CONTENTS were frozen, which points at the destination and nothing
+else. Reach for the two-sided trace earlier than this did.
+
+**A latent bug of this kind surfaces on a memory change, and looks like the
+memory change.** Nothing about the texture atlas was wrong; it freed 42K of
+conventional memory, the far heap laid out differently, and an existing
+cached pointer that had always happened to stay valid stopped doing so. Do
+not assume the new code is at fault because the symptom arrived with it.
+
 **Python's `open(f,'wb')` truncates before the write runs.** A `TypeError` on
 the following line leaves the file at zero bytes. This emptied `main.bas`
 during a rename; recovered from git. Read bytes, transform, write bytes — and
@@ -672,6 +737,15 @@ gave md5 8ff755af, 3ee2547c, 8ff755af, tracking animtime 5.933297 / 5.749966 /
 5.933297. A changed md5 after a library swap means nothing on its own; it cost
 a false alarm here.
 
+**`-ticks N` now stops ON the tick, not past it.** It is tested once a
+frame, after `host_advance` has already spent the frame's whole
+accumulator, so a slow frame that ran three steps used to end the run at
+903 rather than 900 -- and the camera was wherever those extra steps
+carried it. Two runs of one binary differed by most of a room, which reads
+exactly like a rendering bug. `host_advance` now checks the budget inside
+its own loop, and `px`/`py`/`pz` and `anim_time` come back identical from
+every run.
+
 **Add `-ticks N` for a comparable frame.** The fixed timestep drives
 `anim_time`, so a tick-bounded run pins it: `-bench 400 -ticks 120` gave
 animtime 1.999995 and one md5 across three runs at 69, 68 and 68 frames. Every
@@ -957,10 +1031,51 @@ trace stop rather than a coincidence.
 
     make assets          # or: python3 tools/mkassets.py <map.bsp> <base.dat> data/assets
 
-Emits one 8-bit BMP per texture per mip level, `t<idx>m<lvl>.bmp`, already
-resampled to the fixed size the renderer wants and already in the game
-palette. `texLoadAll` hands each straight to `uglNewBMPEx`; the Makefile
-regenerates them when the map, `base.dat`, or the tool changes.
+Emits two 8-bit atlases -- `texr.bmp` raw indices, `texs.bmp` with colormap
+row 0 applied -- plus `texofs.bld`, a `[id*4 + level]` table of byte offsets
+into them. Already resampled to the fixed size the renderer wants and already
+in the game palette. The Makefile regenerates them when the map, `base.dat`,
+or the tool changes.
+
+**Two atlases and eight views, not 648 dcs.** A dc costs conventional memory
+for its struct and scanline table whatever its pixels cost -- 264 bytes
+measured, and dm3ish made 160 of them. e1m1 would make 648, which is the
+~171K that stops it loading. `mod_tex_raw`/`mod_tex_shaded` re-aim one view
+per mip size with `uglSetView` instead: `mem textures` went 42,176 -> **0**
+and `mem_avail` up 25,296.
+
+**It costs 1.8% of the frame, and that is the trade.** Six runs per arm
+interleaved on the dm3ish campath: 82.774ms before, 84.229ms after, medians,
+spreads 0.000 and 0.213. The cost is a procedure call and a re-aim per face
+where an array index used to do. Memoising the aim -- each view remembers
+which cell it points at, and consecutive faces usually share a texture --
+recovered only 0.14ms of it, so most of the remainder is the call itself.
+Pinning `gv_buf` into DGROUP to make the address hoistable again was tried
+and abandoned: a bounded `dim` in `main.bas` puts the DECLAREs after an
+executable statement and BC rejects the file.
+
+**A cell is a flat run of `cell*cell` bytes, not a window on the 8192-wide
+image.** The fillers map one page and then walk the cell by the VIEW's bps,
+which is the cell width -- `ul$fillView` strides by the view's own `bps` and
+never the parent's. So the packer writes cells linearly and the BMP is just a
+container for that byte stream. Sizes are 4096/1024/256/64 and each cell sits
+at a multiple of its own size, so none straddles a 16K page.
+
+**The placement is emitted, not re-derived.** mkassets owns the layout and is
+free to pack in whatever order is tightest; deriving it twice is the bug the
+luxel atlas already avoids by shipping its own table.
+
+**`-dumptex` reads every cell back THROUGH ITS VIEW** with `uglPGet` and
+writes `texdump.bmp`, a contact sheet of 20 columns by four stacked mips.
+Diffing that against the atlas is what proves the views deliver the right
+pixels with the renderer out of the way -- 108,800 texels, 0 mismatches. Do
+this before suspecting the atlas: it was right, and the fault was a stale far
+pointer in `d_poly` that the memory change merely exposed.
+
+`tools/sbref.py` reads the atlas through the same table, so it stays a
+reference for `uglBuildSurf` -- but note it reads the SAME assets the target
+does, so it validates the builder and not the data. To check the data,
+compare against the previous build's per-texture bmps.
 
 Three things this has to get right, all found the hard way:
 
@@ -1081,6 +1196,41 @@ identical every time.
 
 ## What was deliberately not done
 
+**Bit-packing the conventional-memory records: tried, measured, reverted.**
+`Node`, `Leaf`, `Face` and `ClipNode` are 22/22/10/6 bytes and cost 181,790
+of conventional memory on e1m1. The field ranges leave real slack --
+measured on e1m1: `plane_id` 0..1074 (11 bits), `child` -1531..2749 (13),
+`lface_num` <= 230 (8), `cont` -4..-1 (4), `side` 0..1 (1), `bound`
+-632..3096 (13 each). Packed to the bit that is 124,335, a 32% saving.
+
+It does not pay, because **BASIC has no byte type**. A narrow field has to
+be `as string * 1` and every read is `asc()` -- a string operation, not a
+byte fetch. Two arms, six runs each, interleaved, dm3ish campath:
+
+| change | saves on e1m1 | frame time |
+|---|---|---|
+| `cont`+`lface_num` -> 1 byte | 5,812 | **+0.64%** |
+| `bound` -> 6 bytes, quantised | 25,686 | **+15.4%** |
+
+The bounds are the instructive one. Quantising to 32 units from -4096 and
+rounding OUTWARD is provably safe -- a box only grows, so `r_cull_box` culls
+less than it might have, never more -- and the unpack was hoisted out of the
+plane loop into six locals, six multiply-adds per box instead of eighteen
+reads. It still cost 14.3ms of an 83.6ms frame, because `r_cull_box` runs per
+VISITED node and six `asc()` calls there is six string operations per node.
+It also loosened culling enough to move the image (64 pixels with the surface
+cache out of the picture) and push `sc_built` from 481 to 508.
+
+If this is revisited, pack pairs of bytes into an `as integer` and split them
+with `\ 256` and `and 255` -- integer arithmetic, no string handling. That
+recovers `Leaf` 22->20 and nothing else, since no other pair of narrow fields
+shares a record. Three kilobytes on e1m1. Not worth the churn.
+
+The wider lesson: none of this addresses why e1m1 fails. It dies creating a
+64,048-byte backbuffer with **183,504 free**, and freeing another 5,776 did
+not change that. Shrinking records is not the blocker.
+
+
 **The ini parser is not table-driven.** It was on the plan as the one place
 OCP is reachable in a language without function pointers, and on inspection it
 is not worth it. A key-to-index table still needs a `SELECT CASE idx` to
@@ -1127,6 +1277,136 @@ Two techniques that paid for themselves:
   minutes per emulator round trip.
 
 ## Open
+
+**A mapped EMS pointer is only as good as its lock, and the lock has to
+come before the next ACQUIRE -- not before the use.** mgl's four page
+slots are an LRU pool now: `emsSlotAcquire` evicts the least recently used
+UNLOCKED slot, so a pointer from `mod_lm_map`, `mod_cm_map` or
+`mod_geom_map` stops being valid the moment anything else wants a window.
+It still reads. It just reads another page, with no error anywhere.
+
+`sb_build` holds two at once -- the face's luxel rect and the colormap --
+across `uglBuildSurf`, which acquires two more of its own. Unpinned, the
+colormap window went first and every texel came out of a wrong lookup:
+the frame was RGB confetti with the geometry still perfectly correct.
+
+Pin at the point of handout:
+
+    lmp = mod_lm_map( g, lmy )
+    lm_lock = mod_lm_lock            '' before anything else can acquire
+    ...
+    sbp.cmap_ptr = mod_cm_map( g )
+    cm_lock = mod_cm_lock
+
+Locking both AFTER both maps looks equivalent and is not: the colormap's
+own acquire is itself allowed to take the luxel slot. That mistake cost a
+build cycle and looked exactly like the unpinned case.
+
+Two of four, never more. `emsSlotLock` refuses the LAST unlocked slot, so
+the pool always keeps one in reserve; pinning two leaves the builder the
+two it needs. Unlock only what locked, and there must be no `exit sub`
+between the lock and the unlock.
+
+**Pinning is necessary and is NOT sufficient, measured.** With both
+windows pinned exactly as above, a campath run still renders a different
+picture every time. The pinning is reverted in the tree rather than left
+in looking like a fix -- and note it makes the squeeze worse, not better:
+four windows want slots (destination, atlas, luxels, colormap) and pinning
+two leaves the builder cycling the atlas through the other two.
+
+## The surface cache draws a different picture every run
+
+`tools/check.sh --churn` reproduces it: one binary, `-ticks 900` so the
+camera stops in the same place, two runs, ~68% of pixels different. A wall
+that is tan brick in one run is dark with red and green streaks in the
+next.
+
+What the bisection established, each step a measurement:
+
+| test | result | what it rules out |
+|---|---|---|
+| `-lm` off | byte-identical x3 | the campath, physics and tick loop |
+| flush every frame | byte-identical, `sc_built` equal too | anything within one frame |
+| `sc_find` forced to always miss | byte-identical x3, and CORRECT | the builder, under any eviction history |
+| ownership check on hit | never fires (`0`) | a block changing hands behind a slot |
+| overlap scan at alloc, 1070 runs | never fires (`0`) | two live faces allocated the same bytes |
+| re-read after forcing the window elsewhere | same bytes | a stale EMS page on the READ side |
+| fingerprint at build, checked on hit | **48-110 mismatches** | nothing: the bytes really do change |
+
+So the builder is right, the allocator's books are right, and the bytes of
+a cached surface are overwritten between the build and the reuse. Forcing
+every face to rebuild hides it completely, which is why a fixed camera --
+which evicts nothing and rebuilds nothing -- has never shown it.
+
+**The clobbering write is megabytes from where it belongs.** Watch one
+cached surface and re-read it after every later build: the surface at
+granule 15040 was destroyed by the build of a face at granule **7072**,
+both order 5. Not adjacent, so not an overrun -- a write landing in the
+wrong EMS *page*, which is the `gv_dst` failure again. The builder streams
+the atlas across many pages while holding a pointer to its destination,
+and the pool may take the destination's slot to map the next atlas page.
+
+Pinning the destination page across `uglBuildSurf` took the hit-time
+mismatches from 48-110 to **0** and cost about 12% of the frame rate --
+and the picture still varies, so there is at least one more path. The fix
+belongs in `uglBuildSurf` itself: re-derive the destination pointer per
+row instead of holding it, exactly as `d_poly` now re-takes `gv_dst` per
+face.
+
+**A run in four dies before writing anything** -- empty `run.out`, no
+`error.log`, no `bench.txt`. Unrelated to the above and still unexplained;
+`--churn` retries rather than call it a failure.
+
+The slot NUMBER stays with whoever owns the resource -- `mod_lm_lock` and
+`mod_cm_lock` live in `model.bas` next to the maps they pin, and callers
+pin by name. Nobody names a slot they do not own; that is the whole point
+of the pool.
+
+Two sites are safe and worth knowing why, so they are not "fixed" by
+mistake: `d_poly`'s per-face geometry copy and `sb_fetch` both go from map
+straight to `memCopy` with nothing but integer arithmetic in between.
+`hud_shade` is safe only because its destination is the MEM backbuffer --
+see the note there.
+
+
+- **`render.scale` wedges under `core=dynamic`, draws correctly under
+  `core=normal`.** The view is rendered into a small backbuffer and blown up
+  to fill the screen; `uglPutScl` does the magnification. Under
+  `cycles=75000 core=dynamic` the program stops responding -- black screen,
+  Esc dead. Under `core=normal` the identical binary draws the scaled view.
+
+  What it is NOT, all tested:
+  - not our computed values: hardcoded `160, 100, 3.0, 3.0` hangs too
+  - not the position: `uglPutScl` takes the TOP-LEFT, whatever its header
+    comment says about a "center col" -- `h_precalc` passes x,y straight to
+    `DC_CLIP_SCL`, which measures width as `xmax-x+1`. Confirmed on screen.
+  - not clipping or an off-by-one at the edge: a whole-number scale putting
+    the rect strictly inside the mode (192x192 at 64,4) hangs just the same
+  - not one entry point: `uglBlitScl` hangs identically
+  - not self-modifying code as such -- the texture mappers patch immediates
+    into their own inner loops and run fine under dynamic
+
+  Where it ends up: sampling under the debugger caught it once in
+  `ugl_text` near `UGLBUILDSURF` and once spinning in `B$FCompactMove`, the
+  VBDOS runtime's local-heap compactor (`lcompact.asm`, LMEM segment). That
+  loop deserves a note of its own:
+
+      097A  inc bx              ; block header 0xFFFF -> 0x0000
+      097B  add si,bx           ; si += 0, no carry
+      097D  jnc 0x943           ; loops instead
+      097F  call B$CorruptHeap  ; the check it should have reached
+
+  The runtime DOES guard against a runaway heap walk, on the carry out of
+  `add si,bx`. A header of `0xFFFF` is the one value that defeats it, because
+  `inc bx` wraps to zero and never carries -- so it spins instead of
+  reporting a corrupt heap. Worth knowing whenever this codebase wedges with
+  no output: that is what it looks like.
+
+  **`/MAP` on the LINK line is what made any of this readable.** Without it
+  `qrender.map` carries segments only and the debugger can say
+  `LMEM+0x943` but not which routine that is; with it there are 2,545
+  publics and the same address resolves to `B$FCompactMove`.
+
 
 - **`sound.enabled = true` hangs at init.** Root cause still unknown; the
   setting now ships disabled so the hang cannot be armed by accident.
