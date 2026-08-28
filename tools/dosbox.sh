@@ -105,8 +105,12 @@ build)
     # LINK's command line would blow past the DOS 127-char limit once there
     # are several modules -- and a truncated line loses the trailing ';' that
     # suppresses its prompts, so it just sits there waiting. Response file.
+    #
+    # /MAP writes the PUBLICS into qrender.map. Without it the map carries
+    # segments only, and a debugger can say "LMEM+0x943" but not which
+    # routine that is.
     printf '%s\r\n' \
-      "/NOE /SEG:800 $OBJS" \
+      "/NOE /MAP /SEG:800 $OBJS" \
       'qrender.exe' \
       'qrender.map' \
       "$rt+$ugl" \
