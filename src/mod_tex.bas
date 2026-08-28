@@ -51,15 +51,11 @@ declare sub mod_link_anims ( _
 declare sub mod_load_texinfo ( _
     g as Game, _
     tex_info() as TexInfo, _
-    h_textr_dc() as long, _
-    mip_buff_inf() as MipTex, _
-    h_rawtx_dc() as long _
+    mip_buff_inf() as MipTex _
 )
 declare sub mod_load_textures ( _
     g as Game, _
-    h_textr_dc() as long, _
-    mip_buff_inf() as MipTex, _
-    h_rawtx_dc() as long _
+    mip_buff_inf() as MipTex _
 )
 
 ''
@@ -89,20 +85,9 @@ dim shared t_mip_inf( 1 ) as DiskMipTex
 sub mod_load_texinfo ( _
     g as Game, _
     tex_info() as TexInfo, _
-    h_textr_dc() as long, _
-    mip_buff_inf() as MipTex, _
-    h_rawtx_dc() as long _
+    mip_buff_inf() as MipTex _
 )
     scr_load_stage "texture info"
-    ''
-    '' hTextrDC is COMMON now, and COMMON can only declare it as hTextrDC()
-    '' with no elements. It carried a real bound, so size it here.
-    ''
-    redim h_textr_dc( 256*4 ) as long
-    if ( g.env.use_lm ) then
-        redim h_rawtx_dc( 256*4 ) as long
-    end if
-
     dim i as integer
 
     def seg = varseg( tex_info(0) )
@@ -139,13 +124,11 @@ end sub
 ''::::::::::
 sub mod_load_textures ( _
     g as Game, _
-    h_textr_dc() as long, _
-    mip_buff_inf() as MipTex, _
-    h_rawtx_dc() as long _
+    mip_buff_inf() as MipTex _
 )
     dim i as integer, j as integer
     dim bmp_file as string
-    dim dc as long
+    dim ofs as long
 
     ''
     '' The palette is still read here because videoOpen installs it and frees
@@ -180,59 +163,48 @@ sub mod_load_textures ( _
             mip_buff_inf(i).liquid = true
         end if
 
-        ''
-        '' One DC per texture per mip, built straight from a preprocessed bmp
-        '' by uGL's own loader.
-        ''
-        '' This replaced a per-texel loop that read the miptex data a byte at
-        '' a time, expanded each index to RGB, filtered, and then searched all
-        '' 256 palette entries to get back to an index -- for dm3ish, 150,960
-        '' single-byte reads, 108,800 output texels and 27,852,800 palette
-        '' searches, every launch, recomputing something that depends only on
-        '' the map and the palette. tools/mkassets.py does it in ~1.5s.
-        ''
-        '' BMPOPT.NO332 matters: without it uGL remaps the image to its own
-        '' 3-3-2 palette and the indices, already correct, would be destroyed.
-        ''
-        for  j = 0 to 3
-            bmp_file = "t" + right$( "00" + ltrim$(str$( i )), 3 ) + _
-                      "m" + ltrim$(str$( j )) + ".bmp"
-
-            dc = uglNewBMPEx( UGL.EMS, UGL.8BIT, bmp_file, BMPOPT.NO332 )
-            if ( dc = false ) then
-                sys_error "0x0004, missing " + bmp_file + " -- run tools/mkassets.py"
-            end if
-
-            h_textr_dc(i*4+j) = dc
-
-            ''
-            '' The raw-index twin, for the surface builder only. It shades
-            '' through the whole colormap itself, and t* already had row 0
-            '' applied on the way in -- feeding it those would treat a
-            '' brightened index as a raw one. See mkassets.py's r*/t* note.
-            ''
-            if ( g.env.use_lm ) then
-                bmp_file = "r" + right$( "00" + ltrim$(str$( i )), 3 ) + _
-                          "m" + ltrim$(str$( j )) + ".bmp"
-                dc = uglNewBMPEx( UGL.EMS, UGL.8BIT, bmp_file, BMPOPT.NO332 )
-                if ( dc = false ) then
-                    sys_error "0x0005, missing " + bmp_file + " -- run tools/mkassets.py"
-                end if
-                h_rawtx_dc(i*4+j) = dc
-            end if
-
-            if ( (i and 15) = 0 ) then scr_mip_tick (j+1)*25
-        next j
-
-        scr_load_part 1.0/g.wld.count.textures, ((i and 15) = 0)
     next i
 
+    ''
+    '' The pixels: two atlases, four views each. A cell is a FLAT run of
+    '' cell*cell bytes, not a window on the 8192-wide image -- the fillers
+    '' map one page and then walk the cell by the VIEW's bps, which is the
+    '' cell width. Sizes are 4096/1024/256/64 and each cell is placed at a
+    '' multiple of its own size, so none straddles a 16K page.
+    ''
+    '' The placement is READ, not re-derived: mkassets.py owns the layout
+    '' and is free to pack in whatever order is tightest. Deriving it twice
+    '' is the bug the luxel atlas avoids by shipping its own table.
+    ''
+    '' BMPOPT.NO332 matters: without it uGL remaps the image to its own
+    '' 3-3-2 palette and the indices, already correct, would be destroyed.
+    ''
+    g.wld.tex.raw    = uglNewBMPEx( UGL.EMS, UGL.8BIT, "texr.bmp", BMPOPT.NO332 )
+    g.wld.tex.shaded = uglNewBMPEx( UGL.EMS, UGL.8BIT, "texs.bmp", BMPOPT.NO332 )
+    if ( g.wld.tex.raw = 0 or g.wld.tex.shaded = 0 ) then
+        sys_error "0x0016, texture atlas would not load"
+    end if
+
+    def seg = varseg( g.wld.tex.ofs(0) )
+    bload "texofs.bld", varptr( g.wld.tex.ofs(0) )
+    def seg
+
+    for  j = 0 to 3
+        g.wld.tex.cell(j) = 64 \ (2 ^ j)
+        g.wld.tex.aim_raw(j) = -1
+        g.wld.tex.aim_shd(j) = -1
+
+        g.wld.tex.v_raw(j)    = uglNewView&( g.wld.tex.raw, 0, _
+                                             g.wld.tex.cell(j), g.wld.tex.cell(j) )
+        g.wld.tex.v_shaded(j) = uglNewView&( g.wld.tex.shaded, 0, _
+                                             g.wld.tex.cell(j), g.wld.tex.cell(j) )
+        if ( g.wld.tex.v_raw(j) = 0 or g.wld.tex.v_shaded(j) = 0 ) then
+            sys_error "0x0017, no room for a texture view"
+        end if
+        scr_load_part 0.25, true
+    next j
+
     mod_link_anims g, mip_buff_inf()
-
-
-    uglRestore
-    screen 0
-    width 80, 25
 
 end sub
 
@@ -287,4 +259,107 @@ sub mod_link_anims ( _
 next_tex:
     next i
 
+end sub
+
+
+'' Cell k of mip j, as a dc. Re-aims a view rather than owning 648 of them.
+function mod_tex_raw ( _
+    g as Game, _
+    byval k as integer, _
+    byval mip as integer _
+) as long
+    if ( g.wld.tex.aim_raw(mip) <> k ) then
+        if ( uglSetView%( g.wld.tex.v_raw(mip), _
+                          g.wld.tex.ofs( k*4 + mip ) ) = 0 ) then exit function
+        g.wld.tex.aim_raw(mip) = k
+    end if
+    mod_tex_raw = g.wld.tex.v_raw(mip)
+end function
+
+function mod_tex_shaded ( _
+    g as Game, _
+    byval k as integer, _
+    byval mip as integer _
+) as long
+    if ( g.wld.tex.aim_shd(mip) <> k ) then
+        if ( uglSetView%( g.wld.tex.v_shaded(mip), _
+                          g.wld.tex.ofs( k*4 + mip ) ) = 0 ) then exit function
+        g.wld.tex.aim_shd(mip) = k
+    end if
+    mod_tex_shaded = g.wld.tex.v_shaded(mip)
+end function
+
+
+''::::::::::
+'' name: mod_tex_dump
+'' desc: Reads every cell back THROUGH ITS VIEW, with uglPGet, into a
+''       contact sheet. Comparing that against the atlas says whether
+''       uglNewView/uglSetView deliver the right pixels, with the renderer
+''       out of the way.
+''::::::::::
+sub mod_tex_dump ( g as Game )
+    dim k as integer, mip as integer, y as integer, ty as integer
+    dim x as integer, cx as integer, cell as integer
+    dim dc as long
+    dim f as integer
+    dim sw as integer, sh as integer
+    dim rowlen as integer
+    dim imgsz as long, off_bits as long
+    dim palbuf(255) as tRGB
+    dim row as string, buf as string
+
+    sw       = 20 * 64
+    sh       = 64 + 32 + 16 + 8
+    rowlen   = sw
+    imgsz    = clng(rowlen) * clng(sh)
+    off_bits = 14 + 40 + 1024
+
+    uglPalGetBuff 0, 256, palbuf(0)
+
+    f = freefile
+    open "texdump.bmp" for binary as #f
+
+    buf = "BM" + mkl$( off_bits + imgsz ) + mki$(0) + mki$(0) + mkl$( off_bits )
+    put #f, , buf
+
+    buf = mkl$(40) + mkl$(clng(sw)) + mkl$(clng(sh)) + mki$(1) + mki$(8) + _
+          mkl$(0) + mkl$(imgsz) + mkl$(2835) + mkl$(2835) + _
+          mkl$(256) + mkl$(0)
+    put #f, , buf
+
+    buf = ""
+    for  x = 0 to 255
+        buf = buf + palbuf(x).blue + palbuf(x).green + palbuf(x).red + chr$(0)
+    next x
+    put #f, , buf
+
+    ''
+    '' One column per texture, the four mips stacked largest first. y runs
+    '' down the sheet; BMP stores the bottom row first, so it counts down.
+    ''
+    for  y = sh-1 to 0 step -1
+        if ( y < 64 ) then
+            mip = 0 : ty = y
+        elseif ( y < 96 ) then
+            mip = 1 : ty = y - 64
+        elseif ( y < 112 ) then
+            mip = 2 : ty = y - 96
+        else
+            mip = 3 : ty = y - 112
+        end if
+        cell = g.wld.tex.cell(mip)
+
+        row = string$( rowlen, 0 )
+        for  k = 0 to g.wld.count.textures-1
+            dc = mod_tex_raw( g, k, mip )
+            if ( dc <> 0 ) then
+                for  cx = 0 to cell-1
+                    mid$( row, k*64 + cx + 1, 1 ) = chr$( uglPGet( dc, cx, ty ) and 255 )
+                next cx
+            end if
+        next k
+        put #f, , row
+    next y
+
+    close #f
 end sub

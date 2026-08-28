@@ -86,7 +86,6 @@ declare sub sb_dump ( _
     tri_buffer() as Face, _
     tex_inf_buff() as TexInfo, _
     gv_buf() as integer, _
-    h_rawtx_dc() as long, _
     mip_buff_inf() as MipTex _
 )
 declare sub sb_build ( _
@@ -1230,9 +1229,9 @@ sub sb_dump ( _
     tri_buffer() as Face, _
     tex_inf_buff() as TexInfo, _
     gv_buf() as integer, _
-    h_rawtx_dc() as long, _
     mip_buff_inf() as MipTex _
 )
+    dim tex_dc as long
     dim mt as long
     dim o as long
     dim lmw as integer, lmh as integer
@@ -1278,7 +1277,8 @@ sub sb_dump ( _
         exit sub
     end if
 
-    sb_build g, dc, h_rawtx_dc( mi*4 + mip ), face, mip, pw, ph, tri_buffer(), _
+    tex_dc = mod_tex_raw( g, mi, mip )
+    sb_build g, dc, tex_dc, face, mip, pw, ph, tri_buffer(), _
               tex_inf_buff(), gv_buf(), mip_buff_inf()
 
     fh = freefile
@@ -1403,6 +1403,7 @@ sub sb_build ( _
         '' only a luxel grid too big for the builder's stack buffer gets
         '' here; leave the surface as it is rather than half-composite it
     end if
+
 end sub
 
 

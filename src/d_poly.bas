@@ -70,8 +70,6 @@ declare sub d_draw_faces ( _
     pln_buffer() as Plane, _
     nds_buffer() as Node, _
     mip_buff_inf() as MipTex, _
-    h_rawtx_dc() as long, _
-    h_textr_dc() as long, _
     order_list() as integer, _
     poly_flag() as integer _
 )
@@ -292,8 +290,6 @@ sub d_draw_faces ( _
     pln_buffer() as Plane, _
     nds_buffer() as Node, _
     mip_buff_inf() as MipTex, _
-    h_rawtx_dc() as long, _
-    h_textr_dc() as long, _
     order_list() as integer, _
     poly_flag() as integer _
 )
@@ -309,6 +305,7 @@ sub d_draw_faces ( _
     dim gp as long, gv_dst as long
     dim zl as single
     dim mip_level as integer, tex_indx as integer
+    dim tex_dc as long
     dim p2 as integer, p3 as integer
     dim liquid as integer
     dim tu as single, tv as single
@@ -413,7 +410,6 @@ sub d_draw_faces ( _
             '' record inside one row, so the row end is also the end of
             '' the mapped EMS window, and a fixed-size copy from a record
             '' near it would read off the page.
-            ''
             ''
             '' Where memCopy puts the record. Taken per face, NOT hoisted
             '' out of the loop: gv_buf is a far-heap array and the runtime
@@ -668,9 +664,9 @@ sub d_draw_faces ( _
             end if
 
             if ( g.rdr.use_mips ) then
-                tex_indx = mipidx*4+mip_level
+                tex_indx = mip_level
             else
-                tex_indx = mipidx*4
+                tex_indx = 0
             end if
 
             ''
@@ -679,7 +675,6 @@ sub d_draw_faces ( _
             '' EMS page the filler maps, so it is a floor on the distance
             '' choice, never a substitute for it.
             ''
-            src_dc = h_textr_dc(tex_indx)
             if ( lm_on ) then
                 lm_mip = mip_level
                 if ( g.rdr.use_mips = 0 ) then lm_mip = 0
@@ -733,7 +728,10 @@ sub d_draw_faces ( _
                         '' sb_build clamps its luxel and atlas reads, so the
                         '' extra columns come out edge-extended.
                         ''
-                        sb_build g, lm_dc, h_rawtx_dc(mipidx*4 + lm_mip), i, lm_mip, _
+                        '' hoisted: BC will not take a call inside another
+                        '' call's argument list
+                        tex_dc = mod_tex_raw( g, mipidx, lm_mip )
+                        sb_build g, lm_dc, tex_dc, i, lm_mip, _
                                   2 ^ sc_shift( lm_sw ), 2 ^ sc_shift( lm_sh ), _
                                   tri_buffer(), tex_inf_buff(), gv_buf(), mip_buff_inf()
                     end if
@@ -773,6 +771,11 @@ sub d_draw_faces ( _
                     next j
                     lm_on = 0
                 end if
+            end if
+
+            '' the texture itself, only where no cached surface stands in
+            if ( lm_on = 0 ) then
+                src_dc = mod_tex_shaded( g, mipidx, tex_indx )
             end if
                 ''
                 '' One convex polygon, one call -- no fan pivot, so no

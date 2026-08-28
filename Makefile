@@ -17,10 +17,10 @@ TIMEOUT    ?= 600
 SRCS := $(wildcard src/*.bas)
 HDRS := $(wildcard src/*.bi)
 DATA := data/stuff.ini data/base.dat
-## Preprocessed textures. texLoadAll blits these instead of resampling and
-## colour-matching the miptex lump at every launch; one bmp stands in for the
-## whole set as far as make is concerned.
-ASSETS := data/assets/t000m0.bmp
+## Preprocessed textures. The renderer blits these instead of resampling and
+## colour-matching the miptex lump at every launch; the raw atlas stands in
+## for the whole set as far as make is concerned.
+ASSETS := data/assets/texr.bmp
 HARNESS := tools/dosbox.sh dosbox/template.conf
 EXE  := build/vbd/qrender.exe
 

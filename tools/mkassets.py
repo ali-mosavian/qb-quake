@@ -121,9 +121,9 @@ UA_WIN = 16384          # uglArr's page size (UA_WIN in src/ugl/uglarr.asm)
 # Element sizes for the paged lumps, so the padding lands where uGL puts it.
 PAGED_ELEM = {
     'nodes.pag': 22,    # nodeb: planeid child0 child1 lfaceid lfacenum + 12
-    'clip.pag':   6,    # clipnode: planenum front back
+    'clip.pag':   6,    # ClipNode: planenum front back
     'leaves.pag':22,    # leaf2: cont vislist bound[12] lfaceid lfacenum
-    'faces.pag': 10,    # face2: planeid side geom_row geom_ofs texinfoid
+    'faces.pag': 10,    # Face: planeid side geom_row geom_ofs texinfoid
 }
 
 
@@ -598,18 +598,61 @@ def main():
     ntex    = struct.unpack_from('<i', d, toff)[0]
     offs    = [struct.unpack_from('<i', d, toff + 4 + 4*k)[0] for k in range(ntex)]
 
-    # One BMP per texture per mip level, DOS 8.3: t<idx>m<level>.bmp.
+    # ------------------------------------------------------------------
+    # Two atlases, not 648 DCs.
     #
-    # An atlas per mip level would mean fewer files, but pulling a cell out of
-    # one needs uglBlit, and uglBlit is declared in ugl.bi without being
-    # implemented in the VBD library -- LINK resolves the call to an int 3.
-    # uglNewBMPEx is present, and it builds a DC straight from a file, so a
-    # file per texture is both simpler and one call per texture on the target.
-    written = 0
+    # Each texture used to become its own EMS dc, four mips times two
+    # variants: 648 dcs on dm3ish, and a dc costs conventional memory for
+    # its struct and scanline table whatever its pixels cost. Measured at
+    # 42,176 bytes, the largest item after the back buffer, and it scales
+    # with texture count -- which is what stops e1m1 loading.
+    #
+    # One store per variant instead, with the renderer making FOUR view
+    # dcs -- one per mip size -- and re-aiming them per face with
+    # uglSetView. That is the same trick the surface cache uses.
+    #
+    # CELL-MAJOR, and no cell may straddle a scanline. A view reads its
+    # rows through the parent's scanline table, so a cell that crossed a
+    # row boundary would not be contiguous. Cells are 4096/1024/256/64
+    # bytes and the scanline is 8192, so each divides it exactly; each mip
+    # block is padded up to a scanline so the next one starts clean.
+    #
+    # The offset of any cell is then arithmetic, not a table:
+    #     ofs(k, lvl) = mip_base(lvl) + k * cell(lvl)^2
+    # ------------------------------------------------------------------
+    # Two atlases and a lookup table, not 648 dcs.
+    #
+    # Each texture used to become its own EMS dc, four mips times two
+    # variants: 160 dcs on dm3ish at 264 bytes of CONVENTIONAL memory each
+    # for the struct and scanline table, measured at 42,176. e1m1 would
+    # make 648 -- the ~171K that stops it loading.
+    #
+    # One store per variant instead. The renderer makes four VIEWS per
+    # store, one per mip size, and re-aims them per face with uglSetView --
+    # no allocation, no copy. The same trick the surface cache uses.
+    #
+    # Scanlines are 8192 and cells are crammed in, largest mip first. A
+    # cell must never cross a scanline: a view reads its rows through the
+    # parent's table, so a split cell would not be contiguous. Going
+    # largest-first every cell starts at a multiple of its own size
+    # (4096/1024/256/64), and each divides 8192, so none ever does.
+    #
+    # The placement is EMITTED, not re-derived. Two independent
+    # derivations of the same layout is exactly the bug the luxel atlas
+    # avoids by shipping its own table.
+    place = [[0] * MIPS for _ in range(ntex)]
+    raw_at, shd_at = bytearray(), bytearray()
+
     for lvl in range(MIPS):
         cell = SIZES[lvl]
         for k, o in enumerate(offs):
+            # A view must not straddle a 16K page (uglview.asm). Cells are
+            # powers of two and packed largest-first, so every offset is a
+            # multiple of its own size and none ever does.
+            assert len(raw_at) % (cell * cell) == 0, "cell not self-aligned"
+            place[k][lvl] = len(raw_at)
             if o < 0:
+                raw_at += bytes(cell * cell); shd_at += bytes(cell * cell)
                 continue
             base = toff + o
             w, h = struct.unpack_from('<ii', d, base + 16)
@@ -617,28 +660,34 @@ def main():
             mw, mh = w >> lvl, h >> lvl
             src  = d[base+mo : base+mo + mw*mh]
             if len(src) < mw*mh:
-                print(f"  ! texture {k} mip {lvl} truncated, skipped")
+                print(f"  ! texture {k} mip {lvl} truncated, left blank")
+                raw_at += bytes(cell * cell); shd_at += bytes(cell * cell)
                 continue
-            # Two sets, because they feed two different things.
-            #
-            # t*: shade0 applied, as texLoadAll did -- what the current
-            # unlit path draws directly.
-            #
-            # r*: raw indices, for the surface builder. It shades through the
-            # full colormap itself, and colormap row 0 is not the identity --
-            # it BRIGHTENS (index 40, luminance 83, becomes 47, luminance
-            # 146). Shading a texel that already went through row 0 treats a
-            # brightened index as a raw one, and the lighting range collapses
-            # to almost nothing.
-            raw  = resample(src, mw, mh, cell, cell, pal, cube, bits)
-            write_bmp8(os.path.join(outdir, f"r{k:03d}m{lvl}.bmp"),
-                       cell, cell, raw, pal)
-            src  = bytes(shade0[b] for b in src)        # as texLoadAll did
-            tile = resample(src, mw, mh, cell, cell, pal, cube, bits)
-            out  = os.path.join(outdir, f"t{k:03d}m{lvl}.bmp")
-            write_bmp8(out, cell, cell, tile, pal)
-            written += 2
-        print(f"  mip {lvl}: {ntex} textures @ {cell}x{cell}")
-    print(f"done: {written} bmps for {ntex} textures across {MIPS} mip levels")
+            # raw: indices, for the surface builder, which shades through the
+            # full colormap itself. shaded: row 0 applied, for the unlit path.
+            raw_at += resample(src, mw, mh, cell, cell, pal, cube, bits)
+            lit     = bytes(shade0[b] for b in src)
+            shd_at += resample(lit, mw, mh, cell, cell, pal, cube, bits)
+        print(f"  mip {lvl}: {ntex} cells @ {cell}x{cell}")
+
+    for at in (raw_at, shd_at):
+        if len(at) % LM_ATLAS_W:
+            at += bytes(LM_ATLAS_W - (len(at) % LM_ATLAS_W))
+    rows = len(raw_at) // LM_ATLAS_W
+    for name, at in (("texr.bmp", raw_at), ("texs.bmp", shd_at)):
+        write_bmp8(os.path.join(outdir, name), LM_ATLAS_W, rows, bytes(at), pal)
+        print(f"  {name}: {LM_ATLAS_W}x{rows} = {len(at):,} bytes")
+
+    tbl = bytearray()
+    for k in range(ntex):
+        for lvl in range(MIPS):
+            tbl += struct.pack('<l', place[k][lvl])
+    write_bload(os.path.join(outdir, "texofs.bld"), bytes(tbl))
+    print(f"  texofs.bld: {ntex} x {MIPS} offsets")
+    written = 2
+
+    written = MIPS * 2
+
+    print(f"done: {written} atlases for {ntex} textures across {MIPS} mip levels")
 
 main()

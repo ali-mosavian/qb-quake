@@ -61,6 +61,36 @@ type LightStore
     loaded      as long         '' bytes that actually arrived
 end type
 
+''
+'' Every texture, in two atlas dcs instead of one dc per texture per mip.
+''
+'' A dc costs conventional memory for its struct and scanline table
+'' whatever its pixels cost -- measured at 264 bytes, and dm3ish made 160
+'' of them. e1m1 would make 648, which is the ~171K that stops it loading.
+''
+'' Four VIEWS per atlas instead, one per mip size, re-aimed per face with
+'' uglSetView -- no allocation, no copy. The same trick the surface cache
+'' uses to avoid a dc per surface.
+''
+'' The atlas scanline. A view reads its rows through the parent's scanline
+'' table, so a cell must sit entirely inside one -- 4096/1024/256/64 all
+'' divide 8192, so none ever crosses. Same width the luxel atlas uses, and
+'' uglbmp.asm's BMP_MAX_BPS.
+const TEX_ATLAS_W = 8192
+
+type TexStore
+    shaded      as long         '' one atlas dc: row 0 applied
+    raw         as long         '' one atlas dc: raw indices
+    v_shaded(3) as long         '' a view per mip size, re-aimed per face
+    v_raw(3)    as long
+    cell(3)     as integer      '' texels per side at that mip
+    aim_raw(3)  as integer      '' cell each view is already aimed at, -1
+    aim_shd(3)  as integer      '' none -- re-aiming rewrites a scanline
+                                '' table, and consecutive faces usually
+                                '' share a texture
+    ofs(1023)   as long         '' [id*4 + level] -> byte offset in the atlas
+end type
+
 type ColorMap
     dc          as long
     size        as long
@@ -85,6 +115,7 @@ type World
     geom        as GeomStore
     light       as LightStore
     cmap        as ColorMap
+    tex         as TexStore
     pvs         as VisLump
 end type
 
