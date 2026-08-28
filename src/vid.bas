@@ -84,7 +84,7 @@ sub vid_init ( _
         pages = 1
     end if
             
-    g.env.h_video_dc = uglSetVideoDC( g.env.c_fmt, g.env.x_res, g.env.y_res, pages )
+    g.env.h_video_dc = uglSetVideoDC( g.env.c_fmt, g.env.scr_x_res, g.env.scr_y_res, pages )
     if ( g.env.h_video_dc = FALSE ) then 
         sys_error "0x0001, Could not set video mode..."
     end if
@@ -94,12 +94,25 @@ sub vid_init ( _
     '' Create a backbuffer
     '' 
     if ( g.env.use_paging = false ) then
+        ''
+        '' The RENDER size, not the mode's. This is the single
+        '' largest conventional allocation the program makes, and it
+        '' scales with the view: 150x150 is 22,500 bytes where a full
+        '' 320x200 is 64,000.
+        ''
         g.env.h_back_bdc = uglNew( ugl.mem, g.env.c_fmt, g.env.x_res, g.env.y_res )
         if ( g.env.h_back_bdc = FALSE ) then 
             sys_error "0x0002, Could not create a backbuffer..."
         end if
     end if     
     
+
+    ''
+    '' The border outside the view is written once and never again --
+    '' nothing blits there -- so whatever the mode set left behind
+    '' would sit there for the whole run.
+    ''
+    uglRectF g.env.h_video_dc, 0, 0, g.env.scr_x_res-1, g.env.scr_y_res-1, 0
 
     ''
     '' Load quake palette
@@ -133,7 +146,7 @@ sub vid_update ( _
     '' path is the odd one: pressing a key had to wait for a blit.
     ''
     if ( g.env.use_paging = false ) then
-        uglPut g.env.h_video_dc, 0, 0, g.env.h_back_bdc
+        uglPut g.env.h_video_dc, g.env.view_x, g.env.view_y, g.env.h_back_bdc
     else
         uglSetVisPage page
         uglSetWrkPage (page+1) mod g.env.pages

@@ -693,6 +693,7 @@ sub host_main ( _
     tele() as Teleporter _
 )
     dim mtx_prj as u3dMtrx
+    dim aspect as single
     
     
     dim h_dst_dc as long
@@ -718,6 +719,13 @@ sub host_main ( _
     xresh = g.env.x_res/2.0
     yresh = g.env.y_res/2.0
 
+    ''
+    '' Wipe the loading screen. It draws across the whole mode, and
+    '' from here on only the view is blitted -- so anything it left
+    '' outside the view would sit in the border for the whole run.
+    ''
+    uglRectF g.env.h_video_dc, 0, 0, g.env.scr_x_res-1, g.env.scr_y_res-1, 0
+
     mousePos 0, 0
 
 
@@ -726,7 +734,7 @@ sub host_main ( _
     cam_up.z = 0.0   
     
     if ( g.env.yaw_set ) then g.cam.start_angle = g.env.start_yaw
-    mousePos (g.env.x_res-1) * g.cam.start_angle/360.0, 110
+    mousePos (g.env.scr_x_res-1) * g.cam.start_angle/360.0, 110
     
     
 
@@ -747,7 +755,19 @@ sub host_main ( _
         h_dst_dc = g.env.h_video_dc
     end if        
     
-    u3dMtrxPersp mtx_prj, g.env.cam_fov, 320.0/240.0, g.env.z_near, g.env.z_far
+    ''
+    '' The view's PHYSICAL shape, not its pixel count. A 320x200 mode
+    '' is displayed 4:3, so its pixels are taller than they are wide,
+    '' and a view covers only the fraction of that shape its pixels
+    '' covers. It is the DRAWN rect, so scaling the view up widens
+    '' the projection to match. Full screen this is 320/240 -- the
+    '' constant that used to sit here -- so a full-screen render is
+    '' unchanged; a square 64x64 view comes out 0.833 and is drawn
+    '' round rather than stretched.
+    ''
+    aspect = (g.env.view_w * g.env.scr_y_res * DISPLAY_W) / _
+             (g.env.view_h * g.env.scr_x_res * DISPLAY_H)
+    u3dMtrxPersp mtx_prj, g.env.cam_fov, aspect, g.env.z_near, g.env.z_far
 
     ''
     '' Depth buffer, matching the destination. EMS: 320x200 of depth is
