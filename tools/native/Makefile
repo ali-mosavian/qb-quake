@@ -68,7 +68,8 @@ DIR_DOS   := dos
 MODS_DOS  := dosfile dosmem dosbfile
 
 DIR_EMS   := ems
-MODS_EMS  := emsalloc emsavail emsblock emsfill emsfree emsheap emsmap emssave emsmapex emsmapq
+MODS_EMS  := emsalloc emsavail emsblock emsfill emsfree emsheap emsmap emssave emsmapex emsmapq \
+             emsslot
 
 DIR_XMS   := xms
 MODS_XMS  := xmsalloc xmsavail xmsblock xmsfill xmsfree xmsheap xmsmap
@@ -120,7 +121,12 @@ MODS_UGLU := glubez glubez3d glucpuft gludcsav
 
 DIR_MUSIC  := music
 MODS_MUSIC := modamain
-CMODS_MUSIC := modcmn modctrl modload modmain modmem modplay modtbl
+# Kept in step with mgl's own src/music/MUSIC.mk CPPLIST -- that is the
+# authoritative list. Drifting from it links a library missing whatever
+# the module player gained, and LINK reports it as unresolved externals
+# from modplay.c rather than as a missing file.
+CMODS_MUSIC := modctrl modload modinit modmem modplay modtbl mods3m \
+               modprot modeff
 
 DIR_XSND   := xsnd
 MODS_XSND  := sndamain

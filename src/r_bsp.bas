@@ -778,9 +778,9 @@ sub r_load_leaves ( _
     '' array out of it leaves a larger contiguous hole behind even when the
     '' total free does not change.
     ''
-    g.wld.store.leaves = uglArrNew&( UGL.MEM, len( lef_buffer(0) ), g.wld.count.leaves, 0 )
+    g.wld.store.leaves = uglArrNew( UGL.MEM, len( lef_buffer(0) ), g.wld.count.leaves )
     if ( g.wld.store.leaves = 0 ) then
-        g.wld.store.leaves = uglArrNew&( UGL.EMS, len( lef_buffer(0) ), g.wld.count.leaves, PAGE_SLOT )
+        g.wld.store.leaves = uglArrNew( UGL.EMS, len( lef_buffer(0) ), g.wld.count.leaves )
     end if
     if ( g.wld.store.leaves = 0 ) then sys_error "0x0036, no room for the leaves"
 
@@ -794,7 +794,7 @@ sub r_load_leaves ( _
     if ( fileOpen%( f, "leaves.pag", F4READ ) = 0 ) then
         sys_error "0x0037, leaves.pag missing"
     end if
-    if ( uglArrLoad%( f, g.wld.store.leaves ) = 0 ) then
+    if ( uglArrLoad( f, g.wld.store.leaves ) = 0 ) then
         fileClose f
         sys_error "0x0038, leaves.pag short or unreadable"
     end if
@@ -805,7 +805,7 @@ sub r_load_leaves ( _
     '' the descriptor at the entire block and every subscript works from
     '' here on with no further calls.
     ''
-    mapped = uglArrMap&( g.wld.store.leaves, lef_buffer(), 0 )
+    mapped = uglArrMap( g.wld.store.leaves, lef_buffer(), 0, 0 )
 end sub
 
 ''::::::::::
