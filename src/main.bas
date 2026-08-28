@@ -1121,6 +1121,17 @@ sub host_advance ( _
 
     steps = 0
     do while ( host_accum >= HOST_DT# and steps < HOST_MAXSTEPS )
+        ''
+        '' Stop ON the tick budget, not past it. -ticks is tested once a
+        '' frame, after this whole loop, so a slow frame that runs two or
+        '' three steps ends the run at 902 rather than 900 -- and the
+        '' camera is wherever those extra steps carried it. Two runs of
+        '' one binary then differ by most of a room, which reads exactly
+        '' like a rendering bug and is not one.
+        ''
+        if ( g.env.bench_ticks > 0 and host_ticks >= g.env.bench_ticks ) then
+            exit do
+        end if
         host_tick g, HOST_DT#, brush(), models(), planes(), nodes(), cp_x(), cp_y(), _
                    cp_z(), tele(), plat()
         host_accum = host_accum - HOST_DT#
