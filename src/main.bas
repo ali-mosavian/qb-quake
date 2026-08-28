@@ -91,8 +91,6 @@ declare sub host_render ( _
     brush() as BrushModel, _
     frustum() as DiskPlane, _
     bit_array() as integer, _
-    h_rawtx_dc() as long, _
-    h_textr_dc() as long, _
     mip_buff_inf() as MipTex, _
     face_mdl() as integer _
 )
@@ -136,9 +134,7 @@ declare sub host_init ( _
     cp_x() as integer, _
     cp_y() as integer, _
     cp_z() as integer, _
-    h_textr_dc() as long, _
     mip_buff_inf() as MipTex, _
-    h_rawtx_dc() as long, _
     frustum() as DiskPlane, _
     brush() as BrushModel, _
     tele() as Teleporter, _
@@ -161,8 +157,6 @@ declare sub host_main ( _
     brush() as BrushModel, _
     frustum() as DiskPlane, _
     bit_array() as integer, _
-    h_rawtx_dc() as long, _
-    h_textr_dc() as long, _
     mip_buff_inf() as MipTex, _
     face_mdl() as integer, _
     plat() as PlatEnt, _
@@ -242,9 +236,7 @@ declare sub vid_init_ugl ( )
 declare sub mod_load_texinfo ( _
     g as Game, _
     tex_info() as TexInfo, _
-    h_textr_dc() as long, _
-    mip_buff_inf() as MipTex, _
-    h_rawtx_dc() as long _
+    mip_buff_inf() as MipTex _
 )
 declare sub mod_load_world ( _
     g as Game, _
@@ -272,7 +264,6 @@ declare sub sb_dump ( _
     tri_buffer() as Face, _
     tex_inf_buff() as TexInfo, _
     gv_buf() as integer, _
-    h_rawtx_dc() as long, _
     mip_buff_inf() as MipTex _
 )
 declare function mod_cm_bytes ( _
@@ -298,9 +289,7 @@ declare sub mod_load_colormap ( _
 )
 declare sub mod_load_textures ( _
     g as Game, _
-    h_textr_dc() as long, _
-    mip_buff_inf() as MipTex, _
-    h_rawtx_dc() as long _
+    mip_buff_inf() as MipTex _
 )
 declare sub sc_init ( _
     g as Game _
@@ -335,8 +324,6 @@ declare sub d_draw_faces ( _
     pln_buffer() as Plane, _
     nds_buffer() as Node, _
     mip_buff_inf() as MipTex, _
-    h_rawtx_dc() as long, _
-    h_textr_dc() as long, _
     order_list() as integer, _
     poly_flag() as integer _
 )
@@ -414,9 +401,7 @@ dim face_mdl() as integer
 dim plat() as PlatEnt
 dim bit_array() as integer
 dim frustum() as DiskPlane
-dim h_textr_dc() as long
 dim mip_buff_inf() as MipTex
-dim h_rawtx_dc() as long
 dim cp_x() as integer
 dim cp_y() as integer
 dim cp_z() as integer
@@ -525,16 +510,18 @@ dim shared z_dc as long
     
     host_init g, tri_buffer(), tex_inf_buff(), pln_buffer(), nds_buffer(), _
               mdl_buffer(), order_list(), poly_flag(), gv_buf(), bit_array(), _
-              cp_x(), cp_y(), cp_z(), h_textr_dc(), mip_buff_inf(), h_rawtx_dc(), _
+              cp_x(), cp_y(), cp_z(), mip_buff_inf(), _
               frustum(), brush(), tele(), face_mdl(), plat()
-    if ( g.env.dump_set ) then
+    if ( g.env.dump_tex ) then
+        mod_tex_dump g
+    elseif ( g.env.dump_set ) then
         sb_dump g, g.env.dump_face, g.env.dump_mip, tri_buffer(), tex_inf_buff(), _
-                gv_buf(), h_rawtx_dc(), mip_buff_inf()
+                gv_buf(), mip_buff_inf()
     else
         host_main g, cp_x(), cp_y(), cp_z(), _
                   tri_buffer(), tex_inf_buff(), pln_buffer(), nds_buffer(), _
                   mdl_buffer(), order_list(), poly_flag(), gv_buf(), brush(), _
-                  frustum(), bit_array(), h_rawtx_dc(), h_textr_dc(), _
+                  frustum(), bit_array(), _
                   mip_buff_inf(), face_mdl(), plat(), tele()
     end if
     host_shutdown
@@ -584,9 +571,7 @@ sub host_init ( _
     cp_x() as integer, _
     cp_y() as integer, _
     cp_z() as integer, _
-    h_textr_dc() as long, _
     mip_buff_inf() as MipTex, _
-    h_rawtx_dc() as long, _
     frustum() as DiskPlane, _
     brush() as BrushModel, _
     tele() as Teleporter, _
@@ -640,8 +625,8 @@ sub host_init ( _
     t_lump = timer
 
     '' textures and palette
-    mod_load_texinfo g, tex_inf_buff(), h_textr_dc(), mip_buff_inf(), h_rawtx_dc()
-    mod_load_textures g, h_textr_dc(), mip_buff_inf(), h_rawtx_dc()
+    mod_load_texinfo g, tex_inf_buff(), mip_buff_inf()
+    mod_load_textures g, mip_buff_inf()
     sys_mem_mark "textures"
     mod_close g
     sys_mem_mark "mapclose"
@@ -702,8 +687,6 @@ sub host_main ( _
     brush() as BrushModel, _
     frustum() as DiskPlane, _
     bit_array() as integer, _
-    h_rawtx_dc() as long, _
-    h_textr_dc() as long, _
     mip_buff_inf() as MipTex, _
     face_mdl() as integer, _
     plat() as PlatEnt, _
@@ -854,7 +837,7 @@ sub host_main ( _
         ''
         host_render g, h_dst_dc, mtx_prj, xresh, yresh, tri_buffer(), tex_inf_buff(), _
                      pln_buffer(), nds_buffer(), mdl_buffer(), order_list(), poly_flag(), _
-                     gv_buf(), brush(), frustum(), bit_array(), h_rawtx_dc(), h_textr_dc(), _
+                     gv_buf(), brush(), frustum(), bit_array(), _
                      mip_buff_inf(), face_mdl()
 
 
@@ -1206,8 +1189,6 @@ sub host_render ( _
     brush() as BrushModel, _
     frustum() as DiskPlane, _
     bit_array() as integer, _
-    h_rawtx_dc() as long, _
-    h_textr_dc() as long, _
     mip_buff_inf() as MipTex, _
     face_mdl() as integer _
 )
@@ -1274,8 +1255,8 @@ sub host_render ( _
 
     d_draw_faces g, h_dst_dc, mtx_fin, xresh, yresh, g.cam.pos, g.vis.frame_stamp, _
                   g.vis.ord_count, tri_buffer(), tex_inf_buff(), gv_buf(), face_mdl(), _
-                  brush(), pln_buffer(), nds_buffer(), mip_buff_inf(), h_rawtx_dc(), _
-                  h_textr_dc(), order_list(), poly_flag()
+                  brush(), pln_buffer(), nds_buffer(), mip_buff_inf(), _
+                  order_list(), poly_flag()
 
     '' leave depth off for the overlay, which is 2D and would otherwise
     '' test itself against the scene it is drawn on top of

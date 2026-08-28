@@ -41,6 +41,19 @@ def bload(path):
     return open(path, 'rb').read()[7:]
 
 
+def atlas_cell(mi, mip, cell):
+    """One texture cell out of the raw atlas.
+
+    The cells are packed as flat cell*cell runs, not as windows on the
+    8192-wide image: uglBuildSurf maps one page and then walks the cell
+    with the VIEW's bps, which is the cell width. texofs.bld gives the
+    byte offset of each (texture, mip)."""
+    w, h, px, _ = read_bmp8(os.path.join(ASSETS, 'texr.bmp'))
+    tbl = bload(os.path.join(ASSETS, 'texofs.bld'))
+    ofs = struct.unpack_from('<i', tbl, (mi*4 + mip) * 4)[0]
+    return px[ofs:ofs + cell*cell]
+
+
 def face_record(face):
     """One lmface.bin record: 8 signed 16-bit fields.
 
@@ -84,8 +97,8 @@ def build(face, mip):
     cell = 64 >> mip
     aw, msk = cell, cell - 1
 
-    tw, th, tex, _ = read_bmp8(os.path.join(ASSETS, f'r{mi:03d}m{mip}.bmp'))
-    assert (tw, th) == (cell, cell), (tw, th, cell)
+    tex = atlas_cell(mi, mip, cell)
+    tw, th = cell, cell
 
     aw_, ah_, lm, _ = read_bmp8(os.path.join(ASSETS, 'lm.bmp'))
     cmap = bload(os.path.join(ASSETS, 'colmap.bld'))

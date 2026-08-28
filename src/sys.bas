@@ -173,6 +173,9 @@ sub sys_parse_args ( _
         if ( lcase$(argv(i)) = "-ticks" and i+1 <= argc-1 ) then
             g.env.bench_ticks = val( argv(i+1) )
         end if
+        if ( lcase$(argv(i)) = "-dumptex" ) then
+            g.env.dump_tex = true
+        end if
         if ( lcase$(argv(i)) = "-lm" ) then
             g.env.use_lm = true
         end if

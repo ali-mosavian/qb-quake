@@ -29,14 +29,6 @@ end type
 ''
 '' Procedures whose signatures can be read from here.
 ''
-
-''
-'' Procedures whose signatures can be read from here.
-''
-
-''
-'' Procedures whose signatures can be read from here.
-''
 declare function mod_cm_map ( _
     g as Game _
 ) as long
@@ -44,8 +36,19 @@ declare function mod_geom_map ( _
     g as Game, _
     byval row as integer _
 ) as long
+declare function mod_tex_raw ( _
+    g as Game, _
+    byval k as integer, _
+    byval mip as integer _
+) as long
+declare function mod_tex_shaded ( _
+    g as Game, _
+    byval k as integer, _
+    byval mip as integer _
+) as long
 declare sub scr_screenshot ( _
     g as Game, _
     flname as string, _
     byval dc as long _
 )
+declare sub mod_tex_dump ( g as Game )

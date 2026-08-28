@@ -387,6 +387,8 @@ type Env
                                 '' cache knowledge note.
     dump_set    as integer      '' -dumpsurf given at all. Face 0 is a real
                                 '' face, so dump_face alone cannot say.
+    dump_tex    as integer      '' -dumptex: read every cell back through
+                                '' its view and write texdump.bmp
     dump_face   as integer      '' -dumpsurf F M: build face F at mip M, write
     dump_mip    as integer      '' the composited surface to surfdump.bin and
                                 '' quit. tools/surfcheck.py diffs that against
@@ -442,18 +444,6 @@ end type
 
 ''
 '' screen.bas
-''
-
-''
-'' Procedures whose signatures can be read from here.
-''
-
-''
-'' Procedures whose signatures can be read from here.
-''
-
-''
-'' Procedures whose signatures can be read from here.
 ''
 
 ''
