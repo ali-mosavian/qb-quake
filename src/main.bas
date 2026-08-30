@@ -58,8 +58,6 @@ option explicit
 '$include: 'q_snd.bi'
 '$include: 'q_game.bi'
 
-const DL_RADIUS# = 200.0#   '' Quake's own rocket dlight radius
-
 ''
 '' This module's own procedures.
 ''
@@ -74,7 +72,8 @@ declare sub host_bench_report ( _
     frame_no as long, _
     h_dst_dc as long, _
     brush() as BrushModel, _
-    plat() as PlatEnt _
+    plat() as PlatEnt, _
+    byval host_ticks as long _
 )
 declare sub host_render ( _
     g as Game, _
@@ -94,20 +93,9 @@ declare sub host_render ( _
     frustum() as DiskPlane, _
     bit_array() as integer, _
     mip_buff_inf() as MipTex, _
-    face_mdl() as integer _
-)
-declare sub host_tick ( _
-    g as Game, _
-    byval dt as single, _
-    brush() as BrushModel, _
-    models() as Submodel, _
-    planes() as Plane, _
-    nodes() as Node, _
-    cp_x() as integer, _
-    cp_y() as integer, _
-    cp_z() as integer, _
-    tele() as Teleporter, _
-    plat() as PlatEnt _
+    face_mdl() as integer, _
+    cam_up as u3dVector3f, _
+    byval z_dc as long _
 )
 declare sub host_advance ( _
     g as Game, _
@@ -120,7 +108,9 @@ declare sub host_advance ( _
     cp_y() as integer, _
     cp_z() as integer, _
     tele() as Teleporter, _
-    plat() as PlatEnt _
+    plat() as PlatEnt, _
+    host_accum as single, _
+    host_ticks as long _
 )
 declare sub host_init ( _
     g as Game, _
@@ -180,39 +170,28 @@ declare sub draw_init_font ( _
     g as Game, _
     bit_array() as integer _
 )
-declare sub ent_place_models ( _
-    byval model_count as integer, _
-    models() as Submodel, _
-    nodes() as Node, _
-    planes() as Plane, _
-    brush() as BrushModel _
-)
 declare sub in_screenshot_key ( _
     g as Game, _
     byval h_dst_dc as long _
-)
-declare sub r_set_frustum ( _
-    frustum() as DiskPlane, _
-    mtx as u3dMtrx _
 )
 declare sub vid_update ( _
     g as Game, _
     h_dst_dc as long, _
     page as integer _
 )
-declare function pl_hull_rec ( ) as integer
 declare function sys_mem_count ( ) as integer
 declare function sys_mem_fre ( byval i as integer ) as long
 declare function sys_mem_tag ( byval i as integer ) as string
-declare function sys_mem_val ( byval i as integer ) as long
-declare function sys_tick_hz ( ) as single
 declare function sys_now ( ) as single
 declare function sys_rdtsc ( ) as long
-declare function sys_rdtsc_hz ( ) as single
 '' r_walk.c. Only caller is host_init's startup layout check.
 declare function r_walk_layout_ok ( byval vis_off as long ) as integer
 '' sb_build.c. Only caller is host_init's startup layout check.
 declare function sb_layout_ok ( byval dlight_off as long ) as integer
+'' r_span.c. Only caller is host_init's one-time reset -- the rest of
+'' r_span.c's own declares moved to host_bench.bas with the -bench
+'' report, the only other caller.
+declare sub r_span_start_frame ( )
 declare sub d_init_turb ( )
 declare sub in_init ( _
     g as Game _
@@ -276,24 +255,7 @@ declare sub sb_dump ( _
     mip_buff_inf() as MipTex, _
     pln_buffer() as Plane _
 )
-declare function mod_cm_bytes ( _
-    g as Game _
-) as long
-declare function mod_geom_rows ( _
-    g as Game _
-) as integer
-declare function mod_lm_bytes ( _
-    g as Game _
-) as long
-declare function mod_lm_got ( _
-    g as Game _
-) as long
-declare function sc_selftest ( _
-    g as Game _
-) as integer
 declare sub ls_init ()
-declare sub ls_animate ( byval anim_time as single )
-declare function ls_selftest () as integer
 declare sub mod_close ( _
     g as Game _
 )
@@ -307,63 +269,13 @@ declare sub mod_load_textures ( _
 declare sub sc_init ( _
     g as Game _
 )
-declare sub r_draw_world ( _
-    g as Game, _
-    byval model as integer, _
-    campos as u3dVector3f, _
-    models() as Submodel, _
-    brush() as BrushModel, _
-    nodes() as Node, _
-    planes() as Plane, _
-    pflag() as integer, _
-    ord() as integer, _
-    fru() as DiskPlane, _
-    bit_array() as integer _
-)
-declare sub d_draw_faces ( _
-    g as Game, _
-    h_dst_dc as long, _
-    mtx_fin as u3dMtrx, _
-    xresh as single, _
-    yresh as single, _
-    campos as u3dVector3f, _
-    byval frame_stamp as integer, _
-    byval ord_count as integer, _
-    tri_buffer() as Face, _
-    tex_inf_buff() as TexInfo, _
-    gv_buf() as integer, _
-    face_mdl() as integer, _
-    brush() as BrushModel, _
-    pln_buffer() as Plane, _
-    nds_buffer() as Node, _
-    mip_buff_inf() as MipTex, _
-    order_list() as integer, _
-    poly_flag() as integer _
-)
 declare sub scr_count_frame ( _
     g as Game _
-)
-declare sub scr_draw_hud ( _
-    g as Game, _
-    h_dst_dc as long _
 )
 declare function sys_frame_time ( _
     g as Game _
 ) as single
 declare sub mod_find_spawn ( _
-    g as Game _
-)
-declare sub ent_check_teleport ( _
-    g as Game, _
-    tele() as Teleporter _
-)
-declare sub ent_move_plats ( _
-    g as Game, _
-    byval dt as single, _
-    brush() as BrushModel, _
-    plat() as PlatEnt _
-)
-declare sub in_handle_toggles ( _
     g as Game _
 )
 declare sub pl_init ( _
@@ -439,17 +351,6 @@ dim gv_buf() as integer
 '' view.bas. Declared here rather than in a header: main is the only
 '' caller, and a header would hand them to modules that never call them.
 ''
-declare sub v_update_camera ( _
-    g as Game, _
-    byval dt as single, _
-    cp_x() as integer, _
-    cp_y() as integer, _
-    cp_z() as integer, _
-    brush() as BrushModel, _
-    models() as Submodel, _
-    planes() as Plane, _
-    nodes() as Node _
-)
 declare sub v_open_script ( _
     g as Game _
 )
@@ -615,6 +516,7 @@ sub host_init ( _
     if ( sb_layout_ok( varptr( g.rdr.dlight ) - varptr( g ) ) = 0 ) then
         sys_error "0x0042, sb_build.c's Game.rdr.dlight offset is stale"
     end if
+    r_span_start_frame
 
     '' TIMER, not a TMR: tmrInit does not run until inputOpen, the
     '' second-to-last step below, so a TMR counter reads zero for almost
@@ -877,7 +779,8 @@ sub host_main ( _
 
         pt0 = sys_now()
         host_advance g, g.scr.frame_time, brush(), mdl_buffer(), pln_buffer(), _
-                      nds_buffer(), cp_x(), cp_y(), cp_z(), tele(), plat()
+                      nds_buffer(), cp_x(), cp_y(), cp_z(), tele(), plat(), _
+                      host_accum, host_ticks
         if ( g.ft.n > 0 ) then
             ptd = sys_now() - pt0
             g.pt.tick_sum = g.pt.tick_sum + ptd
@@ -894,7 +797,7 @@ sub host_main ( _
         host_render g, h_dst_dc, mtx_prj, xresh, yresh, tri_buffer(), tex_inf_buff(), _
                      pln_buffer(), nds_buffer(), mdl_buffer(), order_list(), poly_flag(), _
                      gv_buf(), brush(), frustum(), bit_array(), _
-                     mip_buff_inf(), face_mdl()
+                     mip_buff_inf(), face_mdl(), cam_up, z_dc
 
 
         ''
@@ -907,15 +810,15 @@ sub host_main ( _
         frame_no = frame_no + 1
         '' -campath ends when the route does, whatever -bench says
         if ( g.env.cam_path and g.cp.done ) then
-            host_bench_report g, frame_no, h_dst_dc, brush(), plat()
+            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), host_ticks
             exit do
         end if
         if ( g.env.bench_ticks > 0 and host_ticks >= g.env.bench_ticks ) then
-            host_bench_report g, frame_no, h_dst_dc, brush(), plat()
+            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), host_ticks
             exit do
         end if
         if ( g.env.bench_frames > 0 and frame_no >= g.env.bench_frames ) then
-            host_bench_report g, frame_no, h_dst_dc, brush(), plat()
+            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), host_ticks
             exit do
         end if
 
@@ -948,7 +851,7 @@ sub host_main ( _
         '' scr_count_frame just above, so this must run after it.
         ''
         if ( g.env.bench_secs > 0 and g.scr.bench_secs >= g.env.bench_secs ) then
-            host_bench_report g, frame_no, h_dst_dc, brush(), plat()
+            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), host_ticks
             exit do
         end if
 
@@ -1143,401 +1046,10 @@ sub cp_advance ( _
     g.cp.last_y = g.pl.pos.y
 end sub
 
-''::::::::::
-'' name: host_advance
-'' desc: Spends a frame's worth of real time on whole simulation steps.
-''
-''       The renderer's frame time varies with what is on screen. Feeding
-''       it straight to the physics made every result depend on the
-''       framerate: the same walk integrated in a few long steps at 12 fps
-''       and many short ones at 45, and the two drifted apart because a
-''       long step overshoots a wall that a short one stops against.
-''
-''       Now every step is HOST_DT regardless, and the remainder is
-''       carried. Physics sees a constant rate; only how many steps a
-''       frame runs varies.
-''::::::::::
-sub host_advance ( _
-    g as Game, _
-    byval real_dt as single, _
-    brush() as BrushModel, _
-    models() as Submodel, _
-    planes() as Plane, _
-    nodes() as Node, _
-    cp_x() as integer, _
-    cp_y() as integer, _
-    cp_z() as integer, _
-    tele() as Teleporter, _
-    plat() as PlatEnt _
-)
-    dim steps as integer
-
-    host_accum = host_accum + real_dt
-
-    steps = 0
-    do while ( host_accum >= HOST_DT# and steps < HOST_MAXSTEPS )
-        ''
-        '' Stop ON the tick budget, not past it. -ticks is tested once a
-        '' frame, after this whole loop, so a slow frame that runs two or
-        '' three steps ends the run at 902 rather than 900 -- and the
-        '' camera is wherever those extra steps carried it. Two runs of
-        '' one binary then differ by most of a room, which reads exactly
-        '' like a rendering bug and is not one.
-        ''
-        if ( g.env.bench_ticks > 0 and host_ticks >= g.env.bench_ticks ) then
-            exit do
-        end if
-        host_tick g, HOST_DT#, brush(), models(), planes(), nodes(), cp_x(), cp_y(), _
-                   cp_z(), tele(), plat()
-        host_accum = host_accum - HOST_DT#
-        host_ticks = host_ticks + 1
-        steps = steps + 1
-    loop
-
-    ''
-    '' Still behind after the cap: give up on the backlog rather than
-    '' carry it into the next frame, where it would only grow.
-    ''
-    if ( host_accum > HOST_DT# ) then host_accum = 0.0
-
-end sub
 
 
 
 
-''::::::::::
-'' name: host_tick
-'' desc: One simulation step. Everything that changes the world in response
-''       to time or input happens here, and nothing here draws.
-''
-''       dt is a parameter rather than a global read so that the step is
-''       explicit at the call site: this is the one number that decides how
-''       far the world moves, and a caller can pass a different one -- a
-''       fixed step, a halved step for a sub-tick -- without the routine
-''       knowing or caring.
-''::::::::::
-sub host_tick ( _
-    g as Game, _
-    byval dt as single, _
-    brush() as BrushModel, _
-    models() as Submodel, _
-    planes() as Plane, _
-    nodes() as Node, _
-    cp_x() as integer, _
-    cp_y() as integer, _
-    cp_z() as integer, _
-    tele() as Teleporter, _
-    plat() as PlatEnt _
-)
-
-    '' what the player asked for
-    in_handle_toggles g
-
-    '' and what the world does about it: camera, and the physics under it
-    v_update_camera g, dt, cp_x(), cp_y(), cp_z(), brush(), models(), planes(), nodes()
-
-    '' and anything the world does to the player as a result of moving
-    ent_check_teleport g, tele()
-
-    '' movers, after the player has moved and before anything is drawn
-    ent_move_plats g, dt, brush(), plat()
-
-    '' where each mover ended up, so the draw order can place it
-    ent_place_models g.wld.count.models, models(), nodes(), planes(), brush()
-
-    '' map time, which drives every texture animation
-    g.rdr.anim_time = g.rdr.anim_time + dt
-
-    '' light styles: fixed 10 Hz off the same clock, not framerate
-    ls_animate g.rdr.anim_time
-
-    '' the test dynamic light, following the player -- field by field,
-    '' not a whole-UDT assignment, matching how every other Vec3 copy in
-    '' this codebase is written
-    g.rdr.dlight.pos.x = g.pl.pos.x
-    g.rdr.dlight.pos.y = g.pl.pos.y
-    g.rdr.dlight.pos.z = g.pl.pos.z
-    g.rdr.dlight.radius = DL_RADIUS#
-
-end sub
-
-
-
-
-''::::::::::
-'' name: host_render
-'' desc: One frame's drawing. Reads the world, changes none of it -- the
-''       counterpart to host_tick, which changes it and draws none of it.
-''::::::::::
-sub host_render ( _
-    g as Game, _
-    byval h_dst_dc as long, _
-    mtx_prj as u3dMtrx, _
-    byval xresh as single, _
-    byval yresh as single, _
-    tri_buffer() as Face, _
-    tex_inf_buff() as TexInfo, _
-    pln_buffer() as Plane, _
-    nds_buffer() as Node, _
-    mdl_buffer() as Submodel, _
-    order_list() as integer, _
-    poly_flag() as integer, _
-    gv_buf() as integer, _
-    brush() as BrushModel, _
-    frustum() as DiskPlane, _
-    bit_array() as integer, _
-    mip_buff_inf() as MipTex, _
-    face_mdl() as integer _
-)
-    dim mtx_mdl as u3dMtrx
-    dim zz as long                  '' soaks up uglZMode's return;
-                                    '' the call is the point
-    dim mtx_fin as u3dMtrx
-    dim cam_pos_b as u3dVector3f
-    dim bm as integer
-    dim pt0 as single, ptd as single
-
-    pt0 = sys_now()
-    u3dMtrxLookAt mtx_mdl, g.cam.pos, g.cam.look_at, cam_up
-    u3dMtrxConc mtx_fin, mtx_mdl, mtx_prj
-    r_set_frustum frustum(), mtx_fin
-    
-
-    ''
-    '' Birdseye stuff
-    ''
-    '' Deliberate, and it looks like a bug: the frustum above was taken
-    '' from the PLAYER camera, and the view matrix is now rebuilt from a
-    '' fixed overhead one. Flying above the level while the culling still
-    '' answers to the player's view is the point of the mode -- you get to
-    '' watch what the PVS and the frustum actually throw away. Do not
-    '' "fix" it by moving ExtractFrustum below this block.
-    ''
-    if ( g.cam.fps_view = false ) then 
-        cam_pos_b.x = 351.0
-        cam_pos_b.y = 2119.0
-        cam_pos_b.z = -552.0            
-                    
-        g.cam.look_at.x = cam_pos_b.x + 1.991367e-8
-        g.cam.look_at.y = cam_pos_b.y + -1.0
-        g.cam.look_at.z = cam_pos_b.z + 1.570986e-2
-    else
-        cam_pos_b.x = g.cam.pos.x
-        cam_pos_b.y = g.cam.pos.y
-        cam_pos_b.z = g.cam.pos.z
-    end if
-    
-    '        
-    u3dMtrxLookAt mtx_mdl, cam_pos_b, g.cam.look_at, cam_up        
-    u3dMtrxConc mtx_fin, mtx_mdl, mtx_prj
-    
-    
-    ''
-    '' Walk BSP tree
-    ''
-    r_draw_world g, 0, g.cam.pos, mdl_buffer(), brush(), nds_buffer(), pln_buffer(), _
-                  poly_flag(), order_list(), frustum(), bit_array()
-
-    ''
-    '' Cull ends here -- both exits from this sub after this point
-    '' (-nodraw, and the normal one at the bottom) have to pass through
-    '' it, so timing it once here covers both.
-    ''
-    if ( g.ft.n > 0 ) then
-        ptd = sys_now() - pt0
-        g.pt.cull_sum = g.pt.cull_sum + ptd
-        if ( ptd > g.pt.cull_max ) then g.pt.cull_max = ptd
-    end if
-
-    ''
-    '' Clear to the far plane before the frame. Depth is 1/z and larger is
-    '' nearer, so zero is infinitely distant and the first surface to
-    '' cover a pixel always wins.
-    ''
-    if ( z_dc <> 0 ) then uglClearZ z_dc, 0
-
-    '' -nodraw stops HERE: the walk above has run and filled order_list,
-    '' so everything the node paging touches has happened. What is skipped
-    '' is fill, which paging does not affect.
-    if ( g.env.no_draw ) then exit sub
-
-    pt0 = sys_now()
-    d_draw_faces g, h_dst_dc, mtx_fin, xresh, yresh, g.cam.pos, g.vis.frame_stamp, _
-                  g.vis.ord_count, tri_buffer(), tex_inf_buff(), gv_buf(), face_mdl(), _
-                  brush(), pln_buffer(), nds_buffer(), mip_buff_inf(), _
-                  order_list(), poly_flag()
-    if ( g.ft.n > 0 ) then
-        ptd = sys_now() - pt0
-        g.pt.draw_sum = g.pt.draw_sum + ptd
-        if ( ptd > g.pt.draw_max ) then g.pt.draw_max = ptd
-    end if
-
-    '' leave depth off for the overlay, which is 2D and would otherwise
-    '' test itself against the scene it is drawn on top of
-    if ( z_dc <> 0 ) then zz = uglZMode%( UGL.Z.OFF% )
-
-    pt0 = sys_now()
-    scr_draw_hud g, h_dst_dc
-    if ( g.ft.n > 0 ) then
-        ptd = sys_now() - pt0
-        g.pt.hud_sum = g.pt.hud_sum + ptd
-        if ( ptd > g.pt.hud_max ) then g.pt.hud_max = ptd
-    end if
-
-end sub
-
-
-
-
-''::::::::::
-'' name: host_bench_report
-'' desc: Writes bench.bmp and bench.txt at the end of a -bench run.
-''
-''       Called before vid_update, so the counters are still the frame's
-''       own -- scr_count_frame clears them -- and h_dst_dc still holds
-''       the finished image.
-''::::::::::
-sub host_bench_report ( _
-    g as Game, _
-    frame_no as long, _
-    h_dst_dc as long, _
-    brush() as BrushModel, _
-    plat() as PlatEnt _
-)
-    dim scs as CacheStats
-    dim dv as long
-    dim df as long
-    dim ddv as long
-    dim ddf as long
-    dim mi as integer
-    dim benchf as integer
-
-    scr_screenshot g, "bench.bmp", h_dst_dc
-
-    benchf = freefile
-    open "bench.txt" for output as #benchf
-    print #benchf, "frames " + ltrim$(str$( frame_no ))
-    print #benchf, "seconds " + ltrim$(str$( g.scr.bench_secs ))
-    print #benchf, "last_fps " + ltrim$(str$( g.scr.fps ))
-    print #benchf, "peak_fps " + ltrim$(str$( g.scr.fps_peak ))
-    print #benchf, "low_fps " + ltrim$(str$( g.ft.fps_low ))
-    print #benchf, "cp_pts " + ltrim$(str$( g.cp.n ))
-    ''
-    '' Frame times in milliseconds, and the rates they imply. These are the
-    '' numbers to compare: fastest frame, slowest frame, mean over the run.
-    ''
-    if ( g.ft.n > 0 ) then
-        print #benchf, "ft_min " + ltrim$(str$( g.ft.min * 1000.0 ))
-        print #benchf, "ft_max " + ltrim$(str$( g.ft.max * 1000.0 ))
-        print #benchf, "ft_mean " + ltrim$(str$( (g.ft.sum / g.ft.n) * 1000.0 ))
-        print #benchf, "ft_n " + ltrim$(str$( g.ft.n ))
-        if ( g.ft.min > 0.0 ) then _
-            print #benchf, "fps_best " + ltrim$(str$( 1.0 / g.ft.min ))
-        if ( g.ft.max > 0.0 ) then _
-            print #benchf, "fps_worst " + ltrim$(str$( 1.0 / g.ft.max ))
-        if ( g.ft.sum > 0.0 ) then _
-            print #benchf, "fps_mean " + ltrim$(str$( g.ft.n / g.ft.sum ))
-        ''
-        '' Where the frame above actually went. Same milliseconds, same
-        '' g.ft.n sample count -- pt_tick_mean + pt_cull_mean + pt_draw_mean
-        '' + pt_hud_mean + pt_present_mean should land close to ft_mean;
-        '' the gap is whatever this pass did not bother to time (see
-        '' PhaseTimes in q_scr.bi for exactly what that is).
-        ''
-        print #benchf, "pt_tick_mean " + ltrim$(str$( (g.pt.tick_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_tick_max " + ltrim$(str$( g.pt.tick_max * 1000.0 ))
-        print #benchf, "pt_cull_mean " + ltrim$(str$( (g.pt.cull_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_cull_max " + ltrim$(str$( g.pt.cull_max * 1000.0 ))
-        print #benchf, "pt_draw_mean " + ltrim$(str$( (g.pt.draw_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_draw_max " + ltrim$(str$( g.pt.draw_max * 1000.0 ))
-        print #benchf, "pt_hud_mean " + ltrim$(str$( (g.pt.hud_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_hud_max " + ltrim$(str$( g.pt.hud_max * 1000.0 ))
-        print #benchf, "pt_present_mean " + ltrim$(str$( (g.pt.present_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_present_max " + ltrim$(str$( g.pt.present_max * 1000.0 ))
-        ''
-        '' Nested inside pt_draw, not subtracted from it -- see PhaseTimes
-        '' in q_scr.bi. pt_draw_mean minus these two is cache lookup and
-        '' per-face UV setup: whatever neither rebuilding nor rasterising
-        '' accounts for.
-        ''
-        print #benchf, "pt_raster_mean " + ltrim$(str$( (g.pt.raster_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_raster_max " + ltrim$(str$( g.pt.raster_max * 1000.0 ))
-        print #benchf, "pt_build_mean " + ltrim$(str$( (g.pt.build_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_build_max " + ltrim$(str$( g.pt.build_max * 1000.0 ))
-        print #benchf, "rdtsc_hz " + ltrim$(str$( sys_rdtsc_hz() ))
-        ''
-        '' Nested inside pt_cull, not subtracted from it -- see PhaseTimes
-        '' in q_scr.bi. pt_cull_mean minus these two is frustum extraction
-        '' and the two lookat/concat matrix builds.
-        ''
-        print #benchf, "pt_mark_mean " + ltrim$(str$( (g.pt.mark_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_mark_max " + ltrim$(str$( g.pt.mark_max * 1000.0 ))
-        print #benchf, "pt_walk_mean " + ltrim$(str$( (g.pt.walk_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_walk_max " + ltrim$(str$( g.pt.walk_max * 1000.0 ))
-    end if
-    print #benchf, "polys " + ltrim$(str$( g.rdr.polys ))
-    print #benchf, "tris " + ltrim$(str$( g.rdr.tris ))
-    print #benchf, "px " + ltrim$(str$( g.pl.pos.x ))
-    print #benchf, "py " + ltrim$(str$( g.pl.pos.y ))
-    print #benchf, "pz " + ltrim$(str$( g.pl.pos.z ))
-    print #benchf, "on_ground " + ltrim$(str$( g.pl.on_ground ))
-    print #benchf, "vz " + ltrim$(str$( g.pl.vel.z ))
-    print #benchf, "dt " + ltrim$(str$( g.scr.frame_time ))
-    print #benchf, "tick_hz " + ltrim$(str$( sys_tick_hz ))
-    print #benchf, "mem_avail " + ltrim$(str$( memAvail& ))
-    print #benchf, "lm_size " + ltrim$(str$( mod_lm_bytes( g ) ))
-    print #benchf, "lm_read " + ltrim$(str$( mod_lm_got( g ) ))
-    print #benchf, "geom_rows " + ltrim$(str$( mod_geom_rows( g ) ))
-    print #benchf, "cm_size " + ltrim$(str$( mod_cm_bytes( g ) ))
-        sc_stats scs
-    print #benchf, "sc_made " + ltrim$(str$( scs.made ))
-    print #benchf, "sc_ems " + ltrim$(str$( scs.peak ))
-    ''
-    '' Cache behaviour. scworst is the most surfaces built in any ONE
-    '' frame, which is what a hitch is made of -- a run-wide total says
-    '' nothing about whether they arrived together or spread out.
-    ''
-    print #benchf, "sc_built " + ltrim$(str$( scs.total_builds ))
-    print #benchf, "sc_dlit " + ltrim$(str$( scs.dlit ))
-    print #benchf, "sc_worst " + ltrim$(str$( scs.bpeak ))
-    print #benchf, "sc_live " + ltrim$(str$( scs.live ))
-    print #benchf, "sc_evict " + ltrim$(str$( scs.evict ))
-    print #benchf, "sc_flush " + ltrim$(str$( scs.flushes ))
-    print #benchf, "sc_test " + ltrim$(str$( sc_selftest( g ) ))
-    print #benchf, "ls_test " + ltrim$(str$( ls_selftest() ))
-    print #benchf, "peak_z " + ltrim$(str$( g.pl.peak_z ))
-    print #benchf, "ticks " + ltrim$(str$( host_ticks ))
-    ''
-    '' Where conventional memory went. Deltas, not absolutes: what matters
-    '' is which stage took the bite, and a running total drifts with DOS's
-    '' own overhead between the marks.
-    ''
-    for mi = 0 to sys_mem_count-1
-        dv = sys_mem_val(mi)
-        df = sys_mem_fre(mi)
-        if ( mi = 0 ) then
-            ddv = 0
-            ddf = 0
-        else
-            ddv = sys_mem_val(mi-1) - dv
-            ddf = sys_mem_fre(mi-1) - df
-        end if
-        print #benchf, "mem " + sys_mem_tag(mi) + _
-                       " " + ltrim$(str$( dv )) + " " + ltrim$(str$( ddv )) + _
-                       " " + ltrim$(str$( df )) + " " + ltrim$(str$( ddf ))
-    next mi
-    print #benchf, "clp_rec " + ltrim$(str$( pl_hull_rec ))
-    print #benchf, "clp_cnt " + ltrim$(str$( g.wld.count.clips ))
-    print #benchf, "water_level " + ltrim$(str$( g.pl.water_level ))
-    print #benchf, "water_type " + ltrim$(str$( g.pl.water_type ))
-    print #benchf, "anim_time " + ltrim$(str$( g.rdr.anim_time ))
-    if ( g.plat_count > 0 ) then
-        print #benchf, "plat_zofs " + ltrim$(str$( brush( plat(0).model ).zofs ))
-        print #benchf, "plat_state " + ltrim$(str$( plat(0).state ))
-    end if
-    close #benchf
-
-end sub
 
 ''::::::::::
 '' name: host_z_on

@@ -68,7 +68,6 @@ build)
     CMODS="$(cd "$ROOT/src" && ls *.c 2>/dev/null | sed 's/\.c$//')"
     cp "$ROOT"/src/*.c "$out/" 2>/dev/null || true
     cp "$ROOT"/src/*.h "$out/" 2>/dev/null || true
-    CC_OBJS=""; for m in $CMODS; do CC_OBJS="$CC_OBJS$(echo "$m" | tr 'a-z' 'A-Z').OBJ+"; done
     BCPP31="$TOOLCHAINS/bcpp31"
     ##
     ## uGL comes from the NATIVE build (tools/native/Makefile), not from a
@@ -94,8 +93,27 @@ build)
     # every .bas except the superseded rewrite is a module of the program
     # main must come first: it carries the module-level main code
     MODS="main $(cd "$ROOT/src" && ls *.bas | sed 's/\.bas$//' | grep -vx main | tr '\n' ' ')"
-    OBJS=""; for m in $MODS; do OBJS="$OBJS$m.obj+"; done
-    OBJS="${OBJS}${CC_OBJS}M:\\LIB\\ADDONS\\U3D.OBJ"
+    ##
+    ## Four objects per line, not one giant line: LINK's response file
+    ## has its own line-length limit distinct from the DOS 127-char
+    ## command-line cap the response file itself exists to route around
+    ## -- adding h_bench.bas/h_frame.bas pushed a one-line OBJS list past
+    ## it ("LINK : fatal error L1022: response line too long"). A '+' at
+    ## the end of a line continues the object list onto the next one,
+    ## same as it already separates names on one line.
+    ##
+    OBJS=""; n=0
+    for m in $MODS; do
+        OBJS="$OBJS$m.obj+"
+        n=$((n+1))
+        [[ $((n % 4)) -eq 0 ]] && OBJS="$OBJS"$'\r\n'
+    done
+    for m in $CMODS; do
+        OBJS="$OBJS$(echo "$m" | tr 'a-z' 'A-Z').OBJ+"
+        n=$((n+1))
+        [[ $((n % 4)) -eq 0 ]] && OBJS="$OBJS"$'\r\n'
+    done
+    OBJS="${OBJS}M:\\LIB\\ADDONS\\U3D.OBJ"
 
     # one BC line per module, then one LINK line naming every object.
     # u3d is a uGL addon and is not inside the uglX.lib -- link it explicitly.
