@@ -361,7 +361,7 @@ sub mod_load_faces ( _
     '' cost an INT 67h each time. A MEM-backed store needs no slot at all,
     '' so it also cannot collide with the geometry window d_poly maps
     '' between these reads.
-    g.wld.store.faces = uglArrNew( UGL.MEM, len( faces(0) ), g.wld.count.faces )
+    g.wld.store.faces = uglArrNew&( UGL.MEM, len( faces(0) ), g.wld.count.faces, 0 )
     if ( g.wld.store.faces = 0 ) then sys_error "0x0039, no room for the faces"
 
     '' Hands the descriptor over. NOT ceremony: this is what takes
@@ -376,7 +376,7 @@ sub mod_load_faces ( _
     if ( fileOpen%( f, "faces.pag", F4READ ) = 0 ) then
         sys_error "0x003A, faces.pag missing"
     end if
-    if ( uglArrLoad( f, g.wld.store.faces ) = 0 ) then
+    if ( uglArrLoad%( f, g.wld.store.faces ) = 0 ) then
         fileClose f
         sys_error "0x003B, faces.pag short or unreadable"
     end if
@@ -387,7 +387,7 @@ sub mod_load_faces ( _
     '' the descriptor at the entire block and every subscript works from
     '' here on with no further calls.
     ''
-    mapped = uglArrMap( g.wld.store.faces, faces(), 0, 0 )
+    mapped = uglArrMap&( g.wld.store.faces, faces(), 0 )
 
     scr_load_step
 end sub
@@ -603,9 +603,9 @@ sub mod_load_nodes ( _
     '' It still gets the tree out of BASIC's far heap, which is what FRE(-1)
     '' measures; memAlloc takes it from DOS (upper memory when there is
     '' room), not from the heap the BSP arrays compete for.
-    g.wld.store.nodes = uglArrNew( UGL.MEM, len( nodes(0) ), g.wld.count.nodes )
+    g.wld.store.nodes = uglArrNew&( UGL.MEM, len( nodes(0) ), g.wld.count.nodes, 0 )
     if ( g.wld.store.nodes = 0 ) then
-        g.wld.store.nodes = uglArrNew( UGL.EMS, len( nodes(0) ), g.wld.count.nodes )
+        g.wld.store.nodes = uglArrNew&( UGL.EMS, len( nodes(0) ), g.wld.count.nodes, PAGE_SLOT )
     end if
     if ( g.wld.store.nodes = 0 ) then sys_error "0x0030, no room for the node tree"
 
@@ -623,7 +623,7 @@ sub mod_load_nodes ( _
     if ( fileOpen%( f, "nodes.pag", F4READ ) = 0 ) then
         sys_error "0x0031, nodes.pag missing"
     end if
-    if ( uglArrLoad( f, g.wld.store.nodes ) = 0 ) then
+    if ( uglArrLoad%( f, g.wld.store.nodes ) = 0 ) then
         fileClose f
         sys_error "0x0032, nodes.pag short or unreadable"
     end if
@@ -634,7 +634,7 @@ sub mod_load_nodes ( _
     '' the descriptor at the entire block and every subscript works from
     '' here on with no further calls.
     ''
-    mapped = uglArrMap( g.wld.store.nodes, nodes(), 0, 0 )
+    mapped = uglArrMap&( g.wld.store.nodes, nodes(), 0 )
 
     scr_load_step
 end sub
