@@ -146,7 +146,8 @@ sub vid_update ( _
     '' path is the odd one: pressing a key had to wait for a blit.
     ''
     if ( g.env.use_paging = false ) then
-        uglPut g.env.h_video_dc, g.env.view_x, g.env.view_y, g.env.h_back_bdc
+        uglPutScl g.env.h_video_dc, g.env.view_x, g.env.view_y, _
+                  g.env.view_scale, g.env.view_scale, g.env.h_back_bdc
     else
         uglSetVisPage page
         uglSetWrkPage (page+1) mod g.env.pages

@@ -182,7 +182,8 @@ sub com_parse_config ( _
                       page_flag or usepg_flag or clear_flag or cminp_flag or cmmde_flag or _
                       fov_flag or sound_flag
     
-    dim flags as integer   
+    dim flags as integer
+    dim vscale as integer   
     dim raw_line as string
     dim line_num as integer
     dim strm(50) as string
@@ -302,11 +303,27 @@ sub com_parse_config ( _
     if ( g.env.x_res > g.env.scr_x_res ) then g.env.x_res = g.env.scr_x_res
     if ( g.env.y_res > g.env.scr_y_res ) then g.env.y_res = g.env.scr_y_res
     
-    '' Where the view lands on the screen, and how big. Unscaled it is
-    '' its own size, one backbuffer pixel to one screen pixel.
-    
-    g.env.view_w = g.env.x_res
-    g.env.view_h = g.env.y_res
+    '' The largest whole-number multiple of the backbuffer that still
+    '' fits the screen on both axes -- a fractional one would need
+    '' uglPutFit or a scratch-buffer resample to stay correct, and a
+    '' non-integer scale is also the one thing that visibly smears
+    '' straight edges. \ truncates, so this never rounds up past the
+    '' screen.
+    ''
+    vscale = g.env.scr_x_res \ g.env.x_res
+    if ( (g.env.scr_y_res \ g.env.y_res) < vscale ) then
+        vscale = g.env.scr_y_res \ g.env.y_res
+    end if
+    if ( vscale < 1 ) then vscale = 1
+    g.env.view_scale = vscale
+
+    '' Where the view lands on the screen, and how big. Scaled or not,
+    '' this is the SAME centring formula -- view_w/h already carry the
+    '' scale, so the ratio to x_res/y_res that the projection's aspect
+    '' depends on is unchanged.
+
+    g.env.view_w = g.env.x_res * vscale
+    g.env.view_h = g.env.y_res * vscale
     g.env.view_x = (g.env.scr_x_res - g.env.view_w) \ 2
     g.env.view_y = (g.env.scr_y_res - g.env.view_h) \ 2
 
