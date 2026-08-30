@@ -1617,210 +1617,25 @@ sub sb_dump ( _
     print "dumpsurf: face"; face; "mip"; mip; "->"; pw; "x"; ph
 end sub
 
-''::::::::::
-sub sb_build ( _
-    g as Game, _
-    byval dc as long, _
-    byval tex as long, _
-    byval face as integer, _
-    byval mip as integer, _
-    byval sw as integer, _
-    byval sh as integer, _
-    tri_buffer() as Face, _
-    tex_inf_buff() as TexInfo, _
-    gv_buf() as integer, _
-    mip_buff_inf() as MipTex, _
-    pln_buffer() as Plane _
-)
-    dim mt as long
-
-    '' Counted here rather than at the call site: this IS the build, so the
-    '' counter cannot drift away from the thing it counts.
+''
+'' sb_build now lives in src/sb_build.c, compiled with bcc and linked in
+'' under this same name -- see r_walk.c's own header for why (BASIC's
+'' compiled code loses to a static-near C helper by roughly half on this
+'' compiler). sc_note_build and sc_note_dlit below are the only pieces
+'' left here: sc_builds/sc_tbuilds/sc_dlit are private to this module,
+'' read by sc_stats, so the counters themselves stay BASIC-owned and the
+'' C code just calls these to bump them.
+''
+'' Kept as an EXTERNAL declare only -- see git history for this file for
+'' the original BASIC body, if this ever needs reverting or comparing.
+''
+sub sc_note_build ( )
     sc_builds  = sc_builds + 1
     sc_tbuilds = sc_tbuilds + 1
+end sub
 
-
-    dim au as long, av as long, du as long, dv as long
-    dim aw as integer, msk as integer
-    dim lmw as integer, lmh as integer
-    dim lmx as long, lmy as integer, lmp as long
-    dim tms as integer, tmt as integer
-    dim o as long
-    dim mi as integer, recip as single
-    dim sbp as SurfBuild
-    dim lseg as long, lofs16 as long
-    dim style as integer, sval as integer, scaled as integer
-    dim lrow as long, srow as long, li as integer, lv as long
-    dim ls_out as string
-    dim pl as Plane, pdist as single, dlit as integer
-    dim impx as single, impy as single, impz as single
-    dim tinfo as integer, locs as single, loct as single
-    dim lx as integer, ly as integer
-
-    aw = 64 \ (2 ^ mip)
-    msk = aw - 1
-    mi = tex_inf_buff( tri_buffer(face).tex_info_id ).mip_tex
-
-    ''
-    '' Out of the record d_draw_faces already fetched, NOT out of the
-    '' window it came from. PAGE_SLOT does not still hold that page by the
-    '' time a build runs -- something between the fetch and here remaps it,
-    '' and the header read back as zeros, which hangs uglBuildSurf on a 0x0
-    '' luxel grid. The copy is the only safe source, and it is free.
-    ''
-    lmy = gv_buf(GEOM_LMOFS)            '' atlas scanline, -1 if unlit
-    lmx = clng( gv_buf(GEOM_LMOFS + 1) ) and 65535&
-    tms = gv_buf(GEOM_LMOFS + 2)
-    tmt = gv_buf(GEOM_LMOFS + 3)
-    lmw = gv_buf(GEOM_LMOFS + 4)
-    lmh = gv_buf(GEOM_LMOFS + 5)
-
-    ''
-    '' The luxels live in one EMS atlas dc. mod_lm_map hands back the face's
-    '' scanline and this points at the rect inside it; uglBuildSurf's own
-    '' texture and destination go to slots 0 and 1 without disturbing it.
-    ''
-    '' An unlit face has no rect at all. It used to compute a pointer from
-    '' the -1 sentinel and read whatever that landed on; point it at one
-    '' flat luxel instead, so its surface comes out evenly lit rather than
-    '' lit by whatever was in memory.
-    ''
-    if ( lmy < 0 ) then
-        lseg   = clng( varseg( lm_flat(0) ) )
-        lofs16 = clng( varptr( lm_flat(0) ) ) and 65535&
-        lmw    = 1
-        lmh    = 1
-    else
-        lmp = mod_lm_map ( g, lmy )
-        lseg   = clng( sb_seg( lmp ) )
-        lofs16 = (lmp and 65535&) + lmx
-
-        ''
-        '' A steady style (LS_NEUTRAL, style 0 on every map so far) needs
-        '' nothing more than the compare below -- one call and one integer
-        '' check, on the path every lit face already takes. Only a style
-        '' whose CURRENT value differs from what the compiler baked for
-        '' takes the copy-and-scale detour, and only if it fits the
-        '' scratch buffer; a grid that somehow doesn't is drawn unscaled
-        '' rather than overrun or dropped.
-        ''
-        style = gv_buf(GEOM_LMOFS + 6) and 255
-        sval  = ls_value( style )
-
-        ''
-        '' The dynamic light's perpendicular distance to this face's own
-        '' PLANE, and where it projects onto that plane -- both properties
-        '' of the plane record itself, not of which side a face uses it
-        '' from, so tri_buffer(face).side never enters either line. Both
-        '' the light's position and pl.norm/pl.dist are BSP space, Z-up,
-        '' the one thing PlayerState.pos already documents and the only
-        '' space TexInfo.vecs/vect understand -- unlike r_cam_plane_dist's
-        '' Y-up point, nothing here gets an axis swap.
-        ''
-        pl = pln_buffer( tri_buffer(face).plane_id )
-        pdist = g.rdr.dlight.pos.x * pl.norm.x + _
-                g.rdr.dlight.pos.y * pl.norm.y + _
-                g.rdr.dlight.pos.z * pl.norm.z - pl.dist
-        dlit = ( abs( pdist ) < g.rdr.dlight.radius )
-        if ( dlit ) then
-            sc_dlit = sc_dlit + 1
-            impx = g.rdr.dlight.pos.x - pdist * pl.norm.x
-            impy = g.rdr.dlight.pos.y - pdist * pl.norm.y
-            impz = g.rdr.dlight.pos.z - pdist * pl.norm.z
-            tinfo = tri_buffer(face).tex_info_id
-            locs = impx*tex_inf_buff(tinfo).vecs(0) + impy*tex_inf_buff(tinfo).vecs(1) + _
-                   impz*tex_inf_buff(tinfo).vecs(2) + tex_inf_buff(tinfo).vecs(3)
-            loct = impx*tex_inf_buff(tinfo).vect(0) + impy*tex_inf_buff(tinfo).vect(1) + _
-                   impz*tex_inf_buff(tinfo).vect(2) + tex_inf_buff(tinfo).vect(3)
-        end if
-
-        if ( (sval <> LS_NEUTRAL or dlit) and lmw * lmh <= len( ls_scratch ) ) then
-            ''
-            '' memCopy lands the raw rows in ls_scratch, tight (no atlas
-            '' padding); the transform pass then reads it back with mid$
-            '' and rebuilds it by concatenation rather than a mid$
-            '' assignment -- LSET-style in-place mid$ has no precedent
-            '' anywhere in this codebase, and a whole-string reassignment
-            '' does, for the same reason ls_tab(i).pattern is set that way.
-            ''
-            srow = lseg * 65536& + lofs16
-            lrow = clng( varseg( ls_scratch ) ) * 65536& + _
-                   (clng( varptr( ls_scratch ) ) and 65535&)
-            for li = 0 to lmh - 1
-                memCopy lrow, srow, clng( lmw )
-                srow = srow + sb_pot( lmw )
-                lrow = lrow + lmw
-            next li
-            ls_out = ""
-            for li = 1 to lmw * lmh
-                lv = clng( asc( mid$( ls_scratch, li, 1 ) ) )
-                if ( sval <> LS_NEUTRAL ) then lv = ls_scale_byte( lv, sval )
-                if ( dlit ) then
-                    ''
-                    '' li is 1-based row-major; lx/ly are this luxel's
-                    '' column/row, and tms+lx*16+8 / tmt+ly*16+8 are its
-                    '' centre in the SAME texel-space units locs/loct are
-                    '' already in -- the same 16-texels-per-luxel constant
-                    '' d_poly.bas uses to go the other way.
-                    ''
-                    lx = (li - 1) mod lmw
-                    ly = (li - 1) \ lmw
-                    lv = ls_add_dlight( lv, pdist, _
-                                        locs - (tms + lx*16 + 8), _
-                                        loct - (tmt + ly*16 + 8), _
-                                        g.rdr.dlight.radius )
-                end if
-                ls_out = ls_out + chr$( lv )
-            next li
-            ls_scratch = ls_out
-            lseg   = clng( varseg( ls_scratch ) )
-            lofs16 = clng( varptr( ls_scratch ) ) and 65535&
-            scaled = -1
-        end if
-    end if
-
-    '' atlas texels per surface texel, 16.16. wdth is 1/origW already.
-    recip = mip_buff_inf(mi).wdth
-    du = clng( aw * 65536.0 * recip ) * clng(2 ^ mip)
-    recip = mip_buff_inf(mi).hght
-    dv = clng( aw * 65536.0 * recip ) * clng(2 ^ mip)
-
-    au = clng(tms) * (du \ clng(2 ^ mip))
-    av = clng(tmt) * (dv \ clng(2 ^ mip))
-
-    sbp.lmptr = lseg * 65536& + lofs16
-    ''
-    '' Atlas bytes per luxel row. The slot is padded to a power of two in
-    '' each dimension for alignment, so the rows are pot(lmw) apart even
-    '' though only lmw of each is ours -- unless sbp.lmptr is the scratch
-    '' buffer above, which was written tight, lmw bytes per row and no
-    '' padding, so the stride the atlas needs would walk it off the end.
-    ''
-    if ( scaled ) then
-        sbp.lm_stride = clng( lmw )
-    else
-        sbp.lm_stride = clng( sb_pot( lmw ) )
-    end if
-    sbp.cmap_ptr = mod_cm_map( g )
-    sbp.au0 = au
-    sbp.av0 = av
-    sbp.du  = du
-    sbp.dv  = dv
-    sbp.sw  = sw
-    sbp.sh  = sh
-    sbp.lmw = lmw
-    sbp.lmh = lmh
-    '' stp is 2^(4-mip) by construction, so its log2 needs no loop
-    sbp.shft = 4 - mip
-    sbp.msk  = msk
-
-    if ( uglBuildSurf%( dc, tex, _
-                        clng( varseg( sbp ) ) * 65536& + _
-                        (clng( varptr( sbp ) ) and 65535&) ) = 0 ) then
-        '' only a luxel grid too big for the builder's stack buffer gets
-        '' here; leave the surface as it is rather than half-composite it
-    end if
-
+sub sc_note_dlit ( )
+    sc_dlit = sc_dlit + 1
 end sub
 
 

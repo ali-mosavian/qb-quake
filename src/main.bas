@@ -211,6 +211,8 @@ declare function sys_rdtsc ( ) as long
 declare function sys_rdtsc_hz ( ) as single
 '' r_walk.c. Only caller is host_init's startup layout check.
 declare function r_walk_layout_ok ( byval vis_off as long ) as integer
+'' sb_build.c. Only caller is host_init's startup layout check.
+declare function sb_layout_ok ( byval dlight_off as long ) as integer
 declare sub d_init_turb ( )
 declare sub in_init ( _
     g as Game _
@@ -610,6 +612,10 @@ sub host_init ( _
     if ( r_walk_layout_ok( varptr( g.vis ) - varptr( g ) ) = 0 ) then
         sys_error "0x0041, r_walk.c's Game.vis offset is stale"
     end if
+    if ( sb_layout_ok( varptr( g.rdr.dlight ) - varptr( g ) ) = 0 ) then
+        sys_error "0x0042, sb_build.c's Game.rdr.dlight offset is stale"
+    end if
+
     '' TIMER, not a TMR: tmrInit does not run until inputOpen, the
     '' second-to-last step below, so a TMR counter reads zero for almost
     '' the whole load. TIMER is ~55ms granular, which is fine for phases
@@ -727,6 +733,7 @@ sub host_main ( _
     dim page as integer
     dim frame_no as long
     dim pt0 as single, ptd as single
+    dim pr0 as long, prd as long
     dim benchf as integer
     
     ''
@@ -913,12 +920,25 @@ sub host_main ( _
         end if
 
         in_screenshot_key g, h_dst_dc
-        pt0 = sys_now()
+        ''
+        '' RDTSC, not sys_now: present is one call, ~3-4ms against a
+        '' clock that ticks every ~6.9ms, so a single sys_now sample only
+        '' ever reads as 0 or one whole tick -- the same under-resolution
+        '' problem raster and build already needed RDTSC for, just with
+        '' one event a frame instead of many to sum. Same glitch guard as
+        '' both of those: a negative or implausibly large delta is a
+        '' glitched sample (see sys_rdtsc's own doc comment), discarded
+        '' rather than folded into the mean.
+        ''
+        pr0 = sys_rdtsc()
         vid_update g, h_dst_dc, page
         if ( g.ft.n > 0 ) then
-            ptd = sys_now() - pt0
-            g.pt.present_sum = g.pt.present_sum + ptd
-            if ( ptd > g.pt.present_max ) then g.pt.present_max = ptd
+            prd = sys_rdtsc() - pr0
+            if ( prd >= 0 and prd <= 1000000 ) then
+                ptd = prd / 1000000.0
+                g.pt.present_sum = g.pt.present_sum + ptd
+                if ( ptd > g.pt.present_max ) then g.pt.present_max = ptd
+            end if
         end if
         scr_count_frame g
 
