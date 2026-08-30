@@ -28,6 +28,19 @@ const TURB_AMP#      = 0.125
 const TURB_FREQ#     = 326.0
 const TURB_RATE#     = 40.74
 
+''
+'' One light, following the player -- Quake's own dl_t, minus the parts
+'' this renderer has no emitter for (no rockets, no muzzle flashes). pos
+'' is BSP space, Z-up, the same convention PlayerState.pos already
+'' documents, and the only convention Plane.norm and TexInfo.vecs
+'' understand -- r_cam_plane_dist's inline Y/Z swap is for a Y-up point
+'' and does not apply here.
+''
+type DynLight
+    pos     as Vec3        '' BSP space, Z-up
+    radius  as single       '' brightness added at pos itself, 0 at radius
+end type
+
 type RenderState
     backface    as integer      '' cull toggle
     use_mips     as integer      '' mip toggle
@@ -44,6 +57,7 @@ type RenderState
                                 '' consumer, and putting it here keeps main.bas
                                 '' from having to see every map array to hold a
                                 '' single float.
+    dlight      as DynLight     '' the player-following test light
 end type
 
 '' Raw-index atlases, sized and filled only under -lm: the surface builder

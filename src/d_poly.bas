@@ -121,7 +121,8 @@ declare sub sb_build ( _
     tri_buffer() as Face, _
     tex_inf_buff() as TexInfo, _
     gv_buf() as integer, _
-    mip_buff_inf() as MipTex _
+    mip_buff_inf() as MipTex, _
+    pln_buffer() as Plane _
 )
 
 '$static
@@ -319,6 +320,7 @@ sub d_draw_faces ( _
     dim lm_tms as integer, lm_tmt as integer
     dim lm_extw as integer, lm_exth as integer
     dim lm_stag as integer
+    dim dl_pl as Plane, dl_pdist as single
     dim lm_mip as integer, lm_floor as integer
     dim lm_sw as integer, lm_sh as integer
     dim lm_fw as integer, lm_fh as integer
@@ -508,6 +510,25 @@ sub d_draw_faces ( _
                     '' anything about how styles work.
                     ''
                     lm_stag = ls_epoch( gv_buf(GEOM_LMOFS + 6) and 255 )
+
+                    ''
+                    '' A face the dynamic light can reach must rebuild
+                    '' EVERY frame it stays in range, and once more the
+                    '' frame after it leaves to wash the glow back out --
+                    '' matching it here forces exactly that: the miss
+                    '' happens the instant the face is decided to be a
+                    '' candidate at all, before sc_find ever sees it, so a
+                    '' plain style-epoch match can never paper over it. -1
+                    '' never collides with a real epoch, which is always
+                    '' >= 0, so the frame the light leaves still misses
+                    '' once against the stale -1 this frame wrote, then
+                    '' settles back to matching on the frame after that.
+                    ''
+                    dl_pl = pln_buffer( tri_buffer(i).plane_id )
+                    dl_pdist = g.rdr.dlight.pos.x * dl_pl.norm.x + _
+                               g.rdr.dlight.pos.y * dl_pl.norm.y + _
+                               g.rdr.dlight.pos.z * dl_pl.norm.z - dl_pl.dist
+                    if ( abs( dl_pdist ) < g.rdr.dlight.radius ) then lm_stag = -1
                 end if
             end if
 
@@ -747,7 +768,8 @@ sub d_draw_faces ( _
                         tex_dc = mod_tex_raw( g, mipidx, lm_mip )
                         sb_build g, lm_dc, tex_dc, i, lm_mip, _
                                   2 ^ sc_shift( lm_sw ), 2 ^ sc_shift( lm_sh ), _
-                                  tri_buffer(), tex_inf_buff(), gv_buf(), mip_buff_inf()
+                                  tri_buffer(), tex_inf_buff(), gv_buf(), mip_buff_inf(), _
+                                  pln_buffer()
                     end if
                 end if
 

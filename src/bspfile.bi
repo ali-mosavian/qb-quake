@@ -203,6 +203,7 @@ type CacheStats
     flushes     as long         '' whole-cache flushes over the run
     peak        as long         '' high-water bytes in the cache DC
     total_builds     as long         '' builds over the whole run
+    dlit        as long         '' of those, how many the dynamic light reached
 end type
 
 type CacheSlot
@@ -384,7 +385,7 @@ type Env
                                 '' uglPolyTP instead of fanning each face
                                 '' into triangles. A/B against the proven
                                 '' uglTriTP path.
-    no_z        as integer      '' -noz: skip the depth buffer entirely
+    no_z        as integer      '' -noz: skip the depth buffer entirely
     cam_path     as integer      '' -campath: fly the A* route from
                                 '' campath.bin instead of standing still.
                                 '' The old bench rendered ONE viewpoint, so

@@ -88,7 +88,8 @@ declare sub sb_dump ( _
     tri_buffer() as Face, _
     tex_inf_buff() as TexInfo, _
     gv_buf() as integer, _
-    mip_buff_inf() as MipTex _
+    mip_buff_inf() as MipTex, _
+    pln_buffer() as Plane _
 )
 declare sub sb_build ( _
     g as Game, _
@@ -101,7 +102,8 @@ declare sub sb_build ( _
     tri_buffer() as Face, _
     tex_inf_buff() as TexInfo, _
     gv_buf() as integer, _
-    mip_buff_inf() as MipTex _
+    mip_buff_inf() as MipTex, _
+    pln_buffer() as Plane _
 )
 declare function sc_shift ( byval v as integer ) as integer
 declare sub sc_init ( _
@@ -283,6 +285,7 @@ dim shared sc_bpeak as integer
 dim shared sc_live as long
 dim shared sc_evict as long
 dim shared sc_tbuilds as long
+dim shared sc_dlit as long           '' builds a dynamic light actually reached
 
 dim shared sc_hnd as long               '' the DC that owns every surface's bytes
 dim shared sc_next as long              '' bump pointer within it
@@ -477,6 +480,31 @@ function ls_scale_byte ( byval raw as integer, byval sval as integer ) as intege
 end function
 
 ''::::::::::
+'' name: ls_add_dlight
+'' desc: One luxel, brightened by a dynamic light. pdist, ts and tt are
+''       all texel-unit distances -- the perpendicular one to the face's
+''       plane, the other two lateral, from the light's own projection to
+''       this luxel's centre -- combined the way Quake's R_AddDynamicLights
+''       does, by treating a texel as a world unit. Neither map on hand
+''       has a way to see this live, so ls_selftest is what proves it.
+''::::::::::
+function ls_add_dlight ( _
+    byval raw as integer, _
+    byval pdist as single, _
+    byval ts as single, _
+    byval tt as single, _
+    byval radius as single _
+) as integer
+    dim d as single, contrib as single, v as long
+    d = sqr( pdist*pdist + ts*ts + tt*tt )
+    contrib = radius - d
+    if ( contrib < 0.0 ) then contrib = 0.0
+    v = clng( raw ) + clng( contrib )
+    if ( v > 255 ) then v = 255
+    ls_add_dlight = v
+end function
+
+''::::::::::
 '' name: ls_selftest
 '' desc: Proves the animation loop, not the map: a synthetic 2-char
 ''       pattern must toggle value and bump epoch exactly once per
@@ -540,6 +568,21 @@ function ls_selftest () as integer
     if ( ls_scale_byte( 200, LS_NEUTRAL * 2 ) <> 255 ) then ls_selftest = -10 : exit function
     '' off (style value 0) goes fully dark
     if ( ls_scale_byte( 200, 0 ) <> 0 ) then ls_selftest = -11 : exit function
+
+    ''
+    '' ls_add_dlight: the other thing neither map exercises for real.
+    ''
+    '' dead centre: full radius added
+    if ( ls_add_dlight( 0, 0.0, 0.0, 0.0, 200.0 ) <> 200 ) then ls_selftest = -12 : exit function
+    '' exactly at the edge: nothing added, raw passes through
+    if ( ls_add_dlight( 50, 200.0, 0.0, 0.0, 200.0 ) <> 50 ) then ls_selftest = -13 : exit function
+    '' past the edge: still nothing added, never negative
+    if ( ls_add_dlight( 50, 300.0, 0.0, 0.0, 200.0 ) <> 50 ) then ls_selftest = -14 : exit function
+    '' the three components combine by distance, not by summing separately
+    '' -- a 3-4-5 triangle, so this is exact, not an approximation
+    if ( ls_add_dlight( 0, 0.0, 3.0, 4.0, 10.0 ) <> 5 ) then ls_selftest = -15 : exit function
+    '' clamps at 255, does not wrap
+    if ( ls_add_dlight( 200, 0.0, 0.0, 0.0, 200.0 ) <> 255 ) then ls_selftest = -16 : exit function
 
     ls_init                  '' leave the table as any real caller expects it
     ls_selftest = 1
@@ -816,6 +859,7 @@ sub sc_init ( _
     sc_live = 0
     sc_evict = 0
     sc_tbuilds = 0
+    sc_dlit = 0
 
     redim sc_slot(g.wld.count.faces-1) as CacheSlot
     redim sc_desc(SC_NCLS-1) as long
@@ -1501,7 +1545,8 @@ sub sb_dump ( _
     tri_buffer() as Face, _
     tex_inf_buff() as TexInfo, _
     gv_buf() as integer, _
-    mip_buff_inf() as MipTex _
+    mip_buff_inf() as MipTex, _
+    pln_buffer() as Plane _
 )
     dim tex_dc as long
     dim mt as long
@@ -1554,7 +1599,7 @@ sub sb_dump ( _
 
     tex_dc = mod_tex_raw( g, mi, mip )
     sb_build g, dc, tex_dc, face, mip, pw, ph, tri_buffer(), _
-              tex_inf_buff(), gv_buf(), mip_buff_inf()
+              tex_inf_buff(), gv_buf(), mip_buff_inf(), pln_buffer()
 
     fh = freefile
     open "surfdump.bin" for binary as #fh
@@ -1584,7 +1629,8 @@ sub sb_build ( _
     tri_buffer() as Face, _
     tex_inf_buff() as TexInfo, _
     gv_buf() as integer, _
-    mip_buff_inf() as MipTex _
+    mip_buff_inf() as MipTex, _
+    pln_buffer() as Plane _
 )
     dim mt as long
 
@@ -1606,6 +1652,10 @@ sub sb_build ( _
     dim style as integer, sval as integer, scaled as integer
     dim lrow as long, srow as long, li as integer, lv as long
     dim ls_out as string
+    dim pl as Plane, pdist as single, dlit as integer
+    dim impx as single, impy as single, impz as single
+    dim tinfo as integer, locs as single, loct as single
+    dim lx as integer, ly as integer
 
     aw = 64 \ (2 ^ mip)
     msk = aw - 1
@@ -1656,14 +1706,42 @@ sub sb_build ( _
         ''
         style = gv_buf(GEOM_LMOFS + 6) and 255
         sval  = ls_value( style )
-        if ( sval <> LS_NEUTRAL and lmw * lmh <= len( ls_scratch ) ) then
+
+        ''
+        '' The dynamic light's perpendicular distance to this face's own
+        '' PLANE, and where it projects onto that plane -- both properties
+        '' of the plane record itself, not of which side a face uses it
+        '' from, so tri_buffer(face).side never enters either line. Both
+        '' the light's position and pl.norm/pl.dist are BSP space, Z-up,
+        '' the one thing PlayerState.pos already documents and the only
+        '' space TexInfo.vecs/vect understand -- unlike r_cam_plane_dist's
+        '' Y-up point, nothing here gets an axis swap.
+        ''
+        pl = pln_buffer( tri_buffer(face).plane_id )
+        pdist = g.rdr.dlight.pos.x * pl.norm.x + _
+                g.rdr.dlight.pos.y * pl.norm.y + _
+                g.rdr.dlight.pos.z * pl.norm.z - pl.dist
+        dlit = ( abs( pdist ) < g.rdr.dlight.radius )
+        if ( dlit ) then
+            sc_dlit = sc_dlit + 1
+            impx = g.rdr.dlight.pos.x - pdist * pl.norm.x
+            impy = g.rdr.dlight.pos.y - pdist * pl.norm.y
+            impz = g.rdr.dlight.pos.z - pdist * pl.norm.z
+            tinfo = tri_buffer(face).tex_info_id
+            locs = impx*tex_inf_buff(tinfo).vecs(0) + impy*tex_inf_buff(tinfo).vecs(1) + _
+                   impz*tex_inf_buff(tinfo).vecs(2) + tex_inf_buff(tinfo).vecs(3)
+            loct = impx*tex_inf_buff(tinfo).vect(0) + impy*tex_inf_buff(tinfo).vect(1) + _
+                   impz*tex_inf_buff(tinfo).vect(2) + tex_inf_buff(tinfo).vect(3)
+        end if
+
+        if ( (sval <> LS_NEUTRAL or dlit) and lmw * lmh <= len( ls_scratch ) ) then
             ''
             '' memCopy lands the raw rows in ls_scratch, tight (no atlas
-            '' padding); the scale pass then reads it back with mid$ and
-            '' rebuilds it by concatenation rather than a mid$ assignment
-            '' -- LSET-style in-place mid$ has no precedent anywhere in
-            '' this codebase, and a whole-string reassignment does, for
-            '' the same reason ls_tab(i).pattern is set that way.
+            '' padding); the transform pass then reads it back with mid$
+            '' and rebuilds it by concatenation rather than a mid$
+            '' assignment -- LSET-style in-place mid$ has no precedent
+            '' anywhere in this codebase, and a whole-string reassignment
+            '' does, for the same reason ls_tab(i).pattern is set that way.
             ''
             srow = lseg * 65536& + lofs16
             lrow = clng( varseg( ls_scratch ) ) * 65536& + _
@@ -1675,7 +1753,23 @@ sub sb_build ( _
             next li
             ls_out = ""
             for li = 1 to lmw * lmh
-                lv = ls_scale_byte( asc( mid$( ls_scratch, li, 1 ) ), sval )
+                lv = clng( asc( mid$( ls_scratch, li, 1 ) ) )
+                if ( sval <> LS_NEUTRAL ) then lv = ls_scale_byte( lv, sval )
+                if ( dlit ) then
+                    ''
+                    '' li is 1-based row-major; lx/ly are this luxel's
+                    '' column/row, and tms+lx*16+8 / tmt+ly*16+8 are its
+                    '' centre in the SAME texel-space units locs/loct are
+                    '' already in -- the same 16-texels-per-luxel constant
+                    '' d_poly.bas uses to go the other way.
+                    ''
+                    lx = (li - 1) mod lmw
+                    ly = (li - 1) \ lmw
+                    lv = ls_add_dlight( lv, pdist, _
+                                        locs - (tms + lx*16 + 8), _
+                                        loct - (tmt + ly*16 + 8), _
+                                        g.rdr.dlight.radius )
+                end if
                 ls_out = ls_out + chr$( lv )
             next li
             ls_scratch = ls_out
@@ -1774,6 +1868,7 @@ sub sc_stats ( s as CacheStats )
     s.flushes = sc_flushes
     s.peak    = sc_peak
     s.total_builds = sc_tbuilds
+    s.dlit = sc_dlit
 end sub
 
 ''::::::::::
