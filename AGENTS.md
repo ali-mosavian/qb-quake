@@ -483,6 +483,37 @@ abandoned texture cut. `model.bas` survives the same shape only by accident —
 `txcBuffer` is `REDIM`med, and `clpBuffer` is read solely through
 `len( clpBuffer(0) )`, which the compiler folds for a fixed-size UDT.
 
+**This trap does not always "vanish in seconds with empty stdout" -- it can
+look exactly like a slow, nondeterministic hang instead**, which is the more
+dangerous shape because it reads as a completely different bug class.
+`d_surf.bas`'s light-style table (`dim shared ls_tab(LS_MAXSTYLE) as
+LightStyle`, a small fixed-size array, under `'$DYNAMIC`, in a non-main
+module) compiled clean and then hung on every run — not a crash, sustained
+90-100% CPU for minutes, `run.out` and `error.log` both empty. The hang
+point varied: sometimes inside the first few loop iterations, sometimes two
+frames in, never the same place twice. That variability was the tell once
+recognised: every write was landing in whatever happened to occupy that
+segment of the far heap at the time, which differs run to run, so the
+FIRST thing corrupted (and therefore where the symptom eventually surfaced)
+differs too. Genuine logic bugs give a repeatable failure point; this gave
+a different one on every run.
+
+Two false leads cost real time before the allocation was even suspected:
+`byval` on a `string` parameter (no precedent anywhere in this codebase,
+genuinely untested territory, but changing it made no difference), and a
+string-literal argument to a byref string parameter (also no difference).
+`sys_mem_mark`'s existing `memtrace.txt` — already open-appending a line
+per load phase, already proven safe — is what actually localised it: it
+narrowed the hang to strictly between the `mapclose` and `surfcache` marks
+without adding any new instrumentation, and a probe between `sc_init` and
+`ls_init` placed the fault inside `ls_init` with certainty. Only then did
+rereading `'$STATIC`/`'$DYNAMIC` in this file turn up the real cause.
+
+Fixed the same way `sc_slot()` right next to it already does it: declare
+`ls_tab()` empty and `redim ls_tab(LS_MAXSTYLE) as LightStyle` as the first
+line of `ls_init`, a SUB, which runs wherever it is called from — unlike
+the bare module-level `DIM` it replaced, which only ever ran in `main.bas`.
+
 Together with the rule above it, that is the pair to watch when moving code
 between modules: **storage that silently stops existing.** Both link cleanly
 and fail at run time.

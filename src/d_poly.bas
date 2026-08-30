@@ -88,7 +88,8 @@ declare function sc_find ( _
     byval face as integer, _
     byval mip as integer, _
     byval w as integer, _
-    byval h as integer _
+    byval h as integer, _
+    byval stag as integer _
 )
 declare function sc_mipfloor ( _
     byval extw as integer, _
@@ -98,6 +99,7 @@ declare function host_z_on ( ) as integer
 declare function sc_held ( byval face as integer ) as integer
 declare function sc_ready ( ) as integer
 declare function sc_shift ( byval v as integer ) as integer
+declare function ls_epoch ( byval style as integer ) as integer
 declare function sc_alloc ( _
     g as Game, _
     byval face as integer, _
@@ -105,7 +107,8 @@ declare function sc_alloc ( _
     byval w as integer, _
     byval h as integer, _
     byval fw as integer, _
-    byval fh as integer _
+    byval fh as integer, _
+    byval stag as integer _
 )
 declare sub sb_build ( _
     g as Game, _
@@ -315,6 +318,7 @@ sub d_draw_faces ( _
     dim lm_on as integer, lm_use as integer
     dim lm_tms as integer, lm_tmt as integer
     dim lm_extw as integer, lm_exth as integer
+    dim lm_stag as integer
     dim lm_mip as integer, lm_floor as integer
     dim lm_sw as integer, lm_sh as integer
     dim lm_fw as integer, lm_fh as integer
@@ -494,6 +498,16 @@ sub d_draw_faces ( _
                     lm_extw = (gv_buf(GEOM_LMOFS + 4) - 1) * 16
                     lm_exth = (gv_buf(GEOM_LMOFS + 5) - 1) * 16
                     if ( lm_extw > 0 and lm_exth > 0 ) then lm_on = -1
+                    ''
+                    '' The style id the baked plane belongs to -- mkassets
+                    '' packs it as the low byte of styles01 (GEOM_LMOFS+6)
+                    '' and has all along; nothing read it until now. The
+                    '' epoch is looked up per face rather than cached,
+                    '' which costs one array read and is what lets sc_find
+                    '' notice a style changed without this module knowing
+                    '' anything about how styles work.
+                    ''
+                    lm_stag = ls_epoch( gv_buf(GEOM_LMOFS + 6) and 255 )
                 end if
             end if
 
@@ -715,9 +729,9 @@ sub d_draw_faces ( _
                 if ( lm_fw < 1 ) then lm_fw = 1
                 if ( lm_fh < 1 ) then lm_fh = 1
 
-                lm_dc = sc_find( i, lm_mip, lm_sw, lm_sh )
+                lm_dc = sc_find( i, lm_mip, lm_sw, lm_sh, lm_stag )
                 if ( lm_dc = 0 ) then
-                    lm_dc = sc_alloc ( g, i, lm_mip, lm_sw, lm_sh, lm_fw, lm_fh )
+                    lm_dc = sc_alloc ( g, i, lm_mip, lm_sw, lm_sh, lm_fw, lm_fh, lm_stag )
                     if ( lm_dc <> 0 ) then
                         ''
                         '' Build the DC's WHOLE padded extent, not just the
@@ -844,7 +858,7 @@ poly_done:
 
 next_face:
         next ti
-    next mi        
+    next mi
 end sub
 
 

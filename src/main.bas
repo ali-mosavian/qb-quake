@@ -281,6 +281,9 @@ declare function mod_lm_got ( _
 declare function sc_selftest ( _
     g as Game _
 ) as integer
+declare sub ls_init ()
+declare sub ls_animate ( byval anim_time as single )
+declare function ls_selftest () as integer
 declare sub mod_close ( _
     g as Game _
 )
@@ -632,6 +635,7 @@ sub host_init ( _
     sys_mem_mark "mapclose"
 
     sc_init g
+    ls_init
     sys_mem_mark "surfcache"
 
     t_tex = timer
@@ -1193,6 +1197,9 @@ sub host_tick ( _
     '' map time, which drives every texture animation
     g.rdr.anim_time = g.rdr.anim_time + dt
 
+    '' light styles: fixed 10 Hz off the same clock, not framerate
+    ls_animate g.rdr.anim_time
+
 end sub
 
 
@@ -1379,6 +1386,7 @@ sub host_bench_report ( _
     print #benchf, "sc_evict " + ltrim$(str$( scs.evict ))
     print #benchf, "sc_flush " + ltrim$(str$( scs.flushes ))
     print #benchf, "sc_test " + ltrim$(str$( sc_selftest( g ) ))
+    print #benchf, "ls_test " + ltrim$(str$( ls_selftest() ))
     print #benchf, "peak_z " + ltrim$(str$( g.pl.peak_z ))
     print #benchf, "ticks " + ltrim$(str$( host_ticks ))
     ''
