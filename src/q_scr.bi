@@ -177,6 +177,33 @@ type PhaseTimes
     ''
     raster_sum  as single
     raster_max  as single
+
+    ''
+    '' Also nested inside draw, sibling to raster_sum: sc_alloc plus, on a
+    '' miss, sb_build -- the rebuild path sc_find's own lookup skips. Only
+    '' a few faces rebuild in a given frame, so like raster this needs
+    '' sys_rdtsc rather than sys_now: most frames' build cost is a small
+    '' fraction of one ~6.9ms tick. draw_sum - raster_sum - build_sum is
+    '' what is left: sc_held/sc_find lookups and per-face UV setup.
+    ''
+    build_sum   as single
+    build_max   as single
+
+    ''
+    '' Nested inside cull, not subtracted from it, same reasoning as
+    '' draw/raster above: cull_sum times r_set_frustum plus the whole of
+    '' r_draw_world, and these two time r_draw_world's own two phases on
+    '' the same sys_now clock, so they read directly against cull_sum.
+    '' mark is r_mark_leaves (PVS extract -- usually one exit test, a
+    '' real cost only the frame the camera crosses into a new leaf); walk
+    '' is r_recursive_world_node, the tree traversal, which runs in full
+    '' every frame regardless. cull_sum - mark_sum - walk_sum is frustum
+    '' extraction and the two lookat/concat matrix builds.
+    ''
+    mark_sum    as single
+    mark_max    as single
+    walk_sum    as single
+    walk_max    as single
 end type
 
 '' The path itself stays loose: arrays cannot be TYPE members.

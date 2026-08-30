@@ -1424,12 +1424,24 @@ sub host_bench_report ( _
         print #benchf, "pt_present_max " + ltrim$(str$( g.pt.present_max * 1000.0 ))
         ''
         '' Nested inside pt_draw, not subtracted from it -- see PhaseTimes
-        '' in q_scr.bi. pt_draw_mean minus this is cache lookup and,
-        '' on a miss, sb_build.
+        '' in q_scr.bi. pt_draw_mean minus these two is cache lookup and
+        '' per-face UV setup: whatever neither rebuilding nor rasterising
+        '' accounts for.
         ''
         print #benchf, "pt_raster_mean " + ltrim$(str$( (g.pt.raster_sum / g.ft.n) * 1000.0 ))
         print #benchf, "pt_raster_max " + ltrim$(str$( g.pt.raster_max * 1000.0 ))
+        print #benchf, "pt_build_mean " + ltrim$(str$( (g.pt.build_sum / g.ft.n) * 1000.0 ))
+        print #benchf, "pt_build_max " + ltrim$(str$( g.pt.build_max * 1000.0 ))
         print #benchf, "rdtsc_hz " + ltrim$(str$( sys_rdtsc_hz() ))
+        ''
+        '' Nested inside pt_cull, not subtracted from it -- see PhaseTimes
+        '' in q_scr.bi. pt_cull_mean minus these two is frustum extraction
+        '' and the two lookat/concat matrix builds.
+        ''
+        print #benchf, "pt_mark_mean " + ltrim$(str$( (g.pt.mark_sum / g.ft.n) * 1000.0 ))
+        print #benchf, "pt_mark_max " + ltrim$(str$( g.pt.mark_max * 1000.0 ))
+        print #benchf, "pt_walk_mean " + ltrim$(str$( (g.pt.walk_sum / g.ft.n) * 1000.0 ))
+        print #benchf, "pt_walk_max " + ltrim$(str$( g.pt.walk_max * 1000.0 ))
     end if
     print #benchf, "polys " + ltrim$(str$( g.rdr.polys ))
     print #benchf, "tris " + ltrim$(str$( g.rdr.tris ))

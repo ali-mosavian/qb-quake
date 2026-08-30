@@ -331,6 +331,8 @@ sub d_draw_faces ( _
     dim lm_su as single, lm_sv as single
     dim rt0 as long, rast_cyc as long, rdt as single
     dim rface as long
+    dim bt0 as long, build_cyc as long, bdt as single
+    dim bface as long
 
    ''
    '' Draw nodes
@@ -358,6 +360,7 @@ sub d_draw_faces ( _
     if ( g.env.use_lm and g.rdr.lightmap and sc_ready <> 0 ) then lm_use = -1
 
     rast_cyc = 0
+    build_cyc = 0
 
     for mi = 0 to ord_count-1
         m = order_list(mi)
@@ -757,6 +760,7 @@ sub d_draw_faces ( _
 
                 lm_dc = sc_find( i, lm_mip, lm_sw, lm_sh, lm_stag )
                 if ( lm_dc = 0 ) then
+                    bt0 = sys_rdtsc()
                     lm_dc = sc_alloc ( g, i, lm_mip, lm_sw, lm_sh, lm_fw, lm_fh, lm_stag )
                     if ( lm_dc <> 0 ) then
                         ''
@@ -775,6 +779,16 @@ sub d_draw_faces ( _
                                   2 ^ sc_shift( lm_sw ), 2 ^ sc_shift( lm_sh ), _
                                   tri_buffer(), tex_inf_buff(), gv_buf(), mip_buff_inf(), _
                                   pln_buffer()
+                    end if
+                    ''
+                    '' Same glitch guard as the raster timer below -- see
+                    '' sys_rdtsc's own doc comment. Builds are rare enough
+                    '' per frame that a single discarded sample barely
+                    '' moves the sum, unlike leaving a glitched one in.
+                    ''
+                    bface = sys_rdtsc() - bt0
+                    if ( bface >= 0 and bface <= 1000000 ) then
+                        build_cyc = build_cyc + bface
                     end if
                 end if
 
@@ -919,6 +933,10 @@ next_face:
         rdt = rast_cyc / 1000000.0
         g.pt.raster_sum = g.pt.raster_sum + rdt
         if ( rdt > g.pt.raster_max ) then g.pt.raster_max = rdt
+
+        bdt = build_cyc / 1000000.0
+        g.pt.build_sum = g.pt.build_sum + bdt
+        if ( bdt > g.pt.build_max ) then g.pt.build_max = bdt
     end if
 end sub
 

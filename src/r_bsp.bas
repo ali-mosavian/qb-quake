@@ -158,6 +158,10 @@ declare sub r_recursive_world_node ( _
     fru() as DiskPlane _
 )
 
+'' sys.bas. Only caller in this module is r_draw_world, timing its own
+'' two sub-phases -- narrowest place that can see it.
+declare function sys_now ( ) as single
+
 
 
 ''::::::::::::
@@ -404,6 +408,7 @@ sub r_draw_world ( _
     bit_array() as integer _
 )
     dim i as integer
+    dim pt0 as single, ptd as single
     ''
     '' Reset tree state
     ''
@@ -432,9 +437,15 @@ sub r_draw_world ( _
     ''
     '' Extract pvs
     ''
+    pt0 = sys_now()
     r_mark_leaves g, int(models(model).head_node0), campos, nodes(), planes(), bit_array(), _
                    pvs_buffer_b()
-    
+    if ( g.ft.n > 0 ) then
+        ptd = sys_now() - pt0
+        g.pt.mark_sum = g.pt.mark_sum + ptd
+        if ( ptd > g.pt.mark_max ) then g.pt.mark_max = ptd
+    end if
+
     ''
     '' How many brush entities the walk still has to place. Once it is zero
     '' the per-node test below costs nothing.
@@ -447,10 +458,16 @@ sub r_draw_world ( _
     ''
     '' Traverse tree
     ''
+    pt0 = sys_now()
     r_recursive_world_node g, int( models(model).head_node0 ), _
                               g.wld.count.models, models(), brush(), campos, r_ignore_pvs, _
                               nodes(), planes(), lef_buffer(), lfc_buffer(), _
                               pvs_buffer_b(), pflag(), ord(), fru()
+    if ( g.ft.n > 0 ) then
+        ptd = sys_now() - pt0
+        g.pt.walk_sum = g.pt.walk_sum + ptd
+        if ( ptd > g.pt.walk_max ) then g.pt.walk_max = ptd
+    end if
 
     ''
     '' -badorder reproduces what this used to do: every brush entity appended
