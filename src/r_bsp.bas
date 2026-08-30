@@ -276,120 +276,19 @@ end sub
 
 
 
-sub r_recursive_world_node ( _
-    g as Game, _
-    byval nodenr as integer, _
-    byval model_count as long, _
-    models() as Submodel, _
-    brush() as BrushModel, _
-    cpos as u3dVector3f, _
-    byval ign as integer, _
-    nds() as Node, _
-    pln() as Plane, _
-    lef() as Leaf, _
-    lfc() as integer, _
-    pvsb() as integer, _
-    pflag() as integer, _
-    ord() as integer, _
-    fru() as DiskPlane _
-) static
-    dim dp as single
-    dim frst as integer, last as integer, i as integer
-    dim pid as integer, side as integer
-    dim mp as long
-
-    
-    ''
-    '' If bit 15 is set we are at the end of the branch. We
-	'' draw the leaf and go back.
-	''
-	
-	if ( nodenr and &h8000 ) then
-	    '' leaf: `not nodenr` is its index. One map covers bound,
-	    '' lfaceid and lfacenum -- the store pads pages, so a record
-	    '' never straddles one.
-	    
-	    ''
-	    '' Check pvs and bounding volume
-	    ''
-	    if ( (ign or pvsb(not nodenr)) and _
-	         r_cull_box( lef(not nodenr).bound, fru() ) ) then
-	    
-	        frst = lef(not nodenr).lface_id
-	        last = frst+lef(not nodenr).lface_num
-	        
-	        for  i = frst to last-1	            
-	            pflag(lfc(i)) = g.vis.frame_stamp
-	        next i
-	        
-	        
-    	    ''
-    	    '' Put leaf in ordering list
-    	    ''
-    	    ''
-    	    '' A brush entity small enough to fit inside one leaf is drawn
-    	    '' on arrival at that leaf. Anything larger straddles a plane
-    	    '' and is emitted at a node instead, further down.
-    	    ''
-    	    if ( g.vis.ent_left ) then r_emit_entities g, nodenr, model_count, cpos, ign, _
-                                        models(), brush(), nds(), pln(), _
-                                        pvsb(), pflag(), ord(), fru()
-
-    	    g.vis.drw_leafs = g.vis.drw_leafs + 1
-        else 
-            g.vis.cul_leafs = g.vis.cul_leafs + 1
-        end if
-        
-	    exit sub
-    end if    
-    
-
-    '' .bound goes in BY REFERENCE, so r_cull_box reads it straight out of
-    '' the EMS window. That holds only because r_cull_box maps nothing.
-    if ( not r_cull_box( nds(nodenr).bound, fru() ) ) then
-        exit sub
-    end if
-    
-    if ( r_cam_plane_dist( cpos, pln( nds(nodenr).plane_id ) ) >= 0.0 ) then
-        side = 1
-    else
-        side = 0
-    end if
-    
-    if ( side ) then
-    	''
-    	'' We are at the front side of a node. First walk the
-    	'' back nodes, then the front nodes.
-    	''
-    		
-        '' No map here: the one at the top of the sub still holds -- the
-        '' cull and the plane maths between them do not touch the slot.
-        r_recursive_world_node g, nds(nodenr).child1, model_count, models(), brush(), cpos, ign, nds(), pln(), lef(), lfc(), pvsb(), pflag(), ord(), fru()
-        if ( g.vis.ent_left ) then r_emit_entities g, nodenr, model_count, cpos, ign, _
-                                        models(), brush(), nds(), pln(), _
-                                        pvsb(), pflag(), ord(), fru()
-	    ord(g.vis.ord_count) = nodenr
-	    g.vis.ord_count = g.vis.ord_count + 1
-        r_recursive_world_node g, nds(nodenr).child0, model_count, models(), brush(), cpos, ign, nds(), pln(), lef(), lfc(), pvsb(), pflag(), ord(), fru()
-        
-    else
-        ''
-	    '' We are at the back side of a node. First walk the
-	    '' front nodes, then the back nodes.
-	    ''
-    		
-        '' likewise: still covered by the map at the top of the sub
-        r_recursive_world_node g, nds(nodenr).child0, model_count, models(), brush(), cpos, ign, nds(), pln(), lef(), lfc(), pvsb(), pflag(), ord(), fru()        
-        if ( g.vis.ent_left ) then r_emit_entities g, nodenr, model_count, cpos, ign, _
-                                        models(), brush(), nds(), pln(), _
-                                        pvsb(), pflag(), ord(), fru()
-	    ord(g.vis.ord_count) = nodenr
-	    g.vis.ord_count = g.vis.ord_count + 1        
-        r_recursive_world_node g, nds(nodenr).child1, model_count, models(), brush(), cpos, ign, nds(), pln(), lef(), lfc(), pvsb(), pflag(), ord(), fru()
-    end if
-    
-
-end sub
+''
+'' r_recursive_world_node now lives in src/r_walk.c, compiled with bcc and
+'' linked in under this same name -- the declare above is the only trace
+'' of it left in this module. See r_walk.c's own header for why: the
+'' BASIC version recompiled into 405 instructions per the /A listing;
+'' three separate C designs, on the same compiler and flags, all beat
+'' that by roughly half, the best (a static near helper taking one
+'' pre-unpacked context pointer) by more than that.
+''
+'' Kept as an EXTERNAL declare only -- see the git history for this file
+'' (commit 198b883 and earlier) for the original BASIC recursive body,
+'' if this ever needs to be reverted or compared against again.
+''
 
 
 

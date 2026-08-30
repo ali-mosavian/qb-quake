@@ -54,6 +54,22 @@ build)
     [ "$tc" = vbd ] && out="${VBD_OUT:-$out}"
     mkdir -p "$out"
     cp "$ROOT"/src/*.bas "$ROOT"/src/*.bi "$ROOT"/data/stuff.ini "$ROOT"/data/base.dat "$out/"
+
+    ##
+    ## qrender's own non-BASIC (C) modules -- everything else external is
+    ## uGL -- compiled with bcc -3 -mm -Ox, same flags tools/bcc.sh uses
+    ## for mgl's own C. Each has to compile in THIS session, interleaved
+    ## into build.bat between the "del *.obj" cleanup and the link -- a
+    ## separate, earlier bcc session tried first, and its object file sat
+    ## in $out for exactly as long as it took build.bat's own "del *.obj"
+    ## to delete it. B: (bcpp31) rides along on the same @PRE@ hook that
+    ## mounts nothing for every other target.
+    ##
+    CMODS="$(cd "$ROOT/src" && ls *.c 2>/dev/null | sed 's/\.c$//')"
+    cp "$ROOT"/src/*.c "$out/" 2>/dev/null || true
+    cp "$ROOT"/src/*.h "$out/" 2>/dev/null || true
+    CC_OBJS=""; for m in $CMODS; do CC_OBJS="$CC_OBJS$(echo "$m" | tr 'a-z' 'A-Z').OBJ+"; done
+    BCPP31="$TOOLCHAINS/bcpp31"
     ##
     ## uGL comes from the NATIVE build (tools/native/Makefile), not from a
     ## prebuilt lib in the mgl tree: uglBuildSurf and the view API only exist
@@ -79,28 +95,38 @@ build)
     # main must come first: it carries the module-level main code
     MODS="main $(cd "$ROOT/src" && ls *.bas | sed 's/\.bas$//' | grep -vx main | tr '\n' ' ')"
     OBJS=""; for m in $MODS; do OBJS="$OBJS$m.obj+"; done
-    OBJS="${OBJS}M:\\LIB\\ADDONS\\U3D.OBJ"
+    OBJS="${OBJS}${CC_OBJS}M:\\LIB\\ADDONS\\U3D.OBJ"
 
     # one BC line per module, then one LINK line naming every object.
     # u3d is a uGL addon and is not inside the uglX.lib -- link it explicitly.
     {
         printf '%s\r\n' '@echo off' 'if exist result.txt del result.txt' \
                           'if exist bc.out del bc.out' \
+                          'if exist cc_*.out del cc_*.out' \
                           'if exist *.obj del *.obj' 'if exist qrender.exe del qrender.exe'
+        for m in $CMODS; do
+            printf '%s\r\n' "B:\\BIN\\BCC.EXE -c -3 -mm -Ox -IW:\\ -IB:\\INCLUDE $m.c > cc_$m.out"
+        done
         for m in $MODS; do printf '%s\r\n' "$bc $m.bas, $m.obj; >> bc.out"; done
+        printf '%s\r\n' 'if not exist main.obj goto bcfail'
+        for m in $CMODS; do
+            printf '%s\r\n' "if not exist $(echo "$m" | tr 'a-z' 'A-Z').OBJ goto ccfail"
+        done
+        printf '%s\r\n' \
+          "$lnk @link.rsp > link.out" \
+          'if not exist qrender.exe goto linkfail' \
+          'echo PASS > result.txt' \
+          'goto end' \
+          ':bcfail' \
+          'echo BCFAIL > result.txt' \
+          'goto end' \
+          ':ccfail' \
+          'echo CCFAIL > result.txt' \
+          'goto end' \
+          ':linkfail' \
+          'echo LINKFAIL > result.txt' \
+          ':end'
     } > "$out/build.bat"
-    printf '%s\r\n' \
-      'if not exist main.obj goto bcfail' \
-      "$lnk @link.rsp > link.out" \
-      'if not exist qrender.exe goto linkfail' \
-      'echo PASS > result.txt' \
-      'goto end' \
-      ':bcfail' \
-      'echo BCFAIL > result.txt' \
-      'goto end' \
-      ':linkfail' \
-      'echo LINKFAIL > result.txt' \
-      ':end' >> "$out/build.bat"
 
     # LINK's command line would blow past the DOS 127-char limit once there
     # are several modules -- and a truncated line loses the trailing ';' that
@@ -109,16 +135,26 @@ build)
     # /MAP writes the PUBLICS into qrender.map. Without it the map carries
     # segments only, and a debugger can say "LMEM+0x943" but not which
     # routine that is.
+    #
+    # MATHC.LIB/CL.LIB (bcpp31, B:) supply F_FTOL@/F_SCOPY@ and their kin --
+    # bcc's own codegen support for a float-to-long cast or a whole-struct
+    # assignment, emitted as calls rather than inlined regardless of what
+    # the C source does. Not the app-level stdlib (fopen et al, deliberately
+    # avoided elsewhere): a C module that casts a float to long or copies a
+    # struct by value needs these on this compiler, full stop. Only pulled
+    # in when a C module is actually part of the build.
+    CLIBS=""
+    [[ -n "$CMODS" ]] && CLIBS="+B:\\LIB\\MATHC.LIB+B:\\LIB\\CL.LIB"
     printf '%s\r\n' \
       "/NOE /MAP /SEG:800 $OBJS" \
       'qrender.exe' \
       'qrender.map' \
-      "$rt+$ugl" \
+      "$rt+$ugl$CLIBS" \
       ';' > "$out/link.rsp"
 
     conf="$out/dosbox.conf"
     sed -e "s|@CDRIVE@|$out|" -e "s|@VDRIVE@|$TOOLCHAINS/$cdir|" -e "s|@MDRIVE@|$MGL|" \
-        -e "s|@BAT@|build.bat|" -e "s|@PRE@||" "$ROOT/dosbox/template.conf" > "$conf"
+        -e "s|@BAT@|build.bat|" -e "s|@PRE@|mount b $BCPP31|" "$ROOT/dosbox/template.conf" > "$conf"
 
     launch "$conf" "${TIMEOUT:-300}"
 

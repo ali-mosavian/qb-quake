@@ -209,6 +209,8 @@ declare function sys_tick_hz ( ) as single
 declare function sys_now ( ) as single
 declare function sys_rdtsc ( ) as long
 declare function sys_rdtsc_hz ( ) as single
+'' r_walk.c. Only caller is host_init's startup layout check.
+declare function r_walk_layout_ok ( byval vis_off as long ) as integer
 declare sub d_init_turb ( )
 declare sub in_init ( _
     g as Game _
@@ -597,6 +599,17 @@ sub host_init ( _
     dim t_lump as single, t_tex as single, t_vid as single
     dim pf as integer
 
+    ''
+    '' r_walk.c hardcodes vis's byte offset within Game (measured once,
+    '' not derived from the five structs ahead of it) because r_bsp.bas's
+    '' r_recursive_world_node now lives there. A field added ahead of vis
+    '' in q_game.bi would silently shift that offset and corrupt whatever
+    '' VisState field the wrong address lands on -- checked here instead,
+    '' once, at startup, so that shows up as a loud, clear exit instead.
+    ''
+    if ( r_walk_layout_ok( varptr( g.vis ) - varptr( g ) ) = 0 ) then
+        sys_error "0x0041, r_walk.c's Game.vis offset is stale"
+    end if
     '' TIMER, not a TMR: tmrInit does not run until inputOpen, the
     '' second-to-last step below, so a TMR counter reads zero for almost
     '' the whole load. TIMER is ~55ms granular, which is fine for phases
@@ -725,8 +738,7 @@ sub host_main ( _
     '' Per-face texture axes with the texture size folded in, and the
     '' per-vertex projection the triangle fan shares. See the draw loop.
     ''
-    
-    
+
     xresh = g.env.x_res/2.0
     yresh = g.env.y_res/2.0
 
