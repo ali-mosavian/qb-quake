@@ -352,6 +352,11 @@ type Env
     view_y      as integer
     view_w      as integer      '' and how big it is drawn -- the same
     view_h      as integer      '' as x_res/y_res unless scaled
+    view_scale  as integer      '' the whole-integer factor view_w/h are
+                                '' x_res/y_res times -- uglPutScl wants it
+                                '' as a single, but it is computed and
+                                '' stored as a whole number so the truncation
+                                '' happens once, not once a frame
     c_fmt       as integer
     pages       as integer
     use_paging      as integer
