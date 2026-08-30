@@ -68,7 +68,8 @@ declare function sc_find ( _
     byval face as integer, _
     byval mip as integer, _
     byval w as integer, _
-    byval h as integer _
+    byval h as integer, _
+    byval stag as integer _
 )
 declare function sc_alloc ( _
     g as Game, _
@@ -77,7 +78,8 @@ declare function sc_alloc ( _
     byval w as integer, _
     byval h as integer, _
     byval fw as integer, _
-    byval fh as integer _
+    byval fh as integer, _
+    byval stag as integer _
 )
 declare sub sb_dump ( _
     g as Game, _
@@ -301,6 +303,191 @@ dim shared sc_bcnt as integer           '' blocks made so far
 '' heap rather than DGROUP -- DGROUP is shared with BASIC's stack and string
 '' space here and has no room to spare.
 dim shared sc_desc() as long
+
+''
+'' ---- ls_: light styles -----------------------------------------------
+''
+'' A second subsystem in this file, not its own module -- screen.bas
+'' carries draw_/scr_ for the same reason. The only reader of a style's
+'' current value or epoch is this file's own cache logic (sc_find/
+'' sc_alloc, below), so splitting it out would buy a new module, a new
+'' header and new build-list plumbing for no caller anywhere else.
+''
+'' Quake drives a face's lightmap brightness from a compiled-in ANIMATION
+'' PATTERN, one of 64 style ids, each a string of 'a'..'z' ('a' = off,
+'' 'z' = brightest) stepped at a fixed 10 Hz -- independent of framerate,
+'' the same way physics steps at a fixed HOST_DT. Style id 0 is "steady":
+'' pattern length 1, so it is skipped by ls_animate's loop and never
+'' produces an epoch bump. On dm3ish every lit face is style 0, so this
+'' whole subsystem is exercised today only by ls_selftest and by the
+'' extra assertions in sc_selftest -- there is nothing in dm3ish for it
+'' to animate.
+''
+
+const LS_MAXSTYLE = 63
+const LS_RATE#     = 10.0#       '' Quake's own rate: ten steps a second
+
+type LightStyle
+    pattern     as string * 32
+    length      as integer
+    frame       as integer
+    value       as integer      '' current intensity: (asc(char)-97) * 10
+    epoch       as integer      '' bumped whenever value actually changes
+end type
+
+'' Empty-dim, redim'd inside ls_init -- not a bare fixed-size DIM. This
+'' module is not main.bas, so a module-level DIM under '$DYNAMIC never
+'' executes here; only code inside a SUB runs wherever it is called from.
+'' A bare `dim shared ls_tab(LS_MAXSTYLE)` looked fine, compiled fine, and
+'' every access then touched unallocated far-heap memory -- not a fault,
+'' just silent corruption of whatever else was there, which is why the
+'' failure looked like a hang at a different point on every run rather
+'' than a clean crash. sc_slot() next to it already gets this right.
+dim shared ls_tab() as LightStyle
+dim shared ls_last as single    '' anim_time ls_animate last ran at
+
+''::::::::::
+'' name: ls_lchar
+'' desc: One pattern character to an intensity, Quake's own mapping: 'a'
+''       is 0, 'z' is the brightest, everything else clamps to 'm'.
+''::::::::::
+function ls_lchar ( c as string ) as integer
+    dim v as integer
+    '' asc("") is an "Illegal function call" runtime error, not a 0 -- a
+    '' garbage or short pattern must never reach it.
+    if ( len(c) = 0 ) then
+        ls_lchar = asc("m") - asc("a")
+        exit function
+    end if
+    v = asc(c) - asc("a")
+    if ( v < 0 or v > 25 ) then v = asc("m") - asc("a")
+    ls_lchar = v * 10
+end function
+
+''::::::::::
+'' name: ls_init
+'' desc: Style 0 is steady, and everything not given a pattern here
+''       defaults to steady too -- Quake's own fallback for an id no
+''       pattern was ever assigned to. A handful of the classic patterns
+''       are seeded for when a lit map actually uses them; the rest stay
+''       steady until they earn a pattern the same way.
+''::::::::::
+sub ls_init ()
+    dim i as integer
+
+    redim ls_tab(LS_MAXSTYLE) as LightStyle
+
+    for i = 0 to LS_MAXSTYLE
+        ls_tab(i).pattern = "m"
+        ls_tab(i).length  = 1
+        ls_tab(i).frame   = 0
+        ls_tab(i).value   = ls_lchar( "m" )
+        ls_tab(i).epoch   = 0
+    next i
+
+    ls_tab(1).pattern  = "mmnmmommommnonmmonqnmmo"
+    ls_tab(1).length   = 23
+    ls_tab(10).pattern = "mmamammmmammamamaaamammma"
+    ls_tab(10).length  = 25
+
+    ls_last = 0.0
+end sub
+
+''::::::::::
+'' name: ls_animate
+'' desc: Called once a tick with the map's own running clock (the same
+''       g.rdr.anim_time every texture animation already uses), so style
+''       animation is exactly as deterministic as physics -- the fixed
+''       10 Hz rate, not wall-clock time or framerate.
+''::::::::::
+sub ls_animate ( byval anim_time as single )
+    dim i as integer, steps as integer, nf as integer, nv as integer
+
+    steps = int( anim_time * LS_RATE# ) - int( ls_last * LS_RATE# )
+    if ( steps <= 0 ) then exit sub
+    ls_last = anim_time
+
+    for i = 0 to LS_MAXSTYLE
+        if ( ls_tab(i).length > 1 ) then
+            nf = (ls_tab(i).frame + steps) mod ls_tab(i).length
+            ls_tab(i).frame = nf
+            nv = ls_lchar( mid$( ls_tab(i).pattern, nf + 1, 1 ) )
+            if ( nv <> ls_tab(i).value ) then
+                ls_tab(i).value = nv
+                ls_tab(i).epoch = ls_tab(i).epoch + 1
+                if ( ls_tab(i).epoch > 32000 ) then ls_tab(i).epoch = 1
+            end if
+        end if
+    next i
+end sub
+
+''::::::::::
+'' name: ls_epoch
+'' desc: The value sc_find/sc_alloc key a cached surface's lighting on.
+''       Out-of-range clamps to style 0 (steady) rather than faulting --
+''       a caller only reaches here with a byte read off the map, and a
+''       corrupt one should read as "unlit changes nothing," not crash.
+''::::::::::
+function ls_epoch ( byval style as integer ) as integer
+    if ( style < 0 or style > LS_MAXSTYLE ) then style = 0
+    ls_epoch = ls_tab(style).epoch
+end function
+
+''::::::::::
+'' name: ls_selftest
+'' desc: Proves the animation loop, not the map: a synthetic 2-char
+''       pattern must toggle value and bump epoch exactly once per
+''       change, a steady style must never bump, and steps must
+''       accumulate correctly across an uneven call pattern (two short
+''       ticks the same as one that covers both).
+''::::::::::
+function ls_selftest () as integer
+    dim e0 as integer, v0 as integer
+
+    ls_init
+
+    '' style 0 is steady: many ticks, no bump
+    e0 = ls_tab(0).epoch
+    ls_animate 0.05
+    ls_animate 1.05
+    ls_animate 2.05
+    if ( ls_tab(0).epoch <> e0 ) then ls_selftest = -1 : exit function
+
+    '' a synthetic 2-char pattern, 'a' then 'z': one step must flip the
+    '' value and bump the epoch exactly once
+    ls_tab(30).pattern = "az"
+    ls_tab(30).length  = 2
+    ls_tab(30).frame   = 0
+    ls_tab(30).value   = ls_lchar( "a" )
+    ls_tab(30).epoch   = 0
+    ls_last = 0.0
+
+    ls_animate 0.1#          '' one 10 Hz step: frame 0 -> 1, 'a' -> 'z'
+    if ( ls_tab(30).value <> ls_lchar( "z" ) ) then ls_selftest = -2 : exit function
+    if ( ls_tab(30).epoch <> 1 ) then ls_selftest = -3 : exit function
+
+    ls_animate 0.15#         '' under 0.1s more: no new step, no bump
+    if ( ls_tab(30).epoch <> 1 ) then ls_selftest = -4 : exit function
+
+    ls_animate 0.2#          '' the step lands: frame 1 -> 0, 'z' -> 'a'
+    if ( ls_tab(30).value <> ls_lchar( "a" ) ) then ls_selftest = -5 : exit function
+    if ( ls_tab(30).epoch <> 2 ) then ls_selftest = -6 : exit function
+
+    '' two ticks that together cross a step boundary must land the same
+    '' as one tick that crosses it directly -- steps come from elapsed
+    '' TIME, not call count
+    ls_tab(31).pattern = "az" : ls_tab(31).length = 2
+    ls_tab(31).frame = 0 : ls_tab(31).value = ls_lchar("a") : ls_tab(31).epoch = 0
+    v0 = ls_tab(30).value
+    ls_last = 0.0
+    ls_tab(30).frame = 0 : ls_tab(30).value = ls_lchar("a") : ls_tab(30).epoch = 0
+    ls_animate 0.04#
+    ls_animate 0.11#         '' crosses 0.1 here, one step total
+    if ( ls_tab(30).epoch <> 1 ) then ls_selftest = -7 : exit function
+
+    ls_init                  '' leave the table as any real caller expects it
+    ls_selftest = 1
+end function
 
 ''::::::::::
 '' name: sc_mipfloor
@@ -695,7 +882,8 @@ function sc_find ( _
     byval face as integer, _
     byval mip as integer, _
     byval w as integer, _
-    byval h as integer _
+    byval h as integer, _
+    byval stag as integer _
 )
     dim dc as long
     dim a as integer, b as integer, vcls as integer
@@ -709,6 +897,13 @@ function sc_find ( _
         exit function
     end if
     if ( sc_slot(face).tag <> sc_gen * 4 + mip ) then
+        sc_find = 0
+        exit function
+    end if
+    '' A tag match says the mip and generation are right; stag is the
+    '' SEPARATE axis -- the face's light style may have moved on since
+    '' this block was built, and that has nothing to do with mip or gen.
+    if ( sc_slot(face).stag <> stag ) then
         sc_find = 0
         exit function
     end if
@@ -748,7 +943,8 @@ function sc_alloc ( _
     byval w as integer, _
     byval h as integer, _
     byval fw as integer, _
-    byval fh as integer _
+    byval fh as integer, _
+    byval stag as integer _
 )
     dim a as integer, b as integer, cidx as integer, bord as integer
     dim dc as long
@@ -907,6 +1103,7 @@ function sc_alloc ( _
     if ( sc_next > sc_peak ) then sc_peak = sc_next
 
     sc_slot(face).tag = sc_gen * 4 + mip
+    sc_slot(face).stag = stag
     sc_lru_touch blk
 
     '' aim it at the bytes just claimed, ready for the builder to write
@@ -991,10 +1188,10 @@ function sc_selftest ( _
     if ( sc_shift( 16 ) <> 4 ) then sc_selftest = -5 : exit function
 
     '' 224x224 pads to 256x256 = 64K, four pages: it must be refused
-    if ( sc_alloc( g, 9, 0, 224, 224, 224, 224 ) <> 0 ) then sc_selftest = -6 : exit function
+    if ( sc_alloc( g, 9, 0, 224, 224, 224, 224, 0 ) <> 0 ) then sc_selftest = -6 : exit function
     '' 112x112 pads to 128x128 = 16,384, exactly one page: it must not be
-    d0 = sc_alloc ( g, 0, 0, 112, 112, 112, 112 )
-    d1 = sc_alloc ( g, 1, 0, 112, 96, 112, 96 )
+    d0 = sc_alloc ( g, 0, 0, 112, 112, 112, 112, 0 )
+    d1 = sc_alloc ( g, 1, 0, 112, 96, 112, 96, 0 )
     if ( d0 = 0 ) then sc_selftest = -7 : exit function
     if ( d1 = 0 ) then sc_selftest = -8 : exit function
     '' both round to 128x128, so they share a view and differ only in where
@@ -1007,9 +1204,9 @@ function sc_selftest ( _
     if ( sc_mipfloor( 224, 224 ) <> 1 ) then sc_selftest = -19 : exit function
     if ( sc_mipfloor( 112, 112 ) <> 0 ) then sc_selftest = -20 : exit function
 
-    if ( sc_find( 0, 0, 112, 112 ) <> d0 ) then sc_selftest = -9 : exit function
-    if ( sc_find( 1, 0, 112, 96 ) <> d1 ) then sc_selftest = -10 : exit function
-    if ( sc_find( 1, 1, 112, 96 ) <> 0 ) then sc_selftest = -11 : exit function
+    if ( sc_find( 0, 0, 112, 112, 0 ) <> d0 ) then sc_selftest = -9 : exit function
+    if ( sc_find( 1, 0, 112, 96, 0 ) <> d1 ) then sc_selftest = -10 : exit function
+    if ( sc_find( 1, 1, 112, 96, 0 ) <> 0 ) then sc_selftest = -11 : exit function
 
     '' a write into the last row of the largest class, the 16K page edge
     for i = 0 to 31
@@ -1029,10 +1226,10 @@ function sc_selftest ( _
     made0 = sc_made
     sc_flush g
     if ( sc_gen = gen0 ) then sc_selftest = -13 : exit function
-    if ( sc_find( 0, 0, 112, 112 ) <> 0 ) then sc_selftest = -14 : exit function
+    if ( sc_find( 0, 0, 112, 112, 0 ) <> 0 ) then sc_selftest = -14 : exit function
 
     '' a flush rewinds the store and makes no new view
-    d2 = sc_alloc ( g, 5, 0, 112, 112, 112, 112 )
+    d2 = sc_alloc ( g, 5, 0, 112, 112, 112, 112, 0 )
     if ( d2 <> d0 ) then sc_selftest = -15 : exit function
     if ( sc_made <> made0 ) then sc_selftest = -16 : exit function
     if ( sc_slot(5).blk < 0 ) then sc_selftest = -23 : exit function
@@ -1049,9 +1246,9 @@ function sc_selftest ( _
     sc_reset g
 
     '' fill one class: three faces, three distinct blocks
-    d0 = sc_alloc ( g, 0, 0, 112, 112, 112, 112 )
-    d1 = sc_alloc ( g, 1, 0, 112, 112, 112, 112 )
-    d2 = sc_alloc ( g, 2, 0, 112, 112, 112, 112 )
+    d0 = sc_alloc ( g, 0, 0, 112, 112, 112, 112, 0 )
+    d1 = sc_alloc ( g, 1, 0, 112, 112, 112, 112, 0 )
+    d2 = sc_alloc ( g, 2, 0, 112, 112, 112, 112, 0 )
     if ( d0 = 0 or d1 = 0 or d2 = 0 ) then sc_selftest = -24 : exit function
     '' PROBE: three allocations should be three new blocks. Separate codes --
     '' a single packed number turned out to have two valid decodes.
@@ -1061,7 +1258,7 @@ function sc_selftest ( _
     if ( sc_slot(1).blk = sc_slot(2).blk ) then sc_selftest = -26 : exit function
 
     '' face 0 is the oldest, so touching it must make face 1 the victim
-    if ( sc_find( 0, 0, 112, 112 ) = 0 ) then sc_selftest = -27 : exit function
+    if ( sc_find( 0, 0, 112, 112, 0 ) = 0 ) then sc_selftest = -27 : exit function
     if ( sc_lhead( sc_slot(0).cls ) < 0 ) then sc_selftest = -28 : exit function
     if ( sc_bown( sc_lhead( sc_slot(0).cls ) ) <> 1 ) then _
         sc_selftest = -(4000 + sc_bown( sc_lhead( sc_slot(0).cls ) )) : exit function
@@ -1071,7 +1268,7 @@ function sc_selftest ( _
     ofs0 = clng( sc_slot(0).blk )
     live0 = sc_live
     flush0 = sc_flushes
-    if ( sc_alloc( g, 0, 1, 56, 56, 112, 112 ) = 0 ) then sc_selftest = -29 : exit function
+    if ( sc_alloc( g, 0, 1, 56, 56, 112, 112, 0 ) = 0 ) then sc_selftest = -29 : exit function
     if ( clng( sc_slot(0).blk ) <> ofs0 ) then sc_selftest = -30 : exit function
     if ( sc_live <> live0 ) then sc_selftest = -31 : exit function
 
@@ -1091,15 +1288,15 @@ function sc_selftest ( _
     '' free must merge them into one order-1 block.
     ''
     sc_reset g
-    if ( sc_alloc( g, 0, 0, 16, 16, 16, 16 ) = 0 ) then sc_selftest = -40 : exit function
-    if ( sc_alloc( g, 1, 0, 16, 16, 16, 16 ) = 0 ) then sc_selftest = -41 : exit function
+    if ( sc_alloc( g, 0, 0, 16, 16, 16, 16, 0 ) = 0 ) then sc_selftest = -40 : exit function
+    if ( sc_alloc( g, 1, 0, 16, 16, 16, 16, 0 ) = 0 ) then sc_selftest = -41 : exit function
     '' grow both: each takes a new order-2 block and hands its order-0 back
-    if ( sc_alloc( g, 0, 0, 32, 32, 32, 32 ) = 0 ) then sc_selftest = -42 : exit function
-    if ( sc_alloc( g, 1, 0, 32, 32, 32, 32 ) = 0 ) then sc_selftest = -43 : exit function
+    if ( sc_alloc( g, 0, 0, 32, 32, 32, 32, 0 ) = 0 ) then sc_selftest = -42 : exit function
+    if ( sc_alloc( g, 1, 0, 32, 32, 32, 32, 0 ) = 0 ) then sc_selftest = -43 : exit function
 
     next0 = sc_next
     '' 32x16 is 512 bytes, order 1: only the MERGED pair can serve it
-    if ( sc_alloc( g, 2, 0, 32, 16, 32, 16 ) = 0 ) then sc_selftest = -44 : exit function
+    if ( sc_alloc( g, 2, 0, 32, 16, 32, 16, 0 ) = 0 ) then sc_selftest = -44 : exit function
     if ( sc_next <> next0 ) then sc_selftest = -45 : exit function
 
     ''
@@ -1109,11 +1306,30 @@ function sc_selftest ( _
     '' rather than the store being grown again.
     ''
     sc_reset g
-    if ( sc_alloc( g, 0, 0, 32, 32, 32, 32 ) = 0 ) then sc_selftest = -46 : exit function
-    if ( sc_alloc( g, 0, 0, 64, 64, 64, 64 ) = 0 ) then sc_selftest = -47 : exit function
+    if ( sc_alloc( g, 0, 0, 32, 32, 32, 32, 0 ) = 0 ) then sc_selftest = -46 : exit function
+    if ( sc_alloc( g, 0, 0, 64, 64, 64, 64, 0 ) = 0 ) then sc_selftest = -47 : exit function
     next0 = sc_next
-    if ( sc_alloc( g, 1, 0, 16, 16, 16, 16 ) = 0 ) then sc_selftest = -48 : exit function
+    if ( sc_alloc( g, 1, 0, 16, 16, 16, 16, 0 ) = 0 ) then sc_selftest = -48 : exit function
     if ( sc_next <> next0 ) then sc_selftest = -49 : exit function
+
+    ''
+    '' ---- stag: a light-style change must force a rebuild -------------
+    ''
+    '' Everything above passes whether or not sc_find even looks at stag,
+    '' so this is the one block that proves it does. A tag match (same
+    '' gen, same mip) must still MISS if the style epoch moved on -- that
+    '' is the entire mechanism animated lightmaps rely on.
+    ''
+    sc_reset g
+    if ( sc_alloc( g, 0, 0, 112, 112, 112, 112, 5 ) = 0 ) then sc_selftest = -50 : exit function
+    if ( sc_find( 0, 0, 112, 112, 5 ) = 0 ) then sc_selftest = -51 : exit function
+    if ( sc_find( 0, 0, 112, 112, 6 ) <> 0 ) then sc_selftest = -52 : exit function
+
+    '' rebuilding at the new stag must overwrite the slot's stag, not
+    '' just its tag -- a second style change has to miss again too
+    if ( sc_alloc( g, 0, 0, 112, 112, 112, 112, 6 ) = 0 ) then sc_selftest = -53 : exit function
+    if ( sc_find( 0, 0, 112, 112, 5 ) <> 0 ) then sc_selftest = -54 : exit function
+    if ( sc_find( 0, 0, 112, 112, 6 ) = 0 ) then sc_selftest = -55 : exit function
 
     sc_reset g
     sc_selftest = 1
@@ -1242,6 +1458,7 @@ sub sb_dump ( _
     dim x as integer, y as integer
     dim fh as integer
     dim row as string
+    dim stag as integer
 
     if ( face < 0 or face > g.wld.count.faces - 1 ) then
         print "dumpsurf: face"; face; "out of range 0.."; g.wld.count.faces - 1
@@ -1271,7 +1488,9 @@ sub sb_dump ( _
 
     mi = tex_inf_buff( tri_buffer(face).tex_info_id ).mip_tex
 
-    dc = sc_alloc ( g, face, mip, sw, sh, pw, ph )
+    '' hoisted: BC will not take a call inside another call's argument list
+    stag = ls_epoch( gv_buf(GEOM_LMOFS + 6) and 255 )
+    dc = sc_alloc ( g, face, mip, sw, sh, pw, ph, stag )
     if ( dc = 0 ) then
         print "dumpsurf: sc_alloc failed for face"; face; "mip"; mip
         exit sub

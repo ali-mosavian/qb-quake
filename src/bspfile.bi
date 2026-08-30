@@ -209,6 +209,11 @@ type CacheSlot
     blk         as integer      '' index into the block table, -1 for none
     tag         as integer      '' generation * 4 + mip the CONTENT holds
     cls         as integer      '' size class of the block, fixed per face
+    stag        as integer      '' the face's light style epoch the CONTENT
+                                '' holds -- see ls_epoch in d_surf.bas. Costs
+                                '' 2 bytes/face on top of the 6 already kept
+                                '' minimal; not yet re-measured against e1m1's
+                                '' tighter far-heap margin (see AGENTS.md).
 end type
 
 type DiskLeaf
