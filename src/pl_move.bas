@@ -174,33 +174,11 @@ dim shared clp_buffer() as ClipNode
 '' desc: Walks the hull tree to find what is at a point. A negative child is
 ''       not a node index but a contents code, which is the terminator.
 ''::::::::::
-function pl_hull_contents ( _
-    byval node as integer, _
-    p as Vec3, _
-    clip() as ClipNode, _
-    planes() as Plane _
-) as integer
-    dim mc as long
-    dim d as single
-    dim pid as integer
-
-    do while ( node >= 0 )
-        pid = clip(node).plane_num
-
-        d = p.x*planes(pid).norm.x + _
-            p.y*planes(pid).norm.y + _
-            p.z*planes(pid).norm.z - planes(pid).dist
-
-        if ( d >= 0.0 ) then
-            node = clip(node).front
-        else
-            node = clip(node).back
-        end if
-    loop
-
-    pl_hull_contents = node
-
-end function
+''
+'' Moved to src/pl_trace.c -- see pl_trace's own note below for why,
+'' and r_walk.c's header for the general reasoning. Declare above is
+'' the only trace of the BASIC body left; see git history to recover it.
+''
 
 
 
@@ -282,119 +260,11 @@ end sub
 ''
 ''       Returns true while the sweep is still clear.
 ''::::::::::
-function pl_hull_check ( _
-    byval node as integer, _
-    byval p1f as single, _
-    byval p2f as single, _
-    p1 as Vec3, _
-    p2 as Vec3, _
-    tr as TraceResult, _
-    clip() as ClipNode, _
-    planes() as Plane _
-) as integer
-    dim pid as integer
-    dim t1 as single, t2 as single
-    dim frac as single, midf as single
-    dim midp as Vec3
-    dim side as integer, other as integer
-    dim mc as long
-
-    ''
-    '' A leaf: solid stops the sweep, anything else lets it through.
-    ''
-    if ( node < 0 ) then
-        if ( node = CONTENTS_SOLID ) then
-            tr.all_solid = true
-        else
-            tr.all_solid = false
-        end if
-        pl_hull_check = true
-        exit function
-    end if
-
-    pid = clip(node).plane_num
-    t1 = p1.x*planes(pid).norm.x + p1.y*planes(pid).norm.y + _
-         p1.z*planes(pid).norm.z - planes(pid).dist
-    t2 = p2.x*planes(pid).norm.x + p2.y*planes(pid).norm.y + _
-         p2.z*planes(pid).norm.z - planes(pid).dist
-
-    '' wholly on one side: recurse into that child alone
-    if ( t1 >= 0.0 and t2 >= 0.0 ) then
-        pl_hull_check = pl_hull_check( clip(node).front, p1f, p2f, p1, p2, tr, clip(), planes() )
-        exit function
-    end if
-    if ( t1 < 0.0 and t2 < 0.0 ) then
-        pl_hull_check = pl_hull_check( clip(node).back, p1f, p2f, p1, p2, tr, clip(), planes() )
-        exit function
-    end if
-
-    ''
-    '' Straddles the plane. Split at the crossing, backing off by an epsilon so
-    '' the near half stops just short of the surface rather than exactly on it.
-    ''
-    if ( t1 < 0.0 ) then
-        frac = (t1 + PL_CLIP_EPS#) / (t1 - t2)
-        side = 1
-    else
-        frac = (t1 - PL_CLIP_EPS#) / (t1 - t2)
-        side = 0
-    end if
-
-    if ( frac < 0.0 ) then frac = 0.0
-    if ( frac > 1.0 ) then frac = 1.0
-
-    midf  = p1f + (p2f - p1f) * frac
-    midp.x = p1.x + (p2.x - p1.x) * frac
-    midp.y = p1.y + (p2.y - p1.y) * frac
-    midp.z = p1.z + (p2.z - p1.z) * frac
-
-    '' the near half first: an earlier hit wins
-    if ( side = 0 ) then
-        if ( pl_hull_check( clip(node).front, p1f, midf, p1, midp, tr, clip(), planes() ) = false ) then
-            pl_hull_check = false
-            exit function
-        end if
-        '' the recursion above moved the window; map before reading again
-        other = clip(node).back
-    else
-        if ( pl_hull_check( clip(node).back, p1f, midf, p1, midp, tr, clip(), planes() ) = false ) then
-            pl_hull_check = false
-            exit function
-        end if
-        other = clip(node).front
-    end if
-
-    '' far half is open: carry on through it
-    if ( pl_hull_contents( other, midp, clip(), planes() ) <> CONTENTS_SOLID ) then
-        pl_hull_check = pl_hull_check( other, midf, p2f, midp, p2, tr, clip(), planes() )
-        exit function
-    end if
-
-    '' far half is solid: this plane is the impact
-    if ( tr.all_solid ) then
-        tr.start_solid = true
-        pl_hull_check  = false
-        exit function
-    end if
-
-    if ( tr.frac > midf ) then
-        tr.frac    = midf
-        tr.end_pos = midp
-
-        if ( side = 1 ) then
-            tr.norm.x = -planes(pid).norm.x
-            tr.norm.y = -planes(pid).norm.y
-            tr.norm.z = -planes(pid).norm.z
-        else
-            tr.norm.x = planes(pid).norm.x
-            tr.norm.y = planes(pid).norm.y
-            tr.norm.z = planes(pid).norm.z
-        end if
-    end if
-
-    pl_hull_check = false
-
-end function
+''
+'' Moved to src/pl_trace.c -- see pl_trace's own note below for why,
+'' and r_walk.c's header for the general reasoning. Declare above is
+'' the only trace of the BASIC body left; see git history to recover it.
+''
 
 
 
@@ -413,54 +283,17 @@ end function
 ''       it beats tr.frac -- so the hulls can be walked in any order. all_solid
 ''       is the exception: each walk sets it, so it is gathered by hand.
 ''::::::::::
-sub pl_trace ( _
-    start as Vec3, _
-    fin as Vec3, _
-    tr as TraceResult, _
-    byval model_count as integer, _
-    models() as Submodel, _
-    brush() as BrushModel, _
-    clip() as ClipNode, _
-    planes() as Plane _
-)
-    dim dummy as integer
-    dim i as integer
-    dim any_solid as integer
-    dim s2 as Vec3, f2 as Vec3
-
-    tr.frac        = 1.0
-    tr.end_pos     = fin
-    tr.norm.x      = 0.0
-    tr.norm.y      = 0.0
-    tr.norm.z      = 0.0
-    tr.start_solid = false
-
-    tr.all_solid = true
-    dummy = pl_hull_check( int( models(0).head_node1 ), 0.0, 1.0, start, fin, tr, clip(), planes() )
-    any_solid = tr.all_solid
-
-    for  i = 1 to model_count-1
-        if ( brush(i).solid ) then
-            s2 = start
-            f2 = fin
-            s2.z = s2.z - brush(i).zofs
-            f2.z = f2.z - brush(i).zofs
-
-            tr.all_solid = true
-            dummy = pl_hull_check( int( models(i).head_node1 ), 0.0, 1.0, s2, f2, tr, clip(), planes() )
-            if ( tr.all_solid ) then any_solid = true
-        end if
-    next i
-
-    tr.all_solid = any_solid
-
-    if ( tr.frac < 1.0 ) then
-        tr.end_pos.x = start.x + (fin.x - start.x) * tr.frac
-        tr.end_pos.y = start.y + (fin.y - start.y) * tr.frac
-        tr.end_pos.z = start.z + (fin.z - start.z) * tr.frac
-    end if
-
-end sub
+''
+'' pl_trace, pl_hull_check and pl_hull_contents now live in
+'' src/pl_trace.c, compiled with bcc and linked in under these same
+'' names -- see r_walk.c's own header for the general reasoning and
+'' pl_trace.c's for why this port needed none of sb_build.c's extra
+'' care (no calls out to other BASIC functions, no g as Game).
+''
+'' Kept as an EXTERNAL declare only -- see git history for this file
+'' for the original BASIC body, if this ever needs reverting or
+'' comparing.
+''
 
 
 
