@@ -40,48 +40,9 @@
  * pointers from their descriptors at every node.
  */
 
-typedef struct _BASARRAY {
-    void  far *farptr;
-    short next_dsc;
-    short next_dsc_size;
-    char  dimensions;
-    char  type_storage;
-    short adjs_offset;
-    short element_len;
-    short last_dim_elemts;
-    short last_dim_first;
-} BASARRAY;
-
-typedef struct { short x, y, z; } Vec3i;
-typedef struct { Vec3i min, max; } Bounds;
-typedef struct { float x, y, z; } Vec3f;
-
-typedef struct {
-    short plane_id;
-    short child0;
-    short child1;
-    short lface_id;
-    short lface_num;
-    Bounds bound;
-} Node;
-
-typedef struct {
-    short cont;
-    long  vis_list;
-    Bounds bound;
-    short lface_id;
-    short lface_num;
-} Leaf;
-
-typedef struct { Vec3f norm; float dist; short ptype; } Plane;
-typedef struct { Vec3f norm; float dist; long  ptype; } DiskPlane;
+#include "qcshared.h"
 
 /*
- * VisState's own fields, verified against src/q_vis.bi's declared order:
- * frame_stamp(int) ord_count(long) drw_leafs(int) cul_leafs(int)
- * ent_left(int) no_ents(int) bad_order(int) -- all scalars, no padding,
- * so this is a direct transcription, not a guess.
- *
  * Game.vis's own OFFSET is not something to hand-derive: Game carries
  * five nested structs (World, Env, PlayerState, CamState, RenderState)
  * before vis, and getting any one of their sizes wrong silently
@@ -90,16 +51,6 @@ typedef struct { Vec3f norm; float dist; long  ptype; } DiskPlane;
  * asserts this at startup (see r_walk_layout_ok) so a future field added
  * ahead of vis fails loud at run time instead of silently drifting.
  */
-typedef struct {
-    short frame_stamp;
-    long  ord_count;
-    short drw_leafs;
-    short cul_leafs;
-    short ent_left;
-    short no_ents;
-    short bad_order;
-} VisState;
-
 #define GAME_VIS_OFFSET 5022
 
 /* ign here is BASIC's own "ign as integer" -- no byval in the original
@@ -131,7 +82,8 @@ extern void pascal far r_emit_entities(
 
 /* DiskVertex: single-precision scratch r_cull_box_c projects bbox's
    integer corners into before dotting with a frustum plane -- matches
-   src/bspfile.bi's own DiskVertex exactly (x,y,z as single). */
+   src/bspfile.bi's own DiskVertex exactly (x,y,z as single). Local to
+   this file: nothing else needs it. */
 typedef struct { float x, y, z; } DiskVertex;
 
 /* Transcribed from r_bsp.bas's r_cull_box, not reimagined: same 8-way

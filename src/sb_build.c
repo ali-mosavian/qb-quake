@@ -21,62 +21,7 @@
  * whole string through concatenation instead.
  */
 
-typedef struct _BASARRAY {
-    void  far *farptr;
-    short next_dsc;
-    short next_dsc_size;
-    char  dimensions;
-    char  type_storage;
-    short adjs_offset;
-    short element_len;
-    short last_dim_elemts;
-    short last_dim_first;
-} BASARRAY;
-
-typedef struct { float x, y, z; } Vec3f;
-
-typedef struct {
-    short plane_id;
-    short side;
-    short geom_row;
-    short geom_ofs;
-    short tex_info_id;
-} Face;
-
-typedef struct {
-    float vecs[4];
-    float vect[4];
-    short mip_tex;
-} TexInfo;
-
-typedef struct {
-    float wdth;
-    float hght;
-    short lnext;
-    short liquid;
-    short anim_base;
-    short anim_count;
-} MipTex;
-
-typedef struct { Vec3f norm; float dist; short ptype; } Plane;
-
-typedef struct { Vec3f pos; float radius; } DynLight;
-
-typedef struct {
-    long  lmptr;
-    long  lm_stride;
-    long  cmap_ptr;
-    long  au0;
-    long  av0;
-    long  du;
-    long  dv;
-    short sw;
-    short sh;
-    short lmw;
-    short lmh;
-    short shft;
-    short msk;
-} SurfBuild;
+#include "qcshared.h"
 
 /* Game.rdr.dlight's own offset, same story as r_walk.c's GAME_VIS_OFFSET:
    measured (varptr(g.rdr.dlight) - varptr(g) = 5006), not derived from
