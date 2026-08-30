@@ -48,6 +48,8 @@ declare function sys_frame_time ( _
 ) as single
 declare function sys_tick_hz ( ) as single
 declare function sys_now ( ) as single
+declare function sys_rdtsc ( ) as long
+declare function sys_rdtsc_hz ( ) as single
 declare function sys_mem_count ( ) as integer
 declare function sys_mem_tag ( byval i as integer ) as string
 declare function sys_mem_val ( byval i as integer ) as long
@@ -89,6 +91,9 @@ dim shared frame_tmr as TMR
 dim shared last_tick as long
 dim shared timing_on as integer
 dim shared tick_hz as single
+dim shared rdtsc_hz as single    '' cycles/sec, calibrated the same way
+dim shared cyc_per_us as long    '' rdtsc_hz / 1e6, as a whole number --
+                                  '' see sys_rdtsc for why it has to be one
 '$dynamic
 
 '$dynamic
@@ -278,6 +283,7 @@ sub sys_time_init
     dim hz as long
     dim t0 as single, elapsed as single
     dim c0 as long, c1 as long
+    dim r0 as long, r1 as long
 
     hz = tmrMs2Freq&( 1 )
     tmrNew frame_tmr, TMR.AUTOINIT, hz
@@ -307,12 +313,43 @@ sub sys_time_init
 
     t0 = timer
     c0 = frame_tmr.counter
+    r0 = sndDebugStat&( 6 )
 
     do
     loop until ( timer - t0 >= 0.5 )
 
     elapsed = timer - t0
     c1 = frame_tmr.counter
+    r1 = sndDebugStat&( 6 )
+
+    ''
+    '' sndDebugStat(6) is __snd_tsc -- RDTSC, already declared in snd.bi
+    '' and already linked (the mixer profiles itself with it), so this
+    '' costs nothing new to the library. Calibrated in the SAME window as
+    '' tick_hz, against the SAME TIMER-aligned reference, for the same
+    '' reason: DOSBox ties RDTSC to cycles actually executed under the
+    '' pinned `cycles=` setting, not wall-clock time, which is far more
+    '' reproducible run to run than a real timer -- but "cycles per
+    '' second" still depends on the emulator underneath, and asking would
+    '' be the same mistake sys_frame_time's own note describes.
+    ''
+    if ( elapsed > 0.0 and r1 > r0 ) then
+        rdtsc_hz = (r1 - r0) / elapsed
+    else
+        rdtsc_hz = 1.0
+    end if
+
+    ''
+    '' A whole number, not a float division at read time. sys_rdtsc
+    '' divides the raw counter by this with \, not /, so two calls a few
+    '' hundred cycles apart give an EXACT microsecond delta -- no
+    '' single-precision rounding on either reading to subtract away. It
+    '' also shrinks the counter about 76x before anything is ever
+    '' subtracted, which is most of the headroom that turns a ~28-second
+    '' wraparound window into a ~35-minute one.
+    ''
+    cyc_per_us = clng( rdtsc_hz / 1000000.0 )
+    if ( cyc_per_us < 1 ) then cyc_per_us = 1
 
     if ( elapsed > 0.0 and c1 > c0 ) then
         tick_hz = (c1 - c0) / elapsed
@@ -395,6 +432,48 @@ end function
 ''::::::::::
 function sys_now ( ) as single
     sys_now = frame_tmr.counter / tick_hz
+end function
+
+''::::::::::
+'' name: sys_rdtsc
+'' desc: Microseconds on the RDTSC clock, via sndDebugStat(6) -- NOT raw
+''       cycles. The raw counter measured at ~76 million a second on this
+''       machine, not "a few million" as first assumed, which wraps a
+''       signed 32-bit long in about 28 seconds; a run that long or
+''       longer under host contention (this project's own benchmarks
+''       regularly run that long) hit it in practice, as a huge negative
+''       delta the moment two readings straddled the sign bit. Dividing
+''       by cyc_per_us -- calibrated once, alongside rdtsc_hz -- before
+''       ever returning a value moves that wraparound out to roughly half
+''       an hour, which nothing here runs anywhere near.
+''
+''       A separate, rarer glitch survives this: on a long run the raw
+''       counter itself has been observed reading back near zero for one
+''       call, unrelated to the sign wrap -- likely the dynamic core's own
+''       RDTSC virtualization resetting on some internal event, not
+''       anything BASIC-side arithmetic can correct. A caller taking a
+''       difference between two calls must treat a negative or
+''       wildly-oversized delta as a glitched sample and discard it,
+''       exactly as sys_frame_time already does for frame_tmr wrapping.
+''
+''       Like sys_now, only ever meaningful as a difference between two
+''       calls, never as a value on its own -- and like sys_now, calling
+''       it before sys_time_init has calibrated cyc_per_us would divide
+''       by whatever a fresh dim shared long defaults to, which the
+''       clamp in sys_time_init exists specifically to keep off zero.
+''::::::::::
+function sys_rdtsc ( ) as long
+    sys_rdtsc = sndDebugStat&( 6 ) \ cyc_per_us
+end function
+
+''::::::::::
+'' name: sys_rdtsc_hz
+'' desc: The calibrated rate sys_rdtsc counts at, for converting a delta
+''       to seconds -- or for reporting cycles alongside milliseconds
+''       without silently mixing units.
+''::::::::::
+function sys_rdtsc_hz ( ) as single
+    sys_rdtsc_hz = rdtsc_hz
 end function
 
 
