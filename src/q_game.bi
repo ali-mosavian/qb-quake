@@ -20,6 +20,7 @@ type Game
     scr         as ScreenState    '' fps and the stats overlay
     cp          as CamPath        '' the scripted walkthrough
     ft          as FrameTimes     '' frame-time accumulators
+    pt          as PhaseTimes     '' where inside the frame it went
     pal         as long           '' the palette dc
     mymod       as UGMMOD         '' the music module
     tele_count  as integer        '' entities: filled by ent_load_teleports

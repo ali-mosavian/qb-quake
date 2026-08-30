@@ -47,6 +47,7 @@ declare function sys_frame_time ( _
     g as Game _
 ) as single
 declare function sys_tick_hz ( ) as single
+declare function sys_now ( ) as single
 declare function sys_mem_count ( ) as integer
 declare function sys_mem_tag ( byval i as integer ) as string
 declare function sys_mem_val ( byval i as integer ) as long
@@ -380,6 +381,20 @@ end function
 ''::::::::::
 function sys_tick_hz ( ) as single
     sys_tick_hz = tick_hz
+end function
+
+''::::::::::
+'' name: sys_now
+'' desc: Seconds on the same clock sys_frame_time reads, for timing a
+''       PART of a frame rather than the whole of it -- take it before and
+''       after, subtract. Not an absolute time (the epoch is whenever
+''       sys_time_init ran) and not meant to be one; only deltas are ever
+''       valid, and only ones short enough that frame_tmr.counter cannot
+''       have wrapped, which at ~144 Hz on a long is effectively forever
+''       for anything measured within one frame.
+''::::::::::
+function sys_now ( ) as single
+    sys_now = frame_tmr.counter / tick_hz
 end function
 
 

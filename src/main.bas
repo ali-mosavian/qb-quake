@@ -206,6 +206,7 @@ declare function sys_mem_fre ( byval i as integer ) as long
 declare function sys_mem_tag ( byval i as integer ) as string
 declare function sys_mem_val ( byval i as integer ) as long
 declare function sys_tick_hz ( ) as single
+declare function sys_now ( ) as single
 declare sub d_init_turb ( )
 declare sub in_init ( _
     g as Game _
@@ -710,6 +711,7 @@ sub host_main ( _
     dim hz as long
     dim page as integer
     dim frame_no as long
+    dim pt0 as single, ptd as single
     dim benchf as integer
     
     ''
@@ -852,8 +854,14 @@ sub host_main ( _
             g.ft.n   = g.ft.n + 1
         end if
 
+        pt0 = sys_now()
         host_advance g, g.scr.frame_time, brush(), mdl_buffer(), pln_buffer(), _
                       nds_buffer(), cp_x(), cp_y(), cp_z(), tele(), plat()
+        if ( g.ft.n > 0 ) then
+            ptd = sys_now() - pt0
+            g.pt.tick_sum = g.pt.tick_sum + ptd
+            if ( ptd > g.pt.tick_max ) then g.pt.tick_max = ptd
+        end if
 
         '' cp_advance is called from view.bas now, where the movement
         '' input is assembled -- it steers the player rather than placing
@@ -891,7 +899,13 @@ sub host_main ( _
         end if
 
         in_screenshot_key g, h_dst_dc
+        pt0 = sys_now()
         vid_update g, h_dst_dc, page
+        if ( g.ft.n > 0 ) then
+            ptd = sys_now() - pt0
+            g.pt.present_sum = g.pt.present_sum + ptd
+            if ( ptd > g.pt.present_max ) then g.pt.present_max = ptd
+        end if
         scr_count_frame g
 
         ''
@@ -1247,8 +1261,10 @@ sub host_render ( _
     dim mtx_fin as u3dMtrx
     dim cam_pos_b as u3dVector3f
     dim bm as integer
+    dim pt0 as single, ptd as single
 
-    u3dMtrxLookAt mtx_mdl, g.cam.pos, g.cam.look_at, cam_up        
+    pt0 = sys_now()
+    u3dMtrxLookAt mtx_mdl, g.cam.pos, g.cam.look_at, cam_up
     u3dMtrxConc mtx_fin, mtx_mdl, mtx_prj
     r_set_frustum frustum(), mtx_fin
     
@@ -1288,8 +1304,17 @@ sub host_render ( _
     r_draw_world g, 0, g.cam.pos, mdl_buffer(), brush(), nds_buffer(), pln_buffer(), _
                   poly_flag(), order_list(), frustum(), bit_array()
 
-    
-    
+    ''
+    '' Cull ends here -- both exits from this sub after this point
+    '' (-nodraw, and the normal one at the bottom) have to pass through
+    '' it, so timing it once here covers both.
+    ''
+    if ( g.ft.n > 0 ) then
+        ptd = sys_now() - pt0
+        g.pt.cull_sum = g.pt.cull_sum + ptd
+        if ( ptd > g.pt.cull_max ) then g.pt.cull_max = ptd
+    end if
+
     ''
     '' Clear to the far plane before the frame. Depth is 1/z and larger is
     '' nearer, so zero is infinitely distant and the first surface to
@@ -1302,18 +1327,28 @@ sub host_render ( _
     '' is fill, which paging does not affect.
     if ( g.env.no_draw ) then exit sub
 
+    pt0 = sys_now()
     d_draw_faces g, h_dst_dc, mtx_fin, xresh, yresh, g.cam.pos, g.vis.frame_stamp, _
                   g.vis.ord_count, tri_buffer(), tex_inf_buff(), gv_buf(), face_mdl(), _
                   brush(), pln_buffer(), nds_buffer(), mip_buff_inf(), _
                   order_list(), poly_flag()
+    if ( g.ft.n > 0 ) then
+        ptd = sys_now() - pt0
+        g.pt.draw_sum = g.pt.draw_sum + ptd
+        if ( ptd > g.pt.draw_max ) then g.pt.draw_max = ptd
+    end if
 
     '' leave depth off for the overlay, which is 2D and would otherwise
     '' test itself against the scene it is drawn on top of
     if ( z_dc <> 0 ) then zz = uglZMode%( UGL.Z.OFF% )
 
-
-    
+    pt0 = sys_now()
     scr_draw_hud g, h_dst_dc
+    if ( g.ft.n > 0 ) then
+        ptd = sys_now() - pt0
+        g.pt.hud_sum = g.pt.hud_sum + ptd
+        if ( ptd > g.pt.hud_max ) then g.pt.hud_max = ptd
+    end if
 
 end sub
 
@@ -1368,6 +1403,23 @@ sub host_bench_report ( _
             print #benchf, "fps_worst " + ltrim$(str$( 1.0 / g.ft.max ))
         if ( g.ft.sum > 0.0 ) then _
             print #benchf, "fps_mean " + ltrim$(str$( g.ft.n / g.ft.sum ))
+        ''
+        '' Where the frame above actually went. Same milliseconds, same
+        '' g.ft.n sample count -- pt_tick_mean + pt_cull_mean + pt_draw_mean
+        '' + pt_hud_mean + pt_present_mean should land close to ft_mean;
+        '' the gap is whatever this pass did not bother to time (see
+        '' PhaseTimes in q_scr.bi for exactly what that is).
+        ''
+        print #benchf, "pt_tick_mean " + ltrim$(str$( (g.pt.tick_sum / g.ft.n) * 1000.0 ))
+        print #benchf, "pt_tick_max " + ltrim$(str$( g.pt.tick_max * 1000.0 ))
+        print #benchf, "pt_cull_mean " + ltrim$(str$( (g.pt.cull_sum / g.ft.n) * 1000.0 ))
+        print #benchf, "pt_cull_max " + ltrim$(str$( g.pt.cull_max * 1000.0 ))
+        print #benchf, "pt_draw_mean " + ltrim$(str$( (g.pt.draw_sum / g.ft.n) * 1000.0 ))
+        print #benchf, "pt_draw_max " + ltrim$(str$( g.pt.draw_max * 1000.0 ))
+        print #benchf, "pt_hud_mean " + ltrim$(str$( (g.pt.hud_sum / g.ft.n) * 1000.0 ))
+        print #benchf, "pt_hud_max " + ltrim$(str$( g.pt.hud_max * 1000.0 ))
+        print #benchf, "pt_present_mean " + ltrim$(str$( (g.pt.present_sum / g.ft.n) * 1000.0 ))
+        print #benchf, "pt_present_max " + ltrim$(str$( g.pt.present_max * 1000.0 ))
     end if
     print #benchf, "polys " + ltrim$(str$( g.rdr.polys ))
     print #benchf, "tris " + ltrim$(str$( g.rdr.tris ))

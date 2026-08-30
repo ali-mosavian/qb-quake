@@ -130,6 +130,41 @@ type FrameTimes
     raw_dt      as single     '' this frame's dt, before the clamps
 end type
 
+''
+'' Where a frame's time actually goes, not just how long the whole of it
+'' took -- ft above answers "is a frame slow," this answers "which part."
+'' sum/max per phase rather than min: a phase's best case is not
+'' actionable the way its typical and worst cases are, and FrameTimes'
+'' own min is used for exactly the frame-level version of that same call.
+''
+'' No count of its own: every phase is gated on the SAME condition
+'' FrameTimes' own accumulation already uses (past the load-tail warmup),
+'' so ft.n is exactly how many samples each sum below represents too --
+'' keeping a second counter in lockstep with it would just be one more
+'' place for the two to drift apart.
+''
+'' tick, cull, draw, hud and present are each measured exactly once per
+'' rendered frame -- host_advance may run several simulation steps inside
+'' "tick," but the phase is timed as the one call that runs them all, not
+'' per step.
+''
+'' Deliberately not everything in the frame: uglClear, sys_frame_time's
+'' own read, screenshot-key polling and scr_count_frame's bookkeeping are
+'' all cheap enough that timing them would cost more than they take.
+''
+type PhaseTimes
+    tick_sum    as single     '' host_advance: simulation
+    tick_max    as single
+    cull_sum    as single     '' r_set_frustum + r_draw_world: BSP walk
+    cull_max    as single
+    draw_sum    as single     '' d_draw_faces: rasterises, builds surfaces
+    draw_max    as single
+    hud_sum     as single     '' scr_draw_hud: the stats overlay
+    hud_max     as single
+    present_sum as single     '' vid_update: blit to the screen
+    present_max as single
+end type
+
 '' The path itself stays loose: arrays cannot be TYPE members.
 
 ''
