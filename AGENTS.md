@@ -1584,3 +1584,59 @@ see the note there.
 - ~~`clpBuffer` in `model.bas`~~ hardened to `'$STATIC`.
 - ~~Remaining cuts~~ done — `main.bas` is 427 lines: `doInit`, `doMain`,
   `doEnd`, `ExitError`. All ten modules carry `OPTION EXPLICIT`.
+
+## Dynamic lighting
+
+A single light follows the player (`g.rdr.dlight`, updated in `host_tick`
+from `g.pl.pos` every tick) and brightens nearby luxels live, additively,
+on top of whatever a face's baked lightmap and light style already
+produced -- Quake's own dynamic-light effect, minus the emitters this
+renderer has no rockets or muzzle flashes to drive. `DL_RADIUS#` in
+main.bas is Quake's own rocket-light radius, 200 units, picked for no
+better reason than fidelity to the source.
+
+**Reuses the light-style scratch buffer (`ls_scratch` in `d_surf.bas`)
+rather than adding a second one.** A face gets copied in, scaled by its
+style if non-neutral, and now also has the light's falloff added per
+luxel, all in the one pass -- the two effects were never going to collide
+since both only fire for faces already taking the rare, non-neutral path.
+
+**Coordinate space needed checking before any of the geometry math got
+written, not after.** `PlayerState.pos` documents itself as BSP space,
+Z-up; `Plane.norm`/`.dist` and `TexInfo.vecs`/`.vect` had to be confirmed
+the same way, since a mismatch here is exactly the kind of thing that
+compiles, runs, and silently produces wrong numbers. Two facts settled
+it, read out of working code rather than assumed: `d_poly.bas` dots
+`vecs`/`vect` against `vx,vy,vz` taken straight from `gv_buf` -- raw BSP
+vertex data, before the Y-swap to renderer space happens a few lines
+later -- so `vecs`/`vect` are BSP-space and want an UNSWAPPED point.
+`r_cam_plane_dist`, by contrast, dots a Y-up point against a Plane with
+the swap baked into the dot product itself (`pt.y*pl.norm.z +
+pt.z*pl.norm.y`), which is the opposite convention on the opposite kind
+of input. The two must never be mixed: this feature uses `g.pl.pos`
+(already Z-up, no swap) with `vecs`/`vect` and its own plain,
+un-swapped `Plane` dot product throughout, and never touches
+`r_cam_plane_dist` at all.
+
+**A dynamically lit face has to rebuild every frame it stays in range,
+not just the first.** The light's own falloff is computed inside
+`sb_build`, but the decision to skip the cache has to happen earlier, in
+`d_poly.bas`, before `sc_find` ever runs -- a plain style-epoch match
+would otherwise paper over the fact that the face needs redrawing. Forced
+by overwriting `lm_stag` with `-1` (a value `ls_epoch` never returns)
+whenever the face's plane is within radius. That also gives, for free,
+exactly one extra rebuild the frame the light leaves -- the stale `-1`
+from the last lit frame no longer matches the real epoch computed once
+the light is gone, so it misses once more and washes the glow back out,
+then settles. No separate "was lit last frame" flag needed.
+
+**Verified the same way the style-scale math was: unit tests for the
+formula (`ls_add_dlight`, hand-computed including a 3-4-5 triangle for an
+exact check), then confirmed against real runs on two independently
+converted maps.** Neither dm3ish nor e1m7 gives any way to eyeball this
+in isolation, so `sc_dlit` (builds the light actually reached) is a
+permanent counter, not scaffolding -- `-campath` on dm3ish shows several
+hundred over one walk, and pixel-diffing e1m7's `-bench` frame
+before/after the feature landed shows 69% of pixels uniformly brighter,
+no noise, consistent with an additive light near the camera in a tight
+corridor.

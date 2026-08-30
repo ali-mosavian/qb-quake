@@ -58,6 +58,8 @@ option explicit
 '$include: 'q_snd.bi'
 '$include: 'q_game.bi'
 
+const DL_RADIUS# = 200.0#   '' Quake's own rocket dlight radius
+
 ''
 '' This module's own procedures.
 ''
@@ -264,7 +266,8 @@ declare sub sb_dump ( _
     tri_buffer() as Face, _
     tex_inf_buff() as TexInfo, _
     gv_buf() as integer, _
-    mip_buff_inf() as MipTex _
+    mip_buff_inf() as MipTex, _
+    pln_buffer() as Plane _
 )
 declare function mod_cm_bytes ( _
     g as Game _
@@ -519,7 +522,7 @@ dim shared z_dc as long
         mod_tex_dump g
     elseif ( g.env.dump_set ) then
         sb_dump g, g.env.dump_face, g.env.dump_mip, tri_buffer(), tex_inf_buff(), _
-                gv_buf(), mip_buff_inf()
+                gv_buf(), mip_buff_inf(), pln_buffer()
     else
         host_main g, cp_x(), cp_y(), cp_z(), _
                   tri_buffer(), tex_inf_buff(), pln_buffer(), nds_buffer(), _
@@ -652,7 +655,7 @@ sub host_init ( _
     '' having got all the way through loading. Nothing needs the table
     '' until the first surface is built.
     if ( g.env.use_lm ) then mod_load_colormap g
-    sys_mem_mark "colormap"
+    sys_mem_mark "colormap"
 
     t_vid = timer
 
@@ -1200,6 +1203,14 @@ sub host_tick ( _
     '' light styles: fixed 10 Hz off the same clock, not framerate
     ls_animate g.rdr.anim_time
 
+    '' the test dynamic light, following the player -- field by field,
+    '' not a whole-UDT assignment, matching how every other Vec3 copy in
+    '' this codebase is written
+    g.rdr.dlight.pos.x = g.pl.pos.x
+    g.rdr.dlight.pos.y = g.pl.pos.y
+    g.rdr.dlight.pos.z = g.pl.pos.z
+    g.rdr.dlight.radius = DL_RADIUS#
+
 end sub
 
 
@@ -1381,6 +1392,7 @@ sub host_bench_report ( _
     '' nothing about whether they arrived together or spread out.
     ''
     print #benchf, "sc_built " + ltrim$(str$( scs.total_builds ))
+    print #benchf, "sc_dlit " + ltrim$(str$( scs.dlit ))
     print #benchf, "sc_worst " + ltrim$(str$( scs.bpeak ))
     print #benchf, "sc_live " + ltrim$(str$( scs.live ))
     print #benchf, "sc_evict " + ltrim$(str$( scs.evict ))
