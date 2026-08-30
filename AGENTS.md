@@ -2,6 +2,146 @@
 
 Hard-won things, mostly the kind that cost an hour before they cost a minute.
 
+## Rules
+
+The short list. Where one of these has a long-form note further down --
+most do, because most were learned the expensive way -- it points there
+rather than saying it twice.
+
+### Code: principles
+
+These apply whether the file is `.bas` or `.py`.
+
+**DRY: one fact in one place.** A value or a rule that is true twice is
+declared once and read twice. **SRP: one module, one subsystem.** Listing
+a file's procedure prefixes should collapse to one -- see **Layout** and
+**Splitting a module**, where this is checked mechanically. **Open/closed:
+a new idiom is a new case, not an edit to the cases already there.** A
+`select case` gains a branch; the branches it already has do not change
+shape to accommodate it. The ini parser is the worked example of where
+this does NOT pay -- see **What was deliberately not done** -- so apply
+it where it earns its keep, not everywhere reflexively.
+
+### Code: the renderer
+
+**`snake_case`, and this is a deliberate divergence.** The sibling BASIC
+project bans underscores because two of its three compilers reject them;
+we build with VBDOS alone, on evidence (`make evidence`), so the
+constraint does not reach us and every procedure here is already
+`r_draw_world`, `pl_trace`, `mod_find_spawn`. `PascalCase` for UDTs. Do
+not "fix" one convention into the other -- see **Names** under House
+rules.
+
+**No type sigils. Declare the type.** `as integer`, not `%`. The one
+exception is uGL's own spelling of its names (`uglMapEx&`), which is the
+library's, not ours.
+
+**A procedure does what its name says, on what it is given.** Everything
+it uses is a parameter or a local; no procedure reads a global. State
+travels in UDTs, and UDTs of UDTs. Arrays are the one forced exception,
+because BASIC cannot put them in a TYPE.
+
+**Bail early; do not nest.** Guard clauses and `exit sub` beat an `if`
+wrapping the body.
+
+**Names say what the thing is, in as few words as do that.** A `2` or a
+`b` suffix means the distinction was never given a word.
+
+### Code: the tools
+
+`tools/*.py` are standalone scripts run directly -- there is no
+`pyproject.toml`, no uv lock, no ruff config and no pytest suite today.
+The rules below are for what gets written or touched from here:
+
+- Python 3.13+, and write 3.13: `match`/`case` over `if`/`elif` chains,
+  `StrEnum` for string-constant sets (a bare name in `case` captures
+  everything, so constants must be dotted), `X | None`, type aliases,
+  walrus where it shortens.
+- Type annotations on every parameter and return. None of the current
+  seventeen tools has one, so this is a rule about new code, not a claim
+  about old.
+- Functions over classes; a class earns its place only when behaviour and
+  state travel together. Data is `@dataclass(slots=True)`, `frozen=True`
+  unless it mutates.
+- Functions are pure. No module-level code that does work.
+- A comprehension where it fits: a `for`+`append` with no real branching
+  is a comprehension not yet written as one.
+- ruff / ruff-format / isort, line length 120, double quotes, one import
+  per line.
+- **No function docstrings, and no comments that restate the code** -- a
+  comment must carry a fact the code does not. The MODULE docstring
+  stays: in this repo it is the tool's usage text, and `imgdiff.py` is
+  the model.
+- If a Python test suite appears: pytest, no test classes, parametrize
+  wherever one assertion runs over a set. The gates today are
+  `tools/check.sh` and `src/test/runall.sh`, not pytest.
+
+### Writing
+
+**Commit messages.** Conventional commits, `type(scope): description`,
+plus a body. The subject says what changed; the body says what it was and
+why. Both short. No `Co-Authored-By` -- the user is the author.
+
+**Replies in session are held to the same rule, and it is the one most
+often missed.** Say the thing and stop. The finding first, no preamble,
+and no closing paragraph recommending next steps unless a decision is
+actually open. PR bodies, docs and comments likewise.
+
+**Report what was measured, not what was expected.** If six runs were
+meant and three ran, say three.
+
+### Working
+
+**Watch DOSBox, do not wait for it -- and check often, not once.** A
+launched run gets `dosbox_status`, a screenshot, the text screen and
+`dosbox_where` checked repeatedly WHILE it is in flight, not started and
+then read once at the end. A picture answers in one glance what a timeout
+cannot answer at all: loading screen, black screen, error, or a frame
+that rendered and stopped. This is the MUST rule -- see House rules and
+**Drive DOSBox hands-on**. Every inspection freezes the CPU; resume with
+`dosbox_continue` and confirm `cpuRunning` before reading anything from
+the next check.
+
+**Measure, do not reason, about cost.** DOSBox charges per instruction and
+models no latency, so intuitions about what is expensive are worthless
+here. Six runs per arm, interleaved, medians -- see **One run per side is
+not a measurement**.
+
+**Round trip before trusting a rewrite.** Read the thing, write it back,
+compare bytes, and only then believe the transform. `-dumptex` reading
+every atlas cell back through its own view is this rule, and it is what
+proved the atlas right while the fault was elsewhere.
+
+**Fixtures are real output, never generated.** Reference images come from
+a known-good build; BSP and asset fixtures are real map data. A fixture
+you synthesised tests your idea of the format.
+
+**A fix starts with a failing test.** Reproduce it, watch it fail, then
+fix. New code does not need the test first, but the coverage has to be
+real. `tools/check.sh --churn` was written this way: it failed on the
+pool build before anything was changed.
+
+**Test behaviour, not implementation.** `sc_selftest` checks the
+allocator's invariants and passed with both of this session's bugs
+present; the test that caught them compares two frames.
+
+**Mutation-check every fix.** Put the bug back and confirm something
+notices. Forcing `sc_find` to always miss is the form this takes here --
+it made a nondeterministic render byte-identical, which is what named the
+hit path.
+
+**When the source measures clean and it still misbehaves, stop measuring
+the source and check what was BUILT.** A stale `uglv.lib`, a shared build
+directory, an unresolved external that LINK emitted an EXE around
+anyway -- see **Build directories: never share one**.
+
+**Consult an Opus-model agent for review at every iteration, not just
+the ends of a task.** Before writing code, after writing it, after each
+round of changes while iterating, and whenever stuck -- not only at the
+start and finish. Resume the same agent across rounds rather than
+starting fresh each time, so it keeps the thread of what it already
+reviewed. Fall back to Fable if Opus is unavailable or fails.
+
 ## House rules
 
 These are not suggestions. Apply them to anything you touch, and do not
