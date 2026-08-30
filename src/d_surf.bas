@@ -243,6 +243,19 @@ const LM_ATLAS_W = 8192
 dim shared lm_flat(0) as integer
 
 ''
+'' Scaled-luxel scratch for an animated style: sb_build copies a face's
+'' luxel rect here, multiplies every byte by the style's current value
+'' over LS_NEUTRAL, and points the builder at this instead of the raw
+'' atlas. A single fixed-length STRING, not an array of STRING*1 elements
+'' -- a fixed string is guaranteed stored inline, byte-adjacent, which is
+'' the one thing this needs and the one thing nothing in this codebase had
+'' already exercised for an array of them. 1024 bytes is a 32x32 luxel
+'' grid, comfortably past anything a real face's mip-floored surface asks
+'' for; sb_build falls back to the unscaled pointer rather than overrun it.
+''
+dim shared ls_scratch as string * 1024
+
+''
 '' The surface store: one big DC holding every cached surface's bytes,
 '' which surfaces are bump-allocated inside. It is shaped 16384 wide so
 '' that its own scanline table stays small -- see sc_store_open.
@@ -326,6 +339,10 @@ dim shared sc_desc() as long
 
 const LS_MAXSTYLE = 63
 const LS_RATE#     = 10.0#       '' Quake's own rate: ten steps a second
+const LS_NEUTRAL   = 120         '' ls_lchar("m")'s value -- the intensity
+                                  '' the compiler assumed while baking, so
+                                  '' a style sitting exactly here needs no
+                                  '' scaling at all
 
 type LightStyle
     pattern     as string * 32
@@ -434,6 +451,32 @@ function ls_epoch ( byval style as integer ) as integer
 end function
 
 ''::::::::::
+'' name: ls_value
+'' desc: The intensity sb_build scales a face's luxels against. Same
+''       out-of-range clamp as ls_epoch, and for the same reason.
+''::::::::::
+function ls_value ( byval style as integer ) as integer
+    if ( style < 0 or style > LS_MAXSTYLE ) then style = 0
+    ls_value = ls_tab(style).value
+end function
+
+''::::::::::
+'' name: ls_scale_byte
+'' desc: One luxel, scaled from the compiler's assumed LS_NEUTRAL to the
+''       style's current value. Pulled out of sb_build so the arithmetic
+''       has a name and a test of its own -- neither map on hand has a
+''       non-neutral style, so this is the only thing that DOES exercise
+''       it today.
+''::::::::::
+function ls_scale_byte ( byval raw as integer, byval sval as integer ) as integer
+    dim v as long
+    v = clng( raw ) * sval \ LS_NEUTRAL
+    if ( v > 255 ) then v = 255
+    if ( v < 0 ) then v = 0
+    ls_scale_byte = v
+end function
+
+''::::::::::
 '' name: ls_selftest
 '' desc: Proves the animation loop, not the map: a synthetic 2-char
 ''       pattern must toggle value and bump epoch exactly once per
@@ -484,6 +527,19 @@ function ls_selftest () as integer
     ls_animate 0.04#
     ls_animate 0.11#         '' crosses 0.1 here, one step total
     if ( ls_tab(30).epoch <> 1 ) then ls_selftest = -7 : exit function
+
+    ''
+    '' ls_scale_byte: the one thing neither map on hand ever exercises for
+    '' real, so it has to prove itself here instead.
+    ''
+    '' at neutral, a byte passes through unchanged
+    if ( ls_scale_byte( 200, LS_NEUTRAL ) <> 200 ) then ls_selftest = -8 : exit function
+    '' half neutral halves it
+    if ( ls_scale_byte( 200, LS_NEUTRAL \ 2 ) <> 100 ) then ls_selftest = -9 : exit function
+    '' double neutral clamps at 255, not wraps
+    if ( ls_scale_byte( 200, LS_NEUTRAL * 2 ) <> 255 ) then ls_selftest = -10 : exit function
+    '' off (style value 0) goes fully dark
+    if ( ls_scale_byte( 200, 0 ) <> 0 ) then ls_selftest = -11 : exit function
 
     ls_init                  '' leave the table as any real caller expects it
     ls_selftest = 1
@@ -1547,6 +1603,9 @@ sub sb_build ( _
     dim mi as integer, recip as single
     dim sbp as SurfBuild
     dim lseg as long, lofs16 as long
+    dim style as integer, sval as integer, scaled as integer
+    dim lrow as long, srow as long, li as integer, lv as long
+    dim ls_out as string
 
     aw = 64 \ (2 ^ mip)
     msk = aw - 1
@@ -1585,6 +1644,45 @@ sub sb_build ( _
         lmp = mod_lm_map ( g, lmy )
         lseg   = clng( sb_seg( lmp ) )
         lofs16 = (lmp and 65535&) + lmx
+
+        ''
+        '' A steady style (LS_NEUTRAL, style 0 on every map so far) needs
+        '' nothing more than the compare below -- one call and one integer
+        '' check, on the path every lit face already takes. Only a style
+        '' whose CURRENT value differs from what the compiler baked for
+        '' takes the copy-and-scale detour, and only if it fits the
+        '' scratch buffer; a grid that somehow doesn't is drawn unscaled
+        '' rather than overrun or dropped.
+        ''
+        style = gv_buf(GEOM_LMOFS + 6) and 255
+        sval  = ls_value( style )
+        if ( sval <> LS_NEUTRAL and lmw * lmh <= len( ls_scratch ) ) then
+            ''
+            '' memCopy lands the raw rows in ls_scratch, tight (no atlas
+            '' padding); the scale pass then reads it back with mid$ and
+            '' rebuilds it by concatenation rather than a mid$ assignment
+            '' -- LSET-style in-place mid$ has no precedent anywhere in
+            '' this codebase, and a whole-string reassignment does, for
+            '' the same reason ls_tab(i).pattern is set that way.
+            ''
+            srow = lseg * 65536& + lofs16
+            lrow = clng( varseg( ls_scratch ) ) * 65536& + _
+                   (clng( varptr( ls_scratch ) ) and 65535&)
+            for li = 0 to lmh - 1
+                memCopy lrow, srow, clng( lmw )
+                srow = srow + sb_pot( lmw )
+                lrow = lrow + lmw
+            next li
+            ls_out = ""
+            for li = 1 to lmw * lmh
+                lv = ls_scale_byte( asc( mid$( ls_scratch, li, 1 ) ), sval )
+                ls_out = ls_out + chr$( lv )
+            next li
+            ls_scratch = ls_out
+            lseg   = clng( varseg( ls_scratch ) )
+            lofs16 = clng( varptr( ls_scratch ) ) and 65535&
+            scaled = -1
+        end if
     end if
 
     '' atlas texels per surface texel, 16.16. wdth is 1/origW already.
@@ -1600,9 +1698,15 @@ sub sb_build ( _
     ''
     '' Atlas bytes per luxel row. The slot is padded to a power of two in
     '' each dimension for alignment, so the rows are pot(lmw) apart even
-    '' though only lmw of each is ours.
+    '' though only lmw of each is ours -- unless sbp.lmptr is the scratch
+    '' buffer above, which was written tight, lmw bytes per row and no
+    '' padding, so the stride the atlas needs would walk it off the end.
     ''
-    sbp.lm_stride = clng( sb_pot( lmw ) )
+    if ( scaled ) then
+        sbp.lm_stride = clng( lmw )
+    else
+        sbp.lm_stride = clng( sb_pot( lmw ) )
+    end if
     sbp.cmap_ptr = mod_cm_map( g )
     sbp.au0 = au
     sbp.av0 = av
