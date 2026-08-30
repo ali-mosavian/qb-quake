@@ -157,12 +157,26 @@ type PhaseTimes
     tick_max    as single
     cull_sum    as single     '' r_set_frustum + r_draw_world: BSP walk
     cull_max    as single
-    draw_sum    as single     '' d_draw_faces: rasterises, builds surfaces
-    draw_max    as single
+    draw_sum    as single     '' d_draw_faces: cache lookup, builds, AND
+    draw_max    as single     '' raster together -- see raster_sum below
     hud_sum     as single     '' scr_draw_hud: the stats overlay
     hud_max     as single
     present_sum as single     '' vid_update: blit to the screen
     present_max as single
+
+    ''
+    '' Nested inside draw, not subtracted from it: draw_sum is measured by
+    '' sys_now around the whole of d_draw_faces, on the same ~144 Hz clock
+    '' as every other phase here, so every phase's mean stays comparable
+    '' against ft_mean. raster_sum is measured by sys_rdtsc, per face,
+    '' summed across the frame -- the individual calls are far under that
+    '' clock's ~6.9ms resolution, which is the whole reason it needs
+    '' RDTSC rather than reusing sys_now here too. draw_sum - raster_sum
+    '' is everything else in d_draw_faces: cache lookup and, on a miss,
+    '' sb_build.
+    ''
+    raster_sum  as single
+    raster_max  as single
 end type
 
 '' The path itself stays loose: arrays cannot be TYPE members.

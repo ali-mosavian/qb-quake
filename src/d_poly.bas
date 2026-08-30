@@ -100,6 +100,7 @@ declare function sc_held ( byval face as integer ) as integer
 declare function sc_ready ( ) as integer
 declare function sc_shift ( byval v as integer ) as integer
 declare function ls_epoch ( byval style as integer ) as integer
+declare function sys_rdtsc ( ) as long
 declare function sc_alloc ( _
     g as Game, _
     byval face as integer, _
@@ -328,6 +329,8 @@ sub d_draw_faces ( _
     dim lm_cm as integer
     dim lm_dc as long, src_dc as long
     dim lm_su as single, lm_sv as single
+    dim rt0 as long, rast_cyc as long, rdt as single
+    dim rface as long
 
    ''
    '' Draw nodes
@@ -353,6 +356,8 @@ sub d_draw_faces ( _
     '' which is exactly what an unlit face already does.
     lm_use = 0
     if ( g.env.use_lm and g.rdr.lightmap and sc_ready <> 0 ) then lm_use = -1
+
+    rast_cyc = 0
 
     for mi = 0 to ord_count-1
         m = order_list(mi)
@@ -818,6 +823,7 @@ sub d_draw_faces ( _
                 '' internal edges for the rasteriser to seam along.
                 '' Wireframe mode still fans, it wants the triangles.
                 ''
+                rt0 = sys_rdtsc()
                 if ( g.env.poly_tp and poly_cnt <= 12 ) then
                     for  j = 0 to poly_cnt-1
                         pvtx(j).x = prj_x(j)
@@ -876,11 +882,44 @@ sub d_draw_faces ( _
 poly_done:
             end if
 
+            ''
+            '' Both paths through the block above -- the single-call
+            '' convex case and the triangle fan -- land here, so this
+            '' catches whichever one ran. Accumulated per face rather
+            '' than reported per face: sys_rdtsc costs a far call of its
+            '' own, and a Game-struct write on top of that per face would
+            '' be measuring the measurement.
+            ''
+            '' Guarded rather than added directly: on a long run the raw
+            '' counter has been measured reading back near zero for a
+            '' single call, unrelated to the sign-bit wrap sys_rdtsc
+            '' already corrects for -- traced to the dynamic core's own
+            '' RDTSC virtualization, not something this arithmetic can
+            '' fix. One microsecond cap of a million (a full second, on a
+            '' single face) is nowhere near real rasterise cost and
+            '' nowhere near a genuine measurement either, so a delta
+            '' outside 0..CAP is a glitched sample, discarded exactly as
+            '' sys_frame_time already discards a negative frame_tmr wrap.
+            ''
+            rface = sys_rdtsc() - rt0
+            if ( rface >= 0 and rface <= 1000000 ) then
+                rast_cyc = rast_cyc + rface
+            end if
+
             g.rdr.polys = g.rdr.polys + 1
 
 next_face:
         next ti
     next mi
+
+    if ( g.ft.n > 0 ) then
+        '' rast_cyc is a sum of MICROSECOND deltas now, sys_rdtsc having
+        '' already divided by cyc_per_us on every call -- just seconds
+        '' from here, no sys_rdtsc_hz() needed at the call site at all.
+        rdt = rast_cyc / 1000000.0
+        g.pt.raster_sum = g.pt.raster_sum + rdt
+        if ( rdt > g.pt.raster_max ) then g.pt.raster_max = rdt
+    end if
 end sub
 
 

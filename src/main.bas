@@ -207,6 +207,8 @@ declare function sys_mem_tag ( byval i as integer ) as string
 declare function sys_mem_val ( byval i as integer ) as long
 declare function sys_tick_hz ( ) as single
 declare function sys_now ( ) as single
+declare function sys_rdtsc ( ) as long
+declare function sys_rdtsc_hz ( ) as single
 declare sub d_init_turb ( )
 declare sub in_init ( _
     g as Game _
@@ -1420,6 +1422,14 @@ sub host_bench_report ( _
         print #benchf, "pt_hud_max " + ltrim$(str$( g.pt.hud_max * 1000.0 ))
         print #benchf, "pt_present_mean " + ltrim$(str$( (g.pt.present_sum / g.ft.n) * 1000.0 ))
         print #benchf, "pt_present_max " + ltrim$(str$( g.pt.present_max * 1000.0 ))
+        ''
+        '' Nested inside pt_draw, not subtracted from it -- see PhaseTimes
+        '' in q_scr.bi. pt_draw_mean minus this is cache lookup and,
+        '' on a miss, sb_build.
+        ''
+        print #benchf, "pt_raster_mean " + ltrim$(str$( (g.pt.raster_sum / g.ft.n) * 1000.0 ))
+        print #benchf, "pt_raster_max " + ltrim$(str$( g.pt.raster_max * 1000.0 ))
+        print #benchf, "rdtsc_hz " + ltrim$(str$( sys_rdtsc_hz() ))
     end if
     print #benchf, "polys " + ltrim$(str$( g.rdr.polys ))
     print #benchf, "tris " + ltrim$(str$( g.rdr.tris ))
