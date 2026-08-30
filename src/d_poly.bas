@@ -101,6 +101,17 @@ declare function sc_ready ( ) as integer
 declare function sc_shift ( byval v as integer ) as integer
 declare function ls_epoch ( byval style as integer ) as integer
 declare function sys_rdtsc ( ) as long
+'' r_span.c investigative prototype: global edge list -> sorted spans,
+'' Quake's r_edge.c approach, timed against real per-frame polygons.
+'' Draws nothing; only caller is d_draw_faces's own timing below.
+declare sub r_span_emit_poly ( _
+    byval poly_cnt as integer, _
+    vx() as single, _
+    vy() as single, _
+    byval depth as single _
+)
+declare function r_span_flush ( byval screen_w as integer, byval screen_h as integer ) as integer
+declare function r_span_overflow_count ( ) as integer
 declare function sc_alloc ( _
     g as Game, _
     byval face as integer, _
@@ -333,6 +344,12 @@ sub d_draw_faces ( _
     dim rface as long
     dim bt0 as long, build_cyc as long, bdt as single
     dim bface as long
+    dim at0 as long, aim_cyc as long, adt as single
+    dim aface as long
+    dim et0 as long, emit_cyc as long, edt as single
+    dim eface as long
+    dim ft0 as long, fdt as single, sface as long
+    dim span_cnt as integer
 
    ''
    '' Draw nodes
@@ -361,6 +378,8 @@ sub d_draw_faces ( _
 
     rast_cyc = 0
     build_cyc = 0
+    aim_cyc = 0
+    emit_cyc = 0
 
     for mi = 0 to ord_count-1
         m = order_list(mi)
@@ -830,8 +849,32 @@ sub d_draw_faces ( _
 
             '' the texture itself, only where no cached surface stands in
             if ( lm_on = 0 ) then
+                ''
+                '' Isolates uglSetView's own cost from the triangle
+                '' mappers below: mod_tex_shaded only calls it when the
+                '' cell it wants differs from the one its view is already
+                '' aimed at, so most calls land here and return at once.
+                '' Same glitch guard as raster/build -- see sys_rdtsc.
+                ''
+                at0 = sys_rdtsc()
                 src_dc = mod_tex_shaded( g, mipidx, tex_indx )
+                aface = sys_rdtsc() - at0
+                if ( aface >= 0 and aface <= 1000000 ) then
+                    aim_cyc = aim_cyc + aface
+                end if
             end if
+
+            ''
+            '' r_span.c prototype: same projected vertices uGL is about
+            '' to receive, timed the same way as aim/build/raster above.
+            ''
+            et0 = sys_rdtsc()
+            r_span_emit_poly poly_cnt, prj_x(), prj_y(), prj_w(0)
+            eface = sys_rdtsc() - et0
+            if ( eface >= 0 and eface <= 1000000 ) then
+                emit_cyc = emit_cyc + eface
+            end if
+
                 ''
                 '' One convex polygon, one call -- no fan pivot, so no
                 '' internal edges for the rasteriser to seam along.
@@ -926,6 +969,17 @@ next_face:
         next ti
     next mi
 
+    ''
+    '' r_span.c prototype, flush half: every polygon this frame has been
+    '' emitted above, so this resolves them into the final span list --
+    '' see r_span.c's own header for why this is the call that would end
+    '' up interleaved with drawing, one scanline at a time, rather than
+    '' materialising the whole frame's spans first.
+    ''
+    ft0 = sys_rdtsc()
+    span_cnt = r_span_flush( g.env.x_res, g.env.y_res )
+    sface = sys_rdtsc() - ft0
+
     if ( g.ft.n > 0 ) then
         '' rast_cyc is a sum of MICROSECOND deltas now, sys_rdtsc having
         '' already divided by cyc_per_us on every call -- just seconds
@@ -934,9 +988,23 @@ next_face:
         g.pt.raster_sum = g.pt.raster_sum + rdt
         if ( rdt > g.pt.raster_max ) then g.pt.raster_max = rdt
 
+        adt = aim_cyc / 1000000.0
+        g.pt.aim_sum = g.pt.aim_sum + adt
+        if ( adt > g.pt.aim_max ) then g.pt.aim_max = adt
+
         bdt = build_cyc / 1000000.0
         g.pt.build_sum = g.pt.build_sum + bdt
         if ( bdt > g.pt.build_max ) then g.pt.build_max = bdt
+
+        edt = emit_cyc / 1000000.0
+        g.pt.emit_sum = g.pt.emit_sum + edt
+        if ( edt > g.pt.emit_max ) then g.pt.emit_max = edt
+
+        if ( sface >= 0 and sface <= 1000000 ) then
+            fdt = sface / 1000000.0
+            g.pt.span_sum = g.pt.span_sum + fdt
+            if ( fdt > g.pt.span_max ) then g.pt.span_max = fdt
+        end if
     end if
 end sub
 

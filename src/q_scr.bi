@@ -179,6 +179,18 @@ type PhaseTimes
     raster_max  as single
 
     ''
+    '' Nested inside raster, not subtracted from it: mod_tex_shaded's own
+    '' uglSetView call, when the atlas cell it wants is not the one its
+    '' view is already aimed at -- the one place in the raster loop that
+    '' touches the atlas's EMS mapping rather than drawing pixels. Most
+    '' calls are a no-op (same cell as last face), so like raster and
+    '' build this needs sys_rdtsc, not sys_now. raster_sum - aim_sum is
+    '' the triangle mappers themselves.
+    ''
+    aim_sum     as single
+    aim_max     as single
+
+    ''
     '' Also nested inside draw, sibling to raster_sum: sc_alloc plus, on a
     '' miss, sb_build -- the rebuild path sc_find's own lookup skips. Only
     '' a few faces rebuild in a given frame, so like raster this needs
@@ -188,6 +200,27 @@ type PhaseTimes
     ''
     build_sum   as single
     build_max   as single
+
+    ''
+    '' Also nested inside draw, but NOT real draw work: r_span.c, an
+    '' investigative prototype that resolves the same frame's polygons
+    '' into a Quake-style global edge list -> sorted span list,
+    '' alongside the real raster path, purely to measure the cost -- it
+    '' draws nothing and changes nothing about what is drawn. emit_sum
+    '' is r_span_emit_poly, called once per face like aim/build above;
+    '' span_sum is r_span_flush, called once per frame after the loop.
+    '' Both run inside d_draw_faces, so draw_sum's own wall clock
+    '' already includes them the same way it includes raster/build/aim
+    '' -- which means anyone computing "what draw_sum spends outside
+    '' raster/build/aim" has to subtract these two as well, or that
+    '' residual reads as inflated by a prototype that is not part of
+    '' the real frame at all. Likewise for ft_mean against a build that
+    '' predates this file.
+    ''
+    emit_sum    as single
+    emit_max    as single
+    span_sum    as single
+    span_max    as single
 
     ''
     '' Nested inside cull, not subtracted from it, same reasoning as
