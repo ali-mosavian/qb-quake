@@ -102,6 +102,12 @@ that rendered and stopped. This is the MUST rule -- see House rules and
 `dosbox_continue` and confirm `cpuRunning` before reading anything from
 the next check.
 
+**In QB, one call per frame beats many small ones.** A C port of
+`d_draw_faces`'s per-face MATH, called once per face, moved e1m7's
+38.773ms setup phase to 38.672ms -- six pairs, medians, -0.100ms. The
+arithmetic was never the cost; 497 crossings a frame were. Port the
+whole loop and cross once, or do not bother.
+
 **Measure, do not reason, about cost.** DOSBox charges per instruction and
 models no latency, so intuitions about what is expensive are worthless
 here. Six runs per arm, interleaved, medians -- see **One run per side is
@@ -544,6 +550,23 @@ three-r typo that was a harmless no-op under implicit declaration became a
 `errror` just to keep the bug alive, it is now `on error goto HandleErr`,
 which finally does what it always looked like it did.
 
+**A far-to-near pointer cast compiles silently and drops the segment.**
+`cam_plane_dist( campos, (Plane *)pl )` where `pl` is `Plane far *` reads
+plane data from whatever sits at that offset in DS. No warning, no crash:
+22 polygons drawn where 153 belonged, a plausible frame with most of the
+level missing. Near-to-far is safe -- it adds DS. Audit the other
+direction.
+
+**A defensive guard that changes control flow is a behaviour change.**
+`if ( vcnt < 3 ) continue;` added to a port looked like bounds checking.
+BASIC had no such test: the face flowed on to the clipper and was
+rejected there, and on the way it still passed the lightmap gate and
+took a cached surface. Same picture, five fewer `sc_find` calls a frame,
+and a diverged cache. Port the control flow, not just the arithmetic.
+
+**BASIC's `int()` is FLOOR; a C cast truncates toward zero.** They differ
+by one for a negative argument.
+
 **MASM logical-line limit is 512 chars** including continuations. Expanding
 tabs to spaces in µGL's asm pushed a `local` block over it.
 
@@ -633,6 +656,14 @@ directly and prints to **stdout**, so always capture `> run.out` too.
   afterwards or its bookkeeping goes wrong in whichever direction the skew runs.
 
 ## Rebuilding uGL
+
+**`tools/native/Makefile` cannot rebuild uGL from a clean checkout.** It
+sources from `$(MGL)/src`, but `uglspan.asm` lives only in
+`ugl-patch/src/ugl/`, so the build stops at "No rule to make target
+.../UGL/uglspan.obj". `build/native-mgl/UGLV.LIB` is also stale and links
+with 23 unresolved externals -- while still emitting an EXE that appears
+to build and then does nothing. Use `build/native-mgl-span/UGLV.LIB` and
+check `grep -c L2029 <builddir>/LINK.OUT` is 0 before believing any run.
 
 `tools/mglbuild.sh uglplxtg` rebuilds a module and swaps it into `uglv.lib`;
 `--all` does all 151, `--list` prints the module-to-directory map it reads out
@@ -932,7 +963,11 @@ file now ships `false`.
 **`defint a-z` is inert once every declaration is explicit**, and 65 of them
 were. Proof rather than argument: removing all 65 produced a byte-identical
 EXE. It only ever typed undeclared names, which `OPTION EXPLICIT` forbids,
-and sigil-less function returns, of which there were none.
+and sigil-less function returns -- of which there were TWO, found later:
+`sc_find` and `sc_alloc` both assign a `long` dc and declare no return
+type, so they returned a **single**. BASIC hid it, converting back on
+assignment; C declaring them `long` read DX:AX and got garbage. Both now
+say `as long`. Check for an `as` clause before believing a return type.
 
 **VBDOS accepts `FUNCTION name (args) AS type`**, so the classic `%`/`$`
 return sigils are not required. QB 4.5 does not, which is why the original
@@ -1023,8 +1058,23 @@ angle key: aim with `atan2(-dy, dx)`.
 
 **`-jump` holds jump, `-walk` holds forward, `-strafe` holds strafe**, and `peakz` records the highest
 point reached, so a jump is provable from a headless run: from the dm3ish
-spawn it should peak about 46 units above the resting height, which is
-`v^2/2g` for Quake's 270 up and 800 down.
+spawn it should peak **47.8** units above the resting height. Not the
+45.56 that `v^2/2g` gives for Quake's 270 up and 800 down: a fixed 60Hz
+step overshoots the continuous result, and the measurement is the
+authority.
+
+**Movement is Quake's, from `sv_user.c`.** Walking is `cl_forwardspeed`
+200; 320 is `sv_maxspeed`, what `+speed` gets. `sv_edgefriction` doubles
+friction over a drop and is ported. Before this, a flat 500 u/s^2 against
+speed-proportional friction settled at `500/4 = 125` u/s -- the 320 cap
+it carried was never reached, so "the cap is unchanged" was never the
+same as "the speed is unchanged".
+
+**Simulate id's code offline before trusting a movement port.** A Python
+transcription of SV_Accelerate/SV_UserFriction predicts the whole curve
+in seconds; ours then measured 197.9 and 199.8 u/s against a predicted
+200, with a constant 63.9 unit offset that was the spawn fall under
+SV_AirAccelerate's 30 u/s cap.
 
 **Water and lava live in hull 0, not the collision hulls.** The clipnodes are
 built for a box to move through and carry only EMPTY and SOLID -- on dm3ish,
@@ -1484,6 +1534,15 @@ picture every time. The pinning is reverted in the tree rather than left
 in looking like a fix -- and note it makes the squeeze worse, not better:
 four windows want slots (destination, atlas, luxels, colormap) and pinning
 two leaves the builder cycling the atlas through the other two.
+
+## `-nostats` makes the picture deterministic
+
+With the HUD off the renderer is **byte-identical run to run** -- one
+binary, two runs, `imgdiff` reports IDENTICAL. An 8-to-40 pixel spread
+that looks like surface-cache churn is the overlay, not the cache. Every
+A/B on an image wants `-nostats`, because it turns "within noise" into an
+exact test. The churn below is real, but it is what `--churn` provokes,
+not what a still frame shows.
 
 ## The surface cache draws a different picture every run
 
