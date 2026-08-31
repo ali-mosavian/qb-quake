@@ -66,6 +66,19 @@ const PL_FRICTION#   = 4.0
 '' Quake's sv_stopspeed.
 const PL_STOPSPEED#  = 100.0
 const PL_MAXSPEED#   = 320.0
+''
+'' Quake's cl_forwardspeed. 320 is sv_maxspeed -- what +speed gets you,
+'' not what walking does: cl_movespeedkey doubles 200 to 400 and the
+'' clamp brings it back to 320. Without a run key, 200 is the walk.
+''
+const PL_FWDSPEED#   = 200.0
+'' sv_edgefriction: friction DOUBLES when the leading edge overhangs a
+'' drop, which is what stops you sliding off a ledge. Costs one trace
+'' per tick -- SV_UserFriction's own.
+const PL_EDGEFRIC#   = 2.0
+'' how far ahead SV_UserFriction probes, and how far down
+const PL_EDGE_FWD#   = 16.0
+const PL_EDGE_DROP#  = 34.0
 '' upward speed of a jump. Quake's, so the arc feels the same
 const PL_JUMP#       = 270.0
 '' noclip fly speed, units per second
