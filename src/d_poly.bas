@@ -158,7 +158,7 @@ dim shared sv0 as single, sv1 as single, sv2 as single, sv3 as single
 dim shared tw as single, th as single
 dim shared uvbuff(64) as TexCoord
 dim shared uv_buff_b(32) as TexCoord
-dim shared vcnt as integer, mipidx as integer
+dim shared vcnt as integer, tex_id as integer
 
 dim shared vtx(31) as tritype
 ''
@@ -320,7 +320,7 @@ sub d_draw_faces ( _
 
     dim gp as long, gv_dst as long
     dim zl as single
-    dim mip_level as integer, tex_indx as integer
+    dim mip_level as integer, draw_mip as integer
     dim tex_dc as long
     dim p2 as integer, p3 as integer
     dim liquid as integer
@@ -463,9 +463,9 @@ sub d_draw_faces ( _
 
             vcnt = gv_buf(0)
             tex = tri_buffer(i).tex_info_id
-            mipidx = tex_inf_buff(tex).mip_tex
+            tex_id = tex_inf_buff(tex).mip_tex
 
-            liquid = mip_buff_inf(mipidx).liquid
+            liquid = mip_buff_inf(tex_id).liquid
             zofs   = brush( face_mdl(i) ).zofs
 
             ''
@@ -504,8 +504,8 @@ sub d_draw_faces ( _
             '' the same product in a different order -- and
             '' nothing downstream wants the unscaled value.
             ''
-            tw = mip_buff_inf(mipidx).wdth
-            th = mip_buff_inf(mipidx).hght
+            tw = mip_buff_inf(tex_id).wdth
+            th = mip_buff_inf(tex_id).hght
 
             ''
             '' Is this face a surface-cache candidate? It must have a
@@ -520,7 +520,7 @@ sub d_draw_faces ( _
             '' the atlas scanline, -1 on an unlit face.
             lm_on = 0
             if ( lm_use and liquid = 0 and _
-                 mip_buff_inf(mipidx).anim_count <= 1 ) then
+                 mip_buff_inf(tex_id).anim_count <= 1 ) then
                 if ( gv_buf(GEOM_LMOFS) >= 0 ) then
                     lm_tms  = gv_buf(GEOM_LMOFS + 2)
                     lm_tmt  = gv_buf(GEOM_LMOFS + 3)
@@ -592,9 +592,9 @@ sub d_draw_faces ( _
             '' An animated texture swaps which image is sampled, so it costs
             '' nothing but the index arithmetic.
             ''
-            if ( mip_buff_inf(mipidx).anim_count > 1 ) then
-                mipidx = mip_buff_inf(mipidx).anim_base + _
-                         (int( g.rdr.anim_time * 5.0 ) mod mip_buff_inf(mipidx).anim_count)
+            if ( mip_buff_inf(tex_id).anim_count > 1 ) then
+                tex_id = mip_buff_inf(tex_id).anim_base + _
+                         (int( g.rdr.anim_time * 5.0 ) mod mip_buff_inf(tex_id).anim_count)
             end if
                     
             for  j = 0 to vcnt-1
@@ -726,9 +726,9 @@ sub d_draw_faces ( _
             end if
 
             if ( g.rdr.use_mips ) then
-                tex_indx = mip_level
+                draw_mip = mip_level
             else
-                tex_indx = 0
+                draw_mip = 0
             end if
 
             ''
@@ -793,7 +793,7 @@ sub d_draw_faces ( _
                         ''
                         '' hoisted: BC will not take a call inside another
                         '' call's argument list
-                        tex_dc = mod_tex_raw( g, mipidx, lm_mip )
+                        tex_dc = mod_tex_raw( g, tex_id, lm_mip )
                         sb_build g, lm_dc, tex_dc, i, lm_mip, _
                                   2 ^ sc_shift( lm_sw ), 2 ^ sc_shift( lm_sh ), _
                                   tri_buffer(), tex_inf_buff(), gv_buf(), mip_buff_inf(), _
@@ -857,7 +857,7 @@ sub d_draw_faces ( _
                 '' Same glitch guard as raster/build -- see sys_rdtsc.
                 ''
                 at0 = sys_rdtsc()
-                src_dc = mod_tex_shaded( g, mipidx, tex_indx )
+                src_dc = mod_tex_shaded( g, tex_id, draw_mip )
                 aface = sys_rdtsc() - at0
                 if ( aface >= 0 and aface <= 1000000 ) then
                     aim_cyc = aim_cyc + aface
