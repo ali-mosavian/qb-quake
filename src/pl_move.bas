@@ -112,8 +112,15 @@ declare sub pl_water_level ( _
     planes() as Plane _
 )
 declare sub pl_ground_friction ( _
+    org as Vec3, _
     vel as Vec3, _
-    byval dt as single _
+    byval dt as single, _
+    tr as TraceResult, _
+    byval model_count as integer, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    clip() as ClipNode, _
+    planes() as Plane _
 )
 declare sub pl_ground_accel ( _
     vel as Vec3, _
@@ -568,23 +575,54 @@ end sub
 ''       matter: acceleration, top speed, and how fast the player stops.
 ''::::::::::
 sub pl_ground_friction ( _
+    org as Vec3, _
     vel as Vec3, _
-    byval dt as single _
+    byval dt as single, _
+    tr as TraceResult, _
+    byval model_count as integer, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    clip() as ClipNode, _
+    planes() as Plane _
 )
     dim speed as single, speed_floor as single, newspeed as single
+    dim fric as single
+    dim edge_a as Vec3, edge_b as Vec3
 
     speed = sqr( vel.x*vel.x + vel.y*vel.y )
     if ( speed = 0.0 ) then exit sub
 
+    ''
+    '' Edge friction. Probe one player-width ahead along the way we
+    '' are travelling, from the feet down 34 units: if nothing is
+    '' under it the leading edge overhangs a drop, and friction
+    '' doubles. That is what stops you sliding off a ledge, and it
+    '' is the one part of SV_UserFriction that costs a trace.
+    ''
+    edge_a.x = org.x + vel.x/speed*PL_EDGE_FWD#
+    edge_a.y = org.y + vel.y/speed*PL_EDGE_FWD#
+    edge_a.z = org.z - PL_FEET#
+    edge_b.x = edge_a.x
+    edge_b.y = edge_a.y
+    edge_b.z = edge_a.z - PL_EDGE_DROP#
+
+    pl_trace edge_a, edge_b, tr, model_count, models(), brush(), clip(), planes()
+
+    fric = PL_FRICTION#
+    if ( tr.frac = 1.0 ) then fric = PL_FRICTION# * PL_EDGEFRIC#
+
     speed_floor = speed
     if ( speed_floor < PL_STOPSPEED# ) then speed_floor = PL_STOPSPEED#
 
-    newspeed = speed - dt*speed_floor*PL_FRICTION#
+    newspeed = speed - dt*speed_floor*fric
     if ( newspeed < 0.0 ) then newspeed = 0.0
     newspeed = newspeed / speed
 
+    '' All THREE components, as SV_UserFriction does: the speed is
+    '' measured from x and y, but the scaling is applied to z as well.
     vel.x = vel.x * newspeed
     vel.y = vel.y * newspeed
+    vel.z = vel.z * newspeed
 
 end sub
 
@@ -693,8 +731,8 @@ sub pl_water_move ( _
     dim speed as single, newspeed as single
     dim addspeed as single, accelspeed as single
 
-    wishvel.x = dir_x*fwd*PL_MAXSPEED# - dir_y*strafe*PL_MAXSPEED#
-    wishvel.y = dir_y*fwd*PL_MAXSPEED# + dir_x*strafe*PL_MAXSPEED#
+    wishvel.x = dir_x*fwd*PL_FWDSPEED# - dir_y*strafe*PL_FWDSPEED#
+    wishvel.y = dir_y*fwd*PL_FWDSPEED# + dir_x*strafe*PL_FWDSPEED#
 
     if ( fwd = 0.0 and strafe = 0.0 ) then
         wishvel.z = -PL_WATERSINK#
@@ -821,8 +859,8 @@ sub pl_move ( _
     if ( g.pl.water_level >= 2 ) then
         pl_water_move g.pl.vel, fwd, strafe, dir_x, dir_y, dt
     else
-        wishvel.x = dir_x*fwd*PL_MAXSPEED# - dir_y*strafe*PL_MAXSPEED#
-        wishvel.y = dir_y*fwd*PL_MAXSPEED# + dir_x*strafe*PL_MAXSPEED#
+        wishvel.x = dir_x*fwd*PL_FWDSPEED# - dir_y*strafe*PL_FWDSPEED#
+        wishvel.y = dir_y*fwd*PL_FWDSPEED# + dir_x*strafe*PL_FWDSPEED#
 
         wishspeed = sqr( wishvel.x*wishvel.x + wishvel.y*wishvel.y )
         if ( wishspeed > 0.0 ) then
@@ -835,7 +873,8 @@ sub pl_move ( _
         if ( wishspeed > PL_MAXSPEED# ) then wishspeed = PL_MAXSPEED#
 
         if ( g.pl.on_ground ) then
-            pl_ground_friction g.pl.vel, dt
+            pl_ground_friction g.pl.pos, g.pl.vel, dt, tr, model_count, _
+                               models(), brush(), clp_buffer(), planes()
             pl_ground_accel g.pl.vel, wishdir, wishspeed, dt
         else
             pl_air_accel g.pl.vel, wishdir, wishspeed, dt
