@@ -43,8 +43,16 @@ C_SRC  := $(wildcard src/*.c)
 C_MODS := $(basename $(notdir $(C_SRC)))
 C_HDRS := $(wildcard src/*.h)
 
+# This project's own assembly -- hot loops that are ours, not uGL's, and
+# so have no business living in mgl's tree. Assembled on the host: jwasm
+# needs no DOS, unlike BC and BCC.
+ASM_SRC  := $(wildcard src/*.asm)
+ASM_MODS := $(basename $(notdir $(ASM_SRC)))
+JWASM    := $(TOOLCHAINS)/native/bin/jwasm
+
 BAS_OBJS := $(addprefix $(BUILD)/,$(addsuffix .obj,$(BAS_MODS)))
 C_OBJS   := $(addprefix $(BUILD)/,$(addsuffix .obj,$(C_MODS)))
+ASM_OBJS := $(addprefix $(BUILD)/,$(addsuffix .obj,$(ASM_MODS)))
 
 DATA := data/stuff.ini data/base.dat
 ## Preprocessed textures. The renderer blits these instead of resampling and
@@ -79,6 +87,9 @@ $(BUILD)/%.obj: src/%.bas $(HDRS) | $(BUILD)
 $(BUILD)/%.obj: src/%.c $(C_HDRS) | $(BUILD)
 	$(BCC_QR) $< $@
 
+$(BUILD)/%.obj: src/%.asm | $(BUILD)
+	$(JWASM) -c -Cp -Zg -omf -Fo$@ $<
+
 $(BUILD)/stuff.ini: data/stuff.ini | $(BUILD)
 	cp $< $@
 
@@ -95,9 +106,9 @@ $(BUILD)/.assets-stamp: $(ASSET_FILES) | $(BUILD)
 	cp -R data/assets/* $(BUILD)/
 	touch $@
 
-$(EXE): $(BAS_OBJS) $(C_OBJS) $(BUILD)/stuff.ini $(BUILD)/base.dat $(BUILD)/UGLV.LIB $(BUILD)/.assets-stamp
+$(EXE): $(BAS_OBJS) $(C_OBJS) $(ASM_OBJS) $(BUILD)/stuff.ini $(BUILD)/base.dat $(BUILD)/UGLV.LIB $(BUILD)/.assets-stamp
 	@python3 tools/qblint.py
-	$(LINKQR) $(BUILD) "$(BAS_MODS)" "$(C_MODS)"
+	$(LINKQR) $(BUILD) "$(BAS_MODS)" "$(C_MODS) $(ASM_MODS)"
 
 run: $(EXE)                     ## headless run; 's' screenshots to build/vbd/
 	@VBD_OUT=$(BUILD) tools/dosbox.sh run $(MAP)

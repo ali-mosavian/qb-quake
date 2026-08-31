@@ -109,7 +109,7 @@ MODS_UGL  := uglbez uglbmp uglelip uglelipf uglclear uglcolor uglconv \
              uglpage uglpixel uglpoly uglpolyf uglput uglputm uglputb \
              uglputs uglblit uglblits uglblitr uglrect uglrectf uglrow \
              uglsel uglvline uglplxf uglplxg uglplxt uglplxtp uglplxtg \
-             uglpltpg uglrtscl uglpal ugllut uglpalfx uglview uglsurf uglshade uglwin uglz uglarr
+             uglpltpg uglrtscl uglpal ugllut uglpalfx uglview uglsurf uglshade uglwin uglz uglarr uglspan
 
 DIR_UGLU  := uglu
 MODS_UGLU := glubez glubez3d glucpuft gludcsav

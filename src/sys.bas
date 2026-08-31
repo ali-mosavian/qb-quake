@@ -162,6 +162,9 @@ sub sys_parse_args ( _
         if ( lcase$(argv(i)) = "-noz" ) then
             g.env.no_z = true
         end if
+        if ( lcase$(argv(i)) = "-spandraw" ) then
+            g.env.span_draw = true
+        end if
         if ( lcase$(argv(i)) = "-nostats" ) then
             g.env.no_stats = true
         end if

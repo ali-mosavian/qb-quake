@@ -391,6 +391,11 @@ type Env
                                 '' into triangles. A/B against the proven
                                 '' uglTriTP path.
     no_z        as integer      '' -noz: skip the depth buffer entirely
+    span_draw   as integer      '' -spandraw: draw the frame from r_span.c's
+                                '' resolved spans, through uGL's scanline
+                                '' filler, instead of handing whole polygons
+                                '' to uglPolyTP. Suppresses the polygon path
+                                '' outright -- both would draw the same faces.
     cam_path     as integer      '' -campath: fly the A* route from
                                 '' campath.bin instead of standing still.
                                 '' The old bench rendered ONE viewpoint, so
