@@ -26,12 +26,12 @@
 /* Game.rdr.dlight's own offset, same story as r_walk.c's GAME_VIS_OFFSET:
    measured (varptr(g.rdr.dlight) - varptr(g) = 5006), not derived from
    World/Env/PlayerState/CamState's sizes ahead of it, and asserted at
-   startup (see sb_layout_ok) for the same reason. 5022 - 5006 = 16,
+   startup (see sb_layout_ok) for the same reason. 5024 - 5008 = 16,
    exactly sizeof(DynLight), confirming dlight is RenderState's last
    field with vis immediately following it -- a cheap independent check
    this comment records but does not rely on at run time.
 */
-#define GAME_DLIGHT_OFFSET 5006
+#define GAME_DLIGHT_OFFSET 5008
 
 #define GEOM_LMOFS 1
 #define LS_NEUTRAL 120

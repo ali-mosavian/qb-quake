@@ -274,6 +274,10 @@ dim shared ls_scratch as string * 1024
 ''
 dim shared sc_slot() as CacheSlot
 dim shared sc_gen as integer
+'' Where sc_find/sc_alloc last aimed the class view. One view serves
+'' every surface of a size class, so the handle alone does not say which
+'' surface it points at -- a caller that draws later has to re-aim it.
+dim shared sc_aim_ofs as long
 dim shared sc_ok as integer
 
 dim shared sc_made as integer
@@ -1022,7 +1026,8 @@ function sc_find ( _
     vcls = (a - SC_MINSH) * 5 + (b - SC_MINSH)
     dc = sc_desc( vcls )
     if ( dc <> 0 ) then
-        if ( uglSetView%( dc, clng( sc_bgrn( sc_slot(face).blk ) ) * SC_GRAN ) = 0 ) then dc = 0
+        sc_aim_ofs = clng( sc_bgrn( sc_slot(face).blk ) ) * SC_GRAN
+        if ( uglSetView%( dc, sc_aim_ofs ) = 0 ) then dc = 0
     end if
     if ( dc <> 0 ) then
         sc_hits = sc_hits + 1
@@ -1207,6 +1212,7 @@ function sc_alloc ( _
     sc_lru_touch blk
 
     '' aim it at the bytes just claimed, ready for the builder to write
+    sc_aim_ofs = ofs
     if ( uglSetView%( dc, ofs ) = 0 ) then
         sc_alloc = 0
         exit function
@@ -1724,4 +1730,13 @@ function sc_held ( byval face as integer ) as integer
     if ( sc_slot(face).blk < 0 ) then exit function
     if ( (sc_slot(face).tag \ 4) <> sc_gen ) then exit function
     sc_held = sc_slot(face).tag and 3
+end function
+
+
+''::::::::::
+'' name: sc_view_ofs
+'' desc: the offset the class view was last aimed at.
+''::::::::::
+function sc_view_ofs () as long
+    sc_view_ofs = sc_aim_ofs
 end function

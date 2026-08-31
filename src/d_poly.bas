@@ -108,8 +108,14 @@ declare sub r_span_emit_poly ( _
     byval poly_cnt as integer, _
     vx() as single, _
     vy() as single, _
-    byval depth as single _
+    vu() as single, _
+    vv() as single, _
+    vz() as single, _
+    byval texdc as long, _
+    byval texofs as long _
 )
+declare sub r_span_draw_to ( byval dst_dc as long )
+declare function sc_view_ofs ( ) as long
 declare function r_span_flush ( byval screen_w as integer, byval screen_h as integer ) as integer
 declare function r_span_overflow_count ( ) as integer
 declare function sc_alloc ( _
@@ -339,6 +345,8 @@ sub d_draw_faces ( _
     dim z_want as integer, z_have as integer, z_avail as integer
     dim lm_cm as integer
     dim lm_dc as long, src_dc as long
+    '' the shared view's aim goes with its handle -- see r_span.c
+    dim tex_ofs as long
     dim lm_su as single, lm_sv as single
     dim rt0 as long, rast_cyc as long, rdt as single
     dim rface as long
@@ -833,6 +841,7 @@ sub d_draw_faces ( _
                         next j
                     end if
                     src_dc = lm_dc
+                    tex_ofs = sc_view_ofs()
                 else
                     ''
                     '' No surface to be had -- the class was exhausted or the
@@ -858,6 +867,13 @@ sub d_draw_faces ( _
                 ''
                 at0 = sys_rdtsc()
                 src_dc = mod_tex_shaded( g, tex_id, draw_mip )
+                '' ofs is [id*4 + level], and the two locals here are
+                '' named the wrong way round: tex_id carries the texture
+                '' id and draw_mip the mip, which is why the call above
+                '' reads as it does. Getting this pair backwards aims the
+                '' view at another cell entirely -- coherent geometry
+                '' wearing noise.
+                tex_ofs = g.wld.tex.ofs( tex_id*4 + draw_mip )
                 aface = sys_rdtsc() - at0
                 if ( aface >= 0 and aface <= 1000000 ) then
                     aim_cyc = aim_cyc + aface
@@ -868,12 +884,20 @@ sub d_draw_faces ( _
             '' r_span.c prototype: same projected vertices uGL is about
             '' to receive, timed the same way as aim/build/raster above.
             ''
+            if ( g.env.span_draw ) then
             et0 = sys_rdtsc()
-            r_span_emit_poly poly_cnt, prj_x(), prj_y(), prj_w(0)
+            r_span_emit_poly poly_cnt, prj_x(), prj_y(), _
+                             prj_u(), prj_v(), prj_w(), src_dc, tex_ofs
             eface = sys_rdtsc() - et0
             if ( eface >= 0 and eface <= 1000000 ) then
                 emit_cyc = emit_cyc + eface
             end if
+            end if
+
+            '' The sweep draws this face, so nothing below may: the two
+            '' paths cover the same pixels. pt_raster reads ~0 in this
+            '' mode by design -- the fill is inside pt_span instead.
+            if ( g.env.span_draw ) then goto poly_done
 
                 ''
                 '' One convex polygon, one call -- no fan pivot, so no
@@ -977,7 +1001,11 @@ next_face:
     '' materialising the whole frame's spans first.
     ''
     ft0 = sys_rdtsc()
-    span_cnt = r_span_flush( g.env.x_res, g.env.y_res )
+    span_cnt = 0
+    if ( g.env.span_draw ) then
+        r_span_draw_to h_dst_dc
+        span_cnt = r_span_flush( g.env.x_res, g.env.y_res )
+    end if
     sface = sys_rdtsc() - ft0
 
     if ( g.ft.n > 0 ) then
