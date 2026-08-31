@@ -30,13 +30,14 @@ const CONTENTS_SKY   = -6
 ''
 const PLAYER_HULL   = 1
 
-'' units per second squared
+'' units per second squared. Quake's sv_gravity.
 const PL_FALLACC#    = 800.0
+'' a per-axis safety clamp, not a gameplay speed cap. Quake's sv_maxvelocity.
 const PL_MAXVEL#     = 2000.0
 const PL_STOP_EPS#   = 0.1
 '' 1/32, Quake's DIST_EPSILON
 const PL_CLIP_EPS#   = 0.03125
-'' the tallest stair the player walks up
+'' the tallest stair the player walks up. Quake's STEPSIZE.
 const PL_STEP#       = 18.0
 '' eye above the hull origin
 const PL_EYE#        = 22.0
@@ -47,21 +48,39 @@ const PL_EYE#        = 22.0
 const PL_TELE_LIFT#  = 27.0
 '' cos of the steepest walkable slope
 const PL_GROUND_NRM# = 0.7
-const PL_ACCEL#      = 500.0
+''
+'' Quake's sv_accelerate: not an acceleration in units/s^2, a dimensionless
+'' rate at which velocity closes on wishspeed -- see pl_accelerate and
+'' pl_air_accelerate, both ported from sv_user.c's SV_Accelerate and
+'' SV_AirAccelerate. The two are separate procedures, not one with a flag,
+'' because SV_AirAccelerate keeps a deliberate quirk: it caps the SPEED
+'' allowed to be gained (PL_AIRSPEEDCAP#) but not the RATE, which is what
+'' makes air strafing gain more per tick than a naive reading suggests.
+''
+const PL_ACCELERATE# = 10.0
+'' SV_AirAccelerate's hardcoded cap on wishspeed while airborne
+const PL_AIRSPEEDCAP# = 30.0
+'' Quake's sv_friction, ground and water alike -- SV_WaterMove reuses it
 const PL_FRICTION#   = 4.0
+'' the floor under ground friction's falloff, so a near-stop still stops.
+'' Quake's sv_stopspeed.
+const PL_STOPSPEED#  = 100.0
 const PL_MAXSPEED#   = 320.0
 '' upward speed of a jump. Quake's, so the arc feels the same
 const PL_JUMP#       = 270.0
 '' noclip fly speed, units per second
 const PL_NOCLIP#     = 200.0
-'' downward drift in water: not gravity, just enough to sink slowly
+'' downward drift in water when there is no input: SV_WaterMove's wishvel.z
+'' of -60, before pl_water_move's own accel/friction is applied to it --
+'' not a separate force the way it used to be.
 const PL_WATERSINK#  = 60.0
-'' how fast jump swims upward
-const PL_SWIM#       = 100.0
-'' water is thick: this much of your speed survives each second
-const PL_WATERFRIC#  = 4.0
-'' and it caps how fast you can move through it
-const PL_WATERSPEED# = 160.0
+'' swim-up speed on jump at waterlevel>=2, by liquid: Quake's JumpButton
+'' sets velocity.z to exactly one of these, keyed on watertype.
+const PL_SWIM_WATER# = 100.0
+const PL_SWIM_SLIME# = 80.0
+const PL_SWIM_LAVA#  = 50.0
+'' SV_WaterMove's wishspeed *= 0.7
+const PL_WATERSCALE# = 0.7
 '' the player box: origin sits this far above the feet, eyes this far above
 '' the origin. Quake's -24 and +22.
 const PL_FEET#       = 24.0

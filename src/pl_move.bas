@@ -111,6 +111,30 @@ declare sub pl_water_level ( _
     nodes() as Node, _
     planes() as Plane _
 )
+declare sub pl_ground_friction ( _
+    vel as Vec3, _
+    byval dt as single _
+)
+declare sub pl_ground_accel ( _
+    vel as Vec3, _
+    wishdir as Vec3, _
+    byval wishspeed as single, _
+    byval dt as single _
+)
+declare sub pl_air_accel ( _
+    vel as Vec3, _
+    wishdir as Vec3, _
+    byval wishspeed as single, _
+    byval dt as single _
+)
+declare sub pl_water_move ( _
+    vel as Vec3, _
+    byval fwd as single, _
+    byval strafe as single, _
+    byval dir_x as single, _
+    byval dir_y as single, _
+    byval dt as single _
+)
 
 ''
 '' This module's own procedures.
@@ -466,6 +490,13 @@ end sub
 '' desc: Ground test and fall. A surface counts as ground only if it is more
 ''       floor than wall, which is what PL_GROUND_NRM# measures -- otherwise the
 ''       player would stand on vertical surfaces.
+''
+''       Gravity is suppressed by ANY water contact, not just being fully
+''       submerged -- Quake's SV_CheckWater gates SV_AddGravity on waterlevel
+''       being nonzero at all (sv_phys.c, SV_Physics_Client). Sinking is
+''       pl_water_move's job at water_level>=2, folded into its own
+''       accel/friction rather than a separate force; at water_level=1
+''       (feet only) there is neither fall nor sink.
 ''::::::::::
 sub pl_gravity ( _
     g as Game, _
@@ -478,38 +509,209 @@ sub pl_gravity ( _
     planes() as Plane _
 )
     dim below as Vec3
-    dim speed as single
 
     below   = g.pl.pos
     below.z = below.z - 1.0
 
     pl_trace g.pl.pos, below, tr, model_count, models(), brush(), clip(), planes()
 
-    ''
-    '' Swimming: no ground, and a slow sink instead of a fall. Checked before
-    '' the ground test because a floor underwater should not stop you
-    '' floating -- otherwise the player walks along the bottom of a pool.
-    ''
-    if ( g.pl.water_level >= 2 ) then
-        g.pl.on_ground = false
-        g.pl.vel.z = g.pl.vel.z - PL_WATERSINK#*dt
-        exit sub
-    end if
-
     if ( tr.frac < 1.0 and tr.norm.z > PL_GROUND_NRM# ) then
         g.pl.on_ground = true
         if ( g.pl.vel.z < 0.0 ) then g.pl.vel.z = 0.0
     else
         g.pl.on_ground = false
-        g.pl.vel.z = g.pl.vel.z - PL_FALLACC#*dt
+        if ( g.pl.water_level = 0 ) then g.pl.vel.z = g.pl.vel.z - PL_FALLACC#*dt
     end if
 
-    speed = sqr( g.pl.vel.x*g.pl.vel.x + g.pl.vel.y*g.pl.vel.y + g.pl.vel.z*g.pl.vel.z )
-    if ( speed > PL_MAXVEL# ) then
-        g.pl.vel.x = g.pl.vel.x * (PL_MAXVEL#/speed)
-        g.pl.vel.y = g.pl.vel.y * (PL_MAXVEL#/speed)
-        g.pl.vel.z = g.pl.vel.z * (PL_MAXVEL#/speed)
+end sub
+
+
+
+
+''::::::::::
+'' name: pl_ground_friction
+'' desc: Ground friction, horizontal only. Ported from sv_user.c's
+''       SV_UserFriction.
+''
+''       The PL_STOPSPEED# floor is what makes a near-stop actually stop: the
+''       decay is proportional to speed, so without a floor it approaches
+''       zero without ever reaching it. Quake's own edge-friction bonus (extra
+''       drag with a dropoff underfoot) needs a second trace per tick and is
+''       not ported -- what is here is the part that changes the numbers that
+''       matter: acceleration, top speed, and how fast the player stops.
+''::::::::::
+sub pl_ground_friction ( _
+    vel as Vec3, _
+    byval dt as single _
+)
+    dim speed as single, speed_floor as single, newspeed as single
+
+    speed = sqr( vel.x*vel.x + vel.y*vel.y )
+    if ( speed = 0.0 ) then exit sub
+
+    speed_floor = speed
+    if ( speed_floor < PL_STOPSPEED# ) then speed_floor = PL_STOPSPEED#
+
+    newspeed = speed - dt*speed_floor*PL_FRICTION#
+    if ( newspeed < 0.0 ) then newspeed = 0.0
+    newspeed = newspeed / speed
+
+    vel.x = vel.x * newspeed
+    vel.y = vel.y * newspeed
+
+end sub
+
+
+
+
+''::::::::::
+'' name: pl_ground_accel
+'' desc: Ground acceleration towards wishdir at wishspeed. Ported from
+''       sv_user.c's SV_Accelerate: the gain is proportional to how far
+''       current speed along wishdir is from wishspeed, so it tapers off
+''       approaching top speed rather than adding a flat amount every tick.
+''::::::::::
+sub pl_ground_accel ( _
+    vel as Vec3, _
+    wishdir as Vec3, _
+    byval wishspeed as single, _
+    byval dt as single _
+)
+    dim currentspeed as single, addspeed as single, accelspeed as single
+
+    currentspeed = vel.x*wishdir.x + vel.y*wishdir.y
+
+    addspeed = wishspeed - currentspeed
+    if ( addspeed <= 0.0 ) then exit sub
+
+    accelspeed = PL_ACCELERATE# * wishspeed * dt
+    if ( accelspeed > addspeed ) then accelspeed = addspeed
+
+    vel.x = vel.x + accelspeed*wishdir.x
+    vel.y = vel.y + accelspeed*wishdir.y
+
+end sub
+
+
+
+
+''::::::::::
+'' name: pl_air_accel
+'' desc: The airborne counterpart of pl_ground_accel. Ported from sv_user.c's
+''       SV_AirAccelerate, quirk and all: addspeed is capped at
+''       PL_AIRSPEEDCAP# (30), but accelspeed is scaled by the UNCAPPED
+''       wishspeed, not by wishspd. That mismatch is what lets air strafing
+''       gain more speed per tick than the 30 cap alone suggests -- it is
+''       Quake's own arithmetic, not a bug to tidy up here.
+''::::::::::
+sub pl_air_accel ( _
+    vel as Vec3, _
+    wishdir as Vec3, _
+    byval wishspeed as single, _
+    byval dt as single _
+)
+    dim wishspd as single, currentspeed as single
+    dim addspeed as single, accelspeed as single
+
+    wishspd = wishspeed
+    if ( wishspd > PL_AIRSPEEDCAP# ) then wishspd = PL_AIRSPEEDCAP#
+
+    currentspeed = vel.x*wishdir.x + vel.y*wishdir.y
+
+    addspeed = wishspd - currentspeed
+    if ( addspeed <= 0.0 ) then exit sub
+
+    accelspeed = PL_ACCELERATE# * wishspeed * dt
+    if ( accelspeed > addspeed ) then accelspeed = addspeed
+
+    vel.x = vel.x + accelspeed*wishdir.x
+    vel.y = vel.y + accelspeed*wishdir.y
+
+end sub
+
+
+
+
+''::::::::::
+'' name: pl_water_move
+'' desc: Swimming: horizontal wishdir from the same input as ground movement,
+''       plus a drift towards the bottom when nothing is pressed. Ported from
+''       sv_user.c's SV_WaterMove.
+''
+''       Friction and acceleration both act on the FULL three-axis speed
+''       here, unlike ground movement's horizontal-only friction -- swimming
+''       drags vertical motion down too, which is what makes a dive glide to
+''       a stop rather than coast forever.
+''
+''       STRUCTURAL NOTE: real Quake's wishvel comes from AngleVectors on the
+''       full view angle, so looking up or down tilts the swim direction --
+''       you swim where you look. dir_x/dir_y here are already flattened to
+''       the horizontal look (v_update_camera renormalises them so aiming at
+''       the floor does not slow walking down), and no pitch reaches this
+''       module. So this ports the horizontal wishdir and the idle sink
+''       exactly, but pitch-steered vertical swimming is not reachable
+''       without changing what v_update_camera hands down -- out of scope
+''       for this pass, and noted rather than faked.
+''::::::::::
+sub pl_water_move ( _
+    vel as Vec3, _
+    byval fwd as single, _
+    byval strafe as single, _
+    byval dir_x as single, _
+    byval dir_y as single, _
+    byval dt as single _
+)
+    dim wishvel as Vec3, wishdir as Vec3
+    dim wishspeed as single, wishlen as single, scale as single
+    dim speed as single, newspeed as single
+    dim addspeed as single, accelspeed as single
+
+    wishvel.x = dir_x*fwd*PL_MAXSPEED# - dir_y*strafe*PL_MAXSPEED#
+    wishvel.y = dir_y*fwd*PL_MAXSPEED# + dir_x*strafe*PL_MAXSPEED#
+
+    if ( fwd = 0.0 and strafe = 0.0 ) then
+        wishvel.z = -PL_WATERSINK#
+    else
+        wishvel.z = 0.0
     end if
+
+    wishspeed = sqr( wishvel.x*wishvel.x + wishvel.y*wishvel.y + wishvel.z*wishvel.z )
+    if ( wishspeed > PL_MAXSPEED# ) then
+        scale = PL_MAXSPEED# / wishspeed
+        wishvel.x = wishvel.x * scale
+        wishvel.y = wishvel.y * scale
+        wishvel.z = wishvel.z * scale
+        wishspeed = PL_MAXSPEED#
+    end if
+    wishlen   = wishspeed
+    wishspeed = wishspeed * PL_WATERSCALE#
+
+    '' water friction: the full 3D speed, not just horizontal
+    speed = sqr( vel.x*vel.x + vel.y*vel.y + vel.z*vel.z )
+    if ( speed > 0.0 ) then
+        newspeed = speed - dt*speed*PL_FRICTION#
+        if ( newspeed < 0.0 ) then newspeed = 0.0
+        vel.x = vel.x * (newspeed/speed)
+        vel.y = vel.y * (newspeed/speed)
+        vel.z = vel.z * (newspeed/speed)
+    else
+        newspeed = 0.0
+    end if
+
+    if ( wishspeed = 0.0 ) then exit sub
+    addspeed = wishspeed - newspeed
+    if ( addspeed <= 0.0 ) then exit sub
+
+    wishdir.x = wishvel.x / wishlen
+    wishdir.y = wishvel.y / wishlen
+    wishdir.z = wishvel.z / wishlen
+
+    accelspeed = PL_ACCELERATE# * wishspeed * dt
+    if ( accelspeed > addspeed ) then accelspeed = addspeed
+
+    vel.x = vel.x + accelspeed*wishdir.x
+    vel.y = vel.y + accelspeed*wishdir.y
+    vel.z = vel.z + accelspeed*wishdir.z
 
 end sub
 
@@ -573,8 +775,9 @@ sub pl_move ( _
     nodes() as Node, _
     planes() as Plane _
 )
-    dim speed as single, drop as single, newspeed as single
     dim tr as TraceResult
+    dim wishvel as Vec3, wishdir as Vec3
+    dim wishspeed as single
 
     ''
     '' dir is the horizontal look direction in BSP space, passed in rather than
@@ -582,45 +785,34 @@ sub pl_move ( _
     '' v_update_camera and an absolute point for the rest, and depending on
     '' which half of the routine called us would be a trap.
     ''
-    g.pl.vel.x = g.pl.vel.x + (dir_x*fwd - dir_y*strafe) * PL_ACCEL# * dt
-    g.pl.vel.y = g.pl.vel.y + (dir_y*fwd + dir_x*strafe) * PL_ACCEL# * dt
-
-    '' water drags in all three axes, ground friction only horizontally
-    if ( g.pl.water_level >= 3 ) then
-        '' full drag only when fully under. At the surface the vertical
-        '' component is left alone so a jump out is not damped away.
-        speed = sqr( g.pl.vel.x*g.pl.vel.x + g.pl.vel.y*g.pl.vel.y + g.pl.vel.z*g.pl.vel.z )
-        if ( speed > 0.0 ) then
-            newspeed = speed - speed*PL_WATERFRIC#*dt
-            if ( newspeed < 0.0 ) then newspeed = 0.0
-            g.pl.vel.x = g.pl.vel.x * (newspeed/speed)
-            g.pl.vel.y = g.pl.vel.y * (newspeed/speed)
-            g.pl.vel.z = g.pl.vel.z * (newspeed/speed)
-        end if
-    end if
-
-    '' ground friction, horizontal only
-    if ( g.pl.on_ground ) then
-        speed = sqr( g.pl.vel.x*g.pl.vel.x + g.pl.vel.y*g.pl.vel.y )
-        if ( speed > 0.0 ) then
-            drop     = speed * PL_FRICTION# * dt
-            newspeed = speed - drop
-            if ( newspeed < 0.0 ) then newspeed = 0.0
-            g.pl.vel.x = g.pl.vel.x * (newspeed/speed)
-            g.pl.vel.y = g.pl.vel.y * (newspeed/speed)
-        end if
-    end if
-
-    '' and a ceiling on how fast walking can get
-    speed = sqr( g.pl.vel.x*g.pl.vel.x + g.pl.vel.y*g.pl.vel.y )
+    '' g.pl.water_level here is last tick's value -- pl_water_level below
+    '' refreshes it for pl_gravity and for the NEXT tick's read of this same
+    '' branch, exactly the one-tick lag SV_ClientThink has against
+    '' SV_CheckWater in sv_phys.c/sv_user.c: friction and accel run before
+    '' the server re-checks where the player ended up wet.
+    ''
     if ( g.pl.water_level >= 2 ) then
-        if ( speed > PL_WATERSPEED# ) then
-            g.pl.vel.x = g.pl.vel.x * (PL_WATERSPEED#/speed)
-            g.pl.vel.y = g.pl.vel.y * (PL_WATERSPEED#/speed)
+        pl_water_move g.pl.vel, fwd, strafe, dir_x, dir_y, dt
+    else
+        wishvel.x = dir_x*fwd*PL_MAXSPEED# - dir_y*strafe*PL_MAXSPEED#
+        wishvel.y = dir_y*fwd*PL_MAXSPEED# + dir_x*strafe*PL_MAXSPEED#
+
+        wishspeed = sqr( wishvel.x*wishvel.x + wishvel.y*wishvel.y )
+        if ( wishspeed > 0.0 ) then
+            wishdir.x = wishvel.x / wishspeed
+            wishdir.y = wishvel.y / wishspeed
+        else
+            wishdir.x = 0.0
+            wishdir.y = 0.0
         end if
-    elseif ( speed > PL_MAXSPEED# ) then
-        g.pl.vel.x = g.pl.vel.x * (PL_MAXSPEED#/speed)
-        g.pl.vel.y = g.pl.vel.y * (PL_MAXSPEED#/speed)
+        if ( wishspeed > PL_MAXSPEED# ) then wishspeed = PL_MAXSPEED#
+
+        if ( g.pl.on_ground ) then
+            pl_ground_friction g.pl.vel, dt
+            pl_ground_accel g.pl.vel, wishdir, wishspeed, dt
+        else
+            pl_air_accel g.pl.vel, wishdir, wishspeed, dt
+        end if
     end if
 
     pl_water_level g, nodes(), planes()
@@ -628,33 +820,47 @@ sub pl_move ( _
     pl_gravity g, dt, tr, model_count, models(), brush(), clp_buffer(), planes()
 
     ''
-    '' Jump. Only from the ground, and after pl_gravity, which is what
-    '' decides whether there is any ground -- doing it before would read
-    '' last frame's answer and allow a second jump in mid-air.
+    '' Jump. After pl_gravity, which is what decides whether there is any
+    '' ground -- doing it before would read last frame's answer and allow a
+    '' second jump in mid-air. Swimming and jumping share the key but not the
+    '' effect: at waterlevel>=2 it is a swim stroke, keyed on liquid type,
+    '' every tick the key is held rather than a one-shot launch. Ported from
+    '' QuakeWorld's pmove.c JumpButton, which mirrors id1's QC.
     ''
     '' The velocity is set rather than added, so holding the key gives one
-    '' jump of a fixed height instead of accumulating thrust.
+    '' jump or one stroke instead of accumulating thrust.
     ''
-    if ( g.pl.water_level >= 3 ) then
-        ''
-        '' Fully under: the jump key swims, every tick rather than only
-        '' from a surface.
-        ''
-        if ( jump ) then g.pl.vel.z = PL_SWIM#
-
-    elseif ( g.pl.water_level = 2 ) then
-        ''
-        '' Head out, body in -- at the surface. Swim speed is not enough to
-        '' leave the water here: the moment the waist clears it gravity
-        '' comes back, and 100 up against 800 down is a six unit hop, which
-        '' clears nothing. A jump from the surface is a real jump.
-        ''
-        if ( jump ) then g.pl.vel.z = PL_JUMP#
+    if ( g.pl.water_level >= 2 ) then
+        if ( jump ) then
+            select case g.pl.water_type
+                case CONTENTS_SLIME
+                    g.pl.vel.z = PL_SWIM_SLIME#
+                case CONTENTS_WATER
+                    g.pl.vel.z = PL_SWIM_WATER#
+                case else
+                    g.pl.vel.z = PL_SWIM_LAVA#
+            end select
+            g.pl.on_ground = false
+        end if
 
     elseif ( jump and g.pl.on_ground ) then
         g.pl.vel.z     = PL_JUMP#
         g.pl.on_ground = false
     end if
+
+    ''
+    '' A per-axis safety clamp, not a speed cap -- Quake's SV_CheckVelocity
+    '' against sv_maxvelocity. The real ceiling on walking/swimming speed is
+    '' wishspeed inside pl_ground_accel/pl_air_accel/pl_water_move; this
+    '' only stops a runaway (e.g. a bad trace) from producing a NaN-adjacent
+    '' velocity that the next frame's move can't recover from.
+    ''
+    if ( g.pl.vel.x >  PL_MAXVEL# ) then g.pl.vel.x =  PL_MAXVEL#
+    if ( g.pl.vel.x < -PL_MAXVEL# ) then g.pl.vel.x = -PL_MAXVEL#
+    if ( g.pl.vel.y >  PL_MAXVEL# ) then g.pl.vel.y =  PL_MAXVEL#
+    if ( g.pl.vel.y < -PL_MAXVEL# ) then g.pl.vel.y = -PL_MAXVEL#
+    if ( g.pl.vel.z >  PL_MAXVEL# ) then g.pl.vel.z =  PL_MAXVEL#
+    if ( g.pl.vel.z < -PL_MAXVEL# ) then g.pl.vel.z = -PL_MAXVEL#
 
     pl_step_move g, g.pl.pos, g.pl.vel, dt, tr, model_count, models(), brush(), _
                   clp_buffer(), planes()
