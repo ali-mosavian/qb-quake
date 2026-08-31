@@ -6,11 +6,16 @@
 #
 # One DOSBox per file, same reasoning as tools/bcc.sh and tools/bc.sh.
 # A SEPARATE script from tools/bcc.sh on purpose: that one carries mgl's
-# own flags (-B for inline asm needing TASM, __BASLIB__, mgl's inc/ as
-# the include root) for sources this project does not own and must not
-# reinterpret. These are plain -mm medium-model C with no inline asm of
-# their own, matching exactly what tools/dosbox.sh's build case already
-# invokes: -3 -mm -Ox -IW:\ -IB:\INCLUDE.
+# own include root (mgl's inc/) and __BASLIB__ define for sources this
+# project does not own and must not reinterpret. Otherwise the same
+# flags qrender's own C has always used: -3 -mm -Ox -IW:\ -IB:\INCLUDE.
+#
+# -B, and TASM mounted on the path, unconditionally: r_span.c's rdtsc_now
+# uses __emit__ plus an __asm { } block referencing ebx, which BCC's own
+# built-in inline assembler does not accept ("Undefined symbol 'ebx'")
+# -- only TASM's fuller support does. Harmless for the other three C
+# files, which have no inline asm of their own; simpler to always pass
+# it than to special-case the one file that needs it.
 set -euo pipefail
 
 SRC_REL="${1:?usage: bcc-qr.sh <src-c> <out-obj>}"
@@ -33,13 +38,15 @@ W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
 cp "$ROOT/src/$base.c" "$W/"
 cp "$ROOT"/src/*.h "$W/" 2>/dev/null || true
 
-{ printf '[sdl]\nautolock=false\n[dosbox]\nmemsize=32\nstartbanner=false\n'
+{ printf '[sdl]\nautolock=false\n[dosbox]\nmemsize=32\nstartbanner=false\nquit warning=false\n'
   printf '[cpu]\ncore=dynamic\ncycles=max\n[dos]\nxms=true\n[autoexec]\n'
   echo "@echo off"
   echo "mount w $W"
   echo "mount b $TOOLCHAINS/bcpp31"
+  echo "mount t $TOOLCHAINS/tasm50/TASM/BIN"
+  echo "path b:\\bin;t:"
   echo "w:"
-  echo "b:\\bin\\bcc.exe -c -3 -mm -Ox -IW:\\ -IB:\\INCLUDE $base.c > w:\\cc.txt"
+  echo "b:\\bin\\bcc.exe -c -B -3 -mm -Ox -IW:\\ -IB:\\INCLUDE $base.c > w:\\cc.txt"
   echo "exit"
 } > "$W/build.conf"
 

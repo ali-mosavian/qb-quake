@@ -42,7 +42,7 @@ W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
 cp "$ROOT/src/$base.bas" "$W/"
 cp "$ROOT"/src/*.bi "$W/" 2>/dev/null || true
 
-{ printf '[sdl]\nautolock=false\n[dosbox]\nmemsize=32\nstartbanner=false\n'
+{ printf '[sdl]\nautolock=false\n[dosbox]\nmemsize=32\nstartbanner=false\nquit warning=false\n'
   # core=dynamic/cycles=max: a compile's correctness does not depend on
   # the emulated clock the way a benchmark's timing does -- see
   # dosbox/template.conf's own note on why cycles is pinned THERE.

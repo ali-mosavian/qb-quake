@@ -123,7 +123,7 @@ build)
                           'if exist cc_*.out del cc_*.out' \
                           'if exist *.obj del *.obj' 'if exist qrender.exe del qrender.exe'
         for m in $CMODS; do
-            printf '%s\r\n' "B:\\BIN\\BCC.EXE -c -3 -mm -Ox -IW:\\ -IB:\\INCLUDE $m.c > cc_$m.out"
+            printf '%s\r\n' "B:\\BIN\\BCC.EXE -c -B -3 -mm -Ox -IW:\\ -IB:\\INCLUDE $m.c > cc_$m.out"
         done
         for m in $MODS; do printf '%s\r\n' "$bc $m.bas, $m.obj; >> bc.out"; done
         printf '%s\r\n' 'if not exist main.obj goto bcfail'
@@ -172,7 +172,11 @@ build)
 
     conf="$out/dosbox.conf"
     sed -e "s|@CDRIVE@|$out|" -e "s|@VDRIVE@|$TOOLCHAINS/$cdir|" -e "s|@MDRIVE@|$MGL|" \
-        -e "s|@BAT@|build.bat|" -e "s|@PRE@|mount b $BCPP31|" "$ROOT/dosbox/template.conf" > "$conf"
+        -e "s|@BAT@|build.bat|" -e "s|@PRE@|mount b $BCPP31|" \
+        -e "/^mount b /a\\
+mount t $TOOLCHAINS/tasm50/TASM/BIN\\
+path b:\\\\bin;t:" \
+        "$ROOT/dosbox/template.conf" > "$conf"
 
     launch "$conf" "${TIMEOUT:-300}"
 
