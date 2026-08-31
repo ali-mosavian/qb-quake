@@ -38,6 +38,12 @@
                 include polyx.inc
 
                 externdef ul$zmode:word
+                externdef ul$zdc:dword
+                externdef ul$zline:word
+                externdef ul$zacc:dword
+                externdef ul$zmul:dword
+
+Z_SLOT          equ     3
 
 .data
 ;; What uglSpanBegin leaves for uglSpanTP. Read through ss: throughout --
@@ -54,6 +60,9 @@ sp_tw           real4   1.0                     ;; texture xRes, yRes, as
 sp_th           real4   1.0                     ;; the u/v scale
 sp_itmp         dw      0                       ;; fild landing pad
 sp_i32          dd      0                       ;; fistp landing pad
+;; Depth runs to 65535 against a 16.16 accumulator, so the product
+;; reaches 4.29e9 -- past what a dword fistp can store, which is signed.
+sp_ztmp         dq      0
 sp_zsave        dw      0                       ;; caller's depth mode
 
 UGL_CODE
@@ -115,18 +124,12 @@ uglSpanBegin    proc    public uses bx cx si di ds es fs gs,\
 
                 ;; gradients and texture masks, patched into the filler.
                 ;;
-                ;; Depth forced off across the selection, and put back
-                ;; after. With a z buffer installed the selector hands
-                ;; back the depth-writing filler, which draws through a
-                ;; scanline pointer the polygon driver sets per row and
-                ;; this entry point has no business setting -- it writes
-                ;; through whatever was left there, which is not a wrong
-                ;; picture but a corrupted heap. A caller drawing spans
-                ;; it has already resolved has no depth left to write.
-                mov     ax, ss:ul$zmode
-                mov     ss:sp_zsave, ax
-                mov     ss:ul$zmode, UGL_Z_OFF
-
+                ;; Left alone, so with a buffer installed the selector
+                ;; hands back the depth-writing filler. A caller drawing
+                ;; resolved spans has no depth to TEST, but it still has
+                ;; depth to WRITE: alias models are not in the edge list
+                ;; and depth-test against what the world pass leaves.
+                ;; uglSpanTP sets the scanline pointer that filler needs.
                 mov     fs, ss:sp_dcseg
                 mov     bx, fs:[DC.fmt]
                 mov     ax, masked
@@ -135,10 +138,6 @@ uglSpanBegin    proc    public uses bx cx si di ds es fs gs,\
                 fld     dudx
                 call    ss:ul$cfmtTB[bx].opt_hLineTP
                 mov     ss:ul$spfiller, ax
-
-                ;; cx, not ax: ax is the filler address on its way out.
-                mov     cx, ss:sp_zsave
-                mov     ss:ul$zmode, cx
 
                 mov     ax, ss:ul$spfiller
                 xor     dx, dx
@@ -152,7 +151,7 @@ uglSpanBegin    endp
 ;; One span of whichever polygon uglSpanBegin last opened. up/vp/zp are
 ;; u/z, v/z and 1/z AT x -- evaluated by the caller, not stepped, which
 ;; is the one cost a span-ordered caller pays that an edge walk does not.
-uglSpanTP       proc    public uses bx cx dx si di ds es fs,\
+uglSpanTP       proc    public uses bx cx dx si di ds es fs gs,\
                         x:word, wid:word, y:word,\
                         up:real4, vp:real4, zp:real4
 
@@ -184,7 +183,36 @@ uglSpanTP       proc    public uses bx cx dx si di ds es fs,\
                 mov     ss:sp_dstseg, ax        ;; carry to the next span
 @@have_bank:    shr     edi, 16                 ;; offset within it
 
-                mov     ds, ss:sp_texseg
+                ;; The depth scanline, for the filler the selector chose.
+                ;; Per SPAN here where the polygon driver does it per
+                ;; scanline -- there are fewer spans than scanlines, and
+                ;; they are longer, so the window opens less often.
+                cmp     ss:ul$zmode, UGL_Z_OFF
+                je      @@nodepth
+
+                PS      eax, ebx, ecx, edx, esi, edi, fs
+
+                mov     fs, W ss:ul$zdc+2
+                mov     bx, fs:[DC.typ]
+                mov     si, ss:ul$dctTB[bx].wrAccessEx
+                test    si, si
+                jz      @@zdone                 ;; type has no Ex accessor
+                mov     di, y
+                shl     di, 2                   ;; T dword
+                mov     cl, Z_SLOT
+                call    si                      ;; -> dx:ax = seg:offs
+                mov     gs, dx
+                mov     ss:ul$zline, ax
+
+                fld     zp
+                fmul    ss:ul$zmul
+                fistp   ss:sp_ztmp
+                mov     eax, D ss:sp_ztmp
+                mov     ss:ul$zacc, eax
+
+@@zdone:        PP      fs, edi, esi, edx, ecx, ebx, eax
+
+@@nodepth:      mov     ds, ss:sp_texseg
 
                 fld     zp                      ;; z'
                 fld     vp                      ;; v' z'
