@@ -45,7 +45,7 @@ dos_dir="\\$(dirname "$SRC_REL" | tr '/' '\\')"
 
 W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
 
-{ printf '[sdl]\nautolock=false\n[dosbox]\nmemsize=32\nstartbanner=false\n'
+{ printf '[sdl]\nautolock=false\n[dosbox]\nmemsize=32\nstartbanner=false\nquit warning=false\n'
   printf '[cpu]\ncore=dynamic\ncycles=max\n[dos]\nxms=true\n[autoexec]\n'
   echo "@echo off"
   echo "mount w $W"
