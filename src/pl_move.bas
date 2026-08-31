@@ -407,8 +407,8 @@ end sub
 '' name: pl_step_move
 '' desc: The same move, but if it is blocked by something short enough, climb
 ''       it. Try the move from PL_STEP# higher, then drop back down: if the
-''       landing is above where we started and within one step, the obstacle
-''       was a stair and the higher path is kept.
+''       result lands on walkable ground, the obstacle was a stair and the
+''       higher path is kept. Ported from sv_phys.c's SV_WalkMove.
 ''
 ''       Without this the player is stopped by every step and every doorframe
 ''       lip, because a 16 unit stair and a wall are the same thing to a trace.
@@ -427,7 +427,8 @@ sub pl_step_move ( _
 )
     dim flat_pos as Vec3, flat_vel as Vec3
     dim up_pos as Vec3, down_pos as Vec3
-    dim climbed as single
+    dim step_vel as Vec3
+    dim old_vel_z as single
 
     '' the ordinary slide, kept in case the step attempt is worse
     flat_pos = org
@@ -435,22 +436,46 @@ sub pl_step_move ( _
     pl_slide_move flat_pos, flat_vel, dt, tr, model_count, models(), brush(), clip(), planes()
 
     ''
-    '' Ground, or water. Standing on something is the usual reason to be
-    '' able to climb a step, but swimming sets on_ground false, and refusing
-    '' to step then means every stair and ledge in a pool stops the player
-    '' dead -- they can neither walk up it nor swim over it, because the
-    '' slide has already been clipped flat against the riser.
+    '' Nothing to step over: the flat move's velocity came out exactly as it
+    '' went in, so nothing clipped it against a plane anywhere along the
+    '' way. Matches SV_WalkMove's own gate (it only tries stepping when
+    '' FlyMove reports it was blocked), and checking velocity rather than
+    '' tr.frac matters here: pl_slide_move can clip against a riser on its
+    '' first bump and then finish the REMAINING distance unobstructed on a
+    '' later bump, leaving tr.frac at 1.0 even though the move was blocked.
+    '' As a side effect this also stops the probe below from zeroing a swim
+    '' stroke's vertical velocity when there was nothing to climb at all.
     ''
-    if ( g.pl.on_ground = false and g.pl.water_level < 2 ) then
+    if ( flat_vel.x = vel.x and flat_vel.y = vel.y and flat_vel.z = vel.z ) then
         org = flat_pos
         vel = flat_vel
         exit sub
     end if
 
-    '' lift, move, and drop back
+    ''
+    '' Ground, or water. Standing on something is the usual reason to be
+    '' able to climb a step, but swimming sets on_ground false, and refusing
+    '' to step then means every stair and ledge in a pool stops the player
+    '' dead -- they can neither walk up it nor swim over it, because the
+    '' slide has already been clipped flat against the riser. Matches
+    '' SV_WalkMove's own gate: don't stair up while jumping, but any wetness
+    '' at all is enough to allow it.
+    ''
+    if ( g.pl.on_ground = false and g.pl.water_level = 0 ) then
+        org = flat_pos
+        vel = flat_vel
+        exit sub
+    end if
+
+    old_vel_z = vel.z
+
+    '' lift, then move forward with the vertical component held at zero --
+    '' the step height stands in for it, so falling speed should not also
+    '' carry the probe forward at the raised height
     up_pos = org
     up_pos.z = up_pos.z + PL_STEP#
     pl_trace org, up_pos, tr, model_count, models(), brush(), clip(), planes()
+
     if ( tr.all_solid ) then
         org = flat_pos
         vel = flat_vel
@@ -458,23 +483,25 @@ sub pl_step_move ( _
     end if
     up_pos = tr.end_pos
 
-    pl_slide_move up_pos, vel, dt, tr, model_count, models(), brush(), clip(), planes()
+    step_vel   = vel
+    step_vel.z = 0.0
+    pl_slide_move up_pos, step_vel, dt, tr, model_count, models(), brush(), clip(), planes()
 
+    '' drop back down, extended by however far the original fall speed would
+    '' have carried this tick
     down_pos   = up_pos
-    down_pos.z = down_pos.z - PL_STEP#
+    down_pos.z = down_pos.z - PL_STEP# + old_vel_z*dt
     pl_trace up_pos, down_pos, tr, model_count, models(), brush(), clip(), planes()
-    if ( tr.all_solid = false ) then up_pos = tr.end_pos
 
     ''
-    '' Keep whichever path travelled further horizontally. The flat move wins
-    '' on open ground -- stepping up and dropping back would cost the same
-    '' distance for extra work -- and the stepped one wins at a stair, where
-    '' the flat move is against a riser and got nowhere.
+    '' Keep the stepped path only if it lands on walkable ground. A slope too
+    '' steep to climb, or open air past the edge, fails this -- tr.norm is
+    '' left at (0,0,0) by pl_trace when nothing is hit, which is not > 0.7
+    '' either -- and falls back to the flat move.
     ''
-    climbed = up_pos.z - org.z
-
-    if ( climbed > 0.1 and climbed <= PL_STEP# + 0.5 ) then
-        org = up_pos
+    if ( tr.norm.z > PL_GROUND_NRM# ) then
+        org = tr.end_pos
+        vel = step_vel
     else
         org = flat_pos
         vel = flat_vel
