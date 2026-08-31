@@ -40,6 +40,11 @@ const PL_CLIP_EPS#   = 0.03125
 const PL_STEP#       = 18.0
 '' eye above the hull origin
 const PL_EYE#        = 22.0
+'' What Quake's info_teleport_destination adds to its own origin when it
+'' spawns. The entity lump stores the mapper's mark; the arrival point is
+'' this much above it, which is what keeps a teleported player out of the
+'' floor. Without it the player lands wedged and cannot move.
+const PL_TELE_LIFT#  = 27.0
 '' cos of the steepest walkable slope
 const PL_GROUND_NRM# = 0.7
 const PL_ACCEL#      = 500.0

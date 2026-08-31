@@ -321,6 +321,10 @@ sub ent_load_teleports ( _
                     tele( g.tele_count ).mins = models(mdlnum).mins
                     tele( g.tele_count ).maxs = models(mdlnum).maxs
                     tele( g.tele_count ).dest = dest_org(k)
+                    '' the arrival point is above the mapper's mark --
+                    '' see PL_TELE_LIFT#
+                    tele( g.tele_count ).dest.z = _
+                        tele( g.tele_count ).dest.z + PL_TELE_LIFT#
                     tele( g.tele_count ).yaw  = dest_yaw(k)
                     g.tele_count = g.tele_count + 1
                 end if

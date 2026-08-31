@@ -519,8 +519,13 @@ end sub
 ''::::::::::
 '' name: pl_init
 '' desc: Seeds the player from the spawn point the map gave the camera.
-''       cam.pos is Y-up; pl.pos is Z-up; the eye sits PL_EYE# above the hull
-''       origin, so the spawn height has to come down by that much.
+''       cam.pos is Y-up and pl.pos is Z-up, so y and z swap. The height
+''       does NOT: info_player_start's origin is the player's own origin,
+''       the same thing pl.pos holds, and the eye goes PL_EYE# ABOVE it
+''       (pl_move does that on the way out). Taking PL_EYE# off here put
+''       the player 22 units under the spawn -- open air on dm3ish, so it
+''       merely fell and landed, but inside the floor on e1m7, where it
+''       traced solid in every direction and could not move at all.
 ''::::::::::
 sub pl_init ( _
     g as Game _
@@ -532,7 +537,7 @@ sub pl_init ( _
     else
         g.pl.pos.x = g.cam.pos.x
         g.pl.pos.y = g.cam.pos.z
-        g.pl.pos.z = g.cam.pos.y - PL_EYE#
+        g.pl.pos.z = g.cam.pos.y
     end if
 
     g.pl.vel.x = 0.0
