@@ -168,6 +168,12 @@ sub sys_parse_args ( _
         if ( lcase$(argv(i)) = "-noportal" ) then
             g.env.no_portal = true
         end if
+        if ( lcase$(argv(i)) = "-comp" ) then
+            g.env.comp = true
+        end if
+        if ( lcase$(argv(i)) = "-ptwire" ) then
+            g.env.pt_wire = true
+        end if
         if ( lcase$(argv(i)) = "-spandraw" ) then
             g.env.span_draw = true
         end if

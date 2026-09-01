@@ -112,6 +112,19 @@ declare sub mod_load_flat ( _
     flname as string, _
     byval dst as long _
 )
+declare sub r_portal_draw ( _
+    byval dc as long, _
+    mtx as u3dMtrx, _
+    byval visleafs as integer, _
+    byval xresh as single, _
+    byval yresh as single, _
+    byval z_near as single, _
+    byval clr as long, _
+    idx() as integer, _
+    ref() as integer, _
+    seen() as integer _
+)
+
 declare function r_portal_mark ( _
     mtx as u3dMtrx, _
     byval cam_leaf as integer, _
@@ -393,14 +406,14 @@ sub r_draw_world ( _
     '' on a leaf change -- a bit cleared in that one stays cleared.
     ''
     g.vis.pt_culled = 0
-    if ( g.env.no_portal = 0 ) then
+    if ( g.rdr.portal ) then
         g.vis.pt_culled = r_portal_mark( mtx_fin, dbg_camleaf, _
                                           int( g.wld.count.leaves-1 ), _
                                           g.env.x_res / 2.0, g.env.y_res / 2.0, _
                                           g.env.z_near, pt_idx(), pt_ref(), _
                                           pvs_buffer_b(), pvs_now() )
     end if
-    if ( g.vis.pt_culled < 0 or g.env.no_portal ) then
+    if ( g.vis.pt_culled < 0 or g.rdr.portal = 0 ) then
         '' bailed, or switched off: use the PVS exactly as it stands
         for  i = 0 to g.wld.count.leaves-1
             pvs_now(i) = pvs_buffer_b(i)
@@ -825,3 +838,22 @@ end function
 function rb_dbg_camleaf ( ) as integer
     rb_dbg_camleaf = dbg_camleaf
 end function
+
+''::::::::::
+'' name: r_portal_outline
+'' desc: Outline every portal of every leaf still visible after the flood.
+''
+''       Lives here because the portal store and pvs_now are this module's;
+''       BASIC cannot hand an array back to a caller, so the caller hands in
+''       the destination instead and the arrays never leave.
+''::::::::::
+sub r_portal_outline ( _
+    g as Game, _
+    byval dc as long, _
+    mtx_fin as u3dMtrx _
+)
+    r_portal_draw dc, mtx_fin, int( g.wld.count.leaves-1 ), _
+                   g.env.x_res / 2.0, g.env.y_res / 2.0, g.env.z_near, _
+                   251, pt_idx(), pt_ref(), pvs_now()
+end sub
+

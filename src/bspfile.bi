@@ -328,6 +328,12 @@ type Env
     
     h_font      as long
     h_video_dc  as long
+    h_comp_dc   as long         '' -comp: a full-mode composite the view is
+                                '' scaled INTO and the overlay drawn onto at
+                                '' 1:1, so one blit reaches the screen. EMS --
+                                '' 320x200 is 64,000 bytes and that is the
+                                '' allocation e1m1 already dies on.
+
     h_back_bdc  as long
     
     mouse       as MOUSEINF
@@ -392,6 +398,18 @@ type Env
                                 '' uglTriTP path.
     no_z        as integer      '' -noz: skip the depth buffer entirely
     no_cull     as integer      '' -nocull: backface culling off, for A/B
+    pt_wire     as integer      '' -ptwire: start with the portal outlines on.
+                                '' The O key does the same thing, but a flag
+                                '' can be verified headlessly and a keypress
+                                '' cannot -- injection has never been reliable
+                                '' here, so a dead toggle and a dropped key
+                                '' look identical.
+
+    comp        as integer      '' -comp: composite through h_comp_dc instead
+                                '' of scaling straight onto the screen. Two
+                                '' passes over video memory a frame is what
+                                '' tears; this makes it one.
+
     no_portal   as integer      '' -noportal: keep the PVS as it stands and
                                 '' skip the portal flood. The mutation check:
                                 '' narrowing to what is actually visible must

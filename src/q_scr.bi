@@ -33,6 +33,10 @@ type ScreenState
                                 '' figure that characterises a build is the
                                 '' best it reached, not where it stopped.
     stats       as integer      '' overlay toggle
+    portal_wire as integer      '' O: outline every portal of every visible
+                                '' leaf, so what the flood is reasoning about
+                                '' can be seen rather than inferred
+
     bench_secs  as integer      '' seconds elapsed, for -bench
     frame_time  as single       '' seconds the last frame took; the physics
                                 '' step. Derived from fps, so it self-tunes

@@ -104,6 +104,13 @@ declare sub r_set_frustum ( _
     frustum() as DiskPlane, _
     mtx as u3dMtrx _
 )
+declare sub r_portal_outline ( _
+    g as Game, _
+    byval dc as long, _
+    mtx_fin as u3dMtrx _
+)
+
+
 declare sub r_draw_world ( _
     g as Game, _
     byval model as integer, _
@@ -144,7 +151,9 @@ declare sub d_draw_faces ( _
 )
 declare sub scr_draw_hud ( _
     g as Game, _
-    h_dst_dc as long _
+    h_dst_dc as long, _
+    byval w as integer, _
+    byval h as integer _
 )
 declare function sys_now ( ) as single
 
@@ -437,12 +446,24 @@ sub host_render ( _
         if ( ptd > g.pt.draw_max ) then g.pt.draw_max = ptd
     end if
 
+    '' Portal outlines, while the depth test is still on, so a portal behind
+    '' a wall is hidden by it. Drawn after depth goes off they show through
+    '' everything, and a view full of portals you cannot see buries the few
+    '' you are actually looking through.
+    if ( g.scr.portal_wire ) then
+        r_portal_outline g, h_dst_dc, mtx_fin
+    end if
+
+
     '' leave depth off for the overlay, which is 2D and would otherwise
     '' test itself against the scene it is drawn on top of
     if ( z_dc <> 0 ) then zz = uglZMode%( UGL.Z.OFF% )
 
     pt0 = sys_now()
-    scr_draw_hud g, h_dst_dc
+    '' Under -comp the host loop draws this onto the composite after the
+    '' scale, at the mode's own resolution -- see scr_draw_hud.
+    if ( g.env.comp = 0 ) then scr_draw_hud g, h_dst_dc, g.env.x_res, g.env.y_res
+
     if ( g.ft.n > 0 ) then
         ptd = sys_now() - pt0
         g.pt.hud_sum = g.pt.hud_sum + ptd

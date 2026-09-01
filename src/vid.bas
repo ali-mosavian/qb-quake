@@ -104,6 +104,30 @@ sub vid_init ( _
         if ( g.env.h_back_bdc = FALSE ) then 
             sys_error "0x0002, Could not create a backbuffer..."
         end if
+
+        ''
+        '' -comp: one more dc, the size of the MODE, that the view is
+        '' scaled into and the overlay drawn onto at 1:1 -- then a single
+        '' uglPut reaches the screen.
+        ''
+        '' The point is that video memory is written ONCE a frame. Scaling
+        '' straight onto the screen and then drawing the overlay on top of
+        '' it is two passes over the live framebuffer: the second one tears,
+        '' and VRAM writes are slow enough to cost real frames.
+        ''
+        '' EMS, not conventional: 320x200 is 64,000 bytes, which is the
+        '' allocation e1m1 already fails on. EMS maps a 16K page at a time,
+        '' so a 320-wide row means one page covers ~51 rows and a sequential
+        '' full-screen pass remaps about four times, not once a scanline.
+        ''
+        if ( g.env.comp ) then
+            g.env.h_comp_dc = uglNew( ugl.ems, g.env.c_fmt, _
+                                       g.env.scr_x_res, g.env.scr_y_res )
+            if ( g.env.h_comp_dc = FALSE ) then
+                sys_error "0x0003, Could not create the composite buffer..."
+            end if
+        end if
+
     end if     
     
 
@@ -146,8 +170,16 @@ sub vid_update ( _
     '' path is the odd one: pressing a key had to wait for a blit.
     ''
     if ( g.env.use_paging = false ) then
-        uglPutScl g.env.h_video_dc, g.env.view_x, g.env.view_y, _
-                  g.env.view_scale, g.env.view_scale, g.env.h_back_bdc
+        '' -comp scales into the composite and leaves the screen alone; the
+        '' host loop draws the overlay on top and blits the result once.
+        if ( g.env.comp ) then
+            uglPutScl g.env.h_comp_dc, g.env.view_x, g.env.view_y, _
+                      g.env.view_scale, g.env.view_scale, g.env.h_back_bdc
+        else
+            uglPutScl g.env.h_video_dc, g.env.view_x, g.env.view_y, _
+                      g.env.view_scale, g.env.view_scale, g.env.h_back_bdc
+        end if
+
     else
         uglSetVisPage page
         uglSetWrkPage (page+1) mod g.env.pages

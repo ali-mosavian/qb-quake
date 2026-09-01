@@ -26,6 +26,8 @@
 
 #include "qcshared.h"
 
+extern void pascal far uglLine( long dc, short x1, short y1, short x2, short y2, long clr );
+
 /*
  * Sized for real mode, where these statics are the whole cost of the file:
  * 1024 leaves is dm3ish's 313 and e1m7's 281 with room, and the tables
@@ -36,6 +38,7 @@
 #define PT_MAX_LEAVES 1024
 #define PT_MAX_STACK  1024   /* frontier depth */
 #define PT_MAX_WORK   8192   /* total pushes before giving up on the frame */
+#define PT_MAX_REFS   4096   /* dm3ish has 1566, e1m7 about the same */
 
 /* A portal entry as mkportals.py writes it: neighbour leaf, then the
    portal's world-space bounding box as mins[3], maxs[3]. BSP space, Z-up. */
@@ -59,6 +62,14 @@ typedef struct { float x0, y0, x1, y1; } Rect;
  */
 static short far seen[PT_MAX_LEAVES][4];
 static short far reached[PT_MAX_LEAVES];
+
+/* Which portal refs the flood actually went through this frame. uglLine
+   carries no z and so cannot be depth-tested, which is the obvious way to
+   hide a portal behind a wall and is not available; this is better anyway.
+   A portal the flood traversed is one visibility genuinely came through,
+   which is the thing worth looking at -- every portal of every surviving
+   leaf includes the ones behind you and the ones you cannot see. */
+static char far used[PT_MAX_REFS];
 
 static short far stk_leaf[PT_MAX_STACK];
 static short far stk_rect[PT_MAX_STACK][4];
@@ -152,7 +163,7 @@ short pascal far r_portal_mark(
     short far *pvsb  = (short far *) a_pvsb->farptr;
     short far *outb  = (short far *) a_out->farptr;
     Rect screen, rect, pr, sub;
-    short sp = 0, i, k, li, nb, first, last;
+    short sp = 0, i, k, li, nb, first, last, nrefs;
     long work = 0;
 
     gave_up = 0;
@@ -161,6 +172,9 @@ short pascal far r_portal_mark(
     if ( cam_leaf < 0 || cam_leaf > visleafs ) return -3;
 
     for ( i = 0; i <= visleafs; i++ ) reached[i] = 0;
+    nrefs = index[visleafs + 1];
+    if ( nrefs > PT_MAX_REFS ) nrefs = PT_MAX_REFS;
+    for ( i = 0; i < nrefs; i++ ) used[i] = 0;
 
     screen.x0 = 0.0; screen.y0 = 0.0;
     screen.x1 = xresh * 2.0; screen.y1 = yresh * 2.0;
@@ -213,6 +227,7 @@ short pascal far r_portal_mark(
 
             if ( sp >= PT_MAX_STACK ) { gave_up = 1; return -4; }
             if ( ++work >= PT_MAX_WORK ) { gave_up = 1; return -1; }
+            if ( k < PT_MAX_REFS ) used[k] = 1;
             stk_leaf[sp] = nb;
             stk_rect[sp][0] = (short) sub.x0; stk_rect[sp][1] = (short) sub.y0;
             stk_rect[sp][2] = (short) sub.x1; stk_rect[sp][3] = (short) sub.y1;
@@ -246,4 +261,109 @@ long pascal far r_portal_culled( void )
 short pascal far r_portal_culled_frame( void )
 {
     return culled_frame;
+}
+
+
+/*
+ * Draw every portal of every leaf the flood reached, as the wireframe of its
+ * bounding box -- which for a planar portal on an axis-aligned plane is the
+ * portal rectangle itself, and for anything else is the box that bounds it.
+ *
+ * The box is what the flood actually tests, so this shows the geometry the
+ * culling is reasoning about rather than an idealised version of it: a portal
+ * that looks far larger than the opening it represents is exactly why a leaf
+ * beyond it survived.
+ *
+ * Drawn into the render target, not the composite -- these are world-space
+ * lines and belong in the view, scaled with it.
+ */
+void pascal far r_portal_draw(
+    long       dc,
+    float     *m,
+    short      visleafs,
+    float      xresh,
+    float      yresh,
+    float      z_near,
+    long       clr,
+    BASARRAY  *a_index,
+    BASARRAY  *a_refs,
+    BASARRAY  *a_seen
+)
+{
+    static short edge[12][2] = {
+        {0,1},{1,3},{3,2},{2,0},   /* the two faces normal to z */
+        {4,5},{5,7},{7,6},{6,4},
+        {0,4},{1,5},{2,6},{3,7}    /* and the struts between them */
+    };
+    short far *index = (short far *) a_index->farptr;
+    short far *refs  = (short far *) a_refs->farptr;
+    short far *vis   = (short far *) a_seen->farptr;
+    short sx[8], sy[8], ok[8];
+    short li, k, i, c, nb, first, last, infront;
+    float lox, loy, hix, hiy;
+
+    if ( visleafs <= 0 || visleafs >= PT_MAX_LEAVES ) return;
+
+    for ( li = 1; li <= visleafs; li++ ) {
+        if ( !vis[li] ) continue;
+        first = index[li];
+        last  = index[li + 1];
+
+        for ( k = first; k < last; k++ ) {
+            short far *bb = refs + (long) k * PT_REF_SHORTS + 1;
+            nb = refs[ (long) k * PT_REF_SHORTS ];
+
+            /* Only the ones visibility actually came through this frame. */
+            if ( k >= PT_MAX_REFS || !used[k] ) continue;
+
+            lox = 1e30; loy = 1e30; hix = -1e30; hiy = -1e30;
+            infront = 0;
+
+            for ( i = 0; i < 8; i++ ) {
+                float bx = (float) bb[ (i & 1) ? 3 : 0 ];
+                float bz = (float) bb[ (i & 2) ? 4 : 1 ];
+                float by = (float) bb[ (i & 4) ? 5 : 2 ];
+                float vx, vy, vw, fx, fy;
+
+                vx = bx*m[0] + by*m[4] + bz*m[ 8] + m[12];
+                vy = bx*m[1] + by*m[5] + bz*m[ 9] + m[13];
+                vw = bx*m[3] + by*m[7] + bz*m[11] + m[15];
+
+                if ( vw < z_near ) { ok[i] = 0; continue; }
+                infront++;
+                fx = xresh + vx / vw * xresh;
+                fy = yresh - vy / vw * yresh;
+                if ( fx < lox ) lox = fx;
+                if ( fx > hix ) hix = fx;
+                if ( fy < loy ) loy = fy;
+                if ( fy > hiy ) hiy = fy;
+
+                /* Clamped before the cast, not after: a corner just past the
+                   near plane projects past a short, and Borland's FIST folds
+                   that to -32768 -- a line to the wrong side of the screen.
+                   Same trap r_span.c documents. */
+                if ( fx < -4096.0 ) fx = -4096.0;
+                if ( fx >  4096.0 ) fx =  4096.0;
+                if ( fy < -4096.0 ) fy = -4096.0;
+                if ( fy >  4096.0 ) fy =  4096.0;
+                sx[i] = (short) fx;
+                sy[i] = (short) fy;
+                ok[i] = 1;
+            }
+
+            /* Only the ones actually on screen. Every portal of every leaf
+               the flood kept includes the ones behind you and the ones off
+               to the side, and drawing those buries the few you are looking
+               through -- which are the only ones that explain anything. */
+            if ( !infront ) continue;
+            if ( hix < 0.0 || hiy < 0.0 ||
+                 lox > xresh * 2.0 || loy > yresh * 2.0 ) continue;
+
+            for ( c = 0; c < 12; c++ ) {
+                short a = edge[c][0], b = edge[c][1];
+                if ( ok[a] && ok[b] )
+                    uglLine( dc, sx[a], sy[a], sx[b], sy[b], clr );
+            }
+        }
+    }
 }

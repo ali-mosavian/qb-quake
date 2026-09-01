@@ -160,6 +160,13 @@ declare sub host_main ( _
 ''
 declare sub host_shutdown ( )
 declare function host_z_on ( ) as integer
+declare sub scr_draw_hud ( _
+    g as Game, _
+    h_dst_dc as long, _
+    byval w as integer, _
+    byval h as integer _
+)
+
 
 ''
 '' Declared here, not in a header: this module is the only caller, and a
@@ -636,6 +643,7 @@ sub host_main ( _
     dim frame_no as long
     dim pt0 as single, ptd as single
     dim pr0 as long, prd as long
+    dim ht0 as single, htd as single
     dim benchf as integer
     
     ''
@@ -729,6 +737,8 @@ sub host_main ( _
     ''
     g.rdr.backface = -1
     if ( g.env.no_cull ) then g.rdr.backface = 0
+    g.rdr.portal   = not g.env.no_portal
+    g.scr.portal_wire = g.env.pt_wire
     g.scr.stats    = -1
     if ( g.env.no_stats ) then g.scr.stats = 0
 
@@ -836,6 +846,25 @@ sub host_main ( _
         ''
         pr0 = sys_rdtsc()
         vid_update g, h_dst_dc, page
+
+        ''
+        '' -comp: vid_update has scaled the view into the composite and left
+        '' the screen untouched, so the overlay goes on at the mode's own
+        '' resolution and ONE uglPut carries the result to video. Drawing it
+        '' onto the screen after a present instead is a second pass over live
+        '' video memory: it tears, and VRAM is slow enough to cost frames.
+        ''
+        if ( g.env.comp ) then
+            ht0 = sys_now()
+            scr_draw_hud g, g.env.h_comp_dc, g.env.scr_x_res, g.env.scr_y_res
+            if ( g.ft.n > 0 ) then
+                htd = sys_now() - ht0
+                g.pt.hud_sum = g.pt.hud_sum + htd
+                if ( htd > g.pt.hud_max ) then g.pt.hud_max = htd
+            end if
+            uglPut g.env.h_video_dc, 0, 0, g.env.h_comp_dc
+        end if
+
         if ( g.ft.n > 0 ) then
             prd = sys_rdtsc() - pr0
             if ( prd >= 0 and prd <= 1000000 ) then
