@@ -98,13 +98,13 @@ done > "$W/body.txt"
 # the mounts with nothing built and no error anywhere.
 cp "$W/body.txt" "$W/build.bat"
 { cat "$W/head.txt"; echo "call build.bat"; echo "exit"; } > "$W/auto.txt"
-{ printf '[sdl]\nautolock=false\n[dosbox]\nmemsize=32\nstartbanner=false\n'
+{ printf '[sdl]\nautolock=false\n[dosbox]\nmemsize=32\nstartbanner=false\nquit warning=false\n'
   printf '[cpu]\ncore=dynamic\ncycles=max\n[dos]\nxms=true\n[autoexec]\n'
   cat "$W/auto.txt"
 } > "$W/build.conf"
 
 echo "assembling $n module(s)..."
-timeout "${TIMEOUT:-900}" "$DOSBOX_BIN" -nolog -conf "$W/build.conf" >/dev/null 2>&1 || true
+SDL_VIDEODRIVER=dummy timeout "${TIMEOUT:-900}" "$DOSBOX_BIN" -nolog -conf "$W/build.conf" -exit >/dev/null 2>&1 || true
 
 if grep -qiE "error A[0-9]|fatal" "$W/ml.txt" 2>/dev/null; then
     echo "== ASSEMBLY FAILED"; grep -iE -B2 "error A[0-9]|fatal" "$W/ml.txt" | head -30; exit 1
