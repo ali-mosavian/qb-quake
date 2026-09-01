@@ -1,6 +1,6 @@
 """mkportals.py -- regenerate leaf portals from a compiled BSP.
 
-Usage: python3 tools/mkportals.py <map.bsp> [-v]
+Usage: python3 tools/mkportals.py <map.bsp> [outdir] [-v]
 
 Quake ships no portals. qbsp writes a .prt, vis consumes it to produce the
 visibility lump, and nobody ships the .prt -- the PVS in the bsp is the
@@ -15,12 +15,21 @@ rebuilds them from the tree itself, which is qbsp's own algorithm:
     a child's plane,
   - what lands between two leaves is a portal between them.
 
+Emits portals.bld when given an outdir: a per-leaf adjacency the renderer
+floods through, each entry a neighbouring leaf and the portal's world-space
+bounding box. The box, not the winding -- measured over eight viewpoints on
+dm3ish, flooding through boxes marks exactly the same leaves as flooding
+through the real windings, because a portal is planar and near enough
+rectangular that its box projects to the same screen rect. That is 14 bytes
+an entry against a variable-length winding, and no clipper at run time.
+
 The check this is held to, and the reason it can be trusted: vis marks a
 leaf visible only if some chain of portals reaches it, so every leaf's PVS
 must be a SUBSET of what a flood fill through these portals reaches. A
 generator that invents, drops or misplaces portals fails that.
 """
 
+import math
 import struct
 import sys
 from dataclasses import dataclass, field
@@ -253,12 +262,42 @@ def decompress_vis(b: Bsp, ofs: int) -> bytearray:
     return out
 
 
+def write_lump(b: Bsp, portals: list[Portal], path: str) -> int:
+    """portals.bld: short visleafs, short nrefs, then a prefix index of
+    visleafs+1 shorts, then nrefs entries of (neighbour, mins[3], maxs[3])."""
+    adj: dict[int, list[tuple[int, tuple[int, ...], tuple[int, ...]]]] = {}
+    for p in portals:
+        a, c = ~p.nodes[0], ~p.nodes[1]
+        if b.leaves[a][0] == CONTENTS_SOLID or b.leaves[c][0] == CONTENTS_SOLID:
+            continue
+        mn = tuple(int(math.floor(min(v[k] for v in p.winding))) for k in range(3))
+        mx = tuple(int(math.ceil(max(v[k] for v in p.winding))) for k in range(3))
+        adj.setdefault(a, []).append((c, mn, mx))
+        adj.setdefault(c, []).append((a, mn, mx))
+
+    index, refs = [], []
+    for li in range(b.visleafs + 1):
+        index.append(len(refs))
+        refs.extend(adj.get(li, ()))
+    index.append(len(refs))
+
+    out = bytearray()
+    out += struct.pack("<hh", b.visleafs, len(refs))
+    for v in index:
+        out += struct.pack("<h", v)
+    for nb, mn, mx in refs:
+        out += struct.pack("<7h", nb, *mn, *mx)
+    open(path, "wb").write(out)
+    return len(out)
+
+
 def main() -> int:
     if len(sys.argv) < 2:
         print(__doc__)
         return 2
     path = sys.argv[1]
     verbose = "-v" in sys.argv
+    outdir = next((a for a in sys.argv[2:] if not a.startswith("-")), None)
 
     b = read_bsp(path)
     nleaf = len(b.leaves)
@@ -306,7 +345,13 @@ def main() -> int:
                 print(f"  leaf {li}: {len(missing)} PVS leaves unreachable, e.g. {sorted(missing)[:6]}")
 
     print(f"PVS-subset check: {checked - bad}/{checked} leaves pass")
-    return 0 if bad == 0 else 1
+    if bad:
+        print("NOT writing the lump: the portals do not cover the PVS")
+        return 1
+    if outdir:
+        n = write_lump(b, portals, f"{outdir}/portals.bld")
+        print(f"wrote {outdir}/portals.bld, {n} bytes")
+    return 0
 
 
 if __name__ == "__main__":
