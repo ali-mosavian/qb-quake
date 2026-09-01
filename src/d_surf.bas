@@ -70,7 +70,7 @@ declare function sc_find ( _
     byval w as integer, _
     byval h as integer, _
     byval stag as integer _
-)
+) as long
 declare function sc_alloc ( _
     g as Game, _
     byval face as integer, _
@@ -80,7 +80,7 @@ declare function sc_alloc ( _
     byval fw as integer, _
     byval fh as integer, _
     byval stag as integer _
-)
+) as long
 declare sub sb_dump ( _
     g as Game, _
     byval face as integer, _
@@ -988,7 +988,7 @@ function sc_find ( _
     byval w as integer, _
     byval h as integer, _
     byval stag as integer _
-)
+) as long
     dim dc as long
     dim a as integer, b as integer, vcls as integer
 
@@ -1050,7 +1050,7 @@ function sc_alloc ( _
     byval fw as integer, _
     byval fh as integer, _
     byval stag as integer _
-)
+) as long
     dim a as integer, b as integer, cidx as integer, bord as integer
     dim dc as long
     dim vic as integer, blk as integer, j as integer, b2 as integer
