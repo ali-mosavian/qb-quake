@@ -59,7 +59,7 @@ W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
   echo "exit"
 } > "$W/build.conf"
 
-timeout "${TIMEOUT:-240}" "$DOSBOX_BIN" -nolog -conf "$W/build.conf" >/dev/null 2>&1 || true
+SDL_VIDEODRIVER=dummy timeout "${TIMEOUT:-240}" "$DOSBOX_BIN" -nolog -conf "$W/build.conf" >/dev/null 2>&1 || true
 
 if [[ ! -f "$W/$up.OBJ" && ! -f "$W/$base.obj" ]]; then
     echo "== bcc FAILED: $SRC_REL" >&2
