@@ -223,14 +223,17 @@ typedef struct {
 typedef struct { Vec3 pos; float radius; } DynLight;
 
 /* q_vis.bi's VisState -- frame_stamp(int) ord_count(long) drw_leafs(int)
-   cul_leafs(int) ent_left(int) no_ents(int) bad_order(int), all scalars,
-   no padding: a direct transcription of the declared field order. */
+   cul_leafs(int) ent_left(int) pt_culled(int) no_ents(int) bad_order(int),
+   all scalars, no padding: a direct transcription of the declared field
+   order, and it has to STAY a transcription -- a field added on one side
+   only silently shifts every field after it. */
 typedef struct {
     short frame_stamp;
     long  ord_count;
     short drw_leafs;
     short cul_leafs;
     short ent_left;
+    short pt_culled;
     short no_ents;
     short bad_order;
 } VisState;

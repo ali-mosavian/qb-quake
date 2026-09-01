@@ -787,6 +787,16 @@ def main():
 
     print(f"done: {written} atlases for {ntex} textures across {MIPS} mip levels")
 
+    # Portals, rebuilt from the tree -- see tools/mkportals.py for why they
+    # have to be rebuilt at all and what check they are held to. Emitted here
+    # so they travel in assets.zip with everything else the map needs.
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import mkportals
+    pb = mkportals.read_bsp(bsp)
+    portals = mkportals.build_portals(pb)
+    OUT['portalidx.bld'], OUT['portalref.bld'] = mkportals.portal_lumps(pb, portals)
+    print(f"  portals: {len(OUT['portalref.bld'])//14} refs over {len(pb.leaves)} leaves")
+
     write_zip(os.path.join(outdir, 'assets.zip'))
 
 main()

@@ -165,6 +165,9 @@ sub sys_parse_args ( _
         if ( lcase$(argv(i)) = "-nocull" ) then
             g.env.no_cull = true
         end if
+        if ( lcase$(argv(i)) = "-noportal" ) then
+            g.env.no_portal = true
+        end if
         if ( lcase$(argv(i)) = "-spandraw" ) then
             g.env.span_draw = true
         end if

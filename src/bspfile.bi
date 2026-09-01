@@ -392,6 +392,11 @@ type Env
                                 '' uglTriTP path.
     no_z        as integer      '' -noz: skip the depth buffer entirely
     no_cull     as integer      '' -nocull: backface culling off, for A/B
+    no_portal   as integer      '' -noportal: keep the PVS as it stands and
+                                '' skip the portal flood. The mutation check:
+                                '' narrowing to what is actually visible must
+                                '' draw exactly what not narrowing draws.
+
     span_draw   as integer      '' -spandraw: draw the frame from r_span.c's
                                 '' resolved spans, through uGL's scanline
                                 '' filler, instead of handing whole polygons

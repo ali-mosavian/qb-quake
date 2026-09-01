@@ -134,6 +134,7 @@ declare function mod_pvs_base ( _
 '' table is finite, and it ran out when they all got everything.
 ''
 declare sub r_alloc_pvs ( byval leaf_count as long )
+declare sub r_load_portals ( byval leaf_count as long )
 declare sub r_load_lfaces ( byval lump_bytes as long )
 declare sub ent_load_teleports ( _
     g as Game, _
@@ -257,6 +258,7 @@ sub mod_alloc ( _
     redim ord(g.wld.count.nodes-1) as integer
     '' r_bsp sizes its own PVS bits; it states why over there.
     r_alloc_pvs g.wld.count.leaves
+    r_load_portals g.wld.count.leaves
 
     '' Sized to the map, not a fixed 4096: poly_flag is indexed by face
     '' 0..wld.count.faces-1, and e3m6 has 6,985 faces -- a fixed 4096 was too

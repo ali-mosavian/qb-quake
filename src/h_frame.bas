@@ -108,6 +108,7 @@ declare sub r_draw_world ( _
     g as Game, _
     byval model as integer, _
     campos as u3dVector3f, _
+    mtx_fin as u3dMtrx, _
     models() as Submodel, _
     brush() as BrushModel, _
     nodes() as Node, _
@@ -345,7 +346,7 @@ sub host_render ( _
     ''
     '' Walk BSP tree
     ''
-    r_draw_world g, 0, g.cam.pos, mdl_buffer(), brush(), nds_buffer(), pln_buffer(), _
+    r_draw_world g, 0, g.cam.pos, mtx_fin, mdl_buffer(), brush(), nds_buffer(), pln_buffer(), _
                   poly_flag(), order_list(), frustum(), bit_array()
 
     ''

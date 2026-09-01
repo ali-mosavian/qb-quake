@@ -262,7 +262,7 @@ def decompress_vis(b: Bsp, ofs: int) -> bytearray:
     return out
 
 
-def write_lump(b: Bsp, portals: list[Portal], path: str) -> int:
+def portal_lumps(b: Bsp, portals: list[Portal]) -> tuple[bytes, bytes]:
     """portals.bld: short visleafs, short nrefs, then a prefix index of
     visleafs+1 shorts, then nrefs entries of (neighbour, mins[3], maxs[3])."""
     adj: dict[int, list[tuple[int, tuple[int, ...], tuple[int, ...]]]] = {}
@@ -275,20 +275,31 @@ def write_lump(b: Bsp, portals: list[Portal], path: str) -> int:
         adj.setdefault(a, []).append((c, mn, mx))
         adj.setdefault(c, []).append((a, mn, mx))
 
+    nleaf = len(b.leaves)
     index, refs = [], []
-    for li in range(b.visleafs + 1):
+    for li in range(nleaf):
         index.append(len(refs))
         refs.extend(adj.get(li, ()))
+    # One past the last leaf, so a leaf's run is index[i]..index[i+1], and the
+    # final entry doubles as the ref count -- which is the only way the loader
+    # can size the ref array at all. It is not in the bsp, and the index IS,
+    # being one short per leaf of a count the renderer already has.
     index.append(len(refs))
 
-    out = bytearray()
-    out += struct.pack("<hh", b.visleafs, len(refs))
+    idx = bytearray()
     for v in index:
-        out += struct.pack("<h", v)
+        idx += struct.pack("<h", v)
+    ref = bytearray()
     for nb, mn, mx in refs:
-        out += struct.pack("<7h", nb, *mn, *mx)
-    open(path, "wb").write(out)
-    return len(out)
+        ref += struct.pack("<7h", nb, *mn, *mx)
+    return bytes(idx), bytes(ref)
+
+
+def write_lump(b: Bsp, portals: list[Portal], path: str) -> int:
+    idx, ref = portal_lumps(b, portals)
+    open(path + "idx.bld", "wb").write(idx)
+    open(path + "ref.bld", "wb").write(ref)
+    return len(idx) + len(ref)
 
 
 def main() -> int:
@@ -349,8 +360,8 @@ def main() -> int:
         print("NOT writing the lump: the portals do not cover the PVS")
         return 1
     if outdir:
-        n = write_lump(b, portals, f"{outdir}/portals.bld")
-        print(f"wrote {outdir}/portals.bld, {n} bytes")
+        n = write_lump(b, portals, f"{outdir}/portal")
+        print(f"wrote {outdir}/portalidx.bld + portalref.bld, {n} bytes")
     return 0
 
 
