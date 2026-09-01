@@ -74,7 +74,7 @@ DIR_XMS   := xms
 MODS_XMS  := xmsalloc xmsavail xmsblock xmsfill xmsfree xmsheap xmsmap
 
 DIR_MODS  := mods
-MODS_MODS := mdfont mdkbd mdmouse mdtimer mdvbe mdarch mdinf mdscr mdu3d
+MODS_MODS := mdfont mdkbd mdmouse mdtimer mdvbe mdarch mdpak mdzip mddrv mdinf mdscr mdu3d
 
 DIR_MISC  := misc
 MODS_MISC := mscmisc msccpu msclog mscopmov mscopsto mscexitq mscshfa \
