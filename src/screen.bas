@@ -1300,6 +1300,8 @@ sub scr_draw_hud ( _
     dim yy as integer, ftr as string
     dim fcol as integer
     dim wide as integer
+    dim dxv as single, dyv as single, ayv as single, yawd as single
+    dim pstr as string
 
     cw = 146
     lx = 3
@@ -1436,6 +1438,45 @@ sub scr_draw_hud ( _
 
         draw_string_r h_dst_dc, g.env.x_res-4, g.env.y_res-9, "powered by uGL"
     end if
+
+    ''
+    '' Where the camera is, always -- with or without the stats panel,
+    '' drawn last so the panel cannot cover it, and printed as the flags
+    '' themselves so a sighting can be replayed headlessly.
+    ''
+    '' pl.pos, not cam.pos: -at takes the hull origin, and the eye is
+    '' PL_EYE# above it. The yaw is mirrored the way -yaw wants -- the
+    '' eye direction is (cos a, -sin a) in bsp x,y -- and normalised to
+    '' 0..360, because -yaw is fed to mousePos as (x_res-1)*yaw/360 and
+    '' a negative angle is a negative screen x. Printing atan2's own
+    '' -180..180 makes half the viewpoints unreplayable.
+    ''
+    dxv = g.cam.look_at.x - g.cam.pos.x
+    dyv = g.cam.look_at.z - g.cam.pos.z
+    ayv = -dyv
+
+    if ( dxv > 0.0 ) then
+        yawd = atn( ayv / dxv ) * 57.29578
+    elseif ( dxv < 0.0 ) then
+        if ( ayv >= 0.0 ) then
+            yawd = atn( ayv / dxv ) * 57.29578 + 180.0
+        else
+            yawd = atn( ayv / dxv ) * 57.29578 - 180.0
+        end if
+    elseif ( ayv >= 0.0 ) then
+        yawd = 90.0
+    else
+        yawd = -90.0
+    end if
+    if ( yawd < 0.0 ) then yawd = yawd + 360.0
+
+    pstr = "-at " + ltrim$(str$( cint( g.pl.pos.x ) )) + " " + _
+                    ltrim$(str$( cint( g.pl.pos.y ) )) + " " + _
+                    ltrim$(str$( cint( g.pl.pos.z ) )) + _
+           " -yaw " + ltrim$(str$( cint( yawd ) ))
+
+    uglRectF h_dst_dc, 0, 0, g.env.x_res, 9, hc_bg
+    draw_string h_dst_dc, 4, 1, pstr
 end sub
 
 

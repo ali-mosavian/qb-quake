@@ -51,7 +51,7 @@
  * asserts this at startup (see r_walk_layout_ok) so a future field added
  * ahead of vis fails loud at run time instead of silently drifting.
  */
-#define GAME_VIS_OFFSET 5024
+#define GAME_VIS_OFFSET 5026
 
 /* ign here is BASIC's own "ign as integer" -- no byval in the original
    declare, so it is BYREF: r_emit_entities sets it true, walks the

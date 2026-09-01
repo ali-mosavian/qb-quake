@@ -728,6 +728,7 @@ sub host_main ( _
     '' leave the image untouched while the polygon count falls.
     ''
     g.rdr.backface = -1
+    if ( g.env.no_cull ) then g.rdr.backface = 0
     g.scr.stats    = -1
     if ( g.env.no_stats ) then g.scr.stats = 0
 
