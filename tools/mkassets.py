@@ -13,6 +13,7 @@ to happen on the target. This emits one atlas BMP per mip level, already in the
 game palette, which uGL's own assembly BMP loader can pull in directly.
 """
 import struct, sys, os, math
+import re
 
 # The geometry store's row width, and the corner count d_poly.bas's
 # polyb()/uvbuffb() can hold. GEOM_W must match GEOM_W in q_map.bi: it is
@@ -364,6 +365,62 @@ def convert_lightmaps(d, lumps, out):
     return lit, unlit, 1, len(blob), 1, bytes(table)
 
 
+ENT_PAIR = re.compile(r'"([^"]*)"\s*"([^"]*)"')
+
+
+def parse_entities(text: str, nmodels: int) -> bytes:
+    # Resolved here, not on the target: BASIC strings cap at 32,767 bytes
+    # and e1m3's entities lump is 45,762 -- mod_find_spawn died at error 5
+    # before anything else could. The renderer wants four facts out of the
+    # text, so those are what ships: spawn, matched teleporter pairs,
+    # func_plats, and which submodels a trigger hides. Layout must match
+    # EntsHead/EntsTele/EntsPlat in q_ent.bi.
+    spawn: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    angle = 0.0
+    dests: dict[str, tuple[tuple[float, float, float], float]] = {}
+    trigs: list[tuple[str, int]] = []
+    plats: list[tuple[int, float, float]] = []
+
+    def vec(v: str) -> tuple[float, float, float]:
+        x, y, z = (float(t) for t in v.split())
+        return (x, y, z)
+
+    def model(v: str) -> int:
+        m = int(v[1:]) if v.startswith('*') and v[1:].isdigit() else 0
+        return m if 0 < m < nmodels else 0
+
+    for block in text.split('{')[1:]:
+        kv = dict(ENT_PAIR.findall(block.split('}')[0]))
+        match kv.get('classname'):
+            case 'info_player_start':
+                spawn = vec(kv.get('origin', '0 0 0'))
+                angle = float(kv.get('angle', '0'))
+            case 'info_teleport_destination':
+                dests[kv.get('targetname', '')] = (
+                    vec(kv.get('origin', '0 0 0')), float(kv.get('angle', '0')))
+            case 'trigger_teleport' if model(kv.get('model', '')):
+                trigs.append((kv.get('target', ''), model(kv['model'])))
+            case 'func_plat' if model(kv.get('model', '')):
+                plats.append((model(kv['model']),
+                              float(kv.get('speed', '0')),
+                              float(kv.get('height', '0'))))
+
+    # a trigger with no destination still hides its brush, exactly as the
+    # BASIC pass 1 did before pass 2 paired them
+    teles = [(m, *dests[t]) for t, m in trigs if t in dests]
+    hides = [m for _, m in trigs]
+
+    buf = bytearray(struct.pack('<4f4h', *spawn, angle, nmodels,
+                                len(teles), len(plats), len(hides)))
+    for m, org, yaw in teles:
+        buf += struct.pack('<h3ff', m, *org, yaw)
+    for m, speed, height in plats:
+        buf += struct.pack('<hff', m, speed, height)
+    for m in hides:
+        buf += struct.pack('<h', m)
+    return bytes(buf)
+
+
 def convert_lumps(d, lumps, outdir):
     """Convert each lump from its on-disk layout to the renderer's own.
 
@@ -458,6 +515,10 @@ def convert_lumps(d, lumps, outdir):
         rows[-1] += rec
     rows[-1].extend(b'\0' * (GEOM_W - len(rows[-1])))
     out['fgeom.bin'] = b''.join(bytes(r) for r in rows)
+
+    ent_text = lump(0).split(b'\0')[0].decode('latin-1')
+    nmodels = lumps[14][1] // 64
+    out['ents.bin'] = parse_entities(ent_text, nmodels)
 
     # marksurfaces, models: identical either side
     out['lface.bld'] = lump(11)
