@@ -23,8 +23,19 @@ ASSETS = os.path.join(os.path.dirname(__file__), '..', 'data', 'assets')
 BSP    = os.path.join(os.path.dirname(__file__), '..', 'data', 'dm3ish.bsp')
 
 
+def asset_bytes(path):
+    """A member out of assets.zip, or the loose file if one still exists."""
+    name = os.path.basename(path)
+    zp = os.path.join(os.path.dirname(path), 'assets.zip')
+    if os.path.exists(zp):
+        import zipfile
+        with zipfile.ZipFile(zp) as z:
+            return z.read(name)
+    return open(path, 'rb').read()
+
+
 def read_bmp8(path):
-    d = open(path, 'rb').read()
+    d = asset_bytes(path)
     off = struct.unpack_from('<I', d, 10)[0]
     w, h = struct.unpack_from('<ii', d, 18)
     stride = (w + 3) & ~3
@@ -37,8 +48,8 @@ def read_bmp8(path):
 
 
 def bload(path):
-    """Strip the 7-byte BSAVE header."""
-    return open(path, 'rb').read()[7:]
+    """Headerless since assets went into the zip."""
+    return asset_bytes(path)
 
 
 def atlas_cell(mi, mip, cell):

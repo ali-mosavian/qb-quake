@@ -34,6 +34,10 @@ option explicit
 ''
 '' This module's own procedures.
 ''
+declare sub mod_load_flat ( _
+    flname as string, _
+    byval dst as long _
+)
 declare sub r_mark_leaves ( _
     g as Game, _
     byval nodenr as integer, _
@@ -666,9 +670,8 @@ sub r_load_lfaces ( byval lump_bytes as long )
     n = lump_bytes \ len( lfc_buffer(0) )
     redim lfc_buffer( n-1 ) as integer
 
-    def seg = varseg( lfc_buffer(0) )
-    bload "lface.bld", varptr( lfc_buffer(0) )
-    def seg
+    mod_load_flat "assets.zip::lface.bld", _
+        clng( varseg( lfc_buffer(0) ) ) * 65536& + (clng( varptr( lfc_buffer(0) ) ) and 65535&)
 end sub
 
 ''::::::::::
@@ -699,10 +702,10 @@ sub r_load_leaves ( _
     '' array out of it leaves a larger contiguous hole behind even when the
     '' total free does not change.
     ''
-    g.wld.store.leaves = uglArrLoad&( "leaves.pag", UGL.MEM, len( lef_buffer(0) ), _
+    g.wld.store.leaves = uglArrLoad&( "assets.zip::leaves.pag", UGL.MEM, len( lef_buffer(0) ), _
                                        clng( g.wld.count.leaves ), 0 )
     if ( g.wld.store.leaves = 0 ) then
-        g.wld.store.leaves = uglArrLoad&( "leaves.pag", UGL.EMS, len( lef_buffer(0) ), _
+        g.wld.store.leaves = uglArrLoad&( "assets.zip::leaves.pag", UGL.EMS, len( lef_buffer(0) ), _
                                           clng( g.wld.count.leaves ), PAGE_SLOT )
     end if
     if ( g.wld.store.leaves = 0 ) then sys_error "0x0036, leaves.pag would not load"

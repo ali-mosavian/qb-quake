@@ -969,10 +969,10 @@ sub pl_load_hulls ( _
     '' hole for the allocations that come after. The far heap is the
     '' fragmented pool; DOS memory is not.
     ''
-    g.wld.store.clips = uglArrLoad&( "clip.pag", UGL.MEM, len( clp_buffer(0) ), _
+    g.wld.store.clips = uglArrLoad&( "assets.zip::clip.pag", UGL.MEM, len( clp_buffer(0) ), _
                                      clng( g.wld.count.clips ), 0 )
     if ( g.wld.store.clips = 0 ) then
-        g.wld.store.clips = uglArrLoad&( "clip.pag", UGL.EMS, len( clp_buffer(0) ), _
+        g.wld.store.clips = uglArrLoad&( "assets.zip::clip.pag", UGL.EMS, len( clp_buffer(0) ), _
                                          clng( g.wld.count.clips ), PAGE_SLOT )
     end if
     if ( g.wld.store.clips = 0 ) then sys_error "0x0033, clip.pag would not load"

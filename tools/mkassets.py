@@ -12,8 +12,49 @@ All of it is a pure function of the .bsp and the palette, so none of it needs
 to happen on the target. This emits one atlas BMP per mip level, already in the
 game palette, which uGL's own assembly BMP loader can pull in directly.
 """
+import hashlib
 import struct, sys, os, math
 import re
+import zlib
+
+# every output lands here and becomes one assets.zip member
+OUT: dict[str, bytes] = {}
+
+
+def deflate12(data: bytes) -> bytes:
+    c = zlib.compressobj(9, zlib.DEFLATED, -12)
+    return c.compress(data) + c.flush()
+
+
+def write_zip(path: str) -> None:
+    # hand-rolled: members >= 1K are DEFLATEd at windowBits=-12 and tagged
+    # with the decoder's ring ('UW' extra field); zipfile offers neither
+    locs, cens, pos = [], [], 0
+    for name, data in OUT.items():
+        payload = deflate12(data) if len(data) >= 1024 else data
+        method = 8 if len(payload) < len(data) or len(data) >= 1024 else 0
+        if method == 0:
+            payload = data
+        xtra = struct.pack("<HHH", 0x5755, 2, 4096) if method == 8 else b""
+        crc = zlib.crc32(data)
+        nm = name.encode()
+        locs.append(struct.pack("<4sHHHHHLLLHH", b"PK\x03\x04", 20, 0, method,
+                                0, 0x21, crc, len(payload), len(data), len(nm),
+                                len(xtra)) + nm + xtra + payload)
+        cens.append(struct.pack("<4sHHHHHHLLLHHHHHLL", b"PK\x01\x02", 20, 20, 0,
+                                method, 0, 0x21, crc, len(payload), len(data),
+                                len(nm), 0, 0, 0, 0, 0, pos) + nm)
+        pos += len(locs[-1])
+    cd = b"".join(cens)
+    open(path, 'wb').write(b"".join(locs) + cd + struct.pack(
+        "<4sHHHHLLH", b"PK\x05\x06", 0, 0, len(OUT), len(OUT), len(cd), pos, 0))
+    # round trip before trusting the writer
+    import zipfile
+    with zipfile.ZipFile(path) as z:
+        for name, data in OUT.items():
+            assert z.read(name) == data, name
+    raw = sum(len(v) for v in OUT.values())
+    print(f"  assets.zip: {len(OUT)} members, {raw:,} -> {os.path.getsize(path):,} bytes")
 
 # The geometry store's row width, and the corner count d_poly.bas's
 # polyb()/uvbuffb() can hold. GEOM_W must match GEOM_W in q_map.bi: it is
@@ -100,7 +141,7 @@ def resample(src, sw, sh, dw, dh, pal, cube, bits):
     return out
 
 def write_bmp8(path, w, h, pixels, pal):
-    open(path, 'wb').write(bmp8_bytes(w, h, pixels, pal))
+    OUT[os.path.basename(path)] = bmp8_bytes(w, h, pixels, pal)
 
 def bmp8_bytes(w, h, pixels, pal):
     """8-bit uncompressed BMP, bottom-up, rows padded to 4 bytes."""
@@ -138,7 +179,8 @@ FLAT = {'nodes.pag', 'clip.pag', 'leaves.pag', 'faces.pag'}
 
 
 def write_flat(path, payload):
-    open(path, 'wb').write(payload)
+    OUT[os.path.basename(path)] = bytes(payload)
+    return len(payload)
     return len(payload)
 
 
@@ -166,20 +208,15 @@ def write_paged(path, payload, elem, win=UA_WIN):
     for start in range(0, n, perpg):
         chunk = payload[start * elem:min(start + perpg, n) * elem]
         out += chunk + b'\x00' * (win - len(chunk))
-    open(path, 'wb').write(out)
+    OUT[os.path.basename(path)] = bytes(out)
+    return len(out)
     return len(out)
 
 
 def write_bload(path, payload):
-    """BSAVE-format file: 0xFD, segment, offset, length, then the bytes.
-
-    BLOAD ignores the stored segment and offset when the caller supplies one,
-    so those are zero here; only the length matters. The format caps at 65535
-    bytes, which every converted lump in this map is comfortably under."""
-    if len(payload) > 65535:
-        raise SystemExit(f"{path}: {len(payload)} bytes, over BLOAD's 64K limit")
-    hdr = struct.pack('<BHHH', 0xFD, 0, 0, len(payload))
-    open(path, 'wb').write(hdr + payload)
+    # headerless now: the loader takes the size from uarSize
+    OUT[os.path.basename(path)] = bytes(payload)
+    return len(payload)
     return len(payload)
 
 
@@ -597,7 +634,6 @@ def convert_lumps(d, lumps, outdir):
         lfaceid, lfacenum = struct.unpack_from('<hh', raw, k+20)
         buf += struct.pack('<hhhhh', planeid, child0, child1, lfaceid, lfacenum) + bound
     out['nodes.pag'] = bytes(buf)
-    out['nodes.bld'] = bytes(buf)   # kept so the pre-paging path still runs
 
     total = 0
     for name, payload in out.items():
@@ -613,7 +649,7 @@ def convert_lumps(d, lumps, outdir):
             # block for lmface, straight into a mapped EMS window for
             # fgeom -- and .bmp by uglNewBMPEx, so none of them is bound
             # by BLOAD's 64K cap or by BASIC's far heap
-            open(path, 'wb').write(payload)
+            OUT[name] = bytes(payload)
             total += len(payload)
         else:
             total += write_bload(path, payload)
@@ -646,7 +682,7 @@ def main():
     # upper memory rather than in the far heap.
     if len(cmap) < 64*256:
         raise SystemExit(f"colormap is {len(cmap)} bytes, need >= {64*256}")
-    open(os.path.join(outdir, 'colmap.bin'), 'wb').write(cmap[:64*256])
+    OUT['colmap.bin'] = bytes(cmap[:64*256])
     print(f"  colmap.bin    {64*256:7,} bytes  (64 shades x 256)")
     print("building inverse palette cube ...", flush=True)
     cube, bits = inverse_palette(pal)
@@ -750,5 +786,7 @@ def main():
     written = MIPS * 2
 
     print(f"done: {written} atlases for {ntex} textures across {MIPS} mip levels")
+
+    write_zip(os.path.join(outdir, 'assets.zip'))
 
 main()
