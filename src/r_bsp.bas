@@ -134,6 +134,8 @@ dim shared pvs_buffer_b() as integer
 dim shared r_ignore_pvs as integer
 '$dynamic
 dim shared pvs_leaf as integer
+dim shared dbg_camleaf as integer
+dim shared dbg_pvscull as integer
 
 ''
 '' The two walk routines call each other, so whichever comes second in the
@@ -581,6 +583,7 @@ sub r_mark_leaves ( _
     '' every frame -- and writing one entry per leaf in the map while doing
     '' it -- was the largest fixed cost in the walk.
     ''
+    dbg_camleaf = not nodenr
     if ( nodenr = pvs_leaf ) then exit sub
     pvs_leaf = nodenr
     
@@ -618,6 +621,9 @@ sub r_mark_leaves ( _
                 pvsb(j) = 0
             next j
             
+            '' one here, one at the bottom of the loop: a zero run is
+            '' marker plus count, and Mod_DecompressVis advances past
+            '' both
             v = v + 1
         else
             byte = peek(v)
@@ -685,7 +691,6 @@ end sub
 sub r_load_leaves ( _
     g as Game _
 )
-    dim f as FILE
     dim mapped as long
 
     redim lef_buffer(0) as Leaf
@@ -694,11 +699,13 @@ sub r_load_leaves ( _
     '' array out of it leaves a larger contiguous hole behind even when the
     '' total free does not change.
     ''
-    g.wld.store.leaves = uglArrNew&( UGL.MEM, len( lef_buffer(0) ), g.wld.count.leaves, 0 )
+    g.wld.store.leaves = uglArrLoad&( "leaves.pag", UGL.MEM, len( lef_buffer(0) ), _
+                                       clng( g.wld.count.leaves ), 0 )
     if ( g.wld.store.leaves = 0 ) then
-        g.wld.store.leaves = uglArrNew&( UGL.EMS, len( lef_buffer(0) ), g.wld.count.leaves, PAGE_SLOT )
+        g.wld.store.leaves = uglArrLoad&( "leaves.pag", UGL.EMS, len( lef_buffer(0) ), _
+                                          clng( g.wld.count.leaves ), PAGE_SLOT )
     end if
-    if ( g.wld.store.leaves = 0 ) then sys_error "0x0036, no room for the leaves"
+    if ( g.wld.store.leaves = 0 ) then sys_error "0x0036, leaves.pag would not load"
 
     '' Hands the descriptor over. NOT ceremony: this is what takes it out
     '' of the far heap's chain, and only BASIC can do that correctly. Left
@@ -706,15 +713,6 @@ sub r_load_leaves ( _
     '' own and moves it -- the far heap is then corrupt. The variable still
     '' exists afterwards, which is what uglArrMap binds to.
     erase lef_buffer
-
-    if ( fileOpen%( f, "leaves.pag", F4READ ) = 0 ) then
-        sys_error "0x0037, leaves.pag missing"
-    end if
-    if ( uglArrLoad%( f, g.wld.store.leaves ) = 0 ) then
-        fileClose f
-        sys_error "0x0038, leaves.pag short or unreadable"
-    end if
-    fileClose f
 
     ''
     '' ONE map, for the whole array. A MEM store is flat, so this points
@@ -732,4 +730,13 @@ end sub
 ''::::::::::
 function r_leaf_contents ( byval leafnr as integer ) as integer
     r_leaf_contents = lef_buffer( leafnr ).cont
+end function
+
+''::::::::::
+'' name: rb_dbg_camleaf
+'' desc: The leaf r_mark_leaves resolved the camera into. Temporary:
+''       it checks the one assumption the PVS analysis rests on.
+''::::::::::
+function rb_dbg_camleaf ( ) as integer
+    rb_dbg_camleaf = dbg_camleaf
 end function
