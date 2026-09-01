@@ -24,6 +24,30 @@ format). Standalone — no dependency on any other bundle.
   per-face 4-bit lightmaps with reconstruction-fit assignment; plus the measured rejections
   (texinfo fixed point, Huffman, perceptual quantization, global-palette dithering) and the
   verification methodology
+- [span-rendering.md](span-rendering.md) — a complete Quake-style global-edge-list span
+  renderer, built, made correct, and benchmarked against the existing polygon path: 56.75 vs
+  47.97 ms/frame, 18% SLOWER, and slower still like-for-like since the span arm writes no depth;
+  the frame decomposition that explains it (per-polygon setup 13.2 ms and invariant to the
+  architecture, fill 8.3, all per-scanline work only 2.5) and the overdraw measurements that
+  undercut the premise (dm3ish 1.42x, e1m7 1.56x yet WORSE, because more smaller polygons cost
+  more to resolve than the fill they save); the four optimisation rounds that cut the resolve 54%
+  (fixed point and near arrays, linked AEL with merge/step/repair in one walk, integer depth key,
+  clamp-the-vertices-not-the-derivatives); two measurement corrections worth keeping (a
+  per-crossing RDTSC bracket cost a third of what it reported; "608 ticks/scanline" was an
+  artifact of deriving cost by subtraction instead of bracketing); the four bugs isolated tests
+  found and the one they structurally could not (~8 shared texture views re-aimed per face, which
+  deferred drawing invalidates); and the near-collinear clipped-polygon fit that was silently
+  dropping whole faces
+- [real-mode-flat-addressing.md](real-mode-flat-addressing.md) — whether segment 0 plus a 32-bit
+  offset reaches 1MB in real mode: DOSBox-X says yes, bochs says #GP in four independent
+  configurations including a genuine V86 one, and bochs is right; why V86 cannot be made to do it
+  (the limit is imposed by the mode, and entering V86 reloads all six segment registers) and what
+  does work instead (DPMI flat selector, VCPI, or no memory manager); the finding that a DPMI host
+  does NOT put the CPU in V86 — neither `CWSDPMI -P` resident nor after a real client activated
+  it, only HIMEM+EMM386 reported PE=1; three ways this test was vacuous before it wasn't (target
+  under 64K, uniform region where 0 == 0 "passed", and both arms secretly identical until SMSW
+  proved it); and the general lesson that any low-level assumption verified only under DOSBox is
+  unverified
 - [surface-cache-and-standalone-testing.md](surface-cache-and-standalone-testing.md) — the
   DC-per-surface conventional-memory bug and its fix (`uglNewView`/`uglSetView`/`uglDelView`,
   numpy-style views added to uGL, 228 DCs → 21 on dm3ish); the `ul$fillView` EMS handle bug that
