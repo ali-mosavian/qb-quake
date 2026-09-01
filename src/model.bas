@@ -72,10 +72,6 @@ declare sub mod_load_visibility ( _
 )
 declare sub mod_load_planes ( planes() as Plane )
 declare sub mod_load_submodels ( models() as Submodel )
-declare sub mod_spawn_from_block ( _
-    g as Game, _
-    block as string _
-)
 
 ''
 '' This module's own procedures.
@@ -83,9 +79,6 @@ declare sub mod_spawn_from_block ( _
 declare sub mod_open ( _
     g as Game, _
     models() as Submodel _
-)
-declare sub mod_find_spawn ( _
-    g as Game _
 )
 declare function mod_lm_map ( _
     g as Game, _
@@ -228,73 +221,6 @@ sub mod_open ( _
     g.wld.count.clips = g.wld.file.head.clip_node.size \ len( clip_tmp )
     seek #g.wld.file.handle, g.wld.file.head.mip_tex.offs+1
     get #g.wld.file.handle,, g.wld.count.textures    
-
-end sub
-
-
-
-
-''::::::::::
-'' name: mod_find_spawn
-'' desc: Scans the entity lump for info_player_start.
-''::::::::::
-sub mod_spawn_from_block ( _
-    g as Game, _
-    block as string _
-)
-    dim strm(50) as string
-    dim strm_cnt as integer
-    dim j as integer
-
-    if ( instr( block, "info_player_start" ) = 0 ) then exit sub
-
-    com_tokenize strm(), strm_cnt, " {}" + chr$(34) + chr$(10) + chr$(13), block
-
-    for  j = 0 to strm_cnt-1
-        if ( strm(j) = "origin" ) then
-            '' BSP is Z-up and the camera is Y-up, so y and z swap here
-            g.cam.pos.x = val( strm(j+1) )
-            g.cam.pos.z = val( strm(j+2) )
-            g.cam.pos.y = val( strm(j+3) )
-        end if
-
-        if ( strm(j) = "angle" ) then g.cam.start_angle = val( strm(j+1) )
-    next j
-
-end sub
-
-
-
-
-''::::::::::
-'' name: mod_find_spawn
-'' desc: Scans the entity lump for the spawn point. Braces delimit the
-''       blocks; each complete one goes to mod_spawn_from_block, which
-''       decides whether it is the one we want.
-''::::::::::
-sub mod_find_spawn ( _
-    g as Game _
-)
-    dim entity as string
-    dim ch as string
-    dim i as integer, open_at as integer
-
-    entity$ = space$( g.wld.file.head.entities.size )
-    seek #g.wld.file.handle, g.wld.file.head.entities.offs+1
-    get #g.wld.file.handle,, entity$
-
-    for  i = 1 to len( entity$ )
-        ch$ = mid$( entity$, i, 1 )
-
-        if ( ch$ = "{" ) then open_at = i
-
-        if ( ch$ = "}" and open_at > 0 ) then
-            mod_spawn_from_block g, mid$( entity$, open_at, i-open_at+1 )
-            open_at = 0
-        end if
-    next i
-
-    scr_load_step
 
 end sub
 

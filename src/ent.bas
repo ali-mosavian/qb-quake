@@ -47,17 +47,6 @@ declare function ent_point_leaf ( _
     nodes() as Node, _
     planes() as Plane _
 ) as integer
-declare function ent_value ( _
-    strm() as string, _
-    byval strm_cnt as integer, _
-    kname as string _
-) as string
-declare sub ent_vec ( _
-    strm() as string, _
-    byval strm_cnt as integer, _
-    kname as string, _
-    v as Vec3 _
-)
 declare function ent_plat_touched ( _
     g as Game, _
     byval p as integer, _
@@ -68,6 +57,13 @@ declare function ent_plat_touched ( _
 ''
 '' This module's own procedures.
 ''
+declare function ent_open_bin ( _
+    g as Game, _
+    h as EntsHead _
+) as integer
+declare sub ent_load_spawn ( _
+    g as Game _
+)
 declare sub ent_load_teleports ( _
     g as Game, _
     models() as Submodel, _
@@ -94,76 +90,62 @@ declare sub ent_place_models ( _
     brush() as BrushModel _
 )
 
-''
-'' Destinations, held only while the entity lump is being read: a trigger may
-'' name a destination that appears later in the text, so the links cannot be
-'' resolved in one pass.
-''
-'$static
-dim shared dest_name( ENT_MAXTELE ) as string * 32
-dim shared dest_org( ENT_MAXTELE ) as Vec3
-dim shared dest_yaw( ENT_MAXTELE ) as single
-dim shared dest_count as integer
-
-dim shared trig_target( ENT_MAXTELE ) as string * 32
-dim shared trig_model( ENT_MAXTELE ) as integer
-dim shared trig_count as integer
-'$dynamic
 
 
 
 
 ''::::::::::
-'' name: ent_value
-'' desc: The value following key in a tokenised entity block, or "" if absent.
+'' name: ent_open_bin
+'' desc: Opens ents.bin for GET and validates it against this map. A BASIC
+''       binary OPEN creates the file it fails to find, so a bad one is
+''       KILLed before erroring rather than left to poison the next run.
 ''::::::::::
-function ent_value ( _
-    strm() as string, _
-    byval strm_cnt as integer, _
-    kname as string _
-) as string
-    dim j as integer
+function ent_open_bin ( _
+    g as Game, _
+    h as EntsHead _
+) as integer
+    dim f as integer
 
-    ent_value = ""
-
-    for  j = 0 to strm_cnt-2
-        if ( strm(j) = kname ) then
-            ent_value = strm(j+1)
-            exit function
-        end if
-    next j
-
+    f = freefile
+    open "ents.bin" for binary as #f
+    if ( lof(f) < len(h) ) then
+        close #f
+        kill "ents.bin"
+        sys_error "0x0043, ents.bin missing or short"
+    end if
+    get #f, , h
+    if ( h.nmodels <> g.wld.count.models ) then
+        close #f
+        sys_error "0x0045, ents.bin is from another map"
+    end if
+    ent_open_bin = f
 end function
 
 
 
 
 ''::::::::::
-'' name: ent_vec
-'' desc: The three numbers following kname. An entity value like
-''       "448 416 176" arrives already split, because space is one of the
-''       separators the block was tokenised with.
+'' name: ent_load_spawn
+'' desc: The spawn point, from ents.bin -- the entities text resolved by
+''       mkassets. The text itself never reaches the target: BASIC strings
+''       cap at 32,767 bytes and e1m3's entities lump is 45,762.
 ''::::::::::
-sub ent_vec ( _
-    strm() as string, _
-    byval strm_cnt as integer, _
-    kname as string, _
-    v as Vec3 _
+sub ent_load_spawn ( _
+    g as Game _
 )
-    dim j as integer
+    dim f as integer
+    dim h as EntsHead
 
-    v.x = 0.0
-    v.y = 0.0
-    v.z = 0.0
+    f = ent_open_bin( g, h )
+    close #f
 
-    for  j = 0 to strm_cnt-4
-        if ( strm(j) = kname ) then
-            v.x = val( strm(j+1) )
-            v.y = val( strm(j+2) )
-            v.z = val( strm(j+3) )
-            exit sub
-        end if
-    next j
+    '' BSP is Z-up and the camera is Y-up, so y and z swap here
+    g.cam.pos.x = h.spawn.x
+    g.cam.pos.z = h.spawn.y
+    g.cam.pos.y = h.spawn.z
+    g.cam.start_angle = h.angle
+
+    scr_load_step
 
 end sub
 
@@ -172,10 +154,11 @@ end sub
 
 ''::::::::::
 '' name: ent_load_teleports
-'' desc: Reads the entity lump and pairs every trigger_teleport with the
-''       destination it targets.
-''
-''       Must run while the map file is still open, so before mod_close.
+'' desc: Loads ents.bin -- teleporter pairs already matched by targetname,
+''       plats and hidden submodels already validated, all by mkassets.
+''       What stays here is what needs the loaded submodels: trigger
+''       volumes and plat defaults come from models(), which mkassets has
+''       no reason to duplicate.
 ''::::::::::
 sub ent_load_teleports ( _
     g as Game, _
@@ -185,28 +168,27 @@ sub ent_load_teleports ( _
     face_mdl() as integer, _
     plat() as PlatEnt _
 )
-    dim entity as string
-    dim strm(50) as string
-    dim strm_cnt as integer
-    dim ch as string, blk as string
-    dim inblk as integer, fchar as integer
+    dim f as integer
+    dim h as EntsHead
+    dim tr as EntsTele
+    dim pr as EntsPlat
     dim i as integer, j as integer, k as integer
-    dim s as string
     dim mdlnum as integer
 
-    redim tele( ENT_MAXTELE ) as Teleporter
-    redim brush( 63 ) as BrushModel
+    f = ent_open_bin( g, h )
+
+    '' Sized to the map, not a fixed 64: e1m3 has 106 submodels, and
+    '' ent_place_models and pl_trace walk every one of them.
+    redim brush( g.wld.count.models-1 ) as BrushModel
     redim face_mdl( g.wld.count.faces ) as integer
-    redim plat( ENT_MAXTELE ) as PlatEnt
+    redim tele( h.ntele ) as Teleporter
+    redim plat( h.nplat ) as PlatEnt
 
     g.tele_count = 0
-    dest_count = 0
-    trig_count = 0
-
     g.plat_count = 0
 
     '' every submodel draws and blocks unless something claims it as a trigger
-    for  i = 0 to 63
+    for  i = 0 to g.wld.count.models-1
         brush(i).draw  = true
         brush(i).solid = true
         brush(i).zofs  = 0.0
@@ -226,113 +208,54 @@ sub ent_load_teleports ( _
         next k
     next j
 
-    entity$ = space$( g.wld.file.head.entities.size )
-    seek #g.wld.file.handle, g.wld.file.head.entities.offs+1
-    get #g.wld.file.handle,, entity$
-
-    ''
-    '' Walk the text a block at a time, the same way mod_find_spawn does.
-    ''
-    for  i = 1 to len( entity$ )
-        ch$ = mid$( entity$, i, 1 )
-
-        if ( ch$ = "{" ) then
-            inblk = 1
-            fchar = i
-        end if
-
-        if ( ch$ = "}" and inblk = 1 ) then
-            blk$ = mid$( entity$, fchar, i-fchar+1 )
-            com_tokenize strm(), strm_cnt, " {}"+chr$(34)+chr$(10)+chr$(13), blk$
-
-            s$ = ent_value( strm(), strm_cnt, "classname" )
-
-            if ( s$ = "info_teleport_destination" and dest_count < ENT_MAXTELE ) then
-                dest_name( dest_count ) = ent_value( strm(), strm_cnt, "targetname" )
-
-                ''
-                '' Space is one of the block separators, so "448 416 176"
-                '' is already three tokens by the time we get here and the
-                '' value of "origin" is just the first of them. Read all
-                '' three, which is what mod_find_spawn does.
-                ''
-                ent_vec strm(), strm_cnt, "origin", dest_org( dest_count )
-
-                dest_yaw( dest_count ) = val( ent_value( strm(), strm_cnt, "angle" ) )
-
-                dest_count = dest_count + 1
-
-            elseif ( s$ = "func_plat" and g.plat_count < ENT_MAXTELE ) then
-                s$ = ent_value( strm(), strm_cnt, "model" )
-                if ( left$( s$, 1 ) = "*" ) then
-                    mdlnum = val( mid$( s$, 2 ) )
-
-                    if ( mdlnum > 0 and mdlnum <= g.wld.count.models-1 ) then
-                        plat( g.plat_count ).model  = mdlnum
-                        plat( g.plat_count ).speed  = val( ent_value( strm(), strm_cnt, "speed" ) )
-                        plat( g.plat_count ).travel = val( ent_value( strm(), strm_cnt, "height" ) )
-                        plat( g.plat_count ).mins   = models(mdlnum).mins
-                        plat( g.plat_count ).maxs   = models(mdlnum).maxs
-
-                        if ( plat( g.plat_count ).speed  <= 0.0 ) then plat( g.plat_count ).speed  = 150.0
-                        if ( plat( g.plat_count ).travel <= 0.0 ) then _
-                            plat( g.plat_count ).travel = models(mdlnum).maxs.z - models(mdlnum).mins.z
-
-                        '' Quake positions the brush raised, so a lift at rest
-                        '' is one full travel below where the map drew it.
-                        plat( g.plat_count ).state = ENT_PLAT_DOWN
-                        brush( mdlnum ).zofs = -plat( g.plat_count ).travel
-
-                        g.plat_count = g.plat_count + 1
-                    end if
-                end if
-
-            elseif ( s$ = "trigger_teleport" and trig_count < ENT_MAXTELE ) then
-                trig_target( trig_count ) = ent_value( strm(), strm_cnt, "target" )
-
-                ''
-                '' "model" "*1" -- the star is not decoration, it says the
-                '' number is a submodel rather than a file name.
-                ''
-                s$ = ent_value( strm(), strm_cnt, "model" )
-                if ( left$( s$, 1 ) = "*" ) then
-                    trig_model( trig_count ) = val( mid$( s$, 2 ) )
-                    brush( trig_model( trig_count ) ).draw  = false
-                    brush( trig_model( trig_count ) ).solid = false
-                    trig_count = trig_count + 1
-                end if
-            end if
-
-            inblk = 0
+    for  i = 1 to h.ntele
+        get #f, , tr
+        mdlnum = tr.model
+        if ( mdlnum > 0 and mdlnum <= g.wld.count.models-1 ) then
+            tele( g.tele_count ).mins = models(mdlnum).mins
+            tele( g.tele_count ).maxs = models(mdlnum).maxs
+            tele( g.tele_count ).dest = tr.dest
+            '' the arrival point is above the mapper's mark --
+            '' see PL_TELE_LIFT#
+            tele( g.tele_count ).dest.z = _
+                tele( g.tele_count ).dest.z + PL_TELE_LIFT#
+            tele( g.tele_count ).yaw  = tr.yaw
+            g.tele_count = g.tele_count + 1
         end if
     next i
 
-    ''
-    '' Second pass: match each trigger's target to a destination's targetname.
-    '' A trigger whose destination is missing is dropped rather than kept as a
-    '' hole that teleports the player to the origin.
-    ''
-    for  j = 0 to trig_count-1
-        for  k = 0 to dest_count-1
-            if ( rtrim$(trig_target(j)) = rtrim$(dest_name(k)) ) then
-                mdlnum = trig_model(j)
+    for  i = 1 to h.nplat
+        get #f, , pr
+        mdlnum = pr.model
+        if ( mdlnum > 0 and mdlnum <= g.wld.count.models-1 ) then
+            plat( g.plat_count ).model  = mdlnum
+            plat( g.plat_count ).speed  = pr.speed
+            plat( g.plat_count ).travel = pr.travel
+            plat( g.plat_count ).mins   = models(mdlnum).mins
+            plat( g.plat_count ).maxs   = models(mdlnum).maxs
 
-                if ( mdlnum > 0 and mdlnum <= g.wld.count.models-1 ) then
-                    tele( g.tele_count ).mins = models(mdlnum).mins
-                    tele( g.tele_count ).maxs = models(mdlnum).maxs
-                    tele( g.tele_count ).dest = dest_org(k)
-                    '' the arrival point is above the mapper's mark --
-                    '' see PL_TELE_LIFT#
-                    tele( g.tele_count ).dest.z = _
-                        tele( g.tele_count ).dest.z + PL_TELE_LIFT#
-                    tele( g.tele_count ).yaw  = dest_yaw(k)
-                    g.tele_count = g.tele_count + 1
-                end if
+            if ( plat( g.plat_count ).speed  <= 0.0 ) then plat( g.plat_count ).speed  = 150.0
+            if ( plat( g.plat_count ).travel <= 0.0 ) then _
+                plat( g.plat_count ).travel = models(mdlnum).maxs.z - models(mdlnum).mins.z
 
-                exit for
-            end if
-        next k
-    next j
+            '' Quake positions the brush raised, so a lift at rest
+            '' is one full travel below where the map drew it.
+            plat( g.plat_count ).state = ENT_PLAT_DOWN
+            brush( mdlnum ).zofs = -plat( g.plat_count ).travel
+
+            g.plat_count = g.plat_count + 1
+        end if
+    next i
+
+    for  i = 1 to h.nhide
+        get #f, , mdlnum
+        if ( mdlnum > 0 and mdlnum <= g.wld.count.models-1 ) then
+            brush( mdlnum ).draw  = false
+            brush( mdlnum ).solid = false
+        end if
+    next i
+
+    close #f
 
 end sub
 

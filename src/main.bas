@@ -275,7 +275,7 @@ declare sub scr_count_frame ( _
 declare function sys_frame_time ( _
     g as Game _
 ) as single
-declare sub mod_find_spawn ( _
+declare sub ent_load_spawn ( _
     g as Game _
 )
 declare sub pl_init ( _
@@ -542,7 +542,7 @@ sub host_init ( _
     mod_open g, mdl_buffer()
     sys_mem_mark "mapopen"
     scr_begin_loading g
-    mod_find_spawn g
+    ent_load_spawn g
     pl_init g
 
     t_map = timer

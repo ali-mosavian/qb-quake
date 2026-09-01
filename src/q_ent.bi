@@ -7,7 +7,6 @@
 '' Include after bspfile.bi and the uGL headers; the types come from there.
 ''
 
-const ENT_MAXTELE = 8
 
 ''
 '' A teleporter is a trigger_teleport entity whose brush is one of the
@@ -31,6 +30,36 @@ end type
 '' Which submodel owns each face, so the renderer can find the offset without
 '' searching. Built once at load.
 ''
+
+''
+'' ents.bin, as tools/mkassets.py emits it: the entities text resolved
+'' offline -- spawn, matched teleporter pairs, func_plats, and which
+'' submodels a trigger hides. Read with GET straight into these, so the
+'' layout here IS the file format; change one and regenerate the other.
+'' Coordinates are BSP-space, unswapped, and dest carries no PL_TELE_LIFT
+'' -- the readers keep applying both, as they did to the text.
+''
+type EntsHead
+    spawn       as Vec3
+    angle       as single
+    nmodels     as integer      '' stamp: must equal the map's model count,
+                                '' or the assets are from another map
+    ntele       as integer
+    nplat       as integer
+    nhide       as integer
+end type
+
+type EntsTele
+    model       as integer
+    dest        as Vec3
+    yaw         as single
+end type
+
+type EntsPlat
+    model       as integer
+    speed       as single
+    travel      as single
+end type
 
 const ENT_PLAT_DOWN = 0
 const ENT_PLAT_UP   = 1
