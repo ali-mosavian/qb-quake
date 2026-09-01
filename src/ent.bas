@@ -57,10 +57,16 @@ declare function ent_plat_touched ( _
 ''
 '' This module's own procedures.
 ''
-declare function ent_open_bin ( _
+declare sub ent_get ( _
+    u as UAR, _
+    byval dst as long, _
+    byval n as integer _
+)
+declare sub ent_open_bin ( _
     g as Game, _
+    u as UAR, _
     h as EntsHead _
-) as integer
+)
 declare sub ent_load_spawn ( _
     g as Game _
 )
@@ -95,31 +101,39 @@ declare sub ent_place_models ( _
 
 
 ''::::::::::
-'' name: ent_open_bin
-'' desc: Opens ents.bin for GET and validates it against this map. A BASIC
-''       binary OPEN creates the file it fails to find, so a bad one is
-''       KILLed before erroring rather than left to poison the next run.
+'' name: ent_get
+'' desc: One record out of the open member, or die: sequential GETs are
+''       all ents.bin ever needed.
 ''::::::::::
-function ent_open_bin ( _
-    g as Game, _
-    h as EntsHead _
-) as integer
-    dim f as integer
-
-    f = freefile
-    open "ents.bin" for binary as #f
-    if ( lof(f) < len(h) ) then
-        close #f
-        kill "ents.bin"
-        sys_error "0x0043, ents.bin missing or short"
+sub ent_get ( _
+    u as UAR, _
+    byval dst as long, _
+    byval n as integer _
+)
+    if ( uarRead( u, dst, clng(n) ) <> clng(n) ) then
+        sys_error "0x0043, ents.bin short read"
     end if
-    get #f, , h
+end sub
+
+
+''::::::::::
+'' name: ent_open_bin
+'' desc: Opens the ents.bin member and validates it against this map.
+''::::::::::
+sub ent_open_bin ( _
+    g as Game, _
+    u as UAR, _
+    h as EntsHead _
+)
+    if ( uarOpen( u, "assets.zip::ents.bin", F4READ ) = 0 ) then
+        sys_error "0x0043, ents.bin missing"
+    end if
+    ent_get u, clng( varseg( h ) ) * 65536& + (clng( varptr( h ) ) and 65535&), len( h )
     if ( h.nmodels <> g.wld.count.models ) then
-        close #f
+        uarClose u
         sys_error "0x0045, ents.bin is from another map"
     end if
-    ent_open_bin = f
-end function
+end sub
 
 
 
@@ -133,11 +147,11 @@ end function
 sub ent_load_spawn ( _
     g as Game _
 )
-    dim f as integer
+    dim u as UAR
     dim h as EntsHead
 
-    f = ent_open_bin( g, h )
-    close #f
+    ent_open_bin g, u, h
+    uarClose u
 
     '' BSP is Z-up and the camera is Y-up, so y and z swap here
     g.cam.pos.x = h.spawn.x
@@ -168,14 +182,14 @@ sub ent_load_teleports ( _
     face_mdl() as integer, _
     plat() as PlatEnt _
 )
-    dim f as integer
+    dim u as UAR
     dim h as EntsHead
     dim tr as EntsTele
     dim pr as EntsPlat
     dim i as integer, j as integer, k as integer
     dim mdlnum as integer
 
-    f = ent_open_bin( g, h )
+    ent_open_bin g, u, h
 
     '' Sized to the map, not a fixed 64: e1m3 has 106 submodels, and
     '' ent_place_models and pl_trace walk every one of them.
@@ -209,7 +223,7 @@ sub ent_load_teleports ( _
     next j
 
     for  i = 1 to h.ntele
-        get #f, , tr
+        ent_get u, clng( varseg( tr ) ) * 65536& + (clng( varptr( tr ) ) and 65535&), len( tr )
         mdlnum = tr.model
         if ( mdlnum > 0 and mdlnum <= g.wld.count.models-1 ) then
             tele( g.tele_count ).mins = models(mdlnum).mins
@@ -225,7 +239,7 @@ sub ent_load_teleports ( _
     next i
 
     for  i = 1 to h.nplat
-        get #f, , pr
+        ent_get u, clng( varseg( pr ) ) * 65536& + (clng( varptr( pr ) ) and 65535&), len( pr )
         mdlnum = pr.model
         if ( mdlnum > 0 and mdlnum <= g.wld.count.models-1 ) then
             plat( g.plat_count ).model  = mdlnum
@@ -248,14 +262,14 @@ sub ent_load_teleports ( _
     next i
 
     for  i = 1 to h.nhide
-        get #f, , mdlnum
+        ent_get u, clng( varseg( mdlnum ) ) * 65536& + (clng( varptr( mdlnum ) ) and 65535&), len( mdlnum )
         if ( mdlnum > 0 and mdlnum <= g.wld.count.models-1 ) then
             brush( mdlnum ).draw  = false
             brush( mdlnum ).solid = false
         end if
     next i
 
-    close #f
+    uarClose u
 
 end sub
 

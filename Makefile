@@ -58,7 +58,7 @@ DATA := data/stuff.ini data/base.dat
 ## Preprocessed textures. The renderer blits these instead of resampling and
 ## colour-matching the miptex lump at every launch; the raw atlas stands in
 ## for the whole set as far as make is concerned.
-ASSETS := data/assets/texr.bmp
+ASSETS := data/assets/assets.zip
 ASSET_FILES := $(wildcard data/assets/*)
 EXE  := $(BUILD)/qrender.exe
 

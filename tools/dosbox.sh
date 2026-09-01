@@ -66,6 +66,17 @@ build)
     ## mounts nothing for every other target.
     ##
     CMODS="$(cd "$ROOT/src" && ls *.c 2>/dev/null | sed 's/\.c$//')"
+    ## .asm hot modules (qr_prof stubs, r_sweep): assembled on the HOST
+    ## with jwasm, same flags as the Makefile -- this flow has no guest
+    ## assembler. Assembled to *.OB_ -- an extension del *.obj cannot match --
+    ## then copied to the link name by the bat, after its del.
+    AMODS="$(cd "$ROOT/src" && ls *.asm 2>/dev/null | sed 's/\.asm$//')"
+    for m in $AMODS; do
+        "$TOOLCHAINS/native/bin/jwasm" -c -Cp -Zg -omf \
+            -Fo"$out/$(echo "$m" | tr 'a-z' 'A-Z').OB_" \
+            "$ROOT/src/$m.asm" > /dev/null || {
+                echo "jwasm failed on $m.asm" >&2; exit 1; }
+    done
     cp "$ROOT"/src/*.c "$out/" 2>/dev/null || true
     cp "$ROOT"/src/*.h "$out/" 2>/dev/null || true
     BCPP31="$TOOLCHAINS/bcpp31"
@@ -113,6 +124,11 @@ build)
         n=$((n+1))
         [[ $((n % 4)) -eq 0 ]] && OBJS="$OBJS"$'\r\n'
     done
+    for m in $AMODS; do
+        OBJS="$OBJS$(echo "$m" | tr 'a-z' 'A-Z').OBJ+"
+        n=$((n+1))
+        [[ $((n % 4)) -eq 0 ]] && OBJS="$OBJS"$'\r\n'
+    done
     OBJS="${OBJS}M:\\LIB\\ADDONS\\U3D.OBJ"
 
     # one BC line per module, then one LINK line naming every object.
@@ -124,6 +140,9 @@ build)
                           'if exist *.obj del *.obj' 'if exist qrender.exe del qrender.exe'
         for m in $CMODS; do
             printf '%s\r\n' "B:\\BIN\\BCC.EXE -c -B -3 -mm -Ox -IW:\\ -IB:\\INCLUDE $m.c > cc_$m.out"
+        done
+        for m in $AMODS; do
+            printf '%s\r\n' "copy $(echo "$m" | tr 'a-z' 'A-Z').OB_ $(echo "$m" | tr 'a-z' 'A-Z').OBJ > nul"
         done
         for m in $MODS; do printf '%s\r\n' "$bc $m.bas, $m.obj; >> bc.out"; done
         printf '%s\r\n' 'if not exist main.obj goto bcfail'

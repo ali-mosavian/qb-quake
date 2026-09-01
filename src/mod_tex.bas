@@ -40,6 +40,10 @@ option explicit
 ''
 '' This module's own procedures.
 ''
+declare sub mod_load_flat ( _
+    flname as string, _
+    byval dst as long _
+)
 declare sub mod_link_anims ( _
     g as Game, _
     mip_buff_inf() as MipTex _
@@ -90,9 +94,8 @@ sub mod_load_texinfo ( _
     scr_load_stage "texture info"
     dim i as integer
 
-    def seg = varseg( tex_info(0) )
-    bload "texinf.bld", varptr( tex_info(0) )
-    def seg
+    mod_load_flat "assets.zip::texinf.bld", _
+        clng( varseg( tex_info(0) ) ) * 65536& + (clng( varptr( tex_info(0) ) ) and 65535&)
 
     scr_load_step
     
@@ -179,15 +182,14 @@ sub mod_load_textures ( _
     '' BMPOPT.NO332 matters: without it uGL remaps the image to its own
     '' 3-3-2 palette and the indices, already correct, would be destroyed.
     ''
-    g.wld.tex.raw    = uglNewBMPEx( UGL.EMS, UGL.8BIT, "texr.bmp", BMPOPT.NO332 )
-    g.wld.tex.shaded = uglNewBMPEx( UGL.EMS, UGL.8BIT, "texs.bmp", BMPOPT.NO332 )
+    g.wld.tex.raw    = uglNewBMPEx( UGL.EMS, UGL.8BIT, "assets.zip::texr.bmp", BMPOPT.NO332 )
+    g.wld.tex.shaded = uglNewBMPEx( UGL.EMS, UGL.8BIT, "assets.zip::texs.bmp", BMPOPT.NO332 )
     if ( g.wld.tex.raw = 0 or g.wld.tex.shaded = 0 ) then
         sys_error "0x0016, texture atlas would not load"
     end if
 
-    def seg = varseg( g.wld.tex.ofs(0) )
-    bload "texofs.bld", varptr( g.wld.tex.ofs(0) )
-    def seg
+    mod_load_flat "assets.zip::texofs.bld", _
+        clng( varseg( g.wld.tex.ofs(0) ) ) * 65536& + (clng( varptr( g.wld.tex.ofs(0) ) ) and 65535&)
 
     for  j = 0 to 3
         g.wld.tex.cell(j) = 64 \ (2 ^ j)

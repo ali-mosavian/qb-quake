@@ -70,6 +70,10 @@ declare sub mod_load_marksurfaces ( _
 declare sub mod_load_visibility ( _
     g as Game _
 )
+declare sub mod_load_flat ( _
+    flname as string, _
+    byval dst as long _
+)
 declare sub mod_load_planes ( planes() as Plane )
 declare sub mod_load_submodels ( models() as Submodel )
 
@@ -286,7 +290,7 @@ sub mod_load_faces ( _
     '' cost an INT 67h each time. A MEM-backed store needs no slot at all,
     '' so it also cannot collide with the geometry window d_poly maps
     '' between these reads.
-    g.wld.store.faces = uglArrLoad&( "faces.pag", UGL.MEM, len( faces(0) ), _
+    g.wld.store.faces = uglArrLoad&( "assets.zip::faces.pag", UGL.MEM, len( faces(0) ), _
                                      clng( g.wld.count.faces ), 0 )
     if ( g.wld.store.faces = 0 ) then sys_error "0x0039, faces.pag would not load"
 
@@ -325,7 +329,7 @@ end sub
 sub mod_load_colormap ( _
     g as Game _
 )
-    dim f as FILE
+    dim u as UAR
 
     scr_load_stage "colormap"
 
@@ -334,19 +338,19 @@ sub mod_load_colormap ( _
     g.wld.cmap.dc = 0
     g.wld.cmap.size = 0
 
-    if ( fileOpen( f, "colmap.bin", F4READ ) = 0 ) then exit sub
+    if ( uarOpen( u, "assets.zip::colmap.bin", F4READ ) = 0 ) then exit sub
 
     g.wld.cmap.dc = uglNew&( UGL.EMS, UGL.8BIT, 16384, 1 )
     if ( g.wld.cmap.dc <> 0 ) then
         p = uglMapEx&( g.wld.cmap.dc, 0, CM_SLOT )
         if ( p <> 0 ) then
-            if ( fileReadH( f, p, 16384 ) = 16384 ) then
+            if ( uarReadH( u, p, 16384 ) = 16384 ) then
                 g.wld.cmap.size = 16384
             end if
         end if
     end if
 
-    fileClose f
+    uarClose u
 
     if ( g.wld.cmap.size = 0 ) then sys_error "0x0015, colormap would not load"
 end sub
@@ -372,7 +376,7 @@ sub mod_load_lightmaps ( _
     g as Game _
 )
     scr_load_stage "lightmaps"
-    dim f as FILE
+    dim u as UAR
     dim got as long
 
     g.wld.light.atlas = 0
@@ -387,11 +391,11 @@ sub mod_load_lightmaps ( _
     '' It costs no conventional memory at all. The packed blob it replaces
     '' cost 40K on dm3ish and more on the bigger maps.
     ''
-    if ( fileOpen( f, "lm.bmp", F4READ ) <> 0 ) then
-        g.wld.light.size = fileSize( f )
-        fileClose f
+    if ( uarOpen( u, "assets.zip::lm.bmp", F4READ ) <> 0 ) then
+        g.wld.light.size = uarSize( u )
+        uarClose u
     end if
-    g.wld.light.atlas = uglNewBMPEx( UGL.EMS, UGL.8BIT, "lm.bmp", BMPOPT.NO332 )
+    g.wld.light.atlas = uglNewBMPEx( UGL.EMS, UGL.8BIT, "assets.zip::lm.bmp", BMPOPT.NO332 )
     if ( g.wld.light.atlas <> 0 ) then
         g.wld.light.loaded = g.wld.light.size
     else
@@ -418,13 +422,13 @@ sub mod_load_facevtx ( _
     g as Game, _
     gv_buf() as integer _
 )
-    dim f as FILE
+    dim u as UAR
     dim y as integer
     dim p as long
 
     scr_load_stage "face vertices"
 
-    if ( fileOpen( f, "fgeom.bin", F4READ ) = 0 ) then
+    if ( uarOpen( u, "assets.zip::fgeom.bin", F4READ ) = 0 ) then
         sys_error "0x0011, fgeom.bin missing"
     end if
 
@@ -433,19 +437,19 @@ sub mod_load_facevtx ( _
     '' would write a whole record past it
     redim gv_buf(108) as integer
 
-    g.wld.geom.rows = cint( (fileSize&( f ) + GEOM_W - 1) \ GEOM_W )
+    g.wld.geom.rows = cint( (uarSize&( u ) + GEOM_W - 1) \ GEOM_W )
     g.wld.geom.dc = uglNew&( UGL.EMS, UGL.8BIT, GEOM_W, g.wld.geom.rows )
     if ( g.wld.geom.dc = 0 ) then sys_error "0x0010, no EMS for the geometry store"
 
     for y = 0 to g.wld.geom.rows-1
         p = uglMapEx&( g.wld.geom.dc, y, PAGE_SLOT )
         if ( p = 0 ) then sys_error "0x0012, geometry store will not map"
-        if ( fileReadH( f, p, GEOM_W ) <> GEOM_W ) then
+        if ( uarReadH( u, p, GEOM_W ) <> GEOM_W ) then
             sys_error "0x0013, fgeom.bin short read"
         end if
     next y
 
-    fileClose f
+    uarClose u
 
     scr_load_step
 end sub
@@ -518,10 +522,10 @@ sub mod_load_nodes ( _
     '' It still gets the tree out of BASIC's far heap, which is what FRE(-1)
     '' measures; memAlloc takes it from DOS (upper memory when there is
     '' room), not from the heap the BSP arrays compete for.
-    g.wld.store.nodes = uglArrLoad&( "nodes.pag", UGL.MEM, len( nodes(0) ), _
+    g.wld.store.nodes = uglArrLoad&( "assets.zip::nodes.pag", UGL.MEM, len( nodes(0) ), _
                                      clng( g.wld.count.nodes ), 0 )
     if ( g.wld.store.nodes = 0 ) then
-        g.wld.store.nodes = uglArrLoad&( "nodes.pag", UGL.EMS, len( nodes(0) ), _
+        g.wld.store.nodes = uglArrLoad&( "assets.zip::nodes.pag", UGL.EMS, len( nodes(0) ), _
                                          clng( g.wld.count.nodes ), PAGE_SLOT )
     end if
     if ( g.wld.store.nodes = 0 ) then sys_error "0x0030, nodes.pag would not load"
@@ -548,13 +552,36 @@ end sub
 
 
 ''::::::::::
+'' name: mod_load_flat
+'' desc: One assets.zip member, whole, to a far destination -- what
+''       bload did, through the uar layer, so the member may arrive
+''       DEFLATEd. The size is the member's own.
+''::::::::::
+sub mod_load_flat ( _
+    flname as string, _
+    byval dst as long _
+)
+    dim u as UAR
+    dim n as long
+
+    if ( uarOpen( u, flname, F4READ ) = 0 ) then
+        sys_error "0x0016, " + flname + " missing"
+    end if
+    n = uarSize( u )
+    if ( uarRead( u, dst, n ) <> n ) then
+        sys_error "0x0017, " + flname + " short read"
+    end if
+    uarClose u
+end sub
+
+
+''::::::::::
 '' name: mod_load_planes
 ''::::::::::
 sub mod_load_planes ( planes() as Plane )
     scr_load_stage "planes"
-    def seg = varseg( planes(0) )
-    bload "planes.bld", varptr( planes(0) )
-    def seg
+    mod_load_flat "assets.zip::planes.bld", _
+        clng( varseg( planes(0) ) ) * 65536& + (clng( varptr( planes(0) ) ) and 65535&)
 
     scr_load_step
 end sub
@@ -567,9 +594,8 @@ end sub
 ''::::::::::
 sub mod_load_submodels ( models() as Submodel )
     scr_load_stage "submodels"
-    def seg = varseg( models(0) )
-    bload "models.bld", varptr( models(0) )
-    def seg
+    mod_load_flat "assets.zip::models.bld", _
+        clng( varseg( models(0) ) ) * 65536& + (clng( varptr( models(0) ) ) and 65535&)
 
     scr_load_step
 end sub
@@ -610,19 +636,19 @@ end sub
 sub mod_load_visibility ( _
     g as Game _
 )
-    dim f as FILE
+    dim u as UAR
 
     scr_load_stage "visibility"
 
     g.wld.pvs.ptr = 0
     g.wld.pvs.size = 0
 
-    if ( fileOpen( f, "pvs.bin", F4READ ) <> 0 ) then
-        g.wld.pvs.size = fileSize&( f )
+    if ( uarOpen( u, "assets.zip::pvs.bin", F4READ ) <> 0 ) then
+        g.wld.pvs.size = uarSize&( u )
         if ( g.wld.pvs.size > 0 ) then
             g.wld.pvs.ptr = memAlloc( g.wld.pvs.size )
             if ( g.wld.pvs.ptr <> 0 ) then
-                if ( fileReadH( f, g.wld.pvs.ptr, g.wld.pvs.size ) <> g.wld.pvs.size ) then
+                if ( uarReadH( u, g.wld.pvs.ptr, g.wld.pvs.size ) <> g.wld.pvs.size ) then
                     memFree g.wld.pvs.ptr
                     g.wld.pvs.ptr = 0
                     g.wld.pvs.size = 0
@@ -631,7 +657,7 @@ sub mod_load_visibility ( _
                 g.wld.pvs.size = 0
             end if
         end if
-        fileClose f
+        uarClose u
     end if
 
     if ( g.wld.pvs.ptr = 0 ) then sys_error "0x0014, visibility lump would not load"
