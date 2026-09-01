@@ -278,7 +278,6 @@ sub mod_load_faces ( _
     g as Game, _
     faces() as Face _
 )
-    dim f as FILE
     dim mapped as long
 
     scr_load_stage "faces"
@@ -287,8 +286,9 @@ sub mod_load_faces ( _
     '' cost an INT 67h each time. A MEM-backed store needs no slot at all,
     '' so it also cannot collide with the geometry window d_poly maps
     '' between these reads.
-    g.wld.store.faces = uglArrNew&( UGL.MEM, len( faces(0) ), g.wld.count.faces, 0 )
-    if ( g.wld.store.faces = 0 ) then sys_error "0x0039, no room for the faces"
+    g.wld.store.faces = uglArrLoad&( "faces.pag", UGL.MEM, len( faces(0) ), _
+                                     clng( g.wld.count.faces ), 0 )
+    if ( g.wld.store.faces = 0 ) then sys_error "0x0039, faces.pag would not load"
 
     '' Hands the descriptor over. NOT ceremony: this is what takes
     '' it out of the far heap's chain, and only BASIC can do that
@@ -297,16 +297,6 @@ sub mod_load_faces ( _
     '' heap is then corrupt. The variable still exists afterwards,
     '' which is what uglArrMap binds to.
     erase faces
-
-
-    if ( fileOpen%( f, "faces.pag", F4READ ) = 0 ) then
-        sys_error "0x003A, faces.pag missing"
-    end if
-    if ( uglArrLoad%( f, g.wld.store.faces ) = 0 ) then
-        fileClose f
-        sys_error "0x003B, faces.pag short or unreadable"
-    end if
-    fileClose f
 
     ''
     '' ONE map, for the whole array. A MEM store is flat, so this points
@@ -509,8 +499,7 @@ sub mod_load_nodes ( _
     g as Game, _
     nodes() as Node _
 )
-    dim f as FILE
-    dim mapped as long
+        dim mapped as long
 
     scr_load_stage "bsp nodes"
 
@@ -529,11 +518,13 @@ sub mod_load_nodes ( _
     '' It still gets the tree out of BASIC's far heap, which is what FRE(-1)
     '' measures; memAlloc takes it from DOS (upper memory when there is
     '' room), not from the heap the BSP arrays compete for.
-    g.wld.store.nodes = uglArrNew&( UGL.MEM, len( nodes(0) ), g.wld.count.nodes, 0 )
+    g.wld.store.nodes = uglArrLoad&( "nodes.pag", UGL.MEM, len( nodes(0) ), _
+                                     clng( g.wld.count.nodes ), 0 )
     if ( g.wld.store.nodes = 0 ) then
-        g.wld.store.nodes = uglArrNew&( UGL.EMS, len( nodes(0) ), g.wld.count.nodes, PAGE_SLOT )
+        g.wld.store.nodes = uglArrLoad&( "nodes.pag", UGL.EMS, len( nodes(0) ), _
+                                         clng( g.wld.count.nodes ), PAGE_SLOT )
     end if
-    if ( g.wld.store.nodes = 0 ) then sys_error "0x0030, no room for the node tree"
+    if ( g.wld.store.nodes = 0 ) then sys_error "0x0030, nodes.pag would not load"
 
     '' Hands the descriptor over. NOT ceremony: this is what takes
     '' it out of the far heap's chain, and only BASIC can do that
@@ -542,18 +533,6 @@ sub mod_load_nodes ( _
     '' heap is then corrupt. The variable still exists afterwards,
     '' which is what uglArrMap binds to.
     erase nodes
-
-    '' Hands the descriptor over: this is what takes it out of the far
-    '' heap's chain, and only BASIC can do it correctly.
-
-    if ( fileOpen%( f, "nodes.pag", F4READ ) = 0 ) then
-        sys_error "0x0031, nodes.pag missing"
-    end if
-    if ( uglArrLoad%( f, g.wld.store.nodes ) = 0 ) then
-        fileClose f
-        sys_error "0x0032, nodes.pag short or unreadable"
-    end if
-    fileClose f
 
     ''
     '' ONE map, for the whole array. A MEM store is flat, so this points

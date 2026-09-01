@@ -953,7 +953,6 @@ end sub
 sub pl_load_hulls ( _
     g as Game _
 )
-    dim f as FILE
     dim mapped as long
 
     redim clp_buffer(0) as ClipNode
@@ -970,11 +969,13 @@ sub pl_load_hulls ( _
     '' hole for the allocations that come after. The far heap is the
     '' fragmented pool; DOS memory is not.
     ''
-    g.wld.store.clips = uglArrNew&( UGL.MEM, len( clp_buffer(0) ), g.wld.count.clips, 0 )
+    g.wld.store.clips = uglArrLoad&( "clip.pag", UGL.MEM, len( clp_buffer(0) ), _
+                                     clng( g.wld.count.clips ), 0 )
     if ( g.wld.store.clips = 0 ) then
-        g.wld.store.clips = uglArrNew&( UGL.EMS, len( clp_buffer(0) ), g.wld.count.clips, PAGE_SLOT )
+        g.wld.store.clips = uglArrLoad&( "clip.pag", UGL.EMS, len( clp_buffer(0) ), _
+                                         clng( g.wld.count.clips ), PAGE_SLOT )
     end if
-    if ( g.wld.store.clips = 0 ) then sys_error "0x0033, no room for the clip hulls"
+    if ( g.wld.store.clips = 0 ) then sys_error "0x0033, clip.pag would not load"
 
     '' Hands the descriptor over. NOT ceremony: this is what takes it out
     '' of the far heap's chain, and only BASIC can do that correctly. Left
@@ -982,15 +983,6 @@ sub pl_load_hulls ( _
     '' own and moves it -- the far heap is then corrupt. The variable still
     '' exists afterwards, which is what uglArrMap binds to.
     erase clp_buffer
-
-    if ( fileOpen%( f, "clip.pag", F4READ ) = 0 ) then
-        sys_error "0x0034, clip.pag missing"
-    end if
-    if ( uglArrLoad%( f, g.wld.store.clips ) = 0 ) then
-        fileClose f
-        sys_error "0x0035, clip.pag short or unreadable"
-    end if
-    fileClose f
 
     ''
     '' ONE map, for the whole array. A MEM store is flat, so this points
