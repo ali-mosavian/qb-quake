@@ -391,6 +391,7 @@ type Env
                                 '' into triangles. A/B against the proven
                                 '' uglTriTP path.
     no_z        as integer      '' -noz: skip the depth buffer entirely
+    no_cull     as integer      '' -nocull: backface culling off, for A/B
     span_draw   as integer      '' -spandraw: draw the frame from r_span.c's
                                 '' resolved spans, through uGL's scanline
                                 '' filler, instead of handing whole polygons

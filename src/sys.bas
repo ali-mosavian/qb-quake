@@ -162,6 +162,9 @@ sub sys_parse_args ( _
         if ( lcase$(argv(i)) = "-noz" ) then
             g.env.no_z = true
         end if
+        if ( lcase$(argv(i)) = "-nocull" ) then
+            g.env.no_cull = true
+        end if
         if ( lcase$(argv(i)) = "-spandraw" ) then
             g.env.span_draw = true
         end if
@@ -176,7 +179,13 @@ sub sys_parse_args ( _
             g.env.no_stats = true     '' the overlay is rasterising too
         end if
         if ( lcase$(argv(i)) = "-yaw" and i+1 <= argc-1 ) then
+            '' wrapped: -yaw reaches mousePos as (x_res-1)*yaw/360, so a
+            '' negative angle is a negative screen x and aims somewhere
+            '' else entirely rather than failing
             g.env.start_yaw = val( argv(i+1) )
+            while ( g.env.start_yaw < 0.0 )
+                g.env.start_yaw = g.env.start_yaw + 360.0
+            wend
             g.env.yaw_set   = true
         end if
         if ( lcase$(argv(i)) = "-ticks" and i+1 <= argc-1 ) then
