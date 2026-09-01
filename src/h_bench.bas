@@ -32,6 +32,12 @@ option explicit
 '$include: 'q_snd.bi'
 '$include: 'q_game.bi'
 
+declare function rb_dbg_camleaf ( ) as integer
+
+declare function dbg_lm_want ( ) as integer
+declare function dbg_lm_fall ( ) as integer
+declare function dbg_keys ( byval which as integer ) as long
+
 '' scr_screenshot comes from q_game.bi above; everything below is
 '' declared here rather than in a shared header because this is the
 '' only caller of each -- narrowest scope, per this project's own rule.
@@ -237,6 +243,18 @@ sub host_bench_report ( _
     end if
     print #benchf, "polys " + ltrim$(str$( g.rdr.polys ))
     print #benchf, "tris " + ltrim$(str$( g.rdr.tris ))
+    print #benchf, "cam_leaf " + ltrim$(str$( rb_dbg_camleaf ))
+    print #benchf, "lm_want " + ltrim$(str$( dbg_lm_want ))
+    print #benchf, "lm_fallback " + ltrim$(str$( dbg_lm_fall ))
+    print #benchf, "k_mip " + ltrim$(str$( dbg_keys(0) ))
+    print #benchf, "k_sw " + ltrim$(str$( dbg_keys(1) ))
+    print #benchf, "k_sh " + ltrim$(str$( dbg_keys(2) ))
+    print #benchf, "k_stag " + ltrim$(str$( dbg_keys(3) ))
+    print #benchf, "k_n " + ltrim$(str$( dbg_keys(4) ))
+    print #benchf, "k_hdr " + ltrim$(str$( dbg_keys(5) ))
+    print #benchf, "k_ext " + ltrim$(str$( dbg_keys(6) ))
+    print #benchf, "k_v0 " + ltrim$(str$( dbg_keys(7) ))
+    print #benchf, "k_lm " + ltrim$(str$( dbg_keys(8) ))
     print #benchf, "px " + ltrim$(str$( g.pl.pos.x ))
     print #benchf, "py " + ltrim$(str$( g.pl.pos.y ))
     print #benchf, "pz " + ltrim$(str$( g.pl.pos.z ))

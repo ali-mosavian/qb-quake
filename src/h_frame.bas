@@ -39,6 +39,14 @@ option explicit
 '$include: 'q_snd.bi'
 '$include: 'q_game.bi'
 
+dim shared lm_want_dbg as integer
+dim shared lm_fall_dbg as integer
+dim shared k_mip_dbg as long, k_sw_dbg as long
+dim shared k_sh_dbg as long, k_stag_dbg as long
+dim shared k_n_dbg as long
+dim shared k_hdr_dbg as long, k_ext_dbg as long
+dim shared k_v0_dbg as long, k_lm_dbg as long
+
 const DL_RADIUS# = 200.0#   '' Quake's own rocket dlight radius
 
 '' This module's own procedures -- host_advance calls host_tick before
@@ -109,15 +117,19 @@ declare sub r_draw_world ( _
     fru() as DiskPlane, _
     bit_array() as integer _
 )
+declare function d_turb_ptr ( ) as long
+'' Temporary instrumentation: how many faces asked for a cached surface
+'' and how many fell back to unlit. NOT in Game -- adding a field there
+'' shifts the offsets sb_build.c and r_walk.c hard-code.
+declare function dbg_lm_want ( ) as integer
+declare function dbg_lm_fall ( ) as integer
+declare function dbg_keys ( byval which as integer ) as long
+'' The whole face loop, in C, once per frame -- see d_faces.c.
 declare sub d_draw_faces ( _
     g as Game, _
-    h_dst_dc as long, _
+    dp as DrawParams, _
     mtx_fin as u3dMtrx, _
-    xresh as single, _
-    yresh as single, _
     campos as u3dVector3f, _
-    byval frame_stamp as integer, _
-    byval ord_count as integer, _
     tri_buffer() as Face, _
     tex_inf_buff() as TexInfo, _
     gv_buf() as integer, _
@@ -293,6 +305,7 @@ sub host_render ( _
     dim cam_pos_b as u3dVector3f
     dim bm as integer
     dim pt0 as single, ptd as single
+    dim dparm as DrawParams
 
     pt0 = sys_now()
     u3dMtrxLookAt mtx_mdl, g.cam.pos, g.cam.look_at, cam_up
@@ -358,11 +371,65 @@ sub host_render ( _
     '' is fill, which paging does not affect.
     if ( g.env.no_draw ) then exit sub
 
+    ''
+    '' Gathered here, once, rather than read out of Game inside the loop:
+    '' that keeps every offset in BASIC, where the compiler checks it,
+    '' instead of hand-mirroring Game's layout in C.
+    ''
+    dparm.h_dst_dc    = h_dst_dc
+    dparm.tex_ofs_ptr = clng( varseg( g.wld.tex.ofs(0) ) ) * 65536& + _
+                        (clng( varptr( g.wld.tex.ofs(0) ) ) and 65535&)
+    dparm.turb_ptr    = d_turb_ptr
+    dparm.xresh       = xresh
+    dparm.yresh       = yresh
+    dparm.z_near      = g.env.z_near
+    dparm.z_far       = g.env.z_far
+    dparm.anim_time   = g.rdr.anim_time
+    dparm.dl_x        = g.rdr.dlight.pos.x
+    dparm.dl_y        = g.rdr.dlight.pos.y
+    dparm.dl_z        = g.rdr.dlight.pos.z
+    dparm.dl_radius   = g.rdr.dlight.radius
+    dparm.frame_stamp = g.vis.frame_stamp
+    dparm.ord_count   = g.vis.ord_count
+    dparm.use_lm      = g.env.use_lm
+    dparm.lightmap    = g.rdr.lightmap
+    dparm.backface    = g.rdr.backface
+    dparm.rend_mode   = g.rdr.rend_mode
+    dparm.use_mips    = g.rdr.use_mips
+    dparm.poly_tp     = g.env.poly_tp
+    dparm.span_draw   = g.env.span_draw
+    dparm.x_res       = g.env.x_res
+    dparm.y_res       = g.env.y_res
+    dparm.prof        = (g.ft.n > 0)
+
     pt0 = sys_now()
-    d_draw_faces g, h_dst_dc, mtx_fin, xresh, yresh, g.cam.pos, g.vis.frame_stamp, _
-                  g.vis.ord_count, tri_buffer(), tex_inf_buff(), gv_buf(), face_mdl(), _
+    d_draw_faces g, dparm, mtx_fin, g.cam.pos, _
+                  tri_buffer(), tex_inf_buff(), gv_buf(), face_mdl(), _
                   brush(), pln_buffer(), nds_buffer(), mip_buff_inf(), _
                   order_list(), poly_flag()
+
+    g.rdr.polys = g.rdr.polys + dparm.polys
+    g.rdr.tris  = g.rdr.tris + dparm.tris
+    lm_want_dbg = dparm.lm_want
+    lm_fall_dbg = dparm.lm_fallback
+    k_mip_dbg = k_mip_dbg + dparm.k_mip
+    k_sw_dbg = k_sw_dbg + dparm.k_sw
+    k_sh_dbg = k_sh_dbg + dparm.k_sh
+    k_stag_dbg = k_stag_dbg + dparm.k_stag
+    k_n_dbg = k_n_dbg + dparm.k_n
+    k_hdr_dbg = k_hdr_dbg + dparm.k_hdr
+    k_ext_dbg = k_ext_dbg + dparm.k_ext
+    k_v0_dbg = k_v0_dbg + dparm.k_v0
+    k_lm_dbg = k_lm_dbg + dparm.k_lm
+
+    '' Only the surface BUILD is still timed inside the loop -- a build
+    '' is a cache miss, so its bracket is rare. The per-face raster/aim
+    '' brackets are gone: 4-6 sys_rdtsc far calls per face, each a far
+    '' call plus a 32-bit divide, to measure a loop that no longer needs
+    '' measuring at that grain. pt_raster/pt_aim/pt_emit read 0 now.
+    if ( g.ft.n > 0 ) then
+        g.pt.build_sum = g.pt.build_sum + dparm.build_us / 1000000.0
+    end if
     if ( g.ft.n > 0 ) then
         ptd = sys_now() - pt0
         g.pt.draw_sum = g.pt.draw_sum + ptd
@@ -382,3 +449,34 @@ sub host_render ( _
     end if
 
 end sub
+
+function dbg_lm_want ( ) as integer
+    dbg_lm_want = lm_want_dbg
+end function
+
+function dbg_lm_fall ( ) as integer
+    dbg_lm_fall = lm_fall_dbg
+end function
+
+function dbg_keys ( byval which as integer ) as long
+    select case which
+        case 0
+            dbg_keys = k_mip_dbg
+        case 1
+            dbg_keys = k_sw_dbg
+        case 2
+            dbg_keys = k_sh_dbg
+        case 3
+            dbg_keys = k_stag_dbg
+        case 4
+            dbg_keys = k_n_dbg
+        case 5
+            dbg_keys = k_hdr_dbg
+        case 6
+            dbg_keys = k_ext_dbg
+        case 7
+            dbg_keys = k_v0_dbg
+        case else
+            dbg_keys = k_lm_dbg
+    end select
+end function
