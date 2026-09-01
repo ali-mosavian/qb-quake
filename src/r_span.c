@@ -422,6 +422,15 @@ static short near ceil_row( float y )
    real raster path. poly_cnt is clamped to 32 whatever is passed: that
    scratch is dim shared prj_x(32), and anything past it reads whatever
    happens to sit beyond the array. */
+void pascal far r_span_emit_ptr( short poly_cnt, float far *vx, float far *vy,
+                                 float far *vu, float far *vv, float far *vz,
+                                 long texdc, long texofs );
+
+/*
+ * BASIC entry: unpacks the five array descriptors and hands off. d_faces.c
+ * calls r_span_emit_ptr directly instead, because it already holds plain
+ * far pointers and has no descriptors to build.
+ */
 void pascal far r_span_emit_poly(
     short poly_cnt,
     BASARRAY *vx_dsc,
@@ -433,13 +442,25 @@ void pascal far r_span_emit_poly(
     long texofs
 )
 {
-    float far *vx = (float far *) vx_dsc->farptr;
-    float far *vy = (float far *) vy_dsc->farptr;
-    float far *vu = (float far *) vu_dsc->farptr;
-    float far *vv = (float far *) vv_dsc->farptr;
-    float far *vz = (float far *) vz_dsc->farptr;
-    short far *xw = (short far *) vx_dsc->farptr;
-    short far *yw = (short far *) vy_dsc->farptr;
+    r_span_emit_ptr( poly_cnt,
+                     (float far *) vx_dsc->farptr, (float far *) vy_dsc->farptr,
+                     (float far *) vu_dsc->farptr, (float far *) vv_dsc->farptr,
+                     (float far *) vz_dsc->farptr, texdc, texofs );
+}
+
+void pascal far r_span_emit_ptr(
+    short poly_cnt,
+    float far *vx,
+    float far *vy,
+    float far *vu,
+    float far *vv,
+    float far *vz,
+    long texdc,
+    long texofs
+)
+{
+    short far *xw = (short far *) vx;
+    short far *yw = (short far *) vy;
     short p, i, i2, hw, ra, rb, y0i, y1i;
     float xlo, xhi, ylo, yhi, dxdy, xstart;
     Edge far *e;

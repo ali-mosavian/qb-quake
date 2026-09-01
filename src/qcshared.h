@@ -152,6 +152,73 @@ typedef struct {
     short start_solid;
 } TraceResult;
 
+/* q_draw.bi's DrawParams -- everything d_draw_faces reads out of Game,
+   gathered by the caller ONCE per frame so the C loop never has to know
+   Game's layout. That matters more than it looks: mirroring Game in C
+   means hand-measured offsets for env/rdr/pt, and every one of them
+   silently corrupts a neighbouring field when a struct ahead of it
+   grows. This costs one struct fill per frame instead.
+
+   Floats and longs first, shorts after, so both sides agree without
+   either needing a padding rule -- BASIC packs UDTs. */
+typedef struct {
+    /* in */
+    long  h_dst_dc;
+    long  tex_ofs_ptr;      /* far pointer to g.wld.tex.ofs(0) */
+    long  turb_ptr;         /* far pointer to d_poly.bas's turb_sin(0) */
+    float xresh, yresh;
+    float z_near, z_far;
+    float anim_time;
+    float dl_x, dl_y, dl_z, dl_radius;
+    /* out */
+    long  build_us;
+    short frame_stamp;
+    short ord_count;
+    short use_lm;
+    short lightmap;
+    short backface;
+    short rend_mode;
+    short use_mips;
+    short poly_tp;
+    short span_draw;
+    short x_res, y_res;
+    short prof;             /* g.ft.n > 0: accumulate build_us at all */
+    /* out */
+    short polys;
+    short tris;
+    short lm_want;          /* faces that asked for a cached surface */
+    short lm_fallback;      /* ...and did not get one, so drew unlit */
+    long  k_mip;            /* sums of the sc_find key inputs, for a  */
+    long  k_sw;             /* two-sided trace against the BASIC      */
+    long  k_sh;             /* original: if these match, the keys do  */
+    long  k_stag;           /* and the divergence is downstream       */
+    long  k_v0;             /* sum of gv[0], the vertex count          */
+    long  k_lm;             /* sum of gv[GEOM_LMOFS], the lightmap row  */
+    long  k_hdr;            /* faces whose record HAS a lightmap       */
+    long  k_ext;            /* ...and whose extents are non-zero       */
+    long  k_n;              /* sc_find CALLS -- without this the sums */
+                            /* are not comparable between arms        */
+} DrawParams;
+
+/* q_draw.bi's FaceSetup -- the parameter block d_draw_faces fills once
+   per face for d_face.c. Floats first, then shorts, so the two sides
+   agree without either needing a padding rule; BASIC packs UDTs. */
+typedef struct {
+    float su[4];
+    float sv[4];
+    float zofs;
+    float turbph;
+    float z_near;
+    float z_far;
+    float xresh;
+    float yresh;
+    float zl;
+    short liquid;
+    short vcnt;
+    short rend_mode;
+    short poly_cnt;
+} FaceSetup;
+
 /* q_draw.bi's DynLight -- BSP space, Z-up, hence Vec3 not Vec3f. */
 typedef struct { Vec3 pos; float radius; } DynLight;
 

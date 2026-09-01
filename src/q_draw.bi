@@ -25,6 +25,74 @@
 '' width and becomes 8*40.74.
 ''
 const TURB_AMP#      = 0.125
+
+''
+'' What d_draw_faces hands d_face.c for one face: the texture axes
+'' already folded with the texture size, the liquid phase, the clip
+'' planes and the viewport half-extents. zl and poly_cnt come back.
+'' Mirrored in qcshared.h -- change one and change the other.
+''
+''
+'' What d_draw_faces needs out of Game, gathered ONCE per frame by the
+'' caller so the C loop never has to know Game's layout. Mirrored in
+'' qcshared.h -- change one and change the other.
+''
+type DrawParams
+    h_dst_dc    as long
+    tex_ofs_ptr as long      '' far pointer to g.wld.tex.ofs(0)
+    turb_ptr    as long      '' far pointer to d_poly.bas's turb_sin(0)
+    xresh       as single
+    yresh       as single
+    z_near      as single
+    z_far       as single
+    anim_time   as single
+    dl_x        as single
+    dl_y        as single
+    dl_z        as single
+    dl_radius   as single
+    build_us    as long      '' out: microseconds spent in sb_build
+    frame_stamp as integer
+    ord_count   as integer
+    use_lm      as integer
+    lightmap    as integer
+    backface    as integer
+    rend_mode   as integer
+    use_mips    as integer
+    poly_tp     as integer
+    span_draw   as integer
+    x_res       as integer
+    y_res       as integer
+    prof        as integer
+    polys       as integer   '' out
+    tris        as integer   '' out
+    lm_want     as integer   '' out: faces that asked for a surface
+    lm_fallback as integer   '' out: ...and did not get one
+    k_mip       as long      '' out: sums of the sc_find key inputs
+    k_sw        as long
+    k_sh        as long
+    k_stag      as long
+    k_v0        as long
+    k_lm        as long
+    k_hdr       as long      '' faces whose record has a lightmap
+    k_ext       as long      '' ...and non-zero extents
+    k_n         as long      '' sc_find calls
+end type
+
+type FaceSetup
+    su(3)       as single    '' u axis, x y z and offset
+    sv(3)       as single    '' v axis, likewise
+    zofs        as single    '' brush entity offset, on renderer y
+    turbph      as single
+    z_near      as single
+    z_far       as single
+    xresh       as single
+    yresh       as single
+    zl          as single    '' out: mean w over the clipped vertices
+    liquid      as integer
+    vcnt        as integer
+    rend_mode   as integer
+    poly_cnt    as integer   '' out
+end type
 const TURB_FREQ#     = 326.0
 const TURB_RATE#     = 40.74
 
