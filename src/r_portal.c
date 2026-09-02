@@ -78,65 +78,31 @@ static long culled_run;
 static short culled_frame;
 static short gave_up;
 
+/* DIAG: how much work the flood really does per frame. */
+static long dg_proj, dg_push, dg_pop, dg_frames;
+
 /*
- * A portal's box projected to a screen rectangle.
- *
- * Returns 0 when the box is entirely behind the near plane, and the whole
- * screen when it straddles it. Straddling is where a projection stops being
- * bounded -- one corner just past the near plane throws the rectangle out to
- * infinity -- and the honest conservative answer is "could be anywhere",
- * which costs cull rate and cannot cost correctness. It also means this
- * needs no clipper at all.
+ * A portal's box projected to a screen rectangle. src/r_portal.asm now, not
+ * C: bcc's -Ox reloaded the segment for BOTH far-declared parameters, 13
+ * times per corner, though only bb is genuinely far -- m is a near pointer
+ * at every real call site (r_portal_mark's own m, straight off BASIC's
+ * u3dMtrx). The asm loads bb's segment once, at entry, and never touches m's
+ * segment at all because m has none. Same math, same near-plane-straddle
+ * fallback to the whole screen -- see r_portal.asm's own header for the
+ * rest, including why vx/vy are computed lazily and 1/vw replaces two
+ * divides with one.
  */
-static int near project_box( short far *bb, float far *m,
-                              float xresh, float yresh, float z_near,
-                              Rect *out )
-{
-    float x0 = 1e30, y0 = 1e30, x1 = -1e30, y1 = -1e30;
-    int i, behind = 0, infront = 0;
+extern short pascal far r_ptproj(
+    short far *bb, float *m,
+    float xresh, float yresh, float z_near,
+    Rect *outp
+);
 
-    for ( i = 0; i < 8; i++ ) {
-        /* BSP is Z-up and the matrix wants the renderer's Y-up, the same
-           swap d_faces makes building a face: renderer y is bsp z. */
-        float bx = (float) bb[ (i & 1) ? 3 : 0 ];
-        float bz = (float) bb[ (i & 2) ? 4 : 1 ];
-        float by = (float) bb[ (i & 4) ? 5 : 2 ];
-        float vx, vy, vw, sx, sy;
-
-        /* Row-vector times a 4x4 with w = 1, matching d_faces.c. */
-        vx = bx*m[0] + by*m[4] + bz*m[ 8] + m[12];
-        vy = bx*m[1] + by*m[5] + bz*m[ 9] + m[13];
-        vw = bx*m[3] + by*m[7] + bz*m[11] + m[15];
-
-        if ( vw < z_near ) { behind++; continue; }
-        infront++;
-
-        sx = xresh + vx / vw * xresh;
-        sy = yresh - vy / vw * yresh;
-        if ( sx < x0 ) x0 = sx;
-        if ( sx > x1 ) x1 = sx;
-        if ( sy < y0 ) y0 = sy;
-        if ( sy > y1 ) y1 = sy;
-    }
-
-    if ( !infront ) return 0;
-    if ( behind ) {
-        out->x0 = -1e6; out->y0 = -1e6;
-        out->x1 =  1e6; out->y1 =  1e6;
-        return 1;
-    }
-    out->x0 = x0; out->y0 = y0; out->x1 = x1; out->y1 = y1;
-    return 1;
-}
-
-static int near rect_clip( Rect *a, Rect *b, Rect *out )
-{
-    out->x0 = a->x0 > b->x0 ? a->x0 : b->x0;
-    out->y0 = a->y0 > b->y0 ? a->y0 : b->y0;
-    out->x1 = a->x1 < b->x1 ? a->x1 : b->x1;
-    out->y1 = a->y1 < b->y1 ? a->y1 : b->y1;
-    return ( out->x1 > out->x0 && out->y1 > out->y0 );
-}
+/* r_ptproj.asm now -- 93 instructions in bcc's own -S output, 6 FWAIT with
+ * nothing to wait on under DOSBox's dynamic core, and 6 redundant reloads
+ * of outp's pointer through a register that cannot itself address memory.
+ * Same math, same result. */
+extern short pascal far r_rclip( Rect *a, Rect *b, Rect *outp );
 
 /*
  * Narrow pvsb to the leaves this eye can actually see through portals.
@@ -171,6 +137,7 @@ short pascal far r_portal_mark(
     if ( visleafs <= 0 || visleafs >= PT_MAX_LEAVES ) return -2;
     if ( cam_leaf < 0 || cam_leaf > visleafs ) return -3;
 
+    dg_frames++;
     for ( i = 0; i <= visleafs; i++ ) reached[i] = 0;
     nrefs = index[visleafs + 1];
     if ( nrefs > PT_MAX_REFS ) nrefs = PT_MAX_REFS;
@@ -193,6 +160,7 @@ short pascal far r_portal_mark(
 
     while ( sp > 0 ) {
         sp--;
+        dg_pop++;
         li = stk_leaf[sp];
         rect.x0 = stk_rect[sp][0]; rect.y0 = stk_rect[sp][1];
         rect.x1 = stk_rect[sp][2]; rect.y1 = stk_rect[sp][3];
@@ -204,8 +172,9 @@ short pascal far r_portal_mark(
             nb = e[0];
             if ( nb < 0 || nb > visleafs ) continue;
 
-            if ( !project_box( e + 1, m, xresh, yresh, z_near, &pr ) ) continue;
-            if ( !rect_clip( &pr, &rect, &sub ) ) continue;
+            dg_proj++;
+            if ( !r_ptproj( e + 1, m, xresh, yresh, z_near, &pr ) ) continue;
+            if ( !r_rclip( &pr, &rect, &sub ) ) continue;
 
             /* Nothing new if the union this leaf has been reached with
                already contains it. Otherwise widen the union and expand. */
@@ -227,6 +196,7 @@ short pascal far r_portal_mark(
 
             if ( sp >= PT_MAX_STACK ) { gave_up = 1; return -4; }
             if ( ++work >= PT_MAX_WORK ) { gave_up = 1; return -1; }
+            dg_push++;
             if ( k < PT_MAX_REFS ) used[k] = 1;
             stk_leaf[sp] = nb;
             stk_rect[sp][0] = (short) sub.x0; stk_rect[sp][1] = (short) sub.y0;
@@ -365,5 +335,15 @@ void pascal far r_portal_draw(
                     uglLine( dc, sx[a], sy[a], sx[b], sy[b], clr );
             }
         }
+    }
+}
+
+long pascal far r_portal_dg( short which )
+{
+    switch ( which ) {
+        case 0:  return dg_proj;
+        case 1:  return dg_push;
+        case 2:  return dg_pop;
+        default: return dg_frames;
     }
 }

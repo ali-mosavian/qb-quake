@@ -17,8 +17,10 @@
  * uGL is called DIRECTLY from here. Its declares are all "seg" (see
  * ugl.bi -- `seg vtx As TriType`), which is exactly the raw far pointer
  * a C callee needs; that is the one interop direction r_walk.c's header
- * says is reliable. So uglPolyTP/uglTriTP/uglTriT/uglTriF/uglLine and
- * uglZMode need no BASIC round-trip.
+ * says is reliable. So uglPolyTP/uglLine and uglZMode need no BASIC
+ * round-trip. uglTriTP/uglTriT/uglTriF are gone with the triangle-fan
+ * path they drew -- uglPolyTP is the only draw call left, for every
+ * rend_mode including wireframe (see the draw loop's own comment).
  *
  * What still crosses per face, and why it is next rather than now: the
  * surface cache (sc_find/sc_held/sc_mipfloor/sc_shift/sc_alloc/
@@ -76,12 +78,8 @@
    out of it, so the stride matters and the unused three still occupy
    space. */
 typedef struct { float x, y, z, u, v, r, g, b; } UglVtx;
-typedef struct { UglVtx v1, v2, v3; } UglTri;
 
 extern void  pascal far uglPolyTP( long dst, UglVtx far *vtx, short cnt, short mask, long src );
-extern void  pascal far uglTriTP ( long dst, UglTri far *vtx, short mask, long src );
-extern void  pascal far uglTriT  ( long dst, UglTri far *vtx, short mask, long src );
-extern void  pascal far uglTriF  ( long dc,  UglTri far *vtx, long col );
 extern void  pascal far uglLine  ( long dc, short x1, short y1, short x2, short y2, long clr );
 extern short pascal far uglZMode ( short mode );
 
@@ -96,10 +94,10 @@ extern short pascal far sc_mipfloor    ( short extw, short exth );
 extern short pascal far sc_held        ( short face );
 extern short pascal far sc_shift       ( short v );
 extern long  pascal far sc_find        ( short face, short mip, short w, short h, short stag );
+extern short pascal far ls_epoch       ( short style );
 extern long  pascal far sc_alloc       ( void *g, short face, short mip, short w, short h,
                                          short fw, short fh, short stag );
 extern long  pascal far sc_view_ofs    ( void );
-extern short pascal far ls_epoch       ( short style );
 extern long  pascal far sys_rdtsc      ( void );
 
 extern void pascal far sb_build( void *g, long lm_dc, long tex_dc, short face, short mip,
@@ -114,6 +112,19 @@ extern void pascal far r_span_emit_ptr( short cnt, float far *vx, float far *vy,
 extern void pascal far r_span_draw_to ( long dst );
 extern short pascal far r_span_flush  ( short w, short h );
 
+/* r_vxfrm.asm's -- one face's vertices, unpacked + UV'd + transformed
+   in a single pass, for the non-liquid case (see the file's own header
+   for why liquid is excluded). gv is far here because it's BASIC's
+   gv_buf, EMS-backed; every other pointer is near. */
+extern void pascal far r_vxfrm(
+    short far *gv, short vcnt, float zofs, float *suv, float *m,
+    float *vt_x, float *vt_y, float *vt_z, float *vt_w,
+    float *vt_u, float *vt_v );
+
+/* r_gvcpy.asm's -- far-to-far byte copy, REP MOVSB instead of a
+   per-byte double segment reload. */
+extern void pascal far r_gvcpy( char far *src, char far *dst, short gn );
+
 /* Per-face scratch. Static, not automatic: the medium model's stack is
    not where a dozen MAXV float arrays belong. */
 static float near vt_x[MAXV], vt_y[MAXV], vt_z[MAXV], vt_w[MAXV];
@@ -121,8 +132,7 @@ static float near vt_u[MAXV], vt_v[MAXV];
 static float near cl_x[MAXV], cl_y[MAXV], cl_z[MAXV], cl_w[MAXV];
 static float near cl_u[MAXV], cl_v[MAXV];
 static float near px[MAXV], py[MAXV], pw[MAXV], pu[MAXV], pv[MAXV];
-static UglVtx near pvtx[16];
-static UglTri near tri1;
+static UglVtx near pvtx[MAXV];   /* was 16: uglPolyTP's own ceiling, matched */
 
 
 /* BASIC's int() is FLOOR, not truncation -- they differ by one for a
@@ -221,14 +231,18 @@ void pascal far d_draw_faces(
     long       far *tex_ofs = (long       far *)dp->tex_ofs_ptr;
 
     short mi, m_node, ti, i, j, v0, gn, vcnt, cnt;
+    short all_in;
+    float zn, zf;
     short tex, tex_id, draw_mip, mip_level, liquid;
     short z_want, z_have = -1, z_avail, lm_use, lm_on;
     short lm_tms, lm_tmt, lm_extw, lm_exth, lm_stag;
     short lm_mip, lm_floor, lm_sw, lm_sh, lm_fw, lm_fh, lm_cm;
-    short leaf_indx, leaf_end, p2, p3;
+    short leaf_indx, leaf_end, p2;
     long  gp, lm_dc, src_dc, tex_dc, texofs;
     long  bt0, bface, build_cyc = 0;
+    long  rt0, raster_cyc = 0;
     float su0, su1, su2, su3, sv0, sv1, sv2, sv3;
+    float suv[8];
     float tw, th, zofs, dp_dist, turbph, zl, zsum;
     float vx, vy, vz, tu, tv, rw, lm_su, lm_sv;
     float dl_pdist;
@@ -242,6 +256,7 @@ void pascal far d_draw_faces(
     dp->lm_fallback = 0;
     dp->k_mip = 0; dp->k_sw = 0; dp->k_sh = 0; dp->k_stag = 0; dp->k_n = 0; dp->k_hdr = 0; dp->k_ext = 0; dp->k_v0 = 0; dp->k_lm = 0;
     dp->build_us = 0;
+    dp->raster_us = 0;
 
     /* Asked once: whether a depth buffer exists cannot change inside a
        frame. */
@@ -321,7 +336,7 @@ void pascal far d_draw_faces(
                  */
                 char far *src = (char far *)( gp + (long)tri[i].geom_ofs );
                 char far *dst = (char far *)gv;
-                for ( j = 0; j < gn; j++ ) dst[j] = src[j];
+                r_gvcpy( src, dst, gn );
             }
 
             vcnt   = gv[0];
@@ -425,46 +440,82 @@ void pascal far d_draw_faces(
                 tex_id = mipinf[tex_id].anim_base
                        + ( ifloor( dp->anim_time * 5.0f ) % mipinf[tex_id].anim_count );
 
-            for ( j = 0; j < vcnt; j++ ) {
-                v0 = j*3 + GEOM_VTX0;
-                vx = gv[v0    ] * (float)VTX_UNSCALE;
-                vy = gv[v0 + 1] * (float)VTX_UNSCALE;
-                vz = gv[v0 + 2] * (float)VTX_UNSCALE;
+            if ( liquid ) {
+                for ( j = 0; j < vcnt; j++ ) {
+                    v0 = j*3 + GEOM_VTX0;
+                    vx = gv[v0    ] * (float)VTX_UNSCALE;
+                    vy = gv[v0 + 1] * (float)VTX_UNSCALE;
+                    vz = gv[v0 + 2] * (float)VTX_UNSCALE;
 
-                /* BSP is Z-up, renderer is Y-up: y and z swap, and the
-                   brush entity's offset rides on renderer y. */
-                vt_x[j] = vx;
-                vt_y[j] = vz + zofs;
-                vt_z[j] = vy;
+                    /* BSP is Z-up, renderer is Y-up: y and z swap, and the
+                       brush entity's offset rides on renderer y. */
+                    vt_x[j] = vx;
+                    vt_y[j] = vz + zofs;
+                    vt_z[j] = vy;
 
-                tu = su0*vx + su1*vy + su2*vz + su3;
-                tv = sv0*vx + sv1*vy + sv2*vz + sv3;
+                    tu = su0*vx + su1*vy + su2*vz + su3;
+                    tv = sv0*vx + sv1*vy + sv2*vz + sv3;
 
-                if ( liquid ) {
                     vt_u[j] = tu + turb_sin[ (short)( ifloor( tv*(float)TURB_FREQ + turbph ) & 255 ) ];
                     vt_v[j] = tv + turb_sin[ (short)( ifloor( tu*(float)TURB_FREQ + turbph ) & 255 ) ];
-                } else {
-                    vt_u[j] = tu;
-                    vt_v[j] = tv;
                 }
+
+                /* Transform. Row-vector times a 4x4 with w = 1, matching
+                   u3dMtrxByVec4's macro (NOT its header comment, which
+                   states the transpose -- the macro is the authority). */
+                for ( j = 0; j < vcnt; j++ ) {
+                    vx = vt_x[j]; vy = vt_y[j]; vz = vt_z[j];
+                    vt_x[j] = vx*m[0] + vy*m[4] + vz*m[ 8] + m[12];
+                    vt_y[j] = vx*m[1] + vy*m[5] + vz*m[ 9] + m[13];
+                    vt_z[j] = vx*m[2] + vy*m[6] + vz*m[10] + m[14];
+                    vt_w[j] = vx*m[3] + vy*m[7] + vz*m[11] + m[15];
+                }
+            } else {
+                /* r_vxfrm.asm: unpack, UV, transform, one pass. See its
+                   own header for why liquid stays on the C path above. */
+                suv[0] = su0; suv[1] = su1; suv[2] = su2; suv[3] = su3;
+                suv[4] = sv0; suv[5] = sv1; suv[6] = sv2; suv[7] = sv3;
+                r_vxfrm( gv, vcnt, zofs, suv, m,
+                         vt_x, vt_y, vt_z, vt_w, vt_u, vt_v );
             }
 
-            /* Transform. Row-vector times a 4x4 with w = 1, matching
-               u3dMtrxByVec4's macro (NOT its header comment, which states
-               the transpose -- the macro is the authority). */
+            /*
+             * The two clips below ping-pong vt -> cl -> vt. When every
+             * vertex is already inside BOTH planes, each one degenerates
+             * to a straight copy (clip_w's in1 && in2 path copies the
+             * vertex and continues), so the pair is the identity: the
+             * data comes back to vt_* unchanged, having been copied
+             * twice for nothing. Measured at ~2.1ms a frame, the largest
+             * single routine left in this loop.
+             *
+             * So test first. A face wholly between near and far -- the
+             * common case by far -- skips both calls outright and leaves
+             * vt_* exactly where the projection below already reads it.
+             * The test is one compare per vertex against the same two
+             * bounds clip_w itself would use, so the answer is identical
+             * by construction, not an approximation: >= z_near and
+             * <= z_far are precisely clip_w's own in1 tests for
+             * keep_ge 1 and 0.
+             */
+            zn = dp->z_near;
+            zf = dp->z_far;
+            all_in = 1;
             for ( j = 0; j < vcnt; j++ ) {
-                vx = vt_x[j]; vy = vt_y[j]; vz = vt_z[j];
-                vt_x[j] = vx*m[0] + vy*m[4] + vz*m[ 8] + m[12];
-                vt_y[j] = vx*m[1] + vy*m[5] + vz*m[ 9] + m[13];
-                vt_z[j] = vx*m[2] + vy*m[6] + vz*m[10] + m[14];
-                vt_w[j] = vx*m[3] + vy*m[7] + vz*m[11] + m[15];
+                if ( vt_w[j] < zn || vt_w[j] > zf ) { all_in = 0; break; }
             }
 
-            cnt = clip_w( vt_x, vt_y, vt_z, vt_w, vt_u, vt_v, vcnt,
-                          cl_x, cl_y, cl_z, cl_w, cl_u, cl_v, dp->z_near, 1 );
-            if ( cnt < 3 ) continue;
-            cnt = clip_w( cl_x, cl_y, cl_z, cl_w, cl_u, cl_v, cnt,
-                          vt_x, vt_y, vt_z, vt_w, vt_u, vt_v, dp->z_far, 0 );
+            if ( all_in ) {
+                cnt = vcnt;
+            } else {
+                cnt = clip_w( vt_x, vt_y, vt_z, vt_w, vt_u, vt_v, vcnt,
+                              cl_x, cl_y, cl_z, cl_w, cl_u, cl_v, zn, 1 );
+                if ( cnt >= 3 )
+                    cnt = clip_w( cl_x, cl_y, cl_z, cl_w, cl_u, cl_v, cnt,
+                                  vt_x, vt_y, vt_z, vt_w, vt_u, vt_v, zf, 0 );
+            }
+            /* Kept OUTSIDE the branch: vcnt < 3 reaches the fast path too
+               (clip_w would have returned < 3 for it), and the original
+               dropped such a face here rather than drawing it. */
             if ( cnt < 3 ) continue;
 
             /*
@@ -606,49 +657,52 @@ void pascal far d_draw_faces(
 
             /*
              * One convex polygon, one call -- no fan pivot, so no
-             * internal edges for the rasteriser to seam along. Wireframe
-             * still fans; it wants the triangles.
+             * internal edges for the rasteriser to seam along. The
+             * triangle-fan path (uglTriTP/uglTriT/uglTriF, one call per
+             * triangle) is gone: uglPolyTP is the only draw call left,
+             * for every rend_mode including wireframe.
+             *
+             * cnt > 32 cannot reach uglPolyTP -- its own ceiling, raised
+             * from 12 to 32 alongside this change (see uglplxtp.asm) --
+             * so it is turned away here instead of relying on the
+             * library's own silent refusal. Measured on the actual
+             * shipped maps this exists for: dm3ish has 17 faces over the
+             * OLD 12-vertex limit, e1m7 has 2, both comfortably under 32
+             * even after near/far clipping can add a vertex or two.
+             *
+             * rt0/raster_cyc bracket ONLY this block -- the uglPolyTP
+             * call and the small vertex-copy around it, not the cache
+             * lookup, mip choice or projection above. One rdtsc pair
+             * per FACE, same coarse granularity build_us already uses.
              */
-            if ( dp->poly_tp && cnt <= 12 && dp->rend_mode != 2 ) {
+            if ( cnt > MAXV ) continue;
+
+            rt0 = dp->prof ? sys_rdtsc() : 0;
+
+            for ( j = 0; j < cnt; j++ ) {
+                pvtx[j].x = px[j]; pvtx[j].y = py[j]; pvtx[j].z = pw[j];
+                pvtx[j].u = pu[j]; pvtx[j].v = pv[j];
+            }
+
+            if ( dp->rend_mode == 2 ) {
+                /* Wireframe: the polygon's own boundary, not a fan's
+                   internal diagonals -- simpler and, unlike the fan
+                   version, actually shows the face's real outline. No
+                   fill; "wireframe" now means what it says. */
                 for ( j = 0; j < cnt; j++ ) {
-                    pvtx[j].x = px[j]; pvtx[j].y = py[j]; pvtx[j].z = pw[j];
-                    pvtx[j].u = pu[j]; pvtx[j].v = pv[j];
+                    p2 = ( j + 1 == cnt ) ? 0 : j + 1;
+                    uglLine( dp->h_dst_dc, (short)px[j], (short)py[j],
+                                           (short)px[p2], (short)py[p2], 0 );
                 }
+            } else {
                 uglPolyTP( dp->h_dst_dc, (UglVtx far *)pvtx, cnt, 0, src_dc );
-                dp->tris += cnt - 2;
-                continue;
             }
+            dp->tris += cnt - 2;
 
-            for ( j = 0; j <= cnt - 3; j++ ) {
-                p2 = j + 1;
-                p3 = j + 2;
-
-                tri1.v1.z = pw[0];  tri1.v2.z = pw[p2]; tri1.v3.z = pw[p3];
-                tri1.v1.x = px[0];  tri1.v1.y = py[0];
-                tri1.v2.x = px[p2]; tri1.v2.y = py[p2];
-                tri1.v3.x = px[p3]; tri1.v3.y = py[p3];
-
-                if ( dp->rend_mode == 2 ) {
-                    uglTriF( dp->h_dst_dc, (UglTri far *)&tri1, 200 );
-                    uglLine( dp->h_dst_dc, (short)tri1.v1.x, (short)tri1.v1.y,
-                                           (short)tri1.v2.x, (short)tri1.v2.y, 0 );
-                    uglLine( dp->h_dst_dc, (short)tri1.v2.x, (short)tri1.v2.y,
-                                           (short)tri1.v3.x, (short)tri1.v3.y, 0 );
-                    uglLine( dp->h_dst_dc, (short)tri1.v3.x, (short)tri1.v3.y,
-                                           (short)tri1.v1.x, (short)tri1.v1.y, 0 );
-                } else {
-                    tri1.v1.u = pu[0];  tri1.v1.v = pv[0];
-                    tri1.v2.u = pu[p2]; tri1.v2.v = pv[p2];
-                    tri1.v3.u = pu[p3]; tri1.v3.v = pv[p3];
-
-                    if ( dp->rend_mode == 0 )
-                        uglTriTP( dp->h_dst_dc, (UglTri far *)&tri1, 0, src_dc );
-                    else
-                        uglTriT ( dp->h_dst_dc, (UglTri far *)&tri1, 0, src_dc );
-                }
-                dp->tris++;
+            if ( dp->prof ) {
+                bface = sys_rdtsc() - rt0;
+                if ( bface >= 0 && bface <= 1000000 ) raster_cyc += bface;
             }
-
         }
     }
 
@@ -658,4 +712,5 @@ void pascal far d_draw_faces(
     }
 
     dp->build_us = build_cyc;
+    dp->raster_us = raster_cyc;
 }

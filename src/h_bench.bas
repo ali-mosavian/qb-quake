@@ -64,6 +64,7 @@ declare function qrProfEdgeSum ( ) as long
 '' r_span.c investigative prototype (see its own file for what it is).
 declare function r_span_overflow_count ( ) as integer
 declare function r_span_resolved_pixels ( ) as long
+declare function r_portal_dg ( byval which as integer ) as long
 declare function r_span_naive_pixels ( ) as long
 declare function r_span_bucket_cycles ( ) as long
 declare function r_span_merge_cycles ( ) as long
@@ -239,6 +240,10 @@ sub host_bench_report ( _
         print #benchf, "pt_mark_mean " + ltrim$(str$( (g.pt.mark_sum / g.ft.n) * 1000.0 ))
         print #benchf, "pt_mark_max " + ltrim$(str$( g.pt.mark_max * 1000.0 ))
         print #benchf, "portal_culled " + ltrim$(str$( g.vis.pt_culled ))
+        print #benchf, "pt_proj " + ltrim$(str$( r_portal_dg(0) ))
+        print #benchf, "pt_push " + ltrim$(str$( r_portal_dg(1) ))
+        print #benchf, "pt_pop " + ltrim$(str$( r_portal_dg(2) ))
+        print #benchf, "pt_frames " + ltrim$(str$( r_portal_dg(3) ))
         print #benchf, "pt_walk_mean " + ltrim$(str$( (g.pt.walk_sum / g.ft.n) * 1000.0 ))
         print #benchf, "pt_walk_max " + ltrim$(str$( g.pt.walk_max * 1000.0 ))
     end if

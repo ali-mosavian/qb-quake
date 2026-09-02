@@ -1420,8 +1420,6 @@ sub scr_draw_hud ( _
         if ( g.rdr.use_mips ) then ftr = ftr + "ON " else ftr = ftr + "off"
         if ( g.rdr.rend_mode = 0 ) then
             ftr = ftr + "   F2 perspective"
-        elseif ( g.rdr.rend_mode = 1 ) then
-            ftr = ftr + "   F2 affine     "
         else
             ftr = ftr + "   F2 wireframe  "
         end if
@@ -1457,8 +1455,15 @@ sub scr_draw_hud ( _
 
     ''
     '' Where the camera is, always -- with or without the stats panel,
-    '' drawn last so the panel cannot cover it, and printed as the flags
-    '' themselves so a sighting can be replayed headlessly.
+    '' drawn last so the panel cannot cover it.
+    ''
+    '' Formatted for reading, NOT as command-line flags. It used to print
+    '' "-at X Y Z -yaw D" so a sighting could be pasted straight into a
+    '' headless run; that is gone deliberately, and replaying a viewpoint
+    '' now means transcribing the numbers rather than copying the line.
+    '' The values themselves are unchanged, so the transcription is
+    '' mechanical -- "at:" holds -at's three arguments in order and
+    '' "yaw:" holds -yaw's.
     ''
     '' pl.pos, not cam.pos: -at takes the hull origin, and the eye is
     '' PL_EYE# above it. The yaw is mirrored the way -yaw wants -- the
@@ -1486,13 +1491,30 @@ sub scr_draw_hud ( _
     end if
     if ( yawd < 0.0 ) then yawd = yawd + 360.0
 
-    pstr = "-at " + ltrim$(str$( cint( g.pl.pos.x ) )) + " " + _
-                    ltrim$(str$( cint( g.pl.pos.y ) )) + " " + _
-                    ltrim$(str$( cint( g.pl.pos.z ) )) + _
-           " -yaw " + ltrim$(str$( cint( yawd ) ))
+    pstr = "at: [" + ltrim$(str$( cint( g.pl.pos.x ) )) + "," + _
+                     ltrim$(str$( cint( g.pl.pos.y ) )) + "," + _
+                     ltrim$(str$( cint( g.pl.pos.z ) )) + "]  " + _
+           "yaw: [" + ltrim$(str$( cint( yawd ) )) + "]"
 
     uglRectF h_dst_dc, 0, 0, w, 9, hc_bg
     draw_string h_dst_dc, 4, 1, pstr
+
+    ''
+    '' Frame rate, top right, in the same always-drawn bar as the
+    '' viewpoint -- the stats panel carries its own big counter, but that
+    '' one goes with the panel, and the rate is worth having whether or
+    '' not the panel is up. Right-aligned so it does not move as the
+    '' viewpoint string beside it changes length.
+    ''
+    '' The bar is x_res/4 characters wide -- 40 at the default 160 render
+    '' width -- and the two strings share it: 28 for a typical viewpoint,
+    '' 9 for the rate, leaving 3 spare. That is why the coordinates are
+    '' comma-packed with no space after: the spaced form measured 30 and
+    '' collided, rendering "yaw: [92Fps: [42]". Five-digit coordinates
+    '' (a map using the full +-4096 range) will collide again; nothing
+    '' truncates, so it shows as overlap rather than as wrong numbers.
+    ''
+    draw_string_r h_dst_dc, w-4, 1, "fps: [" + ltrim$(str$( g.scr.fps )) + "]"
 end sub
 
 

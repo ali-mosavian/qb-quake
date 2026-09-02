@@ -123,7 +123,11 @@ sub in_handle_toggles ( _
 )
 
     if ( in_keystroke( g.env.keyboard.f1  ) ) then g.rdr.use_mips  = not g.rdr.use_mips
-    if ( in_keystroke( g.env.keyboard.f2  ) ) then g.rdr.rend_mode = (g.rdr.rend_mode + 1) mod 3
+    '' Perspective / wireframe only -- affine dropped with the fan path
+    '' that was its only renderer (uglPolyTP has no affine equivalent).
+    if ( in_keystroke( g.env.keyboard.f2  ) ) then
+        if ( g.rdr.rend_mode = 0 ) then g.rdr.rend_mode = 2 else g.rdr.rend_mode = 0
+    end if
     if ( in_keystroke( g.env.keyboard.f3  ) ) then g.cam.fps_view  = not g.cam.fps_view
     if ( in_keystroke( g.env.keyboard.f12 ) ) then g.scr.stats    = not g.scr.stats
     if ( in_keystroke( g.env.keyboard.b   ) ) then g.rdr.backface = not g.rdr.backface

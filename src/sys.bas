@@ -156,9 +156,6 @@ sub sys_parse_args ( _
         if ( lcase$(argv(i)) = "-badorder" ) then
             g.env.bad_order = true
         end if
-        if ( lcase$(argv(i)) = "-polytp" ) then
-            g.env.poly_tp = true
-        end if
         if ( lcase$(argv(i)) = "-noz" ) then
             g.env.no_z = true
         end if

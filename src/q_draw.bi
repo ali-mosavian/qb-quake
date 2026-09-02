@@ -51,6 +51,7 @@ type DrawParams
     dl_z        as single
     dl_radius   as single
     build_us    as long      '' out: microseconds spent in sb_build
+    raster_us   as long      '' out: microseconds in the uglPolyTP call
     frame_stamp as integer
     ord_count   as integer
     use_lm      as integer
@@ -58,7 +59,6 @@ type DrawParams
     backface    as integer
     rend_mode   as integer
     use_mips    as integer
-    poly_tp     as integer
     span_draw   as integer
     x_res       as integer
     y_res       as integer

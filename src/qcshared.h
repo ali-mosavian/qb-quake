@@ -172,6 +172,9 @@ typedef struct {
     float dl_x, dl_y, dl_z, dl_radius;
     /* out */
     long  build_us;
+    long  raster_us;         /* the uglPolyTP call only -- one rdtsc
+                                 bracket per face, same coarse granularity
+                                 build_us already uses */
     short frame_stamp;
     short ord_count;
     short use_lm;
@@ -179,7 +182,6 @@ typedef struct {
     short backface;
     short rend_mode;
     short use_mips;
-    short poly_tp;
     short span_draw;
     short x_res, y_res;
     short prof;             /* g.ft.n > 0: accumulate build_us at all */

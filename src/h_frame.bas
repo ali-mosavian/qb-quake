@@ -406,7 +406,6 @@ sub host_render ( _
     dparm.backface    = g.rdr.backface
     dparm.rend_mode   = g.rdr.rend_mode
     dparm.use_mips    = g.rdr.use_mips
-    dparm.poly_tp     = g.env.poly_tp
     dparm.span_draw   = g.env.span_draw
     dparm.x_res       = g.env.x_res
     dparm.y_res       = g.env.y_res
@@ -432,13 +431,16 @@ sub host_render ( _
     k_v0_dbg = k_v0_dbg + dparm.k_v0
     k_lm_dbg = k_lm_dbg + dparm.k_lm
 
-    '' Only the surface BUILD is still timed inside the loop -- a build
-    '' is a cache miss, so its bracket is rare. The per-face raster/aim
-    '' brackets are gone: 4-6 sys_rdtsc far calls per face, each a far
-    '' call plus a 32-bit divide, to measure a loop that no longer needs
-    '' measuring at that grain. pt_raster/pt_aim/pt_emit read 0 now.
+    '' Surface BUILD and the raster (the uglPolyTP call) are timed
+    '' inside the loop, one rdtsc pair per face each -- a build is a
+    '' cache miss so its bracket is rare, and raster is now the ONE
+    '' bracket left there, not the 4-6 (raster/aim/build/emit, each its
+    '' own far call plus a 32-bit divide) an earlier pass removed for
+    '' costing more than the loop it was measuring. pt_aim/pt_emit still
+    '' read 0 -- neither came back.
     if ( g.ft.n > 0 ) then
         g.pt.build_sum = g.pt.build_sum + dparm.build_us / 1000000.0
+        g.pt.raster_sum = g.pt.raster_sum + dparm.raster_us / 1000000.0
     end if
     if ( g.ft.n > 0 ) then
         ptd = sys_now() - pt0

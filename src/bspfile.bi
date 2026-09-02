@@ -392,10 +392,6 @@ type Env
                                 '' through the wall in front of it".
     bad_order   as integer      '' -badorder: put brush entities back after the
                                 '' world walk, the bug this flag exists to show.
-    poly_tp     as integer      '' -polytp: emit whole convex polygons via
-                                '' uglPolyTP instead of fanning each face
-                                '' into triangles. A/B against the proven
-                                '' uglTriTP path.
     no_z        as integer      '' -noz: skip the depth buffer entirely
     no_cull     as integer      '' -nocull: backface culling off, for A/B
     pt_wire     as integer      '' -ptwire: start with the portal outlines on.
