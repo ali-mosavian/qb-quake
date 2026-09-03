@@ -183,7 +183,8 @@ void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
     u3dMtrxConc( &mtx_fin, &mtx_mdl, mtx_prj );
 
     /* Walk BSP tree */
-    r_draw_world( world, rdr, frustum, 0, &cam->pos, &mtx_fin );
+    r_draw_world( world, rdr, frustum, 0, &cam->pos, &mtx_fin,
+                   xresh, yresh, z_near );
 
     /* Cull ends here -- both exits from this function after this
        point (-nodraw, and the normal one at the bottom) pass through
@@ -251,7 +252,8 @@ void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
        behind a wall is hidden by it. Drawn after depth goes off they
        show through everything, and a view full of portals you cannot
        see buries the few you are actually looking through. */
-    if ( hud->portal_wire ) r_portal_outline( world, rdr, h_dst_dc, &mtx_fin );
+    if ( hud->portal_wire ) r_portal_outline( world, rdr, h_dst_dc, &mtx_fin,
+                                               xresh, yresh, z_near );
 
     /* leave depth off for the overlay, which is 2D and would
        otherwise test itself against the scene it is drawn on top of */

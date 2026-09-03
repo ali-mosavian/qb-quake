@@ -1560,6 +1560,37 @@ Two techniques that paid for themselves:
 
 ## Open
 
+### The walk must read pvs_now, not pvsb
+
+**Fixed, and the HUD is how it was caught.** `r_walk.c` tested
+`rdr->pvsb` -- the raw PVS for the camera's leaf -- where the BASIC
+passes `pvs_now()` into that routine's own `pvsb()` PARAMETER
+(`r_bsp.bas:439`). Once the arrays became `Renderer` fields the name
+matched the wrong one, so `r_portal_mark` built the narrowed set,
+reported `pt_culled` to the overlay, and the walk then ignored it:
+portal culling moved a HUD counter and nothing else.
+
+The tell was exactly that -- "leaves portal-cut" changed while polys
+did not. A toggle that reports work and does not change the picture is
+not a toggle, and this is the second time in this project a counter has
+been believed over the frame.
+
+The A/B, and the regression check until cport has a harness -- e1m7,
+`-lm -nostats -ticks 60`, static at spawn:
+
+| | frames | polys | polys/frame |
+|---|---|---|---|
+| `-noportal` | 17 | 8466 | 498 |
+| portal on   | 39 | 3889 | 100 |
+
+Identical numbers on both sides means the bug is back.
+
+Same commit fixed a second defect at that call site: `r_portal_mark`
+and `r_portal_draw` were passed `0.0f, 0.0f, 0.0f` for
+`xresh`/`yresh`/`z_near` under a comment saying "until Config exists".
+Config exists; they get `x_res/2`, `y_res/2` and `z_near` now, which is
+what their own projection needs to answer for the right screen.
+
 ### cport crashes under live mouse input, and only live
 
 **Unresolved.** `cport/` crashes after a minute or two of being driven

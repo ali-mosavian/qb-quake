@@ -38,12 +38,14 @@ void  r_mark_leaves( World *world, Renderer *rdr, short nodenr, u3dVector3f *cam
  *       (rdr->ord) the rasteriser follows.
  */
 void  r_draw_world( World *world, Renderer *rdr, DiskPlane far *frustum,
-                     short model, u3dVector3f *campos, u3dMtrx *mtx_fin );
+                     short model, u3dVector3f *campos, u3dMtrx *mtx_fin,
+                     float xresh, float yresh, float z_near );
 
 /* Outline every portal of every leaf still visible after the flood --
    r_portal.c's r_portal_draw, wrapped with World's/Renderer's own
    portal store and pvs_now. */
-void  r_portal_outline( World *world, Renderer *rdr, PDC dc, u3dMtrx *mtx_fin );
+void  r_portal_outline( World *world, Renderer *rdr, PDC dc, u3dMtrx *mtx_fin,
+                         float xresh, float yresh, float z_near );
 
 /* Builds world->leaves: leaf_count entries from assets.zip's own
    already-narrowed leaves.pag (fatal if it won't load). */

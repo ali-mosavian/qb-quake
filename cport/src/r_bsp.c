@@ -285,7 +285,8 @@ void r_emit_entities( World *world, Renderer *rdr, DiskPlane far *frustum,
  *       draw order, then walks the tree.
  */
 void r_draw_world( World *world, Renderer *rdr, DiskPlane far *frustum,
-                    short model, u3dVector3f *campos, u3dMtrx *mtx_fin )
+                    short model, u3dVector3f *campos, u3dMtrx *mtx_fin,
+                    float xresh, float yresh, float z_near )
 {
     short i;
 
@@ -317,11 +318,14 @@ void r_draw_world( World *world, Renderer *rdr, DiskPlane far *frustum,
      */
     rdr->pt_culled = 0;
     if ( rdr->portal ) {
-        /* xresh/yresh/z_near are Env's -- 0 here until Config exists to
-           carry x_res/y_res/z_near down to this call. */
+        /* Real half-extents and near plane, not the zeros this used to
+           pass "until Config exists": r_portal_mark projects each
+           portal rect to screen with them, so at 0,0,0 the projection
+           is degenerate and the flood is answering a different
+           question than the one the HUD reports. */
         rdr->pt_culled = r_portal_mark( world, rdr, mtx_fin, rdr->dbg_camleaf,
                                          (short) (world->leaf_count - 1),
-                                         0.0f, 0.0f, 0.0f );
+                                         xresh, yresh, z_near );
     }
     if ( rdr->pt_culled < 0 || !rdr->portal ) {
         /* bailed, or switched off: use the PVS exactly as it stands */
@@ -359,11 +363,11 @@ void r_draw_world( World *world, Renderer *rdr, DiskPlane far *frustum,
  *       anyway since h_frame.c already calls it as r_bsp.bas's own
  *       entry point.
  */
-void r_portal_outline( World *world, Renderer *rdr, PDC dc, u3dMtrx *mtx_fin )
+void r_portal_outline( World *world, Renderer *rdr, PDC dc, u3dMtrx *mtx_fin,
+                        float xresh, float yresh, float z_near )
 {
-    /* xresh/yresh/z_near are Env's -- 0 here until Config exists. */
     r_portal_draw( dc, mtx_fin, (short) (world->leaf_count - 1),
-                   0.0f, 0.0f, 0.0f, 251, world, rdr );
+                   xresh, yresh, z_near, 251, world, rdr );
 }
 
 void r_load_leaves( World *world )

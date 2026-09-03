@@ -29,7 +29,17 @@ void r_recursive_world_node( World *world, Renderer *rdr, DiskPlane far *frustum
 
     if ( nodenr & 0x8000 ) {
         leafnr = ~nodenr;
-        if ( (ign || rdr->pvsb[leafnr]) &&
+        /* pvs_now, NOT pvsb. pvsb is the raw PVS for the camera's leaf,
+           rebuilt only when the leaf changes; pvs_now is that set after
+           r_portal_mark narrows it to what the portals actually reach
+           from this eye, rebuilt every frame. The BASIC passed
+           pvs_now() into this routine's own pvsb() PARAMETER
+           (r_bsp.bas:439), so once the arrays became struct fields the
+           name here matched the wrong one: portal culling built the
+           narrowed set, reported pt_culled to the HUD, and the walk
+           then ignored it. The tell was the HUD itself -- "leaves
+           portal-cut" moved while polys did not. */
+        if ( (ign || rdr->pvs_now[leafnr]) &&
              r_cull_box( &world->leaves[leafnr].bound, frustum ) ) {
             frst = world->leaves[leafnr].lface_id;
             last = frst + world->leaves[leafnr].lface_num;
