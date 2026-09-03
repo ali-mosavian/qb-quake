@@ -1,0 +1,270 @@
+/*
+ * h_frame.c -- one frame's simulation step and one frame's drawing.
+ *
+ * C port of the old h_frame.bas. host_advance's own accumulator logic
+ * is real and self-contained; host_tick and host_render call out to
+ * ent/camera/input/BSP-walk/HUD subsystems that are declared here
+ * (matching the signatures they'll have once ported) but not yet
+ * implemented anywhere -- this compiles today; it links once enough of
+ * World's owners (r_bsp.bas, model.bas, ent.bas, pl_move.bas,
+ * in_main.bas, screen.bas) exist in cport/ too.
+ *
+ * That's a deliberate order: writing the caller before the callees
+ * exist is normal top-down design, and it fixes the target signatures
+ * (World* instead of a dozen separate BASIC arrays) before any of
+ * those modules get written against something that has to change
+ * later.
+ */
+
+#include "h_frame.h"
+#include "d_poly.h"
+#include "d_faces.h"
+#include "ent.h"
+#include "input.h"
+#include "r_bsp.h"
+#include "mod_tex.h"
+#include "uglpatch.h"
+#include "view.h"
+#include "screen.h"
+
+/* q_scr.bi's HOST_DT#/HOST_MAXSTEPS. */
+#define HOST_DT       0.0166666f
+#define HOST_MAXSTEPS 5
+
+/* q_draw.bi's DL_RADIUS#: Quake's own rocket dlight radius. */
+#define DL_RADIUS 200.0f
+
+#define UGL_Z_OFF 0
+
+/*
+ * name: host_advance
+ * desc: Spends a frame's worth of real time on whole simulation steps.
+ *
+ *       The renderer's frame time varies with what is on screen.
+ *       Feeding it straight to the physics made every result depend on
+ *       the framerate: the same walk integrated in a few long steps at
+ *       12 fps and many short ones at 45, and the two drifted apart
+ *       because a long step overshoots a wall a short one stops
+ *       against.
+ *
+ *       Every step is HOST_DT regardless, and the remainder carries.
+ *       Physics sees a constant rate; only how many steps a frame runs
+ *       varies.
+ */
+void host_advance( World *world, Player *player, Camera *cam, Renderer *rdr,
+                    Input *input, Hud far *hud, LightStyles *ls, SysClock *sysclk,
+                    HostClock *clock, PhaseTimes *pt, float real_dt,
+                    short scr_x_res, short scr_y_res )
+{
+    short steps = 0;
+    float t0 = sys_now( sysclk );
+
+    clock->accum += real_dt;
+
+    while ( clock->accum >= HOST_DT && steps < HOST_MAXSTEPS ) {
+        /* Stop ON the tick budget, not past it -- -ticks is tested
+           once a frame, after this whole loop, so a slow frame that
+           runs two or three steps would end the run at 902 rather
+           than 900, with the camera wherever those extra steps
+           carried it. Two runs of one binary then differ by most of a
+           room, which reads exactly like a rendering bug and is not
+           one. */
+        if ( clock->bench_ticks > 0 && clock->ticks >= clock->bench_ticks ) {
+            break;
+        }
+        host_tick( world, player, cam, rdr, input, hud, ls, HOST_DT, scr_x_res, scr_y_res );
+        clock->accum -= HOST_DT;
+        clock->ticks++;
+        steps++;
+    }
+
+    /* Still behind after the cap: give up on the backlog rather than
+       carry it into the next frame, where it would only grow. */
+    if ( clock->accum > HOST_DT ) clock->accum = 0.0f;
+
+    if ( pt->n > 0 ) {
+        float dt = sys_now( sysclk ) - t0;
+        pt->tick_sum += dt;
+        if ( dt > pt->tick_max ) pt->tick_max = dt;
+    }
+}
+
+/*
+ * name: host_tick
+ * desc: One simulation step. Everything that changes the world in
+ *       response to time or input happens here, and nothing here
+ *       draws.
+ *
+ *       dt is a parameter rather than a global read so the step is
+ *       explicit at the call site: this is the one number that
+ *       decides how far the world moves, and a caller can pass a
+ *       different one -- a fixed step, a halved step for a sub-tick --
+ *       without the routine knowing or caring.
+ */
+void host_tick( World *world, Player *player, Camera *cam, Renderer *rdr,
+                 Input *input, Hud far *hud, LightStyles *ls, float dt,
+                 short scr_x_res, short scr_y_res )
+{
+    /* what the player asked for */
+    in_handle_toggles( input, rdr, cam, player, hud );
+
+    /* and what the world does about it: camera, and the physics under it */
+    v_update_camera( cam, player, world, input, dt, scr_x_res, scr_y_res );
+
+    /* and anything the world does to the player as a result of moving */
+    ent_check_teleport( player, world, scr_x_res );
+
+    /* movers, after the player has moved and before anything is drawn */
+    ent_move_plats( world, player, dt );
+
+    /* where each mover ended up, so the draw order can place it */
+    ent_place_models( world );
+
+    /* map time, which drives every texture animation */
+    rdr->anim_time += dt;
+
+    /* light styles: fixed 10 Hz off the same clock, not framerate */
+    ls_animate( ls, rdr->anim_time );
+
+    /* the test dynamic light, following the player */
+    rdr->dlight.pos.x = player->pos.x;
+    rdr->dlight.pos.y = player->pos.y;
+    rdr->dlight.pos.z = player->pos.z;
+    rdr->dlight.radius = DL_RADIUS;
+}
+
+/*
+ * name: host_render
+ * desc: One frame's drawing. Reads the world, changes none of it --
+ *       the counterpart to host_tick, which changes it and draws none
+ *       of it.
+ */
+void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
+                   SurfCache far *sc, LightStyles *ls,
+                   Hud far *hud, PhaseTimes *pt, SysClock *sysclk,
+                   PDC h_dst_dc, u3dMtrx *mtx_prj, float xresh, float yresh,
+                   float z_near, float z_far,
+                   u3dVector3f *cam_up, PDC z_dc, short comp, short no_draw,
+                   short x_res, short y_res )
+{
+    u3dMtrx mtx_mdl, mtx_fin;
+    u3dVector3f cam_pos_b;
+    DrawParams dp;
+    DiskPlane frustum[6];
+    float t0, dt;
+
+    t0 = sys_now( sysclk );
+    u3dMtrxLookAt( &mtx_mdl, &cam->pos, &cam->look_at, cam_up );
+    u3dMtrxConc( &mtx_fin, &mtx_mdl, mtx_prj );
+    r_set_frustum( frustum, &mtx_fin );
+
+    /*
+     * Birdseye stuff. Deliberate, and it looks like a bug: the frustum
+     * above was taken from the PLAYER camera, and the view matrix is
+     * now rebuilt from a fixed overhead one. Flying above the level
+     * while the culling still answers to the player's view is the
+     * point of the mode -- you get to watch what the PVS and the
+     * frustum actually throw away. Do not "fix" it by moving
+     * r_set_frustum below this block.
+     */
+    if ( !cam->fps_view ) {
+        cam_pos_b.x = 351.0f;
+        cam_pos_b.y = 2119.0f;
+        cam_pos_b.z = -552.0f;
+
+        cam->look_at.x = cam_pos_b.x + 1.991367e-8f;
+        cam->look_at.y = cam_pos_b.y - 1.0f;
+        cam->look_at.z = cam_pos_b.z + 1.570986e-2f;
+    } else {
+        cam_pos_b = cam->pos;
+    }
+
+    u3dMtrxLookAt( &mtx_mdl, &cam_pos_b, &cam->look_at, cam_up );
+    u3dMtrxConc( &mtx_fin, &mtx_mdl, mtx_prj );
+
+    /* Walk BSP tree */
+    r_draw_world( world, rdr, frustum, 0, &cam->pos, &mtx_fin );
+
+    /* Cull ends here -- both exits from this function after this
+       point (-nodraw, and the normal one at the bottom) pass through
+       it, so timing it once here covers both. */
+    if ( pt->n > 0 ) {
+        dt = sys_now( sysclk ) - t0;
+        pt->cull_sum += dt;
+        if ( dt > pt->cull_max ) pt->cull_max = dt;
+    }
+
+    /* Clear to the far plane before the frame. Depth is 1/z and
+       larger is nearer, so zero is infinitely distant and the first
+       surface to cover a pixel always wins. */
+    if ( z_dc != 0 ) uglClearZ( z_dc, 0 );
+
+    /* -nodraw stops HERE: the walk above has run and filled the draw
+       order, so everything node paging touches has happened. What is
+       skipped is fill, which paging does not affect. */
+    if ( no_draw ) return;
+
+    dp.h_dst_dc    = h_dst_dc;
+    dp.tex_ofs_ptr = world_tex_ofs_ptr( world );
+    dp.turb_ptr    = (long) (void far *) d_turb_table();
+    dp.xresh       = xresh;
+    dp.yresh       = yresh;
+    dp.z_near      = z_near;
+    dp.z_far       = z_far;
+    dp.anim_time   = rdr->anim_time;
+    dp.dl_x        = rdr->dlight.pos.x;
+    dp.dl_y        = rdr->dlight.pos.y;
+    dp.dl_z        = rdr->dlight.pos.z;
+    dp.dl_radius   = rdr->dlight.radius;
+    dp.frame_stamp = rdr->frame_stamp;
+    dp.ord_count   = (short) rdr->ord_count;
+    /* Config's own use_lm toggle (common.bas, not yet ported) isn't
+       here yet -- gated on whether the lightmap atlas actually loaded
+       instead of a settable flag, which is the conservative default:
+       "off" is never reachable until the map genuinely has no data. */
+    dp.use_lm      = (short) ( world->light_atlas != 0 );
+    dp.lightmap    = rdr->lightmap;
+    dp.backface    = rdr->backface;
+    dp.rend_mode   = rdr->rend_mode;
+    dp.use_mips    = rdr->use_mips;
+    dp.z_avail     = (short) ( z_dc != 0 );
+    dp.x_res       = x_res;
+    dp.y_res       = y_res;
+    dp.prof        = (short) ( pt->n > 0 );
+
+    t0 = sys_now( sysclk );
+    d_draw_faces( world, rdr, sc, ls, &dp, &mtx_fin, &cam->pos, sysclk );
+
+    rdr->polys = (short) ( rdr->polys + dp.polys );
+    rdr->tris  = (short) ( rdr->tris + dp.tris );
+
+    if ( pt->n > 0 ) {
+        pt->build_sum  += dp.build_us  / 1000000.0f;
+        pt->raster_sum += dp.raster_us / 1000000.0f;
+
+        dt = sys_now( sysclk ) - t0;
+        pt->draw_sum += dt;
+        if ( dt > pt->draw_max ) pt->draw_max = dt;
+    }
+
+    /* Portal outlines, while the depth test is still on, so a portal
+       behind a wall is hidden by it. Drawn after depth goes off they
+       show through everything, and a view full of portals you cannot
+       see buries the few you are actually looking through. */
+    if ( hud->portal_wire ) r_portal_outline( world, rdr, h_dst_dc, &mtx_fin );
+
+    /* leave depth off for the overlay, which is 2D and would
+       otherwise test itself against the scene it is drawn on top of */
+    if ( z_dc != 0 ) uglZMode( UGL_Z_OFF );
+
+    t0 = sys_now( sysclk );
+    /* Under -comp the host loop draws this onto the composite after
+       the scale, at the mode's own resolution. */
+    if ( !comp ) scr_draw_hud( world, rdr, cam, player, sc, hud, h_dst_dc, x_res, y_res );
+
+    if ( pt->n > 0 ) {
+        dt = sys_now( sysclk ) - t0;
+        pt->hud_sum += dt;
+        if ( dt > pt->hud_max ) pt->hud_max = dt;
+    }
+}
