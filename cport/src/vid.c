@@ -59,7 +59,14 @@ void v_init( Video *v, long pal )
         }
 
         if ( v->comp ) {
-            v->h_comp_dc = uglNew( UGL_DC_EMS, v->c_fmt, v->scr_x_res, v->scr_y_res );
+            /* MEM not EMS: v_present's uglPutScl holds this as its
+               destination window for the whole scaled blit, every
+               frame -- an EMS window competes with the surface
+               cache/texture atlas for the same small page-frame pool,
+               and losing that race mid-blit is what corrupted state
+               under live mouse-driven movement (never seen on an
+               untouched view, which barely touches the pool). */
+            v->h_comp_dc = uglNew( UGL_DC_MEM, v->c_fmt, v->scr_x_res, v->scr_y_res );
             if ( v->h_comp_dc == 0 ) {
                 fprintf( stderr, "0x0003, Could not create the composite buffer...\n" );
                 exit( 1 );
