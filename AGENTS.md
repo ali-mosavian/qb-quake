@@ -2,6 +2,60 @@
 
 Hard-won things, mostly the kind that cost an hour before they cost a minute.
 
+## Writing — precedes every other rule
+
+**NO RAMBLING.** Write the minimum needed to understand. This takes precedence over every other rule here and in
+any project's instructions: when another convention or habit would make the output longer, this
+one wins. Length is never the price of following some other rule.
+
+- **Chat replies**: answer the question asked, then stop. No findings dumps, no summary tables of
+  work just done, no "a few more things worth knowing" sections. If you found more than was
+  asked, give the headline and offer the rest.
+- **Descriptions** (PR, Jira): `TL;DR` line first — outcome and headline number — then the short
+  version of the detail.
+- **Commit messages**: no `TL;DR` — the subject line is the summary. Keep the body to what the
+  diff cannot show; link the ticket instead of restating it.
+- **Docs and prose a person reads**: plain sentences, one idea per paragraph. No framing, no
+  restating the same fact twice, no caveats section.
+- **Code comments**: only for the non-trivial parts — hidden constraints, subtle invariants,
+  non-obvious workarounds. Naming and structure carry the rest.
+- Cut rhetorical flourishes. Name the thing, state the fact, move on.
+
+## Measurements — the second rule
+
+**Doubt the measurement before the subject.** A result that contradicts what
+is known about the thing being measured is evidence the instrument is wrong,
+not a finding. Never conclude "there is nothing here" from a number that
+common sense says should be large.
+
+- Several measures agreeing on zero is one broken assumption, not several facts.
+- A question shaped so the subject's own style cannot answer it always returns
+  zero. Ask what the subject actually does, not what the textbook name is.
+- Verify against the raw thing -- read the assembly, the bytes, the output --
+  before writing a conclusion down. One look beats any amount of analysis.
+- Derive a target by hand on both sides. An estimated one flatters whatever
+  it measures.
+- Cost hidden behind a call, an interrupt or a helper reads as free unless the
+  measure is told about it.
+- Never explain an implausible result with a story. That is how it survives.
+
+## Regression tests — the third rule
+
+**Every issue found and fixed gets a regression test, in the same commit as
+the fix.** Not "should" — the fix is not finished without it.
+
+- **Write it so it fails first.** Revert the fix, watch the test fail, restore
+  the fix. A test written after the fix and never seen to fail is evidence of
+  nothing.
+- **Test the symptom, not the patch.** The wrong output is the fact; which
+  branch of which helper returned early is this week's shape of it. Assert on
+  observable behaviour where you can.
+- **Instruments count.** A broken measurement is an issue like any other and
+  gets a test like any other — see the second rule. A scoreboard reading the
+  wrong thing will not announce itself twice.
+- **Say what it cost.** The test's name or docstring says what went wrong and
+  what it produced. Cheapest to write while it is still understood.
+
 ## Rules
 
 The short list. Where one of these has a long-form note further down --
@@ -819,6 +873,13 @@ is no case for turning it off.
     core=dynamic
     cycles=75000
     priority=higher,normal        # [sdl]
+    output=opengl                 # [sdl]
+
+**`output=opengl`, always.** The SDL `surface` backend is visibly
+sluggish here, and a laggy window is a window you stop watching -- which
+is how **Never wait blind on DOSBox** gets broken in practice. It is the
+template default now; `viz` used to patch it per-run, which left every
+other mode on `surface`.
 
 These are THE settings. They are not tuning knobs -- a before/after is a
 measurement only if both sides ran on the same emulated machine, and
@@ -1498,6 +1559,67 @@ Two techniques that paid for themselves:
   minutes per emulator round trip.
 
 ## Open
+
+### cport crashes under live mouse input, and only live
+
+**Unresolved.** `cport/` crashes after a minute or two of being driven
+by hand -- `-comp -lm`, dm3ish -- and does not crash any other way. It
+is not a hang: the CPU takes a real invalid-opcode exception (vector 6)
+at `CS:EIP` pointing somewhere it was never meant to jump (`0000:0000`
+once, `ugl_text+0x22E0` another time, and once the whole DOS session
+reset -- `lastExitPsp` went from 2068 to 52501).
+
+**What is ruled out, each by measurement rather than argument:**
+
+| Ruled out | How |
+|---|---|
+| The camera path / map geometry | Recorded a crashing session's real input, replayed it: 489 frames, same end position (`72,238,-545` vs recorded `74.4,238,-545.7`), no crash. Three separate paths replayed, none crashed. |
+| A specific place in the map | Crash positions differ every run -- `104.8,206,369.5`, `131.7,206,226.4`, `74.4,238,-545.7`. |
+| Stack overflow | Painted the stack below SP and read the low-water mark back: **3,126 bytes used, 5,066 still untouched**, and the region is real stack (an 8K paint runs clean, 16K breaks -- so the floor is 8-16K down). An interrupt frame is 32-64 bytes. It cannot cross 5K. |
+| `_stklen` | Set to 32768 and reads back as 32768, but SP top does not move (0xDF88 -> 0xDFAA) and the image grows only by the size of the added code. tc201's `C0M.OBJ` wins; the variable is a decoy. Left in place, and it is NOT a fix. |
+| `mousePos`'s unconditional `cursorShow` | Real bug, found and patched in `mdmouse.asm` (every other entry point gates on `ms.hidden`; that one did not). Crash survives it. |
+| The `-comp` composite DC living in EMS | Switched to `UGL_DC_MEM`. Crash survives it. |
+
+**What is left, and it is the whole finding:** the crash depends on
+*when* an interrupt arrives relative to the renderer, not on what the
+interrupt carries. Replay feeds identical input synchronously at the top
+of a frame and never fails; live, the ISR fires at an arbitrary
+instruction, including deep inside the EMS and rasteriser paths. The
+same sensitivity showed up twice more: adding a per-frame `fopen` to the
+recorder changed whether it reproduced at all, which is why the recorder
+now writes to a far buffer and touches no file during a run.
+
+**Tools built for this, worth keeping:**
+
+- `-record F` / `-play F` in `qmain.c`. One fixed record a frame: nine
+  shorts of real mouse/key state, then the camera position and yaw that
+  frame produced. `-play` feeds the input back through `host_advance`
+  (no position override) and reports the first frame that drifts more
+  than a unit off the recorded answer, so a replay that has stopped
+  being the same run says so instead of being quoted as one.
+- Recording lives in a far-allocated buffer whose address is printed
+  once via `mark()` (`rec_buf seg=... ofs=...`). A crash never reaches
+  any flush, so the buffer is read out of guest memory afterwards.
+- **`mem_dump` in dosbox-x's debug socket** (`src/debug/debug_socket.cpp`):
+  `{"cmd":"mem_dump","addr":N,"len":N,"file":"/host/path"}` writes guest
+  memory straight to a host file. `mem_read` returns hex and is capped
+  well below a 64K buffer; this is what makes dumping the recording
+  after a crash one call instead of sixteen.
+
+**Do not repeat these:** the first recorder gated its input capture on a
+`FILE*` that the far-buffer rewrite had already set to 0, so every
+`in[]` came back zero and the first replays reproduced nothing -- which
+read as "input does not describe the run" when it was only ever that
+bug. And `-at` takes BSP coordinates (Z-up) while the recorder writes
+renderer coordinates (Y-up); feeding one to the other aims the camera
+into solid geometry and returns a black screen that looks like a
+rendering fault.
+
+**The next test that would actually split it:** do not install the mouse
+driver at all (skip `mouseInit`, walk on the keyboard). Survives ->
+it is the mouse ISR and `handler` in `mdmouse.asm` is the whole search
+space. Still crashes -> the mouse is a red herring and the variable is
+interrupt load in general, with the 144 Hz timer the next suspect.
 
 **A mapped EMS pointer is only as good as its lock, and the lock has to
 come before the next ACQUIRE -- not before the use.** mgl's four page

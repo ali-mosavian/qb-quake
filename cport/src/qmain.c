@@ -15,6 +15,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <math.h>   /* atan2 -- -record's diagnostic yaw */
 #include <alloc.h>  /* farmalloc */
 #include <mem.h>    /* _fmemset */
 #include "dos.h"    /* memFree */
@@ -37,6 +38,25 @@
 /* Step log: opened and closed per mark so it survives a fault that
    never returns -- the technique this project records for exactly
    this case. */
+/* Borland's own stack-size knob, and it is not optional here.
+   QCPORT.MAP showed _STACK at 0x80 bytes with _stklen never set, while
+   crash dumps put SP over a ~2.4 KB range: r_walk's BSP recursion plus
+   d_faces' frame is already deep, and medium model puts the stack in
+   DGROUP alongside every near global, so an overflow silently eats
+   data instead of faulting. On top of that mgl's mouse handler
+   (mdmouse.asm) fires asynchronously and does a `pushad` on whatever
+   stack it interrupted -- so the deeper the renderer is when a real
+   mouse interrupt lands, the further past the end it writes. That is
+   exactly the observed failure: crashes only while the mouse is
+   actually moving, never on a replay of the identical camera path
+   (which generates no interrupts), and never at a repeatable frame. */
+extern unsigned _stklen;
+unsigned _stklen = 32768U;
+
+/* Stack low-water probe -- see the paint loop in main(). */
+#define PAINT_BYTE  0xA5
+#define PROBE_BYTES 8192U
+
 static void mark( char *what )
 {
     FILE *m = fopen( "cstep.txt", "a" );
@@ -51,6 +71,40 @@ int main( void )
     long    pal;
 
     mark( "start" );
+    {   /* Is _stklen actually honoured? The EXE header still says
+           SP=0x80, so this reads the real thing rather than trusting
+           it: SP here is the stack top minus main's own frame. */
+        char sbuf[64];
+        unsigned sp_now, ss_now;
+        _asm { mov sp_now, sp }
+        _asm { mov ss_now, ss }
+        sprintf( sbuf, "stack ss=%u sp=%u stklen=%u", ss_now, sp_now, _stklen );
+        mark( sbuf );
+
+        /* Stack low-water probe. Paint the unused stack below SP with
+           a pattern; whatever is still PAINT_BYTE afterwards was never
+           touched, so the lowest disturbed address is the deepest the
+           stack (renderer recursion + any interrupt that landed on top
+           of it) actually reached. Read it back with the debugger's
+           mem_dump over the linear range marked below -- the point is
+           to MEASURE the depth rather than keep assuming an overflow.
+
+           Deliberately conservative: the deepest SP seen in any crash
+           dump so far is ~2.4 KB below the top, so 4 KB covers it with
+           margin. Painting further risks writing into _BSS if the real
+           reserved stack is small -- which is itself the open question,
+           so it is not something to find out by corrupting globals. */
+        {
+            unsigned lo = sp_now - PROBE_BYTES;
+            unsigned hi = sp_now - 256;   /* clear of the current frame */
+            unsigned char *p;
+            for ( p = (unsigned char *) lo; p < (unsigned char *) hi; p++ )
+                *p = PAINT_BYTE;
+            sprintf( sbuf, "probe linear=%lu len=%u",
+                     (unsigned long) ss_now * 16UL + lo, (unsigned)(hi - lo) );
+            mark( sbuf );
+        }
+    }
 
     sys_parse_args( &args );
     mark( "sys_parse_args ok" );
@@ -79,6 +133,12 @@ int main( void )
     pal = 0;
     v_init( &v, pal );
     mark( "v_init ok" );
+    {
+        char buf[48];
+        long raw = (long) (void far *) v.h_comp_dc;
+        sprintf( buf, "h_comp_dc seg=%ld ofs=%ld", raw >> 16, raw & 0xFFFFL );
+        mark( buf );
+    }
 
     d_init_turb();
     mark( "d_init_turb ok" );
@@ -316,10 +376,107 @@ int main( void )
             float raw_dt, frame_dt;
             FILE *bf;
 
+            /* -record/-play: one fixed-size record a frame -- x,y,
+               left,right (mouse), w,a,s,d,spcbar (keyboard), all as
+               shorts, THEN cam.pos.x/y/z and a derived yaw as floats
+               (written after host_advance, once the frame's own move
+               has actually happened) -- diagnostic only, -play reads
+               back just the input half and ignores the rest.
+               Frame-granular, not tick-granular: host_advance already
+               reads input once per call and spends it across however
+               many fixed ticks that frame runs, so a live session
+               never saw input change mid-frame either -- this is not
+               an approximation of what -record captures, it is
+               exactly it. -play replaces the real (here, absent --
+               headless has no hardware mouse/keyboard) input with the
+               recording, frame for frame, so a live-session crash
+               reproduces without a person driving it again.
+
+               Two earlier versions wrote to disk -- every frame, then
+               batched every REC_FLUSH frames -- and both were measured
+               live to change whether the crash reproduces at all: file
+               I/O the original run never spent, perturbing the very
+               timing this bug depends on. No disk I/O during the run
+               at all now: one far-allocated buffer, one write into it
+               a frame, nothing else. Its far pointer and REC_MAX are
+               logged once via mark() (see below), so a crash -- which
+               never reaches the code that would flush it -- still
+               leaves every frame recorded exactly where the log says
+               to find it: read straight out of guest memory with the
+               debugger (dosbox_mem_read), not the file. A clean exit
+               writes it to disk too, as a convenience for -play. */
+/* far, not huge: a single object must stay under 64K, so REC_MAX*34 (+2
+   for count) has to fit -- 1900*34+2 = 64,602 bytes is the room used. */
+#define REC_MAX 1900
+            typedef struct { short in[9]; float px, py, pz, yaw; } RecEntry;
+            typedef struct { short count; RecEntry e[REC_MAX]; } RecBuf;
+            RecBuf far *rec_buf = 0;
+            RecEntry rec;
+            FILE *rf = 0;
+            short play_drift = 0;   /* reported once, then stop checking */
+
+            if ( args.record_name[0] ) {
+                rec_buf = (RecBuf far *) farmalloc( sizeof(RecBuf) );
+                if ( !rec_buf ) sys_error( "out of far memory for -record buffer" );
+                rec_buf->count = 0;
+                {
+                    char mbuf[64];
+                    long raw = (long) (void far *) rec_buf;
+                    sprintf( mbuf, "rec_buf seg=%ld ofs=%ld max=%d",
+                             raw >> 16, raw & 0xFFFFL, REC_MAX );
+                    mark( mbuf );
+                }
+            } else if ( args.play_name[0] ) {
+                rf = fopen( args.play_name, "rb" );
+                if ( !rf ) sys_error( "could not open -play file" );
+            }
+
             frame = 0;
             while ( ( clock.bench_ticks == 0 || clock.ticks < clock.bench_ticks )
                     && !input.keyboard.esc ) {
                 frame_dt = sys_frame_time( &sysclk, &raw_dt );
+
+                if ( args.play_name[0] && rf ) {
+                    /* The input queue: one frame's real mouse and key
+                       state, fed in where the drivers would have put
+                       it. host_advance then derives the camera from it
+                       exactly as it did live -- same code path, no
+                       position override -- which is what makes this a
+                       test of the run rather than a re-enactment of
+                       its camera track. rec.px/py/pz ride along as the
+                       recorded ANSWER, checked against the replayed
+                       one below, so a divergence is reported rather
+                       than papered over. */
+                    if ( fread( &rec, sizeof(rec), 1, rf ) != 1 ) {
+                        input.keyboard.esc = -1;   /* recording ended: stop here, same as the live run did */
+                        continue;
+                    }
+                    input.mouse.x       = rec.in[0];
+                    input.mouse.y       = rec.in[1];
+                    input.mouse.left    = rec.in[2];
+                    input.mouse.right   = rec.in[3];
+                    input.keyboard.w      = rec.in[4];
+                    input.keyboard.a      = rec.in[5];
+                    input.keyboard.s      = rec.in[6];
+                    input.keyboard.d      = rec.in[7];
+                    input.keyboard.spcbar = rec.in[8];
+                } else if ( args.record_name[0] ) {
+                    /* NOT gated on rf: recording goes to the far buffer,
+                       and rf is deliberately 0 here. It used to read
+                       `&& rf`, which silently never ran -- every in[]
+                       came back zero and the first replays reproduced
+                       nothing, which read as "input does not describe
+                       the run" when it was only ever this. */
+                    rec.in[0] = (short) input.mouse.x;
+                    rec.in[1] = (short) input.mouse.y;
+                    rec.in[2] = (short) input.mouse.left;
+                    rec.in[3] = (short) input.mouse.right;
+                    rec.in[4] = (short) input.keyboard.w;
+                    rec.in[5] = (short) input.keyboard.a;
+                    rec.in[6] = (short) input.keyboard.s;
+                    rec.in[7] = (short) input.keyboard.d;
+                    rec.in[8] = (short) input.keyboard.spcbar;
+                }
 
                 if ( frame > 3 && raw_dt > 0.0f ) {
                     if ( ft_n == 0 ) { ft_min = raw_dt; ft_max = raw_dt; }
@@ -333,6 +490,52 @@ int main( void )
 
                 host_advance( &world, &player, &cam, &rdr, &input, hud, &ls, &sysclk,
                                &clock, &pt, frame_dt, v.scr_x_res, v.scr_y_res );
+
+                if ( args.play_name[0] && rf && !play_drift ) {
+                    /* The camera is NOT pinned: host_advance just
+                       derived it from the queued input, and this only
+                       checks that against where the live run actually
+                       was. First frame past a unit of drift is
+                       reported once and then left alone -- a replay
+                       that has diverged is still worth watching, but
+                       it is no longer the same run and must not be
+                       quoted as one. */
+                    float dx = cam.pos.x - rec.px;
+                    float dy = cam.pos.y - rec.py;
+                    float dz = cam.pos.z - rec.pz;
+                    if ( dx*dx + dy*dy + dz*dz > 1.0f ) {
+                        sprintf( buf, "play DIVERGED at frame %d: got %ld,%ld,%ld want %ld,%ld,%ld",
+                                 frame, (long) cam.pos.x, (long) cam.pos.y, (long) cam.pos.z,
+                                 (long) rec.px, (long) rec.py, (long) rec.pz );
+                        mark( buf );
+                        play_drift = 1;
+                    }
+                }
+
+                if ( args.record_name[0] ) {
+                    /* atan2(-dz, dx), mirrored the same as -yaw's own
+                       convention (view.c's freelook math), degrees to
+                       match the HUD's own display. */
+                    rec.px  = cam.pos.x;
+                    rec.py  = cam.pos.y;
+                    rec.pz  = cam.pos.z;
+                    rec.yaw = (float) ( atan2( -(double)(cam.look_at.z - cam.pos.z),
+                                                 (double)(cam.look_at.x - cam.pos.x) ) * 57.29578 );
+                    /* Only a new slot if position actually moved --
+                       a static spawn-camping stretch (measured: at
+                       least 1900 frames of it, standing still, before
+                       one crash) would otherwise burn the whole buffer
+                       on one point and lose everything closer to the
+                       actual fault. */
+                    if ( rec_buf->count < REC_MAX &&
+                         ( rec_buf->count == 0 ||
+                           rec_buf->e[rec_buf->count-1].px != rec.px ||
+                           rec_buf->e[rec_buf->count-1].py != rec.py ||
+                           rec_buf->e[rec_buf->count-1].pz != rec.pz ) ) {
+                        rec_buf->e[ rec_buf->count ] = rec;
+                        rec_buf->count++;
+                    }
+                }
 
                 uglClear( h_dst_dc, 0 );
                 host_render( &world, &rdr, &cam, &player, sc, &ls, hud, &pt, &sysclk,
@@ -372,6 +575,12 @@ int main( void )
                 tri_sum  += rdr.tris;
                 scr_count_frame( hud, &rdr, sc, frame_dt );
                 frame++;
+            }
+
+            if ( rf ) fclose( rf );
+            if ( rec_buf && rec_buf->count > 0 ) {   /* clean exit: dump the whole buffer once, for -play */
+                FILE *wf = fopen( args.record_name, "wb" );
+                if ( wf ) { fwrite( rec_buf->e, sizeof(RecEntry), rec_buf->count, wf ); fclose( wf ); }
             }
 
             sprintf( buf, "frames=%d polys=%ld tris=%ld pos=%ld,%ld,%ld",

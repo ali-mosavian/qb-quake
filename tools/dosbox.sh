@@ -272,7 +272,6 @@ viz)
         -e "s|@BAT@|qrender.exe $map $QFLAGS|" -e "s|@PRE@||" \
         -e "s|^cycles=75000$|cycles=${CYCLES:-75000}|" \
         -e "s|^core=dynamic$|core=${CORE:-dynamic}|" \
-        -e 's/^output=surface$/output=opengl/' \
         -e '/^\[sdl\]/a\
 fullscreen=false\
 autolock=true' \

@@ -101,6 +101,14 @@ void sys_parse_args( RunArgs *args )
             args->bench_ticks = atol( argv[i+1] );
             i++;
         }
+        else if ( stricmp( argv[i], "-record" ) == 0 && i + 1 < argc ) {
+            strncpy( args->record_name, argv[i+1], sizeof(args->record_name) - 1 );
+            i++;
+        }
+        else if ( stricmp( argv[i], "-play" ) == 0 && i + 1 < argc ) {
+            strncpy( args->play_name, argv[i+1], sizeof(args->play_name) - 1 );
+            i++;
+        }
         /* else: unrecognised, ignored -- matching the original, which
            has no "unknown flag" error either. */
     }

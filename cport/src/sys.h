@@ -49,6 +49,12 @@ typedef struct {
     short comp;                /* -comp */
     short use_lm;              /* -lm */
     short ptwire;              /* -ptwire */
+    char  record_name[64];     /* -record F: log real input to F, one
+                                   fixed-size record a frame */
+    char  play_name[64];       /* -play F: replace real input with F's
+                                   recorded frames, for a deterministic
+                                   repro of a live session -- ends the
+                                   run (sets esc) at F's last frame */
 } RunArgs;
 
 /*
