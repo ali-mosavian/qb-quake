@@ -290,8 +290,8 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
             /* Animation swaps which image is sampled; index
                arithmetic only, once per face. */
             if ( mipinf[tex_id].anim_count > 1 )
-                tex_id = (short)( mipinf[tex_id].anim_base
-                       + ( ifloor( dp->anim_time * 5.0f ) % mipinf[tex_id].anim_count ) );
+                tex_id = world->anim_tab[ mipinf[tex_id].anim_base
+                       + ( ifloor( dp->anim_time * 5.0f ) % mipinf[tex_id].anim_count ) ];
 
             if ( liquid ) {
                 for ( j = 0; j < vcnt; j++ ) {

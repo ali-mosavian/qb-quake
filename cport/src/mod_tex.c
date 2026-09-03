@@ -23,37 +23,89 @@ static void modtex_fatal( char *what )
 }
 /*
  * name: mod_link_anims
- * desc: Groups +0name, +1name ... into chains. A frame's name is '+'
- *       then a digit then the shared suffix, and the digit gives the
- *       order. Records, for every frame, where its chain starts and
- *       how long it is -- all d_draw_faces needs to pick a frame,
- *       given the chain is stored contiguously (an mkassets.py
- *       guarantee, not re-checked here, matching the original).
+ * desc: Groups +0name, +1name ... into chains. The digit gives the
+ *       frame order and the text after it names the chain.
+ *
+ *       Chains are NOT contiguous in the miptex lump and never were:
+ *       e1m1 has +0planet at 55 with +1..+3planet at 70..72, and
+ *       +0slip at 56 with +1..+6slip at 73..78. The first version of
+ *       this counted the frames, then stamped that many CONSECUTIVE
+ *       entries starting at the first one -- so "planet" claimed 55,
+ *       56, 57, 58, and drawing planet frame 1 fetched +0slip. On
+ *       screen: a wall cycling through three unrelated textures. It
+ *       survived because dm3ish has no +N textures at all, and the
+ *       comment here asserted a contiguity "guarantee" from
+ *       mkassets.py that mkassets.py does not make.
+ *
+ *       So the frame order is written down instead of assumed:
+ *       world->anim_tab holds each chain's texture indices back to
+ *       back, anim_base indexes INTO THAT, and anim_count is its
+ *       length. d_draw_faces reads anim_tab[base + frame % count].
+ *
+ *       +a..+j are Quake's alternate animation, switched by an entity
+ *       state this renderer has no notion of. They are skipped rather
+ *       than folded into the main chain, which is what made
+ *       +abasebtn a fourth "frame" of basebtn.
  */
 static void mod_link_anims( World *world, DiskMipTex far *t_mip_inf, long texture_count )
 {
-    long i, j, chain0, n;
+    long i, j, k;
+    short frame[10], nf, d, best, bi;
     char far *suffix;
+    short used = 0;
+
+    /* Counted first, then allocated to fit. e1m1 has 16 frames across
+       its chains against 81 textures, so sizing this to texture_count
+       would waste 130 bytes -- and on e1m1 the conventional heap is
+       tight enough that sc_init is already failing, which makes even
+       that worth not spending. No animated textures at all means no
+       table. */
+    {
+        long want = 0;
+        for ( i = 0; i < texture_count; i++ )
+            if ( t_mip_inf[i].name[0] == '+' &&
+                 t_mip_inf[i].name[1] >= '0' && t_mip_inf[i].name[1] <= '9' )
+                want++;
+        if ( want < 2 ) return;
+        world->anim_tab = (short far *) memAlloc( want * (long) sizeof(short) );
+        if ( !world->anim_tab ) modtex_fatal( "out of memory for the animation table" );
+    }
 
     for ( i = 0; i < texture_count; i++ ) {
         if ( t_mip_inf[i].name[0] != '+' ) continue;
         if ( world->miptex[i].anim_count > 1 ) continue;   /* already claimed */
+        if ( t_mip_inf[i].name[1] < '0' || t_mip_inf[i].name[1] > '9' ) continue;
 
-        suffix = t_mip_inf[i].name + 2;   /* skip '+' and the digit */
-        chain0 = i;
-        n = 0;
+        suffix = t_mip_inf[i].name + 2;
+        nf = 0;
 
-        for ( j = i; j < texture_count; j++ ) {
-            if ( t_mip_inf[j].name[0] == '+' && _fstrncmp( t_mip_inf[j].name + 2, suffix, 14 ) == 0 )
-                n++;
+        for ( j = i; j < texture_count && nf < 10; j++ ) {
+            if ( t_mip_inf[j].name[0] != '+' ) continue;
+            if ( t_mip_inf[j].name[1] < '0' || t_mip_inf[j].name[1] > '9' ) continue;
+            if ( _fstrncmp( t_mip_inf[j].name + 2, suffix, 14 ) != 0 ) continue;
+            frame[nf++] = (short) j;
         }
 
-        if ( n > 1 ) {
-            for ( j = chain0; j < chain0 + n; j++ ) {
-                world->miptex[j].anim_base  = (short) chain0;
-                world->miptex[j].anim_count = (short) n;
+        if ( nf < 2 ) continue;
+
+        /* By the digit, not by lump order: nothing says +1 is stored
+           after +0, and on e1m1 several chains are interleaved. */
+        for ( k = 0; k < nf - 1; k++ ) {
+            bi = (short) k;
+            best = (short)( t_mip_inf[ frame[k] ].name[1] );
+            for ( j = k + 1; j < nf; j++ ) {
+                d = (short)( t_mip_inf[ frame[j] ].name[1] );
+                if ( d < best ) { best = d; bi = (short) j; }
             }
+            if ( bi != k ) { d = frame[k]; frame[k] = frame[bi]; frame[bi] = d; }
         }
+
+        for ( k = 0; k < nf; k++ ) {
+            world->anim_tab[ used + k ] = frame[k];
+            world->miptex[ frame[k] ].anim_base  = used;
+            world->miptex[ frame[k] ].anim_count = nf;
+        }
+        used = (short)( used + nf );
     }
 }
 

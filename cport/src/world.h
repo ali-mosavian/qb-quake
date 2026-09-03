@@ -55,6 +55,11 @@ typedef struct {
     Face        far *faces;
     TexInfo     far *texinfo;    /* indexed by faces[f].tex_info_id */
     MipTex      far *miptex;     /* indexed by texinfo[t].mip_tex */
+    short       far *anim_tab;   /* every animation chain's texture ids,
+                                     back to back; MipTex.anim_base is an
+                                     offset into THIS, not a texture id --
+                                     chains are not contiguous in the
+                                     miptex lump (see mod_link_anims) */
 
     short       far *pt_idx;     /* portal adjacency, mkportals.py's own
                                      output: one entry per leaf plus one

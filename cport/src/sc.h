@@ -11,7 +11,7 @@
  * SurfCache is heap-sized, not stack/DGROUP-sized -- its five block
  * tables alone are 10 KB (SC_NBLK entries x 5 arrays x 2 bytes), and
  * medium model's DGROUP is 64 KB shared with the stack and every other
- * near global. Its owner allocates it with farmalloc (<alloc.h>, the
+ * near global. Its owner allocates it with memAlloc (mgl's dos.h, the
  * standard far heap, not a MEM/EMS uGL store -- this is bookkeeping,
  * not surface bytes) and every function here takes SurfCache far*,
  * not SurfCache* -- the one struct in cport/ that has to be far,

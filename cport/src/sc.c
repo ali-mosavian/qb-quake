@@ -27,7 +27,9 @@
 #include <alloc.h>
 #include <stddef.h>
 
+#include <string.h>
 #include "sc.h"
+#include "dos.h"       /* memAlloc/memFree -- mgl's, not Borland's */
 #include "uglpatch.h"
 #include "ems.h"
 
@@ -251,12 +253,12 @@ short sc_init( SurfCache far *sc, short face_count )
     sc->tbuilds = 0;
     sc->dlit    = 0;
 
-    sc->slot = (CacheSlot far *) farmalloc( (unsigned long) face_count * sizeof(CacheSlot) );
-    sc->bgrn  = (short far *) farmalloc( (unsigned long) SC_NBLK * sizeof(short) );
-    sc->bord  = (short far *) farmalloc( (unsigned long) SC_NBLK * sizeof(short) );
-    sc->bown  = (short far *) farmalloc( (unsigned long) SC_NBLK * sizeof(short) );
-    sc->bprev = (short far *) farmalloc( (unsigned long) SC_NBLK * sizeof(short) );
-    sc->bnext = (short far *) farmalloc( (unsigned long) SC_NBLK * sizeof(short) );
+    sc->slot = (CacheSlot far *) memAlloc( (long) face_count * (long) sizeof(CacheSlot) );
+    sc->bgrn  = (short far *) memAlloc( (long) SC_NBLK * (long) sizeof(short) );
+    sc->bord  = (short far *) memAlloc( (long) SC_NBLK * (long) sizeof(short) );
+    sc->bown  = (short far *) memAlloc( (long) SC_NBLK * (long) sizeof(short) );
+    sc->bprev = (short far *) memAlloc( (long) SC_NBLK * (long) sizeof(short) );
+    sc->bnext = (short far *) memAlloc( (long) SC_NBLK * (long) sizeof(short) );
     if ( !sc->slot || !sc->bgrn || !sc->bord || !sc->bown || !sc->bprev || !sc->bnext ) {
         sc->ok = 0;
         return 0;
@@ -547,6 +549,9 @@ short sc_held( SurfCache far *sc, short face )
 
 void sc_stats( SurfCache far *sc, CacheStats *s )
 {
+    /* Same reasoning as sc_ready: the overlay draws on a run whose cache
+       never allocated, and zeroes are the honest reading there. */
+    if ( !sc ) { memset( s, 0, sizeof(*s) ); return; }
     s->hits    = sc->hits;
     s->builds  = sc->builds;
     s->bpeak   = sc->bpeak;
@@ -570,6 +575,12 @@ short sc_frame_end( SurfCache far *sc )
 
 short sc_ready( SurfCache far *sc )
 {
+    /* NULL is a real caller state, not a contract violation: main marks
+       "sc_init FAILED" and carries on so a map too big for the cache
+       still draws, just unlit. It used to dereference straight through
+       and take the program with it -- on e1m1, only once an unrelated
+       memory change let the run get this far. */
+    if ( !sc ) return 0;
     return sc->ok;
 }
 
@@ -753,7 +764,7 @@ short sc_selftest( void )
     short face_count = 10;
     short result;
 
-    sc = (SurfCache far *) farmalloc( sizeof(SurfCache) );
+    sc = (SurfCache far *) memAlloc( (long) sizeof(SurfCache) );
     if ( !sc ) return -1;
 
     if ( !sc_init( sc, face_count ) ) {

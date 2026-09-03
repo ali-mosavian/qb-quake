@@ -5,11 +5,11 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <alloc.h>   /* farmalloc */
 #include <mem.h>     /* _fmemset */
 
 #include "loadscr.h"
 #include "screen.h"   /* draw_string */
+#include "dos.h"       /* memAlloc/memFree -- mgl's, not Borland's */
 #include "uglpatch.h"
 
 /* screen.bas's own names, same offsets into the ramps above. */
@@ -45,7 +45,7 @@ static short pan_x, pan_y;   /* set by ld_begin, read by the drawing below */
  */
 static void ld_palette( void )
 {
-    RGB far *pal = (RGB far *) farmalloc( 256L * sizeof(RGB) );
+    RGB far *pal = (RGB far *) memAlloc( 256L * (long) sizeof(RGB) );
     short i;
     float f;
 
@@ -78,7 +78,7 @@ static void ld_palette( void )
     }
 
     uglPalSet( 0, 256, pal );
-    farfree( pal );
+    memFree( (void far *) pal );
 }
 
 /* A pressed-metal edge: light on top and left, dark on bottom and

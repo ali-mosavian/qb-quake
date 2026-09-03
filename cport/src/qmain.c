@@ -16,9 +16,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>   /* atan2 -- -record's diagnostic yaw */
-#include <alloc.h>  /* farmalloc */
 #include <mem.h>    /* _fmemset */
-#include "dos.h"    /* memFree */
+#include "dos.h"    /* memAlloc/memFree -- mgl's, so every allocation is on one accountable path */
 #include "uglpatch.h"
 #include "video.h"
 #include "d_poly.h"
@@ -224,7 +223,7 @@ int main( void )
            holds the stack too, so a large-enough local overruns
            whatever the compiler happened to place next to it, not a
            guard page. */
-        hud = (Hud far *) farmalloc( sizeof(Hud) );
+        hud = (Hud far *) memAlloc( (long) sizeof(Hud) );
         if ( !hud ) sys_error( "out of far memory for Hud" );
         _fmemset( hud, 0, sizeof(*hud) );
 
@@ -283,7 +282,7 @@ int main( void )
         ld_step( &ldr, v.h_video_dc, hud );
 
         ld_stage( &ldr, v.h_video_dc, hud, "surface cache" );
-        sc = (SurfCache far *) farmalloc( sizeof(SurfCache) );
+        sc = (SurfCache far *) memAlloc( (long) sizeof(SurfCache) );
         if ( !sc || !sc_init( sc, world.face_count ) ) {
             mark( "sc_init FAILED" );
         } else {
@@ -445,7 +444,7 @@ int main( void )
             short play_drift = 0;   /* reported once, then stop checking */
 
             if ( args.record_name[0] ) {
-                rec_buf = (RecBuf far *) farmalloc( sizeof(RecBuf) );
+                rec_buf = (RecBuf far *) memAlloc( (long) sizeof(RecBuf) );
                 if ( !rec_buf ) sys_error( "out of far memory for -record buffer" );
                 rec_buf->count = 0;
                 {
