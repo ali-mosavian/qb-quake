@@ -34,6 +34,7 @@
 #include "screen.h"
 #include "config.h"
 #include "sys.h"
+#include "loadscr.h"
 
 /* Step log: opened and closed per mark so it survives a fault that
    never returns -- the technique this project records for exactly
@@ -201,6 +202,7 @@ int main( void )
         u3dMtrx    mtx_prj;
         u3dVector3f cam_up;
         PDC        z_dc, h_dst_dc;
+        LoadScreen ldr;
         char       buf[96];
         short      frame;
 
@@ -226,7 +228,21 @@ int main( void )
         if ( !hud ) sys_error( "out of far memory for Hud" );
         _fmemset( hud, 0, sizeof(*hud) );
 
+        /* The font comes up here, before any map data: base.dat is not
+           the map's, so nothing below it is needed to read the glyphs,
+           and the loading screen wants them. It used to sit after the
+           textures, which is the only reason it was ever "too late" to
+           label a load. */
+        font_load( &hud->font, "base.dat::font/4x6.fnt" );
+        mark( "font_load ok" );
+
+        /* Six ld_step calls follow -- keep this in step with them, or
+           the bar simply stops short of (or runs past) the end. */
+        ld_begin( &ldr, v.h_video_dc, hud, 6, v.scr_x_res, v.scr_y_res );
+
+        ld_stage( &ldr, v.h_video_dc, hud, "loading map" );
         mapf = mod_load_world( &world, &rdr, &cam, args.map_name, &counts );
+        ld_step( &ldr, v.h_video_dc, hud );
 
         sprintf( buf, "mod_load_world ok faces=%d leaves=%d models=%d tele=%d plat=%d",
                  world.face_count, world.leaf_count, world.model_count,
@@ -240,46 +256,59 @@ int main( void )
         /* mod_tex.c's own proof: textures, still on the same open file,
            matching main.bas's real order (mod_open, mod_load_world,
            mod_load_texinfo/mod_load_textures, THEN mod_close). */
+        ld_stage( &ldr, v.h_video_dc, hud, "loading textures" );
         tex_pal = mod_load_textures( &world, mapf, &counts );
         mod_close( mapf );
+        ld_step( &ldr, v.h_video_dc, hud );
 
         sprintf( buf, "mod_load_textures ok textures=%ld pal=%ld tex_raw=%ld tex_shaded=%ld",
                  counts.textures, (long) (void far *) tex_pal,
                  (long) world.tex_raw, (long) world.tex_shaded );
         mark( buf );
 
-        /* The real game palette, installed now rather than at v_init
-           (which ran before any map data existed to supply one). */
-        if ( tex_pal ) {
-            uglPalSet( 0, 256, (RGB far *) tex_pal );
-            memFree( (void far *) tex_pal );
-        }
-
-        /* scr_hud_colors best-fits the overlay's own colours against
-           whatever palette is live -- has to run AFTER the real one
-           is installed, or every hc_* index would be chosen against
-           whatever uGL's own default happened to be. */
-        scr_hud_colors( hud );
-        mark( "scr_hud_colors ok" );
-
-        font_load( &hud->font, "base.dat::font/4x6.fnt" );
-        mark( "font_load ok" );
+        /* The map's palette is NOT installed here, though this is where
+           the data for it arrives: installing it would repaint the
+           loading screen's own ramps out from under it mid-load. It
+           goes in below, once there is nothing left to show. Nothing
+           between here and there reads the palette -- the surface
+           builder shades through the colormap, not it -- except
+           scr_hud_colors, which moves down with it. */
 
         /* mod_load_colormap is main()'s own call, not mod_load_world's
            -- see mod.h's own note on why (a contiguous 16K EMS page,
            wanted before other map data has used up the room). */
+        ld_stage( &ldr, v.h_video_dc, hud, "loading colormap" );
         mod_load_colormap( &world );
         mark( "mod_load_colormap ok" );
+        ld_step( &ldr, v.h_video_dc, hud );
 
+        ld_stage( &ldr, v.h_video_dc, hud, "surface cache" );
         sc = (SurfCache far *) farmalloc( sizeof(SurfCache) );
         if ( !sc || !sc_init( sc, world.face_count ) ) {
             mark( "sc_init FAILED" );
         } else {
             mark( "sc_init ok" );
         }
-        ls_init( &ls );
+        ld_step( &ldr, v.h_video_dc, hud );
 
+        ld_stage( &ldr, v.h_video_dc, hud, "light styles" );
+        ls_init( &ls );
+        ld_step( &ldr, v.h_video_dc, hud );
+
+        ld_stage( &ldr, v.h_video_dc, hud, "input" );
         in_init( &input, v.h_video_dc );
+        ld_step( &ldr, v.h_video_dc, hud );
+
+        /* Loading is over, so the map's own palette can go in without
+           repainting the screen it would have wrecked. scr_hud_colors
+           best-fits the overlay's colours against whatever palette is
+           live, so it has to follow this, not precede it. */
+        if ( tex_pal ) {
+            uglPalSet( 0, 256, (RGB far *) tex_pal );
+            memFree( (void far *) tex_pal );
+        }
+        scr_hud_colors( hud );
+        mark( "scr_hud_colors ok" );
 
         /* -at X Y Z: BSP-space (Z-up), used AS-IS -- the same space
            pl.pos already lives in, matching pl_init's own ELSE branch

@@ -9,12 +9,13 @@
 
 /*
  * screen.h -- the overlay. C port of a slice of screen.bas: the
- * bitmap font, the stats panels, the screenshot writer. NOT ported --
- * a deliberate scope cut, not an oversight -- the loading-screen
- * chrome (bg_band/draw_logo/rivet/bevel/draw_spinner/scr_load_start/
- * draw_bar/scr_load_chrome/draw_pct): cport/ has no loading screen,
- * loads happen before any video mode exists to show one on, and
- * nothing here needs it. Also not ported: the VU meters (hud_vu,
+ * bitmap font, the stats panels, the screenshot writer. The loading
+ * screen is loadscr.h's, not this file's. Note this header used to
+ * claim it had been cut because "loads happen before any video mode
+ * exists to show one on" -- that was simply wrong. v_init opens the
+ * mode long before mod_load_world runs, so the whole map load spent
+ * its time painting nothing to a live screen. Not ported: the VU
+ * meters (hud_vu,
  * sndMasterGetVU) -- sound is dropped project-wide, see this
  * project's own notes on why.
  */
