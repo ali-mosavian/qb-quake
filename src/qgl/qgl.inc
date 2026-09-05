@@ -135,6 +135,38 @@ QGL_M_TEX       equ     2 * QGL_Z_SPAN
 QGL_M_PTEX      equ     3 * QGL_Z_SPAN
 
 ;;
+;; A vertex, in screen space, floats. ONE layout, which is the whole
+;; reason qgl's clipper is a procedure where mgl's is four hundred lines
+;; of macro: mgl has seven vertex structures (f2d, g2d, gp2d, t2d, tp2d,
+;; tg2d, tpg2d) and generates a clipper for each. We have colour and a
+;; texture and nothing else, so there is nothing to generate.
+;;
+;; z is 1/z, not z. It is linear in screen space where u and v are not,
+;; which is what lets a clipped vertex's depth be an ordinary lerp along
+;; the edge and lets the affine mapper carry depth at all.
+;;
+QVert           struc
+vx              real4   ?
+vy              real4   ?
+vz              real4   ?               ;; 1/z
+vu              real4   ?
+vv              real4   ?
+QVert           ends
+
+;; The ceiling is the CALLER's, plus what clipping can add. d_faces.c
+;; builds up to MAXV = GEOM_MAXVTX + 8 = 41 vertices, and each of the
+;; four boundaries can add at most one, so 45.
+;;
+;; mgl's is SH_MAXV equ 12 against a uglPolyTP that accepts 32, with
+;; SH_vbuff sized MAXV+1 while intersections from all four passes
+;; accumulate into it without reset -- an overrun waiting on a polygon
+;; nobody had drawn yet. Sized from the caller here, and the buffers hold
+;; whole vertices rather than pointers into a shared scratch, so there is
+;; no second array to size wrongly.
+QGL_MAXV        equ     41
+QGL_CLIPV       equ     QGL_MAXV + 4
+
+;;
 ;; A loaded font: header and payload in ONE block, with the payload
 ;; addressed by OFFSET from the header rather than by pointer. Two bytes
 ;; instead of four, and it survives the block being moved.
