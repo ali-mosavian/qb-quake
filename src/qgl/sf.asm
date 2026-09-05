@@ -36,6 +36,7 @@ EMS_PAGE_MASK   equ     3FFFh
 EMS_PAGE_SHIFT  equ     14
 
 qgl_mem_alloc   proto   far pascal :dword
+qgl_sf_new_ex   proto   far pascal :word, :word, :word, :word, :word
 qgl_mem_free    proto   far pascal :dword
 
 qgl_gem_init        proto   far pascal
@@ -60,16 +61,37 @@ qgl_sf_init     endp
 
 
 ;;::::::::::::::
-;; qgl_sf_new ( w:word, h:word, where:word ) -> far ptr, or 0:0
+;; qgl_sf_new ( w:word, h:word, where:word, slot:word ) -> far ptr, or 0:0
+;;
+;; The common case: one byte a pixel, so the stride is the width.
 ;;::::::::::::::
-qgl_sf_new      proc    public uses bx cx si di es,\
+qgl_sf_new      proc    public uses bx,\
                         wid:word, hgt:word, whr:word, slot:word
+
+                invoke  qgl_sf_new_ex, wid, hgt, wid, whr, slot
+                ret
+qgl_sf_new      endp
+
+
+;;::::::::::::::
+;; qgl_sf_new_ex ( w:word, h:word, stride:word, where:word, slot:word )
+;;
+;; A stride wider than the row is what a depth buffer needs -- two bytes
+;; a pixel -- and what padding an EMS row up to a power of two needs. The
+;; width stays in PIXELS either way: x_res is what every clip and every
+;; pget indexes against, and a surface that lies about it makes each of
+;; those wrong by exactly the factor it lied by.
+;;::::::::::::::
+qgl_sf_new_ex   proc    public uses bx cx si di es,\
+                        wid:word, hgt:word, strd:word, whr:word, slot:word
 
                 local   nbytes:dword
                 local   hdr:dword
                 local   bps:word
 
-                mov     ax, wid
+                mov     ax, strd
+                cmp     ax, wid
+                jb      @@refuse                ;; a row that does not fit
                 mov     bps, ax
 
                 ;; row bytes * rows, as a dword: an atlas is past 64K
@@ -159,10 +181,11 @@ qgl_sf_new      proc    public uses bx cx si di es,\
                 ret
 
 @@fail_free:    invoke  qgl_mem_free, hdr
+@@refuse:
 @@fail:         xor     ax, ax
                 xor     dx, dx
                 ret
-qgl_sf_new      endp
+qgl_sf_new_ex   endp
 
 
 ;;::::::::::::::

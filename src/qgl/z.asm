@@ -8,12 +8,12 @@
 ;;       assumes it (main.bas: 65535 * z_near puts the near plane at the
 ;;       top of the range).
 ;;
-;;       A depth buffer is an ordinary Surface with two bytes a pixel, so
-;;       ITS x_res AND stride ARE IN BYTES, not pixels. The alternative --
-;;       a bytes-per-pixel field on Surface -- would put a multiply in
-;;       qgl$row for every colour surface in the program to serve the one
-;;       that is not 8bpp. qgl$zw keeps the pixel width for the routines
-;;       that need it.
+;;       A depth buffer is an ordinary Surface with two bytes a pixel:
+;;       x_res stays in PIXELS and the doubling lives in stride, which is
+;;       what stride is for. Putting bytes in x_res instead was tried on
+;;       paper and is wrong by exactly a factor of two in every clip and
+;;       every pget -- those index against x_res, and none of them would
+;;       have known this one surface meant something else by it.
 ;;
 ;; obs.: - qgl_sf_new demands a power-of-two stride for an EMS surface, so
 ;;         that a row cannot straddle a 16K page. 160 pixels of depth is
@@ -30,7 +30,7 @@
 
                 include qgl.inc
 
-qgl_sf_new      proto   far pascal :word, :word, :word, :word
+qgl_sf_new_ex   proto   far pascal :word, :word, :word, :word, :word
 qgl_sf_free     proto   far pascal :dword
 qgl_sf_row      proto   far pascal :dword, :word
 
@@ -41,7 +41,7 @@ qgl_sf_row      proto   far pascal :dword, :word
                 public  qgl$zline, qgl$zacc, qgl$zdzdx, qgl$zseg, qgl$zw
 
 qgl$zsf         dd      0               ;; far ptr Surface, 0 = no depth
-qgl$zw          dw      0               ;; PIXELS, not bytes
+qgl$zw          dw      0               ;; pixels; the row is twice this
 qgl$zh          dw      0
 qgl$zmode       dw      QGL_Z_OFF
 qgl$zscale      dd      0               ;; 1/z -> 16.16, set by the caller
@@ -87,6 +87,7 @@ qgl_z_new       proc    public uses bx cx si di es,\
 
                 local   bytes:word
                 local   rows:word
+                local   wide:word
 
                 les     bx, dst
                 mov     ax, es
@@ -96,6 +97,7 @@ qgl_z_new       proc    public uses bx cx si di es,\
                 mov     ax, es:[bx].Surface.x_res
                 test    ax, ax
                 jz      @@fail
+                mov     wide, ax
                 shl     ax, 1                   ;; two bytes a pixel
                 jc      @@fail                  ;; a row past 64K is not ours
                 mov     bytes, ax
@@ -104,6 +106,12 @@ qgl_z_new       proc    public uses bx cx si di es,\
                 jz      @@fail
                 mov     rows, ax
 
+                ;; EMS wants a power-of-two stride so a row cannot
+                ;; straddle a 16K page: 160 pixels of depth is 320 bytes,
+                ;; which is not one, so pad to 512. The padding is dead
+                ;; space in a store that has megabytes of it, and it costs
+                ;; nothing per pixel -- the scanner addresses depth off
+                ;; the row pointer, never off the width.
                 cmp     kind, SURF_EMS
                 jne     @F
                 mov     ax, bytes
@@ -111,7 +119,7 @@ qgl_z_new       proc    public uses bx cx si di es,\
                 test    ax, ax
                 jz      @@fail
                 mov     bytes, ax
-@@:             invoke  qgl_sf_new, bytes, rows, kind, slot
+@@:             invoke  qgl_sf_new_ex, wide, rows, bytes, kind, slot
                 ret
 
 @@fail:         xor     ax, ax
@@ -121,12 +129,24 @@ qgl_z_new       endp
 
 
 ;;::::::::::::::
-;; qgl_z_set ( s:far ptr Surface )
+;; qgl_z_set ( s:far ptr Surface ) -> ax nonzero if it took
 ;;
-;; Installs, or uninstalls when handed 0:0. The pixel width is derived
-;; here once rather than shifted in every filler setup.
+;; Installs, or uninstalls when handed 0:0.
+;;
+;; THE FILLERS REACH THIS STATE THROUGH fs, NOT ss, and that is a
+;; deliberate divergence from mgl. mgl reads ss:ul$zacc because ds is the
+;; texture and es the destination, leaving ss: as the only segment it had
+;; spare to say DGROUP with -- which silently assumes SS == DGROUP. It is
+;; not a safe assumption here: the qgl test harness links with SS 094Bh
+;; against a DGROUP of 006Ch, measured, and this repo already has
+;; coroutine stacks that are not DGROUP either. A depth write from one
+;; would land in the stack with nothing to notice.
+;;
+;; fs is untouched by every filler in 8plxtz.asm, so the scanner loads it
+;; with DGROUP once per polygon and the prefix costs the same one byte
+;; ss: would have. No assumption, no check, no per-pixel cost.
 ;;::::::::::::::
-qgl_z_set       proc    public uses ax bx es,\
+qgl_z_set       proc    public uses bx es,\
                         s:dword
 
                 mov     ax, word ptr s
@@ -140,15 +160,16 @@ qgl_z_set       proc    public uses ax bx es,\
                 jz      @@none
 
                 mov     ax, es:[bx].Surface.x_res
-                shr     ax, 1                   ;; bytes -> pixels
                 mov     qgl$zw, ax
                 mov     ax, es:[bx].Surface.y_res
                 mov     qgl$zh, ax
+                mov     ax, 1
                 ret
 
 @@none:         mov     qgl$zw, 0
                 mov     qgl$zh, 0
                 mov     qgl$zmode, QGL_Z_OFF    ;; no buffer, no mode
+                mov     ax, 1                   ;; uninstalling always works
                 ret
 qgl_z_set       endp
 

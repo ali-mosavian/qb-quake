@@ -15,7 +15,10 @@ B      ?= $(ROOT)/build/qgl-test
 JWASM  := $(TC)/jwasm -c -Cp -Zg -omf -I$(QGL) -I.
 JWLINK := $(TC)/jwlink
 
-TESTS  := t01base t02mem t03surf t04txt t05file t06adopt
+# Derived, not listed: a hand-written list is a test that silently stops
+# running the day someone forgets to add it, and the suite still says
+# PASS. tfw.asm is the framework, not a test, so it is excluded by name.
+TESTS  := $(filter-out tfw,$(basename $(wildcard t*.asm)))
 
 # The layer under test. Every test links all of it -- these are small and
 # a per-test object list would drift from reality the first time a module
