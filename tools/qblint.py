@@ -20,6 +20,12 @@ def check(path):
     if lone:
         bad.append(f"{lone} bare LF newlines (BC needs CRLF)")
 
+    # BASIC-only from here. An .asm file has no SUB/FUNCTION, but it does
+    # have the x86 SUB instruction, which this would otherwise count as an
+    # unclosed procedure the first time anyone writes one.
+    if not (path.endswith('.bas') or path.endswith('.bi')):
+        return bad
+
     depth = 0
     for i, line in enumerate(text.replace('\r\n', '\n').split('\n'), 1):
         code = line.split("''")[0]
@@ -44,10 +50,10 @@ if __name__ == '__main__':
     # The subsystem directories the Makefile builds, and the headers.
     # NOT a recursive walk: src/test holds standalone mgl programs that
     # are not part of this build and never carried OPTION EXPLICIT.
-    dirs = ['host', 'render', 'game', 'qgl']
-    files = sorted([f for d in dirs
-                      for f in glob.glob(os.path.join(root, d, '*.bas'))] +
-                   [f for d in dirs for f in glob.glob(os.path.join(root, d, '*.bi'))])
+    dirs = ['host', 'render', 'game', 'qgl', 'qgl/test']
+    pats = ['*.bas', '*.bi', '*.asm', '*.inc']
+    files = sorted(f for d in dirs for pat in pats
+                     for f in glob.glob(os.path.join(root, d, pat)))
     fail = 0
     for f in files:
         for msg in check(f):
