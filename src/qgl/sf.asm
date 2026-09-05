@@ -170,7 +170,7 @@ qgl_sf_free     proc    public uses bx cx es,\
                 les     bx, s
                 mov     ax, es
                 or      ax, bx
-                jz      @@done
+                jz      @F
 
                 cmp     es:[bx].Surface.kind, SURF_EMS
                 jne     @@justfree
@@ -178,7 +178,7 @@ qgl_sf_free     proc    public uses bx cx es,\
                 invoke  qgl_gem_free, es:[bx].Surface.handle
 
 @@justfree:     invoke  memFree, s
-@@done:         ret
+@@:             ret
 qgl_sf_free     endp
 
 

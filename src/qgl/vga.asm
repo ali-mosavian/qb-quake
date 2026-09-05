@@ -106,11 +106,11 @@ qgl_vga_palette proc    public uses si ds,\
                 inc     dx                      ;; DAC_DATA
 
                 mov     cx, 768
-@@next:         lodsb
+@@:             lodsb
                 shr     al, 1
                 shr     al, 1                   ;; 8-bit -> the DAC's 6
                 out     dx, al
-                loop    @@next
+                loop    @B
 
                 ret
 qgl_vga_palette endp

@@ -135,10 +135,10 @@ qgl_gem_free    proc    public uses dx,\
 
                 mov     dx, hnd
                 test    dx, dx
-                jz      @@done
+                jz      @F
                 mov     ah, 45h
                 int     EMS_INT
-@@done:         ret
+@@:             ret
 qgl_gem_free    endp
 
 
@@ -158,7 +158,7 @@ qgl_gem_map     proc    public uses bx cx dx,\
                 mov     ah, 44h                 ;; al = physical page
                 int     EMS_INT
                 test    ah, ah
-                jnz     @@fail
+                jnz     @F
 
                 ;; frame + slot*400h -- 16K in paragraphs
                 mov     ax, slot
@@ -167,7 +167,7 @@ qgl_gem_map     proc    public uses bx cx dx,\
                 add     ax, [qgl$pgframe]
                 ret
 
-@@fail:         xor     ax, ax
+@@:             xor     ax, ax
                 ret
 qgl_gem_map     endp
 
