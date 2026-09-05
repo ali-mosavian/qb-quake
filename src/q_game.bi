@@ -25,6 +25,7 @@ type Game
     mymod       as UGMMOD         '' the music module
     tele_count  as integer        '' entities: filled by ent_load_teleports
     plat_count  as integer
+    mdl         as MdlState       '' one alias model, drawn as real geometry
 end type
 
 ''
@@ -53,3 +54,20 @@ declare sub scr_screenshot ( _
     byval dc as long _
 )
 declare sub mod_tex_dump ( g as Game )
+
+declare sub mdl_load ( _
+    g as Game, _
+    mdlname as string, _
+    tri() as MdlTri _
+)
+declare sub mdl_draw ( _
+    g as Game, _
+    tri() as MdlTri, _
+    org as Vec3, _
+    byval yaw as single, _
+    mtx_fin as u3dMtrx, _
+    byval xresh as single, _
+    byval yresh as single, _
+    byval z_near as single, _
+    byval dst as long _
+)

@@ -35,6 +35,7 @@ option explicit
 '$include: 'q_pl.bi'
 '$include: 'q_ent.bi'
 '$include: 'q_snd.bi'
+'$include: 'q_mdl.bi'
 '$include: 'q_game.bi'
 
 ''
