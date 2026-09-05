@@ -238,8 +238,7 @@ end sub
 sub mdl_draw ( _
     g as Game, _
     tri() as MdlTri, _
-    org as Vec3, _
-    byval yaw as single, _
+    ent as MdlEnt, _
     mtx_fin as u3dMtrx, _
     byval xresh as single, _
     byval yresh as single, _
@@ -257,26 +256,26 @@ sub mdl_draw ( _
 
     if ( g.mdl.loaded = 0 ) then exit sub
 
-    '' g.mdl.anim_frame is mdl_think's own state (pl_move.bas), 0..7
-    '' within whichever cycle g.mdl.state selects -- the SAME tick that
+    '' ent.anim_frame is mdl_think's own state (pl_move.bas), 0..7
+    '' within whichever cycle ent.state selects -- the SAME tick that
     '' picks the monster's movement distance also picks its displayed
     '' frame, matching soldier.qc's state-machine frames exactly rather
     '' than a fixed 10Hz-of-wall-clock guess. Stand frames then run
     '' frames, contiguous in the one EMS-page vertex block (mkmdl.py's
     '' own order): frame 8 is run1.
-    if ( g.mdl.state = MDL_ST_STAND% ) then
-        frame = g.mdl.anim_frame
+    if ( ent.state = MDL_ST_STAND% ) then
+        frame = ent.anim_frame
     else
-        frame = MDL_STAND_FRAMES% + g.mdl.anim_frame
+        frame = MDL_STAND_FRAMES% + ent.anim_frame
     end if
-    mdl_rotate_all g, frame, yaw, mdl_wxr(), mdl_wyr(), mdl_wzr()
+    mdl_rotate_all g, frame, ent.yaw, mdl_wxr(), mdl_wyr(), mdl_wzr()
 
     for v = 0 to g.mdl.nvert - 1
         '' BSP space (Z up), model-local rotation already applied, now
         '' translated to the world position --
-        wx = org.x + mdl_wxr( v )
-        wy = org.y + mdl_wyr( v )
-        wz = org.z + mdl_wzr( v )
+        wx = ent.pos.x + mdl_wxr( v )
+        wy = ent.pos.y + mdl_wyr( v )
+        wz = ent.pos.z + mdl_wzr( v )
 
         '' -- then swapped to renderer space (Y up) the same way
         '' d_faces.c reads a raw BSP vertex: x unchanged, z becomes y.

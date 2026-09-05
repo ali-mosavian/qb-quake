@@ -169,12 +169,15 @@ declare sub pl_load_hulls ( _
 )
 declare sub mdl_think ( _
     g as Game, _
+    ent as MdlEnt, _
+    byval can_chase as integer, _
     models() as Submodel, _
     brush() as BrushModel, _
     planes() as Plane _
 )
 declare sub mdl_spawn ( _
     g as Game, _
+    ent as MdlEnt, _
     org as Vec3, _
     models() as Submodel, _
     brush() as BrushModel, _
@@ -189,9 +192,11 @@ declare function pl_hull_rec ( ) as integer
 declare function mdl_anglemod ( byval v as single ) as single
 declare function mdl_atan2 ( byval y as single, byval x as single ) as single
 declare function mdl_vectoyaw ( byval dx as single, byval dy as single ) as single
-declare sub mdl_change_yaw ( g as Game )
+declare sub mdl_change_yaw ( ent as MdlEnt )
+declare sub mdl_pick_goal ( ent as MdlEnt )
 declare function mdl_movestep ( _
     g as Game, _
+    ent as MdlEnt, _
     byval dx as single, _
     byval dy as single, _
     byval model_count as integer, _
@@ -201,6 +206,7 @@ declare function mdl_movestep ( _
 ) as integer
 declare function mdl_step_dir ( _
     g as Game, _
+    ent as MdlEnt, _
     byval yaw as single, _
     byval dist as single, _
     byval model_count as integer, _
@@ -210,6 +216,7 @@ declare function mdl_step_dir ( _
 ) as integer
 declare sub mdl_new_chase_dir ( _
     g as Game, _
+    ent as MdlEnt, _
     goal as Vec3, _
     byval dist as single, _
     byval model_count as integer, _
@@ -219,6 +226,7 @@ declare sub mdl_new_chase_dir ( _
 )
 declare sub mdl_move_to_goal ( _
     g as Game, _
+    ent as MdlEnt, _
     goal as Vec3, _
     byval dist as single, _
     byval model_count as integer, _
@@ -228,6 +236,7 @@ declare sub mdl_move_to_goal ( _
 )
 declare function mdl_find_target ( _
     g as Game, _
+    ent as MdlEnt, _
     models() as Submodel, _
     brush() as BrushModel, _
     planes() as Plane _
@@ -1083,6 +1092,7 @@ end function
 ''::::::::::::::
 sub mdl_spawn ( _
     g as Game, _
+    ent as MdlEnt, _
     org as Vec3, _
     models() as Submodel, _
     brush() as BrushModel, _
@@ -1091,14 +1101,19 @@ sub mdl_spawn ( _
     dim fin as Vec3
     dim tr as TraceResult
 
-    g.mdl.pos.x = org.x
-    g.mdl.pos.y = org.y
-    g.mdl.pos.z = org.z
-    g.mdl.yaw = 0.0
-    g.mdl.ideal_yaw = 0.0
-    g.mdl.next_think = 0.0
-    g.mdl.state = MDL_ST_STAND%
-    g.mdl.anim_frame = 0
+    ent.pos.x = org.x
+    ent.pos.y = org.y
+    ent.pos.z = org.z
+    ent.yaw = 0.0
+    ent.ideal_yaw = 0.0
+    ent.next_think = 0.0
+    ent.state = MDL_ST_STAND%
+    ent.anim_frame = 0
+    ent.goal.x = org.x : ent.goal.y = org.y : ent.goal.z = org.z
+    ent.wander_ticks = 0
+    '' staggered, not all-at-0: eight monsters spawned in the same tick
+    '' otherwise all pick their first wander goal on the same think.
+    ent.stand_until = rnd * MDL_STAND_MAX#
 
     '' walkmonster_start_go's own droptofloor(): org came from g.pl.pos at
     '' host_init time, before host_main's first physics tick has run
@@ -1108,14 +1123,14 @@ sub mdl_spawn ( _
     '' whatever height was copied in; mdl_movestep's own +-STEPSIZE band
     '' only ever finds a floor already within 18 units, and a fresh spawn
     '' can be well outside that.
-    fin.x = g.mdl.pos.x
-    fin.y = g.mdl.pos.y
-    fin.z = g.mdl.pos.z - 256.0
-    pl_trace g.mdl.pos, fin, tr, g.wld.count.models, models(), brush(), clp_buffer(), planes()
+    fin.x = ent.pos.x
+    fin.y = ent.pos.y
+    fin.z = ent.pos.z - 256.0
+    pl_trace ent.pos, fin, tr, g.wld.count.models, models(), brush(), clp_buffer(), planes()
     if ( tr.frac < 1.0 and tr.all_solid = 0 ) then
-        g.mdl.pos.x = tr.end_pos.x
-        g.mdl.pos.y = tr.end_pos.y
-        g.mdl.pos.z = tr.end_pos.z
+        ent.pos.x = tr.end_pos.x
+        ent.pos.y = tr.end_pos.y
+        ent.pos.z = tr.end_pos.z
     end if
 
     redim mdl_run_dist( MDL_RUN_FRAMES% - 1 ) as integer
@@ -1191,14 +1206,14 @@ end function
 
 ''::::::::::::::
 '' name: mdl_change_yaw
-'' desc: PF_changeyaw (pr_cmds.c) -- turns g.mdl.yaw towards ideal_yaw at
+'' desc: PF_changeyaw (pr_cmds.c) -- turns ent.yaw towards ideal_yaw at
 ''       up to MDL_YAW_SPEED# degrees per 0.1s think. Exact port.
 ''::::::::::::::
-sub mdl_change_yaw ( g as Game )
+sub mdl_change_yaw ( ent as MdlEnt )
     dim cur as single, ideal as single, mv as single
 
-    cur = mdl_anglemod( g.mdl.yaw )
-    ideal = g.mdl.ideal_yaw
+    cur = mdl_anglemod( ent.yaw )
+    ideal = ent.ideal_yaw
     if ( cur = ideal ) then exit sub
 
     mv = ideal - cur
@@ -1214,7 +1229,7 @@ sub mdl_change_yaw ( g as Game )
         if ( mv < -MDL_YAW_SPEED# ) then mv = -MDL_YAW_SPEED#
     end if
 
-    g.mdl.yaw = mdl_anglemod( cur + mv )
+    ent.yaw = mdl_anglemod( cur + mv )
 end sub
 
 ''::::::::::::::
@@ -1242,6 +1257,7 @@ end sub
 ''::::::::::::::
 function mdl_movestep ( _
     g as Game, _
+    ent as MdlEnt, _
     byval dx as single, _
     byval dy as single, _
     byval model_count as integer, _
@@ -1252,13 +1268,13 @@ function mdl_movestep ( _
     dim start as Vec3, fin as Vec3
     dim tr as TraceResult
 
-    start.x = g.mdl.pos.x + dx
-    start.y = g.mdl.pos.y + dy
-    start.z = g.mdl.pos.z + MDL_STEPSIZE#
+    start.x = ent.pos.x + dx
+    start.y = ent.pos.y + dy
+    start.z = ent.pos.z + MDL_STEPSIZE#
 
     fin.x = start.x
     fin.y = start.y
-    fin.z = g.mdl.pos.z - MDL_STEPSIZE#
+    fin.z = ent.pos.z - MDL_STEPSIZE#
 
     pl_trace start, fin, tr, model_count, models(), brush(), clp_buffer(), planes()
 
@@ -1268,7 +1284,7 @@ function mdl_movestep ( _
     end if
 
     if ( tr.start_solid ) then
-        start.z = g.mdl.pos.z
+        start.z = ent.pos.z
         pl_trace start, fin, tr, model_count, models(), brush(), clp_buffer(), planes()
         if ( tr.all_solid or tr.start_solid ) then
             mdl_movestep = 0
@@ -1282,9 +1298,9 @@ function mdl_movestep ( _
         exit function
     end if
 
-    g.mdl.pos.x = tr.end_pos.x
-    g.mdl.pos.y = tr.end_pos.y
-    g.mdl.pos.z = tr.end_pos.z
+    ent.pos.x = tr.end_pos.x
+    ent.pos.y = tr.end_pos.y
+    ent.pos.z = tr.end_pos.z
     mdl_movestep = -1
 end function
 
@@ -1299,6 +1315,7 @@ end function
 ''::::::::::::::
 function mdl_step_dir ( _
     g as Game, _
+    ent as MdlEnt, _
     byval yaw as single, _
     byval dist as single, _
     byval model_count as integer, _
@@ -1311,18 +1328,18 @@ function mdl_step_dir ( _
     dim dx as single, dy as single
     dim delta as single
 
-    g.mdl.ideal_yaw = yaw
-    mdl_change_yaw g
+    ent.ideal_yaw = yaw
+    mdl_change_yaw ent
 
     rad = yaw * 0.017453293
-    old.x = g.mdl.pos.x : old.y = g.mdl.pos.y : old.z = g.mdl.pos.z
+    old.x = ent.pos.x : old.y = ent.pos.y : old.z = ent.pos.z
     dx = cos( rad ) * dist
     dy = sin( rad ) * dist
 
-    if ( mdl_movestep( g, dx, dy, model_count, models(), brush(), planes() ) ) then
-        delta = mdl_anglemod( g.mdl.yaw - g.mdl.ideal_yaw )
+    if ( mdl_movestep( g, ent, dx, dy, model_count, models(), brush(), planes() ) ) then
+        delta = mdl_anglemod( ent.yaw - ent.ideal_yaw )
         if ( delta > 45.0 and delta < 315.0 ) then
-            g.mdl.pos.x = old.x : g.mdl.pos.y = old.y : g.mdl.pos.z = old.z
+            ent.pos.x = old.x : ent.pos.y = old.y : ent.pos.z = old.z
         end if
         mdl_step_dir = -1
     else
@@ -1341,6 +1358,7 @@ end function
 ''::::::::::::::
 sub mdl_new_chase_dir ( _
     g as Game, _
+    ent as MdlEnt, _
     goal as Vec3, _
     byval dist as single, _
     byval model_count as integer, _
@@ -1352,11 +1370,11 @@ sub mdl_new_chase_dir ( _
     dim d1 as single, d2 as single, tdir as single, tmp as single
     dim olddir as single, turnaround as single
 
-    olddir = mdl_anglemod( int( g.mdl.ideal_yaw / 45.0 ) * 45.0 )
+    olddir = mdl_anglemod( int( ent.ideal_yaw / 45.0 ) * 45.0 )
     turnaround = mdl_anglemod( olddir - 180.0 )
 
-    deltax = goal.x - g.mdl.pos.x
-    deltay = goal.y - g.mdl.pos.y
+    deltax = goal.x - ent.pos.x
+    deltay = goal.y - ent.pos.y
 
     if ( deltax > 10.0 ) then
         d1 = 0.0
@@ -1382,7 +1400,7 @@ sub mdl_new_chase_dir ( _
             if ( d2 = 90.0 ) then tdir = 135.0 else tdir = 215.0
         end if
         if ( tdir <> turnaround ) then
-            if ( mdl_step_dir( g, tdir, dist, model_count, models(), brush(), planes() ) ) then exit sub
+            if ( mdl_step_dir( g, ent, tdir, dist, model_count, models(), brush(), planes() ) ) then exit sub
         end if
     end if
 
@@ -1395,35 +1413,35 @@ sub mdl_new_chase_dir ( _
     end if
 
     if ( d1 <> -1.0 and d1 <> turnaround ) then
-        if ( mdl_step_dir( g, d1, dist, model_count, models(), brush(), planes() ) ) then exit sub
+        if ( mdl_step_dir( g, ent, d1, dist, model_count, models(), brush(), planes() ) ) then exit sub
     end if
     if ( d2 <> -1.0 and d2 <> turnaround ) then
-        if ( mdl_step_dir( g, d2, dist, model_count, models(), brush(), planes() ) ) then exit sub
+        if ( mdl_step_dir( g, ent, d2, dist, model_count, models(), brush(), planes() ) ) then exit sub
     end if
 
     '' no direct path -- hold the old heading, then sweep all eight
     '' compass points in a randomised order, then reverse
     if ( olddir <> -1.0 ) then
-        if ( mdl_step_dir( g, olddir, dist, model_count, models(), brush(), planes() ) ) then exit sub
+        if ( mdl_step_dir( g, ent, olddir, dist, model_count, models(), brush(), planes() ) ) then exit sub
     end if
 
     if ( int( rnd * 2 ) ) then
         for tdir = 0.0 to 315.0 step 45.0
             if ( tdir <> turnaround ) then
-                if ( mdl_step_dir( g, tdir, dist, model_count, models(), brush(), planes() ) ) then exit sub
+                if ( mdl_step_dir( g, ent, tdir, dist, model_count, models(), brush(), planes() ) ) then exit sub
             end if
         next tdir
     else
         for tdir = 315.0 to 0.0 step -45.0
             if ( tdir <> turnaround ) then
-                if ( mdl_step_dir( g, tdir, dist, model_count, models(), brush(), planes() ) ) then exit sub
+                if ( mdl_step_dir( g, ent, tdir, dist, model_count, models(), brush(), planes() ) ) then exit sub
             end if
         next tdir
     end if
 
-    if ( mdl_step_dir( g, turnaround, dist, model_count, models(), brush(), planes() ) ) then exit sub
+    if ( mdl_step_dir( g, ent, turnaround, dist, model_count, models(), brush(), planes() ) ) then exit sub
 
-    g.mdl.ideal_yaw = olddir   '' can't move
+    ent.ideal_yaw = olddir   '' can't move
 end sub
 
 ''::::::::::::::
@@ -1436,6 +1454,7 @@ end sub
 ''::::::::::::::
 sub mdl_move_to_goal ( _
     g as Game, _
+    ent as MdlEnt, _
     goal as Vec3, _
     byval dist as single, _
     byval model_count as integer, _
@@ -1447,13 +1466,13 @@ sub mdl_move_to_goal ( _
 
     skip = ( int( rnd * 4 ) = 1 )
     if ( skip = 0 ) then
-        stepped = mdl_step_dir( g, g.mdl.ideal_yaw, dist, model_count, models(), brush(), planes() )
+        stepped = mdl_step_dir( g, ent, ent.ideal_yaw, dist, model_count, models(), brush(), planes() )
     else
         stepped = 0
     end if
 
     if ( skip or ( stepped = 0 ) ) then
-        mdl_new_chase_dir g, goal, dist, model_count, models(), brush(), planes()
+        mdl_new_chase_dir g, ent, goal, dist, model_count, models(), brush(), planes()
     end if
 end sub
 
@@ -1474,6 +1493,7 @@ end sub
 ''::::::::::::::
 function mdl_find_target ( _
     g as Game, _
+    ent as MdlEnt, _
     models() as Submodel, _
     brush() as BrushModel, _
     planes() as Plane _
@@ -1488,7 +1508,7 @@ function mdl_find_target ( _
 
     mdl_find_target = 0
 
-    eye.x  = g.mdl.pos.x : eye.y  = g.mdl.pos.y : eye.z  = g.mdl.pos.z + MDL_VIEW_OFS#
+    eye.x  = ent.pos.x : eye.y  = ent.pos.y : eye.z  = ent.pos.z + MDL_VIEW_OFS#
     peye.x = g.pl.pos.x  : peye.y = g.pl.pos.y  : peye.z = g.pl.pos.z  + PL_EYE#
 
     dx = peye.x - eye.x : dy = peye.y - eye.y : dz = peye.z - eye.z
@@ -1499,7 +1519,7 @@ function mdl_find_target ( _
     if ( tr.frac <= 0.999 or tr.all_solid ) then exit function   '' not visible
 
     if ( r >= MDL_RANGE_MELEE# ) then
-        yaw_rad = g.mdl.yaw * 0.017453293
+        yaw_rad = ent.yaw * 0.017453293
         fwd_x = cos( yaw_rad ) : fwd_y = sin( yaw_rad )
         dlen = sqr( dx*dx + dy*dy )
         if ( dlen > 0.0 ) then
@@ -1511,55 +1531,116 @@ function mdl_find_target ( _
     end if
 
     '' found -- HuntTarget's own side effect: face the enemy immediately
-    g.mdl.ideal_yaw = mdl_vectoyaw( dx, dy )
+    ent.ideal_yaw = mdl_vectoyaw( dx, dy )
     mdl_find_target = -1
 end function
 
 ''::::::::::::::
+'' name: mdl_pick_goal
+'' desc: NOT in stock Quake -- see q_mdl.bi's own note. A random point on
+''       a circle of MDL_WANDER_MIN#..MDL_WANDER_MAX# around the entity's
+''       CURRENT position, not its spawn point, so a monster that has
+''       already wandered somewhere keeps drifting rather than yo-yoing
+''       back to where it started. No reachability check: an unreachable
+''       goal just times out in mdl_think (MDL_WANDER_MAXTICKS%), the
+''       same as a chase the compass search cannot route around.
+''::::::::::::::
+sub mdl_pick_goal ( ent as MdlEnt )
+    dim ang as single, dist as single
+
+    ang = rnd * 6.28318531
+    dist = MDL_WANDER_MIN# + rnd * ( MDL_WANDER_MAX# - MDL_WANDER_MIN# )
+    ent.goal.x = ent.pos.x + cos( ang ) * dist
+    ent.goal.y = ent.pos.y + sin( ang ) * dist
+    ent.goal.z = ent.pos.z
+end sub
+
+''::::::::::::::
 '' name: mdl_think
-'' desc: id's own monster AI (ai.qc/sv_move.c), ported exactly: a
-''       walkmonster with no path_corner target stands (ai_stand) until
-''       FindTarget sees the player, then chases forever (ai_run) via
-''       SV_MoveToGoal / SV_NewChaseDir -- see q_mdl.bi's own note on why
-''       there is no "explore the map" state in real Quake at all. The
-''       "path finding" is the compass search in mdl_new_chase_dir; there
-''       is no A*, no graph, because id never shipped one.
+'' desc: id's own monster AI (ai.qc/sv_move.c), ported exactly, PLUS an
+''       own-goal wander loop stock Quake never had (see q_mdl.bi's own
+''       note: a walkmonster with no path_corner target just stands
+''       forever). STAND either finds the player (can_chase path, exact
+''       port -- FindTarget/ai_run/SV_MoveToGoal/SV_NewChaseDir) or, once
+''       its own idle pause elapses, picks a nearby point and moves there
+''       the SAME way a chase would: mdl_move_to_goal, so collision,
+''       stepping and the 8-direction compass search are identical either
+''       way. The "path finding" is that compass search; there is no A*,
+''       no graph, because id never shipped one and this doesn't add one.
 ''
 ''       Movement distance and displayed frame are the SAME state: while
 ''       army_runN is on screen, ai_run(N)'s own distance is what moves
 ''       that tick, and the frame only advances afterwards -- matching
 ''       soldier.qc's state-machine frames exactly, not a fixed per-think
-''       distance.
+''       distance. Because wandering reuses RUN's animation and STAND
+''       reuses STAND's, the displayed frame always matches what the
+''       entity is actually doing -- walking or standing -- never picked
+''       independently of the movement that drives it.
 ''
 ''       10Hz, like the player's own tick rate and Quake's real think
 ''       clock -- driven off g.rdr.anim_time, already running at real
 ''       seconds, so no new clock is needed.
+''
+''       can_chase gates the FindTarget call only. A monster spawned with
+''       it false never hunts the player -- same as real Quake's own
+''       walkmonster with no path_corner target and no player ever in
+''       range -- but it still wanders on its own goals, which real Quake
+''       never does at all.
 ''::::::::::::::
 sub mdl_think ( _
     g as Game, _
+    ent as MdlEnt, _
+    byval can_chase as integer, _
     models() as Submodel, _
     brush() as BrushModel, _
     planes() as Plane _
 )
     dim dist as single
     dim goal as Vec3
+    dim dx as single, dy as single, d2 as single
 
     if ( g.mdl.loaded = 0 ) then exit sub
-    if ( g.rdr.anim_time < g.mdl.next_think ) then exit sub
-    g.mdl.next_think = g.rdr.anim_time + 0.1
+    if ( g.rdr.anim_time < ent.next_think ) then exit sub
+    ent.next_think = g.rdr.anim_time + 0.1
 
-    if ( g.mdl.state = MDL_ST_STAND% ) then
-        if ( mdl_find_target( g, models(), brush(), planes() ) ) then
-            g.mdl.state = MDL_ST_RUN%
-            g.mdl.anim_frame = 0
+    if ( ent.state = MDL_ST_STAND% ) then
+        if ( can_chase and mdl_find_target( g, ent, models(), brush(), planes() ) ) then
+            ent.state = MDL_ST_RUN%
+            ent.anim_frame = 0
+            ent.wander_ticks = 0
+        elseif ( g.rdr.anim_time >= ent.stand_until ) then
+            mdl_pick_goal ent
+            ent.ideal_yaw = mdl_vectoyaw( ent.goal.x - ent.pos.x, ent.goal.y - ent.pos.y )
+            ent.state = MDL_ST_RUN%
+            ent.anim_frame = 0
+            ent.wander_ticks = 0
         else
-            g.mdl.anim_frame = ( g.mdl.anim_frame + 1 ) mod MDL_STAND_FRAMES%
+            ent.anim_frame = ( ent.anim_frame + 1 ) mod MDL_STAND_FRAMES%
         end if
         exit sub
     end if
 
-    dist = mdl_run_dist( g.mdl.anim_frame )
-    goal.x = g.pl.pos.x : goal.y = g.pl.pos.y : goal.z = g.pl.pos.z
-    mdl_move_to_goal g, goal, dist, g.wld.count.models, models(), brush(), planes()
-    g.mdl.anim_frame = ( g.mdl.anim_frame + 1 ) mod MDL_RUN_FRAMES%
+    dist = mdl_run_dist( ent.anim_frame )
+    if ( can_chase ) then
+        goal.x = g.pl.pos.x : goal.y = g.pl.pos.y : goal.z = g.pl.pos.z
+    else
+        goal.x = ent.goal.x : goal.y = ent.goal.y : goal.z = ent.goal.z
+    end if
+    mdl_move_to_goal g, ent, goal, dist, g.wld.count.models, models(), brush(), planes()
+    ent.anim_frame = ( ent.anim_frame + 1 ) mod MDL_RUN_FRAMES%
+
+    '' Own-goal wandering rests on arrival (or gives up after a timeout,
+    '' the same compass search a real chase can also fail to route
+    '' around) -- a real chase never does either, an enemy hunt is
+    '' unconditional, which is exactly why this is gated on can_chase.
+    if ( can_chase = 0 ) then
+        ent.wander_ticks = ent.wander_ticks + 1
+        dx = ent.pos.x - ent.goal.x : dy = ent.pos.y - ent.goal.y
+        d2 = dx*dx + dy*dy
+        if ( d2 < MDL_WANDER_ARRIVE#*MDL_WANDER_ARRIVE# or ent.wander_ticks >= MDL_WANDER_MAXTICKS% ) then
+            ent.state = MDL_ST_STAND%
+            ent.anim_frame = 0
+            ent.stand_until = g.rdr.anim_time + MDL_STAND_MIN# + rnd * ( MDL_STAND_MAX# - MDL_STAND_MIN# )
+        end if
+    end if
 end sub

@@ -25,7 +25,8 @@ type Game
     mymod       as UGMMOD         '' the music module
     tele_count  as integer        '' entities: filled by ent_load_teleports
     plat_count  as integer
-    mdl         as MdlState       '' one alias model, drawn as real geometry
+    mdl         as MdlState       '' the one loaded model asset, shared by every spawned instance
+    mdl_count   as integer        '' how many of mdl_ent() are actually spawned
 end type
 
 ''
@@ -63,8 +64,7 @@ declare sub mdl_load ( _
 declare sub mdl_draw ( _
     g as Game, _
     tri() as MdlTri, _
-    org as Vec3, _
-    byval yaw as single, _
+    ent as MdlEnt, _
     mtx_fin as u3dMtrx, _
     byval xresh as single, _
     byval yresh as single, _

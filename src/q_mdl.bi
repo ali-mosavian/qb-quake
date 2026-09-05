@@ -26,6 +26,27 @@ const MDL_RANGE_MELEE#  = 120.0  '' ai.qc range() -- visible() alone is enough h
 const MDL_RANGE_MID#    = 1000.0 '' range() >= this is RANGE_FAR, never noticed
 const MDL_VIEW_OFS#     = 25.0   '' walkmonster_start_go's view_ofs
 
+'' NOT in stock Quake: a walkmonster with no path_corner target just
+'' stands forever (see the note above) -- there is no explore state to
+'' port. This crowd needs one anyway, so it is layered on top of the
+'' exact port rather than mixed into it: mdl_think reuses the same
+'' SV_MoveToGoal/mdl_new_chase_dir compass search (collision and
+'' stepping identical to a real chase) aimed at a self-picked point
+'' instead of the player, and reuses the same STAND/RUN frame sets, so
+'' the animation is still always the one matching what the entity is
+'' actually doing -- standing or walking, never picked separately.
+const MDL_WANDER_MIN#     = 64.0    '' shortest own-goal wander hop
+const MDL_WANDER_MAX#     = 256.0   '' longest own-goal wander hop
+const MDL_WANDER_ARRIVE#  = 24.0    '' close enough counts as arrived
+const MDL_WANDER_MAXTICKS% = 100    '' give up after 10s of think-ticks (10Hz)
+const MDL_STAND_MIN#      = 1.0     '' shortest idle pause between wanders
+const MDL_STAND_MAX#      = 4.0     '' longest idle pause between wanders
+
+'' How many can be on screen at once -- an array, not a scalar, so
+'' host_init can spawn a crowd instead of the one soldier this used to
+'' be limited to. Sized for DGROUP headroom, not for any map's own need.
+const MDL_MAX_ENTS%     = 8
+
 type MdlState
     loaded      as integer     '' 0 until mdl_load succeeds
     ntri        as integer
@@ -35,9 +56,14 @@ type MdlState
     vtx_hnd     as integer     '' emsAlloc's handle -- see mdl_rotate_all
     scale       as u3dVector3f '' vertex byte -> model unit: unit = byte*scale + origin
     origin      as u3dVector3f
-    '' mdl_think's own state (pl_move.bas). BSP space, Z up, same
-    '' convention as PlayerState.pos -- Vec3, not u3dVector3f, so it can
-    '' be handed to pl_trace directly with no field-by-field copy.
+end type
+
+'' One spawned instance's own state -- everything mdl_think (pl_move.bas)
+'' owns, separate from MdlState's shared asset data above so a crowd can
+'' share one loaded model. BSP space, Z up, same convention as
+'' PlayerState.pos -- Vec3, not u3dVector3f, so it can be handed to
+'' pl_trace directly with no field-by-field copy.
+type MdlEnt
     pos         as Vec3
     yaw         as single      '' actual current facing (self.angles_y)
     ideal_yaw   as single      '' desired facing (self.ideal_yaw)
@@ -48,6 +74,10 @@ type MdlState
                                 '' renderer's player has no health)
     anim_frame  as integer     '' 0..7 within the current state's cycle
     next_think  as single      '' g.rdr.anim_time of the next 10Hz think
+    '' Own-goal wandering (not in stock Quake -- see the note above).
+    goal        as Vec3        '' current wander destination
+    stand_until as single      '' g.rdr.anim_time to leave STAND and pick a new goal
+    wander_ticks as integer    '' think-ticks spent chasing the current goal
 end type
 
 '' UV as fixed-point Integer (0..32767 = 0.0..1.0), not Single -- halves

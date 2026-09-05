@@ -64,7 +64,8 @@ declare sub host_tick ( _
     cp_y() as integer, _
     cp_z() as integer, _
     tele() as Teleporter, _
-    plat() as PlatEnt _
+    plat() as PlatEnt, _
+    mdl_ent() as MdlEnt _
 )
 
 '' Declared here, not in a header: this module is the only caller of
@@ -102,6 +103,8 @@ declare sub v_update_camera ( _
 )
 declare sub mdl_think ( _
     g as Game, _
+    ent as MdlEnt, _
+    byval can_chase as integer, _
     models() as Submodel, _
     brush() as BrushModel, _
     planes() as Plane _
@@ -182,7 +185,8 @@ sub host_advance ( _
     tele() as Teleporter, _
     plat() as PlatEnt, _
     host_accum as single, _
-    host_ticks as long _
+    host_ticks as long, _
+    mdl_ent() as MdlEnt _
 )
     dim steps as integer
 
@@ -202,7 +206,7 @@ sub host_advance ( _
             exit do
         end if
         host_tick g, HOST_DT#, brush(), models(), planes(), nodes(), cp_x(), cp_y(), _
-                   cp_z(), tele(), plat()
+                   cp_z(), tele(), plat(), mdl_ent()
         host_accum = host_accum - HOST_DT#
         host_ticks = host_ticks + 1
         steps = steps + 1
@@ -241,8 +245,10 @@ sub host_tick ( _
     cp_y() as integer, _
     cp_z() as integer, _
     tele() as Teleporter, _
-    plat() as PlatEnt _
+    plat() as PlatEnt, _
+    mdl_ent() as MdlEnt _
 )
+    dim mdl_i as integer
 
     '' what the player asked for
     in_handle_toggles g
@@ -250,9 +256,14 @@ sub host_tick ( _
     '' and what the world does about it: camera, and the physics under it
     v_update_camera g, dt, cp_x(), cp_y(), cp_z(), brush(), models(), planes(), nodes()
 
-    '' the model's own movement -- Quake's real think rate (10Hz), gated
-    '' inside mdl_think itself against g.rdr.anim_time, not every tick
-    mdl_think g, models(), brush(), planes()
+    '' every spawned model's own movement -- Quake's real think rate
+    '' (10Hz), gated inside mdl_think itself against g.rdr.anim_time, not
+    '' every tick. can_chase is false: a crowd spawned to fill the map is
+    '' not meant to hunt the player, just stand and animate -- same as a
+    '' real Quake walkmonster nothing ever spots (see q_mdl.bi's note).
+    for mdl_i = 0 to g.mdl_count - 1
+        mdl_think g, mdl_ent( mdl_i ), 0, models(), brush(), planes()
+    next mdl_i
 
     '' and anything the world does to the player as a result of moving
     ent_check_teleport g, tele()
@@ -308,9 +319,11 @@ sub host_render ( _
     face_mdl() as integer, _
     cam_up as u3dVector3f, _
     byval z_dc as long, _
-    mdltri_buffer() as MdlTri _
+    mdltri_buffer() as MdlTri, _
+    mdl_ent() as MdlEnt _
 )
     dim mtx_mdl as u3dMtrx
+    dim mdl_i as integer
     dim zz as long                  '' soaks up uglZMode's return;
                                     '' the call is the point
     dim mtx_fin as u3dMtrx
@@ -448,15 +461,18 @@ sub host_render ( _
         if ( ptd > g.pt.draw_max ) then g.pt.draw_max = ptd
     end if
 
-    '' One alias model, real geometry, while depth is still on -- it goes
-    '' in WITH the world, not after it. Depth-tested like a brush entity:
-    '' the world only WRITES (arrives front to back by BSP order already),
-    '' this has no such guarantee. g.mdl.pos/yaw are mdl_think's own state
-    '' (pl_move.bas), updated once per tick -- drawing reads them, same
-    '' split host_tick/host_render already keep for the player.
+    '' Every spawned model, real geometry, while depth is still on -- it
+    '' goes in WITH the world, not after it. Depth-tested like a brush
+    '' entity: the world only WRITES (arrives front to back by BSP order
+    '' already), this has no such guarantee. mdl_ent()'s pos/yaw are
+    '' mdl_think's own state (pl_move.bas), updated once per tick --
+    '' drawing reads them, same split host_tick/host_render already keep
+    '' for the player.
     if ( g.mdl.loaded ) then
-        mdl_draw g, mdltri_buffer(), g.mdl.pos, g.mdl.yaw, _
-                 mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
+        for mdl_i = 0 to g.mdl_count - 1
+            mdl_draw g, mdltri_buffer(), mdl_ent( mdl_i ), _
+                     mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
+        next mdl_i
     end if
 
     '' leave depth off for the overlay, which is 2D and would otherwise

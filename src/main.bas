@@ -97,7 +97,8 @@ declare sub host_render ( _
     face_mdl() as integer, _
     cam_up as u3dVector3f, _
     byval z_dc as long, _
-    mdltri_buffer() as MdlTri _
+    mdltri_buffer() as MdlTri, _
+    mdl_ent() as MdlEnt _
 )
 declare sub host_advance ( _
     g as Game, _
@@ -112,7 +113,8 @@ declare sub host_advance ( _
     tele() as Teleporter, _
     plat() as PlatEnt, _
     host_accum as single, _
-    host_ticks as long _
+    host_ticks as long, _
+    mdl_ent() as MdlEnt _
 )
 declare sub host_init ( _
     g as Game, _
@@ -134,7 +136,8 @@ declare sub host_init ( _
     tele() as Teleporter, _
     face_mdl() as integer, _
     plat() as PlatEnt, _
-    mdltri_buffer() as MdlTri _
+    mdltri_buffer() as MdlTri, _
+    mdl_ent() as MdlEnt _
 )
 declare sub host_main ( _
     g as Game, _
@@ -156,7 +159,8 @@ declare sub host_main ( _
     face_mdl() as integer, _
     plat() as PlatEnt, _
     tele() as Teleporter, _
-    mdltri_buffer() as MdlTri _
+    mdltri_buffer() as MdlTri, _
+    mdl_ent() as MdlEnt _
 )
 
 ''
@@ -287,11 +291,30 @@ declare sub pl_init ( _
 )
 declare sub mdl_spawn ( _
     g as Game, _
+    ent as MdlEnt, _
     org as Vec3, _
     models() as Submodel, _
     brush() as BrushModel, _
     planes() as Plane _
 )
+
+'' Scattering the crowd across the map's own rooms rather than in one
+'' ring: not from ents.bin, since mkassets never preprocesses deathmatch
+'' spawns (ent_load_spawn's own note on why the entities text itself
+'' never reaches the target) -- built instead from data already loaded
+'' for rendering, a random non-solid LEAF and its own bounding box.
+declare function r_leaf_contents ( byval leafnr as integer ) as integer
+declare sub r_leaf_bound ( byval leafnr as integer, b as Bounds )
+declare sub mdl_pick_section ( _
+    g as Game, _
+    mdl_ent() as MdlEnt, _
+    byval done_count as integer, _
+    fallback as Vec3, _
+    picked as Vec3 _
+)
+const MDL_SECTION_TRIES%   = 30    '' random leaves tried before giving up
+const MDL_SECTION_MINBOX%  = 96    '' a leaf smaller than this isn't a room
+const MDL_SECTION_MIN_SEP# = 300.0 '' minimum floor distance between sections
 
 ''
 '' Simulation time owed but not yet run. Frames deliver time in whatever
@@ -362,6 +385,11 @@ dim gv_buf() as integer
 '' BSP submodel array (doors, platforms), a different "model" entirely;
 '' these are named mdltri/mdlvert to not collide with it.
 dim mdltri_buffer() as MdlTri
+
+'' One spawned instance per element -- the asset (mdltri_buffer, above,
+'' and g.mdl) is shared; only per-monster position/state lives here.
+'' Sized in host_init, once, to MDL_MAX_ENTS%.
+dim mdl_ent() as MdlEnt
 
 ''
 '' view.bas. Declared here rather than in a header: main is the only
@@ -442,7 +470,7 @@ dim shared z_dc as long
               mdl_buffer(), order_list(), poly_flag(), gv_buf(), bit_array(), _
               cp_x(), cp_y(), cp_z(), mip_buff_inf(), _
               frustum(), brush(), tele(), face_mdl(), plat(), _
-              mdltri_buffer()
+              mdltri_buffer(), mdl_ent()
     if ( g.env.dump_tex ) then
         mod_tex_dump g
     elseif ( g.env.dump_set ) then
@@ -454,7 +482,7 @@ dim shared z_dc as long
                   mdl_buffer(), order_list(), poly_flag(), gv_buf(), brush(), _
                   frustum(), bit_array(), _
                   mip_buff_inf(), face_mdl(), plat(), tele(), _
-                  mdltri_buffer()
+                  mdltri_buffer(), mdl_ent()
     end if
     host_shutdown
     
@@ -477,6 +505,69 @@ HandleErr:
     sys_error "0x1000, runtime error" + str$( err ) + " at line" + str$( erl )
 
 
+
+''::::::::::::::
+'' name: mdl_pick_section
+'' desc: A candidate spawn point in a random room, not the ring around the
+''       player host_init used before this. Rejects a leaf too small to
+''       be a real room (MDL_SECTION_MINBOX%) and one too close to an
+''       already-placed monster (MDL_SECTION_MIN_SEP#, checked against
+''       mdl_ent()'s own SETTLED positions -- after mdl_spawn's
+''       droptofloor, so "close" means close on the floor the entity
+''       actually stands on, not close in an unrelated leaf's box).
+''       Falls back to the caller's own point if nothing qualifies inside
+''       the try budget: a spawn point beats no spawn point on a map this
+''       heuristic fits badly.
+''::::::::::::::
+sub mdl_pick_section ( _
+    g as Game, _
+    mdl_ent() as MdlEnt, _
+    byval done_count as integer, _
+    fallback as Vec3, _
+    picked as Vec3 _
+)
+    dim tries as integer, leafnr as integer, leaf_total as long
+    dim b as Bounds
+    dim cand as Vec3
+    dim dx as single, dy as single
+    dim k as integer, far_enough as integer
+
+    leaf_total = g.wld.count.leaves
+
+    for tries = 1 to MDL_SECTION_TRIES%
+        leafnr = 1 + int( rnd * csng( leaf_total - 1 ) )
+        if ( r_leaf_contents( leafnr ) = CONTENTS_EMPTY ) then
+            r_leaf_bound leafnr, b
+            if ( ( b.max.x - b.min.x ) >= MDL_SECTION_MINBOX% and _
+                 ( b.max.y - b.min.y ) >= MDL_SECTION_MINBOX% ) then
+                cand.x = ( b.min.x + b.max.x ) / 2.0
+                cand.y = ( b.min.y + b.max.y ) / 2.0
+                '' near the FLOOR end of the leaf's own bound, not its
+                '' vertical centre -- a tall room's centre can sit well
+                '' past mdl_spawn's own 256-unit droptofloor search depth,
+                '' leaving the entity floating with nothing to correct it.
+                cand.z = b.min.z + 16.0
+
+                far_enough = -1
+                for k = 0 to done_count - 1
+                    dx = cand.x - mdl_ent(k).pos.x
+                    dy = cand.y - mdl_ent(k).pos.y
+                    if ( dx*dx + dy*dy < MDL_SECTION_MIN_SEP# * MDL_SECTION_MIN_SEP# ) then
+                        far_enough = 0
+                        exit for
+                    end if
+                next k
+
+                if ( far_enough ) then
+                    picked = cand
+                    exit sub
+                end if
+            end if
+        end if
+    next tries
+
+    picked = fallback
+end sub
 
 ''::::
 '' ==========================================================================
@@ -509,7 +600,8 @@ sub host_init ( _
     tele() as Teleporter, _
     face_mdl() as integer, _
     plat() as PlatEnt, _
-    mdltri_buffer() as MdlTri _
+    mdltri_buffer() as MdlTri, _
+    mdl_ent() as MdlEnt _
 )
     ''
     '' Load profiling. A 1 kHz AUTOINIT timer counts milliseconds, and the
@@ -600,20 +692,33 @@ sub host_init ( _
     if ( g.env.use_lm ) then mod_load_colormap g
     sys_mem_mark "colormap"
 
-    '' One alias model, now wandering on its own (mdl_think, pl_move.bas)
-    '' rather than loaded-and-static: the "basic version" milestone this
-    '' started as. The game's own palette (set inside vid_init, above)
-    '' already applies -- the skin's indices come from the same Quake
-    '' palette mkmdl.py baked them from, so nothing extra to install here.
+    '' A crowd of one alias model, each wandering on its own (mdl_think,
+    '' pl_move.bas) rather than loaded-and-static: the "basic version"
+    '' milestone this started as. The game's own palette (set inside
+    '' vid_init, above) already applies -- the skin's indices come from
+    '' the same Quake palette mkmdl.py baked them from, so nothing extra
+    '' to install here.
     mdl_load g, "soldier", mdltri_buffer()
+    g.mdl_count = 0
     if ( g.mdl.loaded ) then
         randomize timer
-        dim mdl_spawn_rad as single, mdl_spawn_org as Vec3
-        mdl_spawn_rad = g.cam.start_angle * 0.017453293
-        mdl_spawn_org.x = g.pl.pos.x + 32.0 * cos( mdl_spawn_rad )
-        mdl_spawn_org.y = g.pl.pos.y + 32.0 * sin( mdl_spawn_rad )
-        mdl_spawn_org.z = g.pl.pos.z
-        mdl_spawn g, mdl_spawn_org, mdl_buffer(), brush(), pln_buffer()
+        dim mdl_i as integer
+        dim mdl_spawn_rad as single, mdl_spawn_fallback as Vec3, mdl_spawn_org as Vec3
+        redim mdl_ent( MDL_MAX_ENTS% - 1 ) as MdlEnt
+        for mdl_i = 0 to MDL_MAX_ENTS% - 1
+            '' the old ring around the player, kept as mdl_pick_section's
+            '' own fallback when the map doesn't offer enough separated
+            '' rooms (or on a mishap: a leaf whose box centre sits inside
+            '' geometry the droptofloor trace below can't recover from).
+            mdl_spawn_rad = ( g.cam.start_angle + mdl_i * ( 360.0 / MDL_MAX_ENTS% ) ) * 0.017453293
+            mdl_spawn_fallback.x = g.pl.pos.x + 96.0 * cos( mdl_spawn_rad )
+            mdl_spawn_fallback.y = g.pl.pos.y + 96.0 * sin( mdl_spawn_rad )
+            mdl_spawn_fallback.z = g.pl.pos.z
+
+            mdl_pick_section g, mdl_ent(), mdl_i, mdl_spawn_fallback, mdl_spawn_org
+            mdl_spawn g, mdl_ent( mdl_i ), mdl_spawn_org, mdl_buffer(), brush(), pln_buffer()
+        next mdl_i
+        g.mdl_count = MDL_MAX_ENTS%
     end if
 
     t_vid = timer
@@ -657,7 +762,8 @@ sub host_main ( _
     face_mdl() as integer, _
     plat() as PlatEnt, _
     tele() as Teleporter, _
-    mdltri_buffer() as MdlTri _
+    mdltri_buffer() as MdlTri, _
+    mdl_ent() as MdlEnt _
 )
     dim mtx_prj as u3dMtrx
     dim aspect as single
@@ -818,7 +924,7 @@ sub host_main ( _
         pt0 = sys_now()
         host_advance g, g.scr.frame_time, brush(), mdl_buffer(), pln_buffer(), _
                       nds_buffer(), cp_x(), cp_y(), cp_z(), tele(), plat(), _
-                      host_accum, host_ticks
+                      host_accum, host_ticks, mdl_ent()
         if ( g.ft.n > 0 ) then
             ptd = sys_now() - pt0
             g.pt.tick_sum = g.pt.tick_sum + ptd
@@ -836,7 +942,7 @@ sub host_main ( _
                      pln_buffer(), nds_buffer(), mdl_buffer(), order_list(), poly_flag(), _
                      gv_buf(), brush(), frustum(), bit_array(), _
                      mip_buff_inf(), face_mdl(), cam_up, z_dc, _
-                     mdltri_buffer()
+                     mdltri_buffer(), mdl_ent()
 
 
         ''

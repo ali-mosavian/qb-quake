@@ -108,6 +108,7 @@ declare sub r_load_leaves ( _
     g as Game _
 )
 declare function r_leaf_contents ( byval leafnr as integer ) as integer
+declare sub r_leaf_bound ( byval leafnr as integer, b as Bounds )
 
 ''
 '' Declared here, not in a header: this module is the only caller, and a
@@ -735,6 +736,17 @@ end sub
 function r_leaf_contents ( byval leafnr as integer ) as integer
     r_leaf_contents = lef_buffer( leafnr ).cont
 end function
+
+''::::::::::
+'' name: r_leaf_bound
+'' desc: One leaf's own bounding box. Same reasoning as r_leaf_contents:
+''       a caller that wants one leaf's box (spreading spawns across the
+''       map's own rooms, not the whole array) does not justify sharing
+''       lef_buffer itself.
+''::::::::::
+sub r_leaf_bound ( byval leafnr as integer, b as Bounds )
+    b = lef_buffer( leafnr ).bound
+end sub
 
 ''::::::::::
 '' name: rb_dbg_camleaf
