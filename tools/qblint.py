@@ -41,8 +41,13 @@ def check(path):
 
 if __name__ == '__main__':
     root = os.path.join(os.path.dirname(__file__), '..', 'src')
-    files = sorted(glob.glob(os.path.join(root, '*.bas')) +
-                   glob.glob(os.path.join(root, '*.bi')))
+    # The subsystem directories the Makefile builds, and the headers.
+    # NOT a recursive walk: src/test holds standalone mgl programs that
+    # are not part of this build and never carried OPTION EXPLICIT.
+    dirs = ['host', 'render', 'game', 'gfx']
+    files = sorted([f for d in dirs
+                      for f in glob.glob(os.path.join(root, d, '*.bas'))] +
+                   glob.glob(os.path.join(root, 'inc', '*.bi')))
     fail = 0
     for f in files:
         for msg in check(f):

@@ -32,21 +32,31 @@ BC     := $(CURDIR)/tools/bc.sh
 BCC_QR := $(CURDIR)/tools/bcc-qr.sh
 LINKQR := $(CURDIR)/tools/link-qr.sh
 
+# Sources sit in one directory per subsystem. Objects stay FLAT in
+# $(BUILD) -- LINK takes module names, not paths, so the layout is a
+# host-side concern only and basenames must therefore stay unique across
+# the tree. vpath is what lets the pattern rules below keep matching on
+# the bare name.
+SRC_DIRS := src/host src/render src/game src/gfx
+vpath %.bas $(SRC_DIRS)
+vpath %.c   $(SRC_DIRS)
+vpath %.asm $(SRC_DIRS)
+
 # main first, unconditionally -- it carries the module-level main code,
 # and the link step needs it named first in the object list. NOT sorted:
 # sort would alphabetise main to the middle of the list.
-BAS_SRC  := $(wildcard src/*.bas)
+BAS_SRC  := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.bas))
 BAS_MODS := main $(filter-out main,$(basename $(notdir $(BAS_SRC))))
-HDRS     := $(wildcard src/*.bi)
+HDRS     := $(wildcard src/inc/*.bi)
 
-C_SRC  := $(wildcard src/*.c)
+C_SRC  := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.c))
 C_MODS := $(basename $(notdir $(C_SRC)))
-C_HDRS := $(wildcard src/*.h)
+C_HDRS := $(wildcard src/inc/*.h)
 
 # This project's own assembly -- hot loops that are ours, not uGL's, and
 # so have no business living in mgl's tree. Assembled on the host: jwasm
 # needs no DOS, unlike BC and BCC.
-ASM_SRC  := $(wildcard src/*.asm)
+ASM_SRC  := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.asm))
 ASM_MODS := $(basename $(notdir $(ASM_SRC)))
 JWASM    := $(TOOLCHAINS)/native/bin/jwasm
 
@@ -78,17 +88,17 @@ $(BUILD):
 # cannot say in advance which subset a given module actually needs
 # without parsing it, and copying the small ones costs nothing to over-
 # depend on -- tools/bc.sh already copies all of them per invocation.
-$(BUILD)/%.obj: src/%.bas $(HDRS) | $(BUILD)
+$(BUILD)/%.obj: %.bas $(HDRS) | $(BUILD)
 	$(BC) $< $@
 
 # qrender's own C ports (r_walk.c, sb_build.c, pl_trace.c, r_span.c),
 # NOT mgl's -- see tools/bcc-qr.sh's own note on why that is a separate
 # script from tools/bcc.sh rather than a shared one with more flags.
-$(BUILD)/%.obj: src/%.c $(C_HDRS) | $(BUILD)
+$(BUILD)/%.obj: %.c $(C_HDRS) | $(BUILD)
 	$(BCC_QR) $< $@
 
-$(BUILD)/%.obj: src/%.asm | $(BUILD)
-	$(JWASM) -c -Cp -Zg -omf -Fo$@ $<
+$(BUILD)/%.obj: %.asm | $(BUILD)
+	$(JWASM) -c -Cp -Zg -omf -I$(CURDIR)/src/inc -Fo$@ $<
 
 $(BUILD)/stuff.ini: data/stuff.ini | $(BUILD)
 	cp $< $@
