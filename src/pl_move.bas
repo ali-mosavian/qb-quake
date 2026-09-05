@@ -33,6 +33,7 @@ option explicit
 '$include: 'q_pl.bi'
 '$include: 'q_ent.bi'
 '$include: 'q_snd.bi'
+'$include: 'q_mdl.bi'
 '$include: 'q_game.bi'
 
 ''
@@ -166,7 +167,71 @@ declare sub pl_move ( _
 declare sub pl_load_hulls ( _
     g as Game _
 )
+declare sub mdl_think ( _
+    g as Game, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+)
+declare sub mdl_spawn ( _
+    g as Game, _
+    org as Vec3, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+)
 declare function pl_hull_rec ( ) as integer
+
+'' id's own monster-movement primitives (sv_move.c/ai.qc), private to this
+'' module -- mdl_think is the only caller, same reasoning r_leaf_contents
+'' gets below: a shared header would hand these to modules that never use
+'' them, and BC's symbol table is finite.
+declare function mdl_anglemod ( byval v as single ) as single
+declare function mdl_atan2 ( byval y as single, byval x as single ) as single
+declare function mdl_vectoyaw ( byval dx as single, byval dy as single ) as single
+declare sub mdl_change_yaw ( g as Game )
+declare function mdl_movestep ( _
+    g as Game, _
+    byval dx as single, _
+    byval dy as single, _
+    byval model_count as integer, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+) as integer
+declare function mdl_step_dir ( _
+    g as Game, _
+    byval yaw as single, _
+    byval dist as single, _
+    byval model_count as integer, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+) as integer
+declare sub mdl_new_chase_dir ( _
+    g as Game, _
+    goal as Vec3, _
+    byval dist as single, _
+    byval model_count as integer, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+)
+declare sub mdl_move_to_goal ( _
+    g as Game, _
+    goal as Vec3, _
+    byval dist as single, _
+    byval model_count as integer, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+)
+declare function mdl_find_target ( _
+    g as Game, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+) as integer
 
 ''
 '' Declared here, not in a header: this module is the only caller, and a
@@ -186,6 +251,15 @@ declare function r_leaf_contents ( byval leafnr as integer ) as integer
 '' binds this stub, and nothing outside needs to see either.
 ''
 dim shared clp_buffer() as ClipNode
+
+'' army_run1..8's own ai_run() distances (soldier.qc) -- redim'd and
+'' filled once by mdl_spawn, a SUB, since a bare module-level fixed-bound
+'' dim in a non-main module is the ls_tab trap (AGENTS.md): it never runs.
+dim shared mdl_run_dist() as integer
+
+'' sv_move.c's own STEPSIZE -- see mdl_movestep.
+const MDL_STEPSIZE# = 18.0
+
 
 
 
@@ -996,3 +1070,496 @@ end sub
 function pl_hull_rec ( ) as integer
     pl_hull_rec = len( clp_buffer(0) )
 end function
+
+''::::::::::::::
+'' name: mdl_spawn
+'' desc: sets the model's WORLD position once, and (re)seeds the run
+''       animation's own per-frame move distances -- army_run1..8's
+''       ai_run(N) calls in soldier.qc, exact: 11,15,10,10,8,15,10,8.
+''       Called from host_init, after mdl_load succeeds -- not from
+''       mdl_draw, which used to recompute a position from the player
+''       every frame and so looked "stuck" to whoever was watching it
+''       rather than standing in the map on its own.
+''::::::::::::::
+sub mdl_spawn ( _
+    g as Game, _
+    org as Vec3, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+)
+    dim fin as Vec3
+    dim tr as TraceResult
+
+    g.mdl.pos.x = org.x
+    g.mdl.pos.y = org.y
+    g.mdl.pos.z = org.z
+    g.mdl.yaw = 0.0
+    g.mdl.ideal_yaw = 0.0
+    g.mdl.next_think = 0.0
+    g.mdl.state = MDL_ST_STAND%
+    g.mdl.anim_frame = 0
+
+    '' walkmonster_start_go's own droptofloor(): org came from g.pl.pos at
+    '' host_init time, before host_main's first physics tick has run
+    '' pl_gravity even once -- that is the player's raw, not-yet-settled
+    '' spawn height, and this model has no gravity of its own to fall the
+    '' rest of the way. Without this it stands in mid-air forever at
+    '' whatever height was copied in; mdl_movestep's own +-STEPSIZE band
+    '' only ever finds a floor already within 18 units, and a fresh spawn
+    '' can be well outside that.
+    fin.x = g.mdl.pos.x
+    fin.y = g.mdl.pos.y
+    fin.z = g.mdl.pos.z - 256.0
+    pl_trace g.mdl.pos, fin, tr, g.wld.count.models, models(), brush(), clp_buffer(), planes()
+    if ( tr.frac < 1.0 and tr.all_solid = 0 ) then
+        g.mdl.pos.x = tr.end_pos.x
+        g.mdl.pos.y = tr.end_pos.y
+        g.mdl.pos.z = tr.end_pos.z
+    end if
+
+    redim mdl_run_dist( MDL_RUN_FRAMES% - 1 ) as integer
+    mdl_run_dist(0) = 11 : mdl_run_dist(1) = 15 : mdl_run_dist(2) = 10 : mdl_run_dist(3) = 10
+    mdl_run_dist(4) =  8 : mdl_run_dist(5) = 15 : mdl_run_dist(6) = 10 : mdl_run_dist(7) =  8
+end sub
+
+''::::::::::::::
+'' name: mdl_anglemod
+'' desc: ai.qc's anglemod -- wrap to [0,360).
+''::::::::::::::
+function mdl_anglemod ( byval v as single ) as single
+    do while ( v >= 360.0 )
+        v = v - 360.0
+    loop
+    do while ( v < 0.0 )
+        v = v + 360.0
+    loop
+    mdl_anglemod = v
+end function
+
+''::::::::::::::
+'' name: mdl_atan2
+'' desc: BASIC has no ATN2 -- the standard four-quadrant construction from
+''       ATN, needed so mdl_vectoyaw can match PF_vectoyaw exactly.
+''::::::::::::::
+function mdl_atan2 ( byval y as single, byval x as single ) as single
+    dim r as single
+    if ( x > 0.0 ) then
+        r = atn( y / x )
+    elseif ( x < 0.0 ) then
+        if ( y >= 0.0 ) then
+            r = atn( y / x ) + 3.14159265
+        else
+            r = atn( y / x ) - 3.14159265
+        end if
+    else
+        if ( y > 0.0 ) then
+            r = 1.57079633
+        elseif ( y < 0.0 ) then
+            r = -1.57079633
+        else
+            r = 0.0
+        end if
+    end if
+    mdl_atan2 = r
+end function
+
+''::::::::::::::
+'' name: mdl_vectoyaw
+'' desc: PF_vectoyaw (pr_cmds.c), exact -- including the (int) truncation
+''       toward zero, which BASIC's own int() does NOT do (int() floors;
+''       see AGENTS.md's own note on the two disagreeing for negatives).
+''::::::::::::::
+function mdl_vectoyaw ( byval dx as single, byval dy as single ) as single
+    dim yaw as single
+
+    if ( dx = 0.0 and dy = 0.0 ) then
+        mdl_vectoyaw = 0.0
+        exit function
+    end if
+
+    yaw = mdl_atan2( dy, dx ) * 57.29577951
+    if ( yaw < 0.0 ) then
+        yaw = -int( -yaw )
+    else
+        yaw = int( yaw )
+    end if
+    if ( yaw < 0.0 ) then yaw = yaw + 360.0
+
+    mdl_vectoyaw = yaw
+end function
+
+''::::::::::::::
+'' name: mdl_change_yaw
+'' desc: PF_changeyaw (pr_cmds.c) -- turns g.mdl.yaw towards ideal_yaw at
+''       up to MDL_YAW_SPEED# degrees per 0.1s think. Exact port.
+''::::::::::::::
+sub mdl_change_yaw ( g as Game )
+    dim cur as single, ideal as single, mv as single
+
+    cur = mdl_anglemod( g.mdl.yaw )
+    ideal = g.mdl.ideal_yaw
+    if ( cur = ideal ) then exit sub
+
+    mv = ideal - cur
+    if ( ideal > cur ) then
+        if ( mv >= 180.0 ) then mv = mv - 360.0
+    else
+        if ( mv <= -180.0 ) then mv = mv + 360.0
+    end if
+
+    if ( mv > 0.0 ) then
+        if ( mv > MDL_YAW_SPEED# ) then mv = MDL_YAW_SPEED#
+    else
+        if ( mv < -MDL_YAW_SPEED# ) then mv = -MDL_YAW_SPEED#
+    end if
+
+    g.mdl.yaw = mdl_anglemod( cur + mv )
+end sub
+
+''::::::::::::::
+'' name: mdl_movestep
+'' desc: SV_movestep's own vertical dance (sv_move.c) -- the piece a bare
+''       pl_trace does not do, and the reason the model used to float:
+''       a horizontal-only trace at a fixed z never touches a floor that
+''       stepped down (nothing blocks it, so it "succeeds" at the old
+''       height), and never climbs one that stepped up either.
+''
+''       One trace of the entity's own box (pl_trace, hull 1 -- the same
+''       collision the player uses), from (new xy, old z + STEPSIZE) down
+''       to (new xy, old z - STEPSIZE): whatever it lands on within that
+''       18-unit-either-way band is the new floor. Starting inside solid
+''       (a low ceiling at +STEPSIZE) retries once from the ORIGINAL
+''       height instead, matching the C original exactly. Nothing hit
+''       anywhere in the band means the step would walk off an edge, and
+''       is refused outright -- there is no FL_PARTIALGROUND fall-through
+''       here (that recovers a monster standing on a lift that got
+''       pulled out from under it, which nothing in this world does yet).
+''
+''       NOT ported: SV_CheckBottom's four-corner support check, so a
+''       monster can still teeter over a corner where the real game would
+''       refuse the step. cport's own mob.c has the full version.
+''::::::::::::::
+function mdl_movestep ( _
+    g as Game, _
+    byval dx as single, _
+    byval dy as single, _
+    byval model_count as integer, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+) as integer
+    dim start as Vec3, fin as Vec3
+    dim tr as TraceResult
+
+    start.x = g.mdl.pos.x + dx
+    start.y = g.mdl.pos.y + dy
+    start.z = g.mdl.pos.z + MDL_STEPSIZE#
+
+    fin.x = start.x
+    fin.y = start.y
+    fin.z = g.mdl.pos.z - MDL_STEPSIZE#
+
+    pl_trace start, fin, tr, model_count, models(), brush(), clp_buffer(), planes()
+
+    if ( tr.all_solid ) then
+        mdl_movestep = 0
+        exit function
+    end if
+
+    if ( tr.start_solid ) then
+        start.z = g.mdl.pos.z
+        pl_trace start, fin, tr, model_count, models(), brush(), clp_buffer(), planes()
+        if ( tr.all_solid or tr.start_solid ) then
+            mdl_movestep = 0
+            exit function
+        end if
+    end if
+
+    if ( tr.frac > 0.999 ) then
+        '' nothing within +-STEPSIZE of the new xy: an edge, not a floor
+        mdl_movestep = 0
+        exit function
+    end if
+
+    g.mdl.pos.x = tr.end_pos.x
+    g.mdl.pos.y = tr.end_pos.y
+    g.mdl.pos.z = tr.end_pos.z
+    mdl_movestep = -1
+end function
+
+''::::::::::::::
+'' name: mdl_step_dir
+'' desc: SV_StepDirection (sv_move.c), exact -- including its own oddity:
+''       the step is REVERTED (position only, not the turn) when not yet
+''       within 45 degrees of the requested heading, but TRUE is still
+''       returned. A monster not yet facing a new direction visibly turns
+''       in place for a tick or two before it starts walking -- that is
+''       this, not a bug.
+''::::::::::::::
+function mdl_step_dir ( _
+    g as Game, _
+    byval yaw as single, _
+    byval dist as single, _
+    byval model_count as integer, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+) as integer
+    dim rad as single
+    dim old as Vec3
+    dim dx as single, dy as single
+    dim delta as single
+
+    g.mdl.ideal_yaw = yaw
+    mdl_change_yaw g
+
+    rad = yaw * 0.017453293
+    old.x = g.mdl.pos.x : old.y = g.mdl.pos.y : old.z = g.mdl.pos.z
+    dx = cos( rad ) * dist
+    dy = sin( rad ) * dist
+
+    if ( mdl_movestep( g, dx, dy, model_count, models(), brush(), planes() ) ) then
+        delta = mdl_anglemod( g.mdl.yaw - g.mdl.ideal_yaw )
+        if ( delta > 45.0 and delta < 315.0 ) then
+            g.mdl.pos.x = old.x : g.mdl.pos.y = old.y : g.mdl.pos.z = old.z
+        end if
+        mdl_step_dir = -1
+    else
+        mdl_step_dir = 0
+    end if
+end function
+
+''::::::::::::::
+'' name: mdl_new_chase_dir
+'' desc: SV_NewChaseDir (sv_move.c), exact -- the real "path finding":
+''       eight compass directions, a direct-diagonal try first, then the
+''       two cardinal components (order coin-flipped the same way the
+''       original does), then the old heading, then a full randomised
+''       sweep, then reverse. No graph, no search, no A* -- this IS what
+''       id shipped.
+''::::::::::::::
+sub mdl_new_chase_dir ( _
+    g as Game, _
+    goal as Vec3, _
+    byval dist as single, _
+    byval model_count as integer, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+)
+    dim deltax as single, deltay as single
+    dim d1 as single, d2 as single, tdir as single, tmp as single
+    dim olddir as single, turnaround as single
+
+    olddir = mdl_anglemod( int( g.mdl.ideal_yaw / 45.0 ) * 45.0 )
+    turnaround = mdl_anglemod( olddir - 180.0 )
+
+    deltax = goal.x - g.mdl.pos.x
+    deltay = goal.y - g.mdl.pos.y
+
+    if ( deltax > 10.0 ) then
+        d1 = 0.0
+    elseif ( deltax < -10.0 ) then
+        d1 = 180.0
+    else
+        d1 = -1.0
+    end if
+
+    if ( deltay < -10.0 ) then
+        d2 = 270.0
+    elseif ( deltay > 10.0 ) then
+        d2 = 90.0
+    else
+        d2 = -1.0
+    end if
+
+    '' direct diagonal route
+    if ( d1 <> -1.0 and d2 <> -1.0 ) then
+        if ( d1 = 0.0 ) then
+            if ( d2 = 90.0 ) then tdir = 45.0 else tdir = 315.0
+        else
+            if ( d2 = 90.0 ) then tdir = 135.0 else tdir = 215.0
+        end if
+        if ( tdir <> turnaround ) then
+            if ( mdl_step_dir( g, tdir, dist, model_count, models(), brush(), planes() ) ) then exit sub
+        end if
+    end if
+
+    '' the two cardinal components, order coin-flipped exactly as the
+    '' original's own (rand()&3)&1 -- a plain OR here would risk BASIC
+    '' evaluating both operands and losing the intended 50/50 skip, so
+    '' it is a single AND-1 test, not two.
+    if ( ( int( rnd * 4 ) and 1 ) or ( abs( deltay ) > abs( deltax ) ) ) then
+        tmp = d1 : d1 = d2 : d2 = tmp
+    end if
+
+    if ( d1 <> -1.0 and d1 <> turnaround ) then
+        if ( mdl_step_dir( g, d1, dist, model_count, models(), brush(), planes() ) ) then exit sub
+    end if
+    if ( d2 <> -1.0 and d2 <> turnaround ) then
+        if ( mdl_step_dir( g, d2, dist, model_count, models(), brush(), planes() ) ) then exit sub
+    end if
+
+    '' no direct path -- hold the old heading, then sweep all eight
+    '' compass points in a randomised order, then reverse
+    if ( olddir <> -1.0 ) then
+        if ( mdl_step_dir( g, olddir, dist, model_count, models(), brush(), planes() ) ) then exit sub
+    end if
+
+    if ( int( rnd * 2 ) ) then
+        for tdir = 0.0 to 315.0 step 45.0
+            if ( tdir <> turnaround ) then
+                if ( mdl_step_dir( g, tdir, dist, model_count, models(), brush(), planes() ) ) then exit sub
+            end if
+        next tdir
+    else
+        for tdir = 315.0 to 0.0 step -45.0
+            if ( tdir <> turnaround ) then
+                if ( mdl_step_dir( g, tdir, dist, model_count, models(), brush(), planes() ) ) then exit sub
+            end if
+        next tdir
+    end if
+
+    if ( mdl_step_dir( g, turnaround, dist, model_count, models(), brush(), planes() ) ) then exit sub
+
+    g.mdl.ideal_yaw = olddir   '' can't move
+end sub
+
+''::::::::::::::
+'' name: mdl_move_to_goal
+'' desc: SV_MoveToGoal (sv_move.c), exact: a 1-in-4 chance to skip the
+''       direct step and go straight to the compass search, matching
+''       C's short-circuit || (mdl_step_dir has side effects, so this is
+''       written to guarantee it is not called on the skip roll, unlike
+''       a plain BASIC OR which does not guarantee short-circuiting).
+''::::::::::::::
+sub mdl_move_to_goal ( _
+    g as Game, _
+    goal as Vec3, _
+    byval dist as single, _
+    byval model_count as integer, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+)
+    dim skip as integer, stepped as integer
+
+    skip = ( int( rnd * 4 ) = 1 )
+    if ( skip = 0 ) then
+        stepped = mdl_step_dir( g, g.mdl.ideal_yaw, dist, model_count, models(), brush(), planes() )
+    else
+        stepped = 0
+    end if
+
+    if ( skip or ( stepped = 0 ) ) then
+        mdl_new_chase_dir g, goal, dist, model_count, models(), brush(), planes()
+    end if
+end sub
+
+''::::::::::::::
+'' name: mdl_find_target
+'' desc: FindTarget (ai.qc), collapsed to the one enemy this world can
+''       ever have -- the player. RANGE_NEAR and RANGE_MID both end up
+''       requiring infront() here (client.show_hostile is a monster-only
+''       field, never set on a player, so client.show_hostile < time is
+''       always true for a real player and the two ranges behave alike).
+''       RANGE_MELEE skips infront -- "will become hostile even if back
+''       is turned" (ai.qc's own comment).
+''
+''       visible() is approximated through hull 1 (the player-sized
+''       clipnodes pl_trace already walks), not the true hull-0 point
+''       trace id's traceline() uses -- this renderer has no hull-0 line
+''       trace. A real point trace sees past a few corners this cannot.
+''::::::::::::::
+function mdl_find_target ( _
+    g as Game, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+) as integer
+    dim eye as Vec3, peye as Vec3
+    dim dx as single, dy as single, dz as single
+    dim r as single
+    dim tr as TraceResult
+    dim yaw_rad as single
+    dim fwd_x as single, fwd_y as single
+    dim dlen as single, dot as single
+
+    mdl_find_target = 0
+
+    eye.x  = g.mdl.pos.x : eye.y  = g.mdl.pos.y : eye.z  = g.mdl.pos.z + MDL_VIEW_OFS#
+    peye.x = g.pl.pos.x  : peye.y = g.pl.pos.y  : peye.z = g.pl.pos.z  + PL_EYE#
+
+    dx = peye.x - eye.x : dy = peye.y - eye.y : dz = peye.z - eye.z
+    r = sqr( dx*dx + dy*dy + dz*dz )
+    if ( r >= MDL_RANGE_MID# ) then exit function   '' RANGE_FAR
+
+    pl_trace eye, peye, tr, g.wld.count.models, models(), brush(), clp_buffer(), planes()
+    if ( tr.frac <= 0.999 or tr.all_solid ) then exit function   '' not visible
+
+    if ( r >= MDL_RANGE_MELEE# ) then
+        yaw_rad = g.mdl.yaw * 0.017453293
+        fwd_x = cos( yaw_rad ) : fwd_y = sin( yaw_rad )
+        dlen = sqr( dx*dx + dy*dy )
+        if ( dlen > 0.0 ) then
+            dot = ( dx*fwd_x + dy*fwd_y ) / dlen
+        else
+            dot = 1.0
+        end if
+        if ( dot <= 0.3 ) then exit function   '' not infront
+    end if
+
+    '' found -- HuntTarget's own side effect: face the enemy immediately
+    g.mdl.ideal_yaw = mdl_vectoyaw( dx, dy )
+    mdl_find_target = -1
+end function
+
+''::::::::::::::
+'' name: mdl_think
+'' desc: id's own monster AI (ai.qc/sv_move.c), ported exactly: a
+''       walkmonster with no path_corner target stands (ai_stand) until
+''       FindTarget sees the player, then chases forever (ai_run) via
+''       SV_MoveToGoal / SV_NewChaseDir -- see q_mdl.bi's own note on why
+''       there is no "explore the map" state in real Quake at all. The
+''       "path finding" is the compass search in mdl_new_chase_dir; there
+''       is no A*, no graph, because id never shipped one.
+''
+''       Movement distance and displayed frame are the SAME state: while
+''       army_runN is on screen, ai_run(N)'s own distance is what moves
+''       that tick, and the frame only advances afterwards -- matching
+''       soldier.qc's state-machine frames exactly, not a fixed per-think
+''       distance.
+''
+''       10Hz, like the player's own tick rate and Quake's real think
+''       clock -- driven off g.rdr.anim_time, already running at real
+''       seconds, so no new clock is needed.
+''::::::::::::::
+sub mdl_think ( _
+    g as Game, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+)
+    dim dist as single
+    dim goal as Vec3
+
+    if ( g.mdl.loaded = 0 ) then exit sub
+    if ( g.rdr.anim_time < g.mdl.next_think ) then exit sub
+    g.mdl.next_think = g.rdr.anim_time + 0.1
+
+    if ( g.mdl.state = MDL_ST_STAND% ) then
+        if ( mdl_find_target( g, models(), brush(), planes() ) ) then
+            g.mdl.state = MDL_ST_RUN%
+            g.mdl.anim_frame = 0
+        else
+            g.mdl.anim_frame = ( g.mdl.anim_frame + 1 ) mod MDL_STAND_FRAMES%
+        end if
+        exit sub
+    end if
+
+    dist = mdl_run_dist( g.mdl.anim_frame )
+    goal.x = g.pl.pos.x : goal.y = g.pl.pos.y : goal.z = g.pl.pos.z
+    mdl_move_to_goal g, goal, dist, g.wld.count.models, models(), brush(), planes()
+    g.mdl.anim_frame = ( g.mdl.anim_frame + 1 ) mod MDL_RUN_FRAMES%
+end sub
