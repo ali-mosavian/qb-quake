@@ -34,9 +34,8 @@
 EMS_PAGE_MASK   equ     3FFFh
 EMS_PAGE_SHIFT  equ     14
 
-;; mgl's conventional allocator, until this layer grows its own.
-memAlloc        proto   far pascal :dword
-memFree         proto   far pascal :dword
+qgl_mem_alloc   proto   far pascal :dword
+qgl_mem_free    proto   far pascal :dword
 
 qgl_gem_init        proto   far pascal
 qgl_gem_alloc       proto   far pascal :dword
@@ -85,7 +84,7 @@ qgl_sf_new      proc    public uses bx cx si di es,\
                 adc     dx, 0
                 mov     word ptr nbytes, ax
                 mov     word ptr nbytes+2, dx
-                invoke  memAlloc, nbytes
+                invoke  qgl_mem_alloc, nbytes
                 mov     word ptr hdr, ax
                 mov     word ptr hdr+2, dx
                 or      ax, dx
@@ -123,7 +122,7 @@ qgl_sf_new      proc    public uses bx cx si di es,\
                 test    ax, cx
                 jnz     @@fail                  ;; not a power of two
 
-                invoke  memAlloc, SIZEOF Surface
+                invoke  qgl_mem_alloc, SIZEOF Surface
                 mov     word ptr hdr, ax
                 mov     word ptr hdr+2, dx
                 or      ax, dx
@@ -154,7 +153,7 @@ qgl_sf_new      proc    public uses bx cx si di es,\
                 mov     dx, word ptr hdr+2
                 ret
 
-@@fail_free:    invoke  memFree, hdr
+@@fail_free:    invoke  qgl_mem_free, hdr
 @@fail:         xor     ax, ax
                 xor     dx, dx
                 ret
@@ -177,7 +176,7 @@ qgl_sf_free     proc    public uses bx cx es,\
 
                 invoke  qgl_gem_free, es:[bx].Surface.handle
 
-@@justfree:     invoke  memFree, s
+@@justfree:     invoke  qgl_mem_free, s
 @@:             ret
 qgl_sf_free     endp
 

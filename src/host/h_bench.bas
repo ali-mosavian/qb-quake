@@ -80,6 +80,9 @@ declare function r_span_poly_peak ( ) as integer
 declare function r_span_edge_peak ( ) as integer
 declare function r_span_ael_peak ( ) as integer
 declare function sys_tick_hz ( ) as single
+'' qgl/mem.asm -- DOS's own numbers, not BASIC's. See the use site.
+declare function qgl_mem_avail ( ) as long
+declare function qgl_mem_free_sum ( ) as long
 declare function mod_cm_bytes ( g as Game ) as long
 declare function mod_geom_rows ( g as Game ) as integer
 declare function mod_lm_bytes ( g as Game ) as long
@@ -264,6 +267,15 @@ sub host_bench_report ( _
     print #benchf, "dt " + ltrim$(str$( g.scr.frame_time ))
     print #benchf, "tick_hz " + ltrim$(str$( sys_tick_hz ))
     print #benchf, "mem_avail " + ltrim$(str$( memAvail& ))
+    '' The same question asked of DOS instead of BASIC. memAvail
+    '' returns MAX(largest free block, BASIC's far-heap SIZE), so it
+    '' can report a heap's extent rather than its free space -- a
+    '' live MCB walk once found 9,312 bytes free where it said
+    '' ~260,000. qgl_avail is what an allocation can actually get;
+    '' qgl_free_sum is every free block added up, so the gap between
+    '' the two is the fragmentation.
+    print #benchf, "qgl_avail " + ltrim$(str$( qgl_mem_avail& ))
+    print #benchf, "qgl_free_sum " + ltrim$(str$( qgl_mem_free_sum& ))
     print #benchf, "lm_size " + ltrim$(str$( mod_lm_bytes( g ) ))
     print #benchf, "lm_read " + ltrim$(str$( mod_lm_got( g ) ))
     print #benchf, "geom_rows " + ltrim$(str$( mod_geom_rows( g ) ))

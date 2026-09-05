@@ -7,6 +7,7 @@ D               textequ <dword ptr>
 tchk            proto   far :word, :word, :word
 tfill           proto   far :word, :word, :word, :byte
 tvrfy           proto   far :word, :word, :word, :byte
+tshow           proto   far :word, :dword
 
 ;; the layer under test
 qgl_vga_screen  proto   far

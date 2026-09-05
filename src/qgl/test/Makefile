@@ -15,12 +15,12 @@ B      ?= $(ROOT)/build/qgl-test
 JWASM  := $(TC)/jwasm -c -Cp -Zg -omf -I$(QGL) -I.
 JWLINK := $(TC)/jwlink
 
-TESTS  := t01base
+TESTS  := t01base t02mem
 
 # The layer under test. Every test links all of it -- these are small and
 # a per-test object list would drift from reality the first time a module
 # grew a dependency.
-QGLSRC := $(QGL)/vga.asm $(QGL)/gem.asm $(QGL)/sf.asm
+QGLSRC := $(QGL)/vga.asm $(QGL)/gem.asm $(QGL)/sf.asm $(QGL)/mem.asm
 QGLOBJ  = $(patsubst $(QGL)/%.asm,$(B)/%/qgl_%.obj,$(QGLSRC))
 
 all: $(TESTS:%=$(B)/%/pass)
@@ -31,16 +31,16 @@ $(TESTS): %: $(B)/%/pass
 $(B)/%/pass: $(B)/%/t.exe run1.sh
 	@sh run1.sh $(DOSBOX) $(@D)
 
-$(B)/%/t.exe: %.asm tfw.asm tfw.inc memstub.asm $(QGLSRC) $(QGL)/qgl.inc
+$(B)/%/t.exe: %.asm tfw.asm tfw.inc $(QGLSRC) $(QGL)/qgl.inc
 	@mkdir -p $(@D)
 	@$(JWASM) -Fo$(@D)/test.obj $< > /dev/null
 	@$(JWASM) -Fo$(@D)/tfw.obj tfw.asm > /dev/null
-	@$(JWASM) -Fo$(@D)/memstub.obj memstub.asm > /dev/null
 	@$(JWASM) -Fo$(@D)/vga.obj $(QGL)/vga.asm > /dev/null
 	@$(JWASM) -Fo$(@D)/gem.obj $(QGL)/gem.asm > /dev/null
 	@$(JWASM) -Fo$(@D)/sf.obj  $(QGL)/sf.asm  > /dev/null
+	@$(JWASM) -Fo$(@D)/mem.obj $(QGL)/mem.asm > /dev/null
 	@$(JWLINK) option quiet format dos name $@ \
-	    file $(@D)/test.obj,$(@D)/tfw.obj,$(@D)/memstub.obj,$(@D)/vga.obj,$(@D)/gem.obj,$(@D)/sf.obj
+	    file $(@D)/test.obj,$(@D)/tfw.obj,$(@D)/vga.obj,$(@D)/gem.obj,$(@D)/sf.obj,$(@D)/mem.obj
 
 clean:
 	rm -rf $(B)
