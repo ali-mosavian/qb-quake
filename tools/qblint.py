@@ -44,7 +44,7 @@ if __name__ == '__main__':
     # The subsystem directories the Makefile builds, and the headers.
     # NOT a recursive walk: src/test holds standalone mgl programs that
     # are not part of this build and never carried OPTION EXPLICIT.
-    dirs = ['host', 'render', 'game', 'gfx']
+    dirs = ['host', 'render', 'game', 'qgl']
     files = sorted([f for d in dirs
                       for f in glob.glob(os.path.join(root, d, '*.bas'))] +
                    glob.glob(os.path.join(root, 'inc', '*.bi')))

@@ -6,31 +6,43 @@
 ;; way. Conventional memory answers with arithmetic; EMS answers with a
 ;; page map.
 ;;
-;; ONE SLOT PER SURFACE, fixed at creation. mgl pools its four physical
-;; pages and evicts the least recently used, which means a pointer handed
-;; out by one surface stops being valid the moment ANY other surface asks
-;; for a window -- the cause of the gv_dst bug, of uglBuildSurf's
-;; corruption, and of the still-open "surface cache draws a different
-;; picture every run". With a fixed slot the only thing that can
-;; invalidate a row pointer is asking the SAME surface for a row in
-;; another page. Two surfaces can never take each other's window.
+;; THE SLOT IS THE CALLER'S, not the surface's. mgl's emsMapEx already
+;; takes an explicit physical page (0..3) for exactly this reason -- its
+;; own header says the plain accessor "evicts whatever the renderer had
+;; there", which is why the Ex form exists -- and q_map.bi's PAGE_SLOT
+;; has been using it that way all along. An earlier draft of this file
+;; claimed mgl pooled its four pages and evicted least-recently-used,
+;; and gave that as the reason for handing each surface a private slot.
+;; That was wrong on both counts: emsSlotAcquire/emsSlotLock appear
+;; nowhere in mgl, only in AGENTS.md's account of an experiment that was
+;; REVERTED, and four private slots cannot cover the nine or more EMS
+;; objects this renderer has live at once.
 ;;
-;; That costs the freedom to have more EMS surfaces live than there are
-;; slots, which is the trade: four at once, and the placement policy
-;; below keeps us inside it.
+;; So: the caller names the slot, and shares it deliberately where it
+;; must, under the discipline q_map.bi already documents -- map
+;; immediately before use, never hold the window across a call that
+;; could remap it.
 ;;
-;; PLACEMENT. Destination and depth in conventional memory, textures and
-;; lightmaps in EMS. Every EMS surface is then a power of two (atlas
-;; cells 4096/1024/256/64, font 2048) and divides the 16K page exactly,
-;; so no row ever straddles a page and bps needs no padding.
+;; WHAT ACTUALLY BUYS HEADROOM is placement, not slot policy. sb_build
+;; today holds four windows live at once -- destination, atlas, luxels,
+;; colormap -- which is 4 of 4 with nothing spare, and mgl's own span
+;; filler gave up depth over it (uglspan.asm: "UGL.Z.OFF only,
+;; deliberately. The depth window wants a fourth EMS slot"). Put the
+;; destination and the depth buffer in conventional memory and the
+;; builder needs three with one in hand.
+;;
+;; A texture the span filler reads must fit ONE 16K page: the texel
+;; fetch is a 16-bit effective address in one segment with the base
+;; patched in as an immediate, mapped once per polygon and never
+;; remapped. Exceeding it cost a measured 15.5% triangle dropout. At
+;; 8bpp that caps a texture at 128x128.
 ;;
 
 SF_CMEM         equ     0
 SF_EMS          equ     1
 
-;; EMS physical pages. 0 and 1 are not special to us the way they were to
-;; mgl (its plain accessors hardwired them), but the numbering is the
-;; hardware's: emsMapEx takes 0..3 and nothing else.
+;; EMS physical pages. The numbering is the hardware's: emsMapEx takes
+;; 0..3 and nothing else.
 SF_SLOT_MAX     equ     3
 
 SF              struc
@@ -38,7 +50,7 @@ sfWidth         dw      ?               ;; pixels
 sfHeight        dw      ?
 sfBps           dw      ?               ;; bytes per row
 sfWhere         db      ?               ;; SF_CMEM or SF_EMS
-sfSlot          db      ?               ;; EMS physical page, SF_EMS only
+sfSlot          db      ?               ;; physical page to map through, SF_EMS
 sfHnd           dw      ?               ;; EMS handle, or the segment if cmem
 sfOfs           dd      ?               ;; byte offset of row 0 in the store
 SF              ends
