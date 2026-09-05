@@ -37,6 +37,7 @@ option explicit
 '$include: 'q_pl.bi'
 '$include: 'q_ent.bi'
 '$include: 'q_snd.bi'
+'$include: 'q_mdl.bi'
 '$include: 'q_game.bi'
 
 dim shared lm_want_dbg as integer
@@ -98,6 +99,12 @@ declare sub v_update_camera ( _
     models() as Submodel, _
     planes() as Plane, _
     nodes() as Node _
+)
+declare sub mdl_think ( _
+    g as Game, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
 )
 declare sub ls_animate ( byval anim_time as single )
 declare sub r_set_frustum ( _
@@ -243,6 +250,10 @@ sub host_tick ( _
     '' and what the world does about it: camera, and the physics under it
     v_update_camera g, dt, cp_x(), cp_y(), cp_z(), brush(), models(), planes(), nodes()
 
+    '' the model's own movement -- Quake's real think rate (10Hz), gated
+    '' inside mdl_think itself against g.rdr.anim_time, not every tick
+    mdl_think g, models(), brush(), planes()
+
     '' and anything the world does to the player as a result of moving
     ent_check_teleport g, tele()
 
@@ -296,7 +307,8 @@ sub host_render ( _
     mip_buff_inf() as MipTex, _
     face_mdl() as integer, _
     cam_up as u3dVector3f, _
-    byval z_dc as long _
+    byval z_dc as long, _
+    mdltri_buffer() as MdlTri _
 )
     dim mtx_mdl as u3dMtrx
     dim zz as long                  '' soaks up uglZMode's return;
@@ -434,6 +446,17 @@ sub host_render ( _
         ptd = sys_now() - pt0
         g.pt.draw_sum = g.pt.draw_sum + ptd
         if ( ptd > g.pt.draw_max ) then g.pt.draw_max = ptd
+    end if
+
+    '' One alias model, real geometry, while depth is still on -- it goes
+    '' in WITH the world, not after it. Depth-tested like a brush entity:
+    '' the world only WRITES (arrives front to back by BSP order already),
+    '' this has no such guarantee. g.mdl.pos/yaw are mdl_think's own state
+    '' (pl_move.bas), updated once per tick -- drawing reads them, same
+    '' split host_tick/host_render already keep for the player.
+    if ( g.mdl.loaded ) then
+        mdl_draw g, mdltri_buffer(), g.mdl.pos, g.mdl.yaw, _
+                 mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
     end if
 
     '' leave depth off for the overlay, which is 2D and would otherwise

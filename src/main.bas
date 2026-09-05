@@ -56,6 +56,7 @@ option explicit
 '$include: 'q_pl.bi'
 '$include: 'q_ent.bi'
 '$include: 'q_snd.bi'
+'$include: 'q_mdl.bi'
 '$include: 'q_game.bi'
 
 ''
@@ -95,7 +96,8 @@ declare sub host_render ( _
     mip_buff_inf() as MipTex, _
     face_mdl() as integer, _
     cam_up as u3dVector3f, _
-    byval z_dc as long _
+    byval z_dc as long, _
+    mdltri_buffer() as MdlTri _
 )
 declare sub host_advance ( _
     g as Game, _
@@ -131,7 +133,8 @@ declare sub host_init ( _
     brush() as BrushModel, _
     tele() as Teleporter, _
     face_mdl() as integer, _
-    plat() as PlatEnt _
+    plat() as PlatEnt, _
+    mdltri_buffer() as MdlTri _
 )
 declare sub host_main ( _
     g as Game, _
@@ -152,7 +155,8 @@ declare sub host_main ( _
     mip_buff_inf() as MipTex, _
     face_mdl() as integer, _
     plat() as PlatEnt, _
-    tele() as Teleporter _
+    tele() as Teleporter, _
+    mdltri_buffer() as MdlTri _
 )
 
 ''
@@ -281,6 +285,13 @@ declare sub ent_load_spawn ( _
 declare sub pl_init ( _
     g as Game _
 )
+declare sub mdl_spawn ( _
+    g as Game, _
+    org as Vec3, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+)
 
 ''
 '' Simulation time owed but not yet run. Frames deliver time in whatever
@@ -346,6 +357,11 @@ dim mdl_buffer() as Submodel
 dim order_list() as integer
 dim poly_flag() as integer
 dim gv_buf() as integer
+
+'' One alias (.mdl) model's geometry -- "mdl_buffer" above is already the
+'' BSP submodel array (doors, platforms), a different "model" entirely;
+'' these are named mdltri/mdlvert to not collide with it.
+dim mdltri_buffer() as MdlTri
 
 ''
 '' view.bas. Declared here rather than in a header: main is the only
@@ -425,7 +441,8 @@ dim shared z_dc as long
     host_init g, tri_buffer(), tex_inf_buff(), pln_buffer(), nds_buffer(), _
               mdl_buffer(), order_list(), poly_flag(), gv_buf(), bit_array(), _
               cp_x(), cp_y(), cp_z(), mip_buff_inf(), _
-              frustum(), brush(), tele(), face_mdl(), plat()
+              frustum(), brush(), tele(), face_mdl(), plat(), _
+              mdltri_buffer()
     if ( g.env.dump_tex ) then
         mod_tex_dump g
     elseif ( g.env.dump_set ) then
@@ -436,7 +453,8 @@ dim shared z_dc as long
                   tri_buffer(), tex_inf_buff(), pln_buffer(), nds_buffer(), _
                   mdl_buffer(), order_list(), poly_flag(), gv_buf(), brush(), _
                   frustum(), bit_array(), _
-                  mip_buff_inf(), face_mdl(), plat(), tele()
+                  mip_buff_inf(), face_mdl(), plat(), tele(), _
+                  mdltri_buffer()
     end if
     host_shutdown
     
@@ -490,7 +508,8 @@ sub host_init ( _
     brush() as BrushModel, _
     tele() as Teleporter, _
     face_mdl() as integer, _
-    plat() as PlatEnt _
+    plat() as PlatEnt, _
+    mdltri_buffer() as MdlTri _
 )
     ''
     '' Load profiling. A 1 kHz AUTOINIT timer counts milliseconds, and the
@@ -581,6 +600,22 @@ sub host_init ( _
     if ( g.env.use_lm ) then mod_load_colormap g
     sys_mem_mark "colormap"
 
+    '' One alias model, now wandering on its own (mdl_think, pl_move.bas)
+    '' rather than loaded-and-static: the "basic version" milestone this
+    '' started as. The game's own palette (set inside vid_init, above)
+    '' already applies -- the skin's indices come from the same Quake
+    '' palette mkmdl.py baked them from, so nothing extra to install here.
+    mdl_load g, "soldier", mdltri_buffer()
+    if ( g.mdl.loaded ) then
+        randomize timer
+        dim mdl_spawn_rad as single, mdl_spawn_org as Vec3
+        mdl_spawn_rad = g.cam.start_angle * 0.017453293
+        mdl_spawn_org.x = g.pl.pos.x + 32.0 * cos( mdl_spawn_rad )
+        mdl_spawn_org.y = g.pl.pos.y + 32.0 * sin( mdl_spawn_rad )
+        mdl_spawn_org.z = g.pl.pos.z
+        mdl_spawn g, mdl_spawn_org, mdl_buffer(), brush(), pln_buffer()
+    end if
+
     t_vid = timer
 
     if ( g.env.bench_frames > 0 ) then
@@ -621,7 +656,8 @@ sub host_main ( _
     mip_buff_inf() as MipTex, _
     face_mdl() as integer, _
     plat() as PlatEnt, _
-    tele() as Teleporter _
+    tele() as Teleporter, _
+    mdltri_buffer() as MdlTri _
 )
     dim mtx_prj as u3dMtrx
     dim aspect as single
@@ -729,7 +765,8 @@ sub host_main ( _
     ''
     g.rdr.backface = -1
     if ( g.env.no_cull ) then g.rdr.backface = 0
-    g.scr.stats    = -1
+    g.scr.stats    = 0
+    if ( g.env.want_stats ) then g.scr.stats = -1
     if ( g.env.no_stats ) then g.scr.stats = 0
 
     redim cp_x(CP_MAX) as integer
@@ -798,7 +835,8 @@ sub host_main ( _
         host_render g, h_dst_dc, mtx_prj, xresh, yresh, tri_buffer(), tex_inf_buff(), _
                      pln_buffer(), nds_buffer(), mdl_buffer(), order_list(), poly_flag(), _
                      gv_buf(), brush(), frustum(), bit_array(), _
-                     mip_buff_inf(), face_mdl(), cam_up, z_dc
+                     mip_buff_inf(), face_mdl(), cam_up, z_dc, _
+                     mdltri_buffer()
 
 
         ''
