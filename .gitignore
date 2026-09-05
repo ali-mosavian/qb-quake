@@ -13,3 +13,4 @@ data/assets/
 # Python bytecode from importing tools/ modules in a scratch script.
 __pycache__/
 dosbox-crash.log
+*.o
