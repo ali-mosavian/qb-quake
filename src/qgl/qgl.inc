@@ -100,6 +100,37 @@ MemOps          ends
 MEM_LARGEST     equ     0 * (SIZEOF MemOps)
 MEM_TOTAL       equ     1 * (SIZEOF MemOps)
 
+;;
+;; A loaded font: header and payload in ONE block, with the payload
+;; addressed by OFFSET from the header rather than by pointer. Two bytes
+;; instead of four, and it survives the block being moved.
+;;
+;; adv is the default advance, and it is 4 for this renderer's own font --
+;; the glyphs are 4x6 ink inside an 8x8 cell and draw_string has always
+;; stepped 4, letting the cells overlap where the mask is clear. A
+;; per-glyph table (flags bit 0) overrides it, so proportional text needs
+;; a different file and not a different format.
+;;
+FONT_PROP       equ     1               ;; flags: per-glyph advance present
+
+;; The file IS this struct, magic and all: mkfont.py writes bits_ofs and
+;; adv_ofs because that end knows them, so loading is a read and a magic
+;; check with no fixup pass to get wrong.
+Font            struc
+magic           dd      ?               ;; "FNT1"
+cell_w          db      ?
+cell_h          db      ?
+rowbytes        db      ?               ;; (cell_w+7)>>3
+flags           db      ?
+adv             db      ?               ;; default advance
+fpad            db      ?
+first           dw      ?               ;; first codepoint present
+count           dw      ?
+bits_ofs        dw      ?               ;; from the block base
+adv_ofs         dw      ?               ;; 0 when there is no table
+fpad2           dw      ?
+Font            ends
+
 ;; Fields are unprefixed: they are scoped to the struct at every use
 ;; (.Surface.stride), and two structs may share a field name -- measured,
 ;; not assumed. The one real constraint is MASM's reserved words, which
