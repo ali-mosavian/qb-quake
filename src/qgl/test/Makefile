@@ -23,7 +23,7 @@ TESTS  := $(filter-out tfw,$(basename $(wildcard t*.asm)))
 # The layer under test. Every test links all of it -- these are small and
 # a per-test object list would drift from reality the first time a module
 # grew a dependency.
-QGLSRC := $(QGL)/vga.asm $(QGL)/gem.asm $(QGL)/sf.asm $(QGL)/mem.asm $(QGL)/txt.asm $(QGL)/file.asm $(QGL)/mgldc.asm $(QGL)/dr.asm $(QGL)/z.asm $(QGL)/clip.asm
+QGLSRC := $(QGL)/vga.asm $(QGL)/gem.asm $(QGL)/sf.asm $(QGL)/mem.asm $(QGL)/txt.asm $(QGL)/file.asm $(QGL)/mgldc.asm $(QGL)/dr.asm $(QGL)/z.asm $(QGL)/clip.asm $(QGL)/rs.asm
 # Objects are DERIVED from QGLSRC, never listed again. Hand-listing them
 # meant every new module had to be added in three places, and twice a
 # careless substitution folded two assembles into one and broke the link.
