@@ -49,7 +49,7 @@ qgl$prevmode    db      3               ;; whatever was current at init
 ;; Records the current mode, sets 13h, hands back the screen. There is
 ;; no failure path worth reporting: INT 10h has none.
 ;;::::::::::::::
-qgl_vga_init        proc    public
+qgl_vga_init    proc    public
                 mov     ah, 0Fh
                 int     10h                     ;; al = current mode
                 mov     [qgl$prevmode], al
@@ -61,18 +61,18 @@ qgl_vga_init        proc    public
                 mov     dx, ds
                 mov     ax, offset qgl$screen
                 ret
-qgl_vga_init        endp
+qgl_vga_init    endp
 
 
 ;;::::::::::::::
 ;; qgl_vga_shutdown ()
 ;;::::::::::::::
-qgl_vga_shutdown    proc    public
+qgl_vga_shutdown proc    public
                 mov     al, [qgl$prevmode]
                 xor     ah, ah
                 int     10h
                 ret
-qgl_vga_shutdown    endp
+qgl_vga_shutdown endp
 
 
 ;;::::::::::::::
@@ -81,11 +81,11 @@ qgl_vga_shutdown    endp
 ;; The same surface qgl_vga_init returned, for callers that did not run the
 ;; init themselves.
 ;;::::::::::::::
-qgl_vga_screen      proc    public
+qgl_vga_screen  proc    public
                 mov     dx, ds
                 mov     ax, offset qgl$screen
                 ret
-qgl_vga_screen      endp
+qgl_vga_screen  endp
 
 
 ;;::::::::::::::
@@ -95,7 +95,7 @@ qgl_vga_screen      endp
 ;; retrace wait: the palette is set at load, not per frame, so tearing a
 ;; ramp for one frame costs nothing and waiting costs a scan.
 ;;::::::::::::::
-qgl_vga_palette     proc    public uses si ds,\
+qgl_vga_palette proc    public uses si ds,\
                         pal:far ptr byte
 
                 lds     si, pal
@@ -113,6 +113,6 @@ qgl_vga_palette     proc    public uses si ds,\
                 loop    @@next
 
                 ret
-qgl_vga_palette     endp
+qgl_vga_palette endp
 
                 end

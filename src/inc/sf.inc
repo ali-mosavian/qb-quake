@@ -38,8 +38,28 @@
 ;; 8bpp that caps a texture at 128x128.
 ;;
 
-SF_CMEM         equ     0
-SF_EMS          equ     1
+;;
+;; DISPATCH, not a compare. One entry per kind of surface, holding the
+;; routines that kind needs -- mgl's ul$dctTB, narrowed to the two kinds
+;; we have. The type constant IS the byte offset into the table, the
+;; same trick as DC_MEM equ 0 * T DCT, so a call site indexes with no
+;; multiply and no branch:
+;;
+;;      mov     cl, es:[bx].SF.sfWhere
+;;      xor     ch, ch
+;;      call    qgl$typeTB[cx].sftRow
+;;
+;; One field today. It is a struct rather than a bare word so that
+;; adding the next per-kind routine does not move SF_CMEM and SF_EMS
+;; out from under every surface already built with them.
+;;
+SFT             struc
+sftRow          dw      ?               ;; near: es:bx = surface, dx:ax = byte
+                                        ;; offset of the row -> dx:ax far ptr
+SFT             ends
+
+SF_CMEM         equ     0 * (SIZEOF SFT)
+SF_EMS          equ     1 * (SIZEOF SFT)
 
 ;; EMS physical pages. The numbering is the hardware's: emsMapEx takes
 ;; 0..3 and nothing else.

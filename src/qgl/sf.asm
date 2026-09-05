@@ -49,16 +49,16 @@ qgl_gem_map         proto   far pascal :word, :word, :word
 ;;::::::::::::::
 ;; qgl_sf_init () -> ax nonzero if EMS surfaces are possible
 ;;::::::::::::::
-qgl_sf_init         proc    public
+qgl_sf_init     proc    public
                 invoke  qgl_gem_init
                 ret
-qgl_sf_init         endp
+qgl_sf_init     endp
 
 
 ;;::::::::::::::
 ;; qgl_sf_new ( w:word, h:word, where:word ) -> far ptr, or 0:0
 ;;::::::::::::::
-qgl_sf_new          proc    public uses bx cx si di es,\
+qgl_sf_new      proc    public uses bx cx si di es,\
                         wid:word, hgt:word, whr:word, slot:word
 
                 local   nbytes:dword
@@ -158,13 +158,13 @@ qgl_sf_new          proc    public uses bx cx si di es,\
 @@fail:         xor     ax, ax
                 xor     dx, dx
                 ret
-qgl_sf_new          endp
+qgl_sf_new      endp
 
 
 ;;::::::::::::::
 ;; qgl_sf_free ( s:far ptr )
 ;;::::::::::::::
-qgl_sf_free         proc    public uses bx cx es,\
+qgl_sf_free     proc    public uses bx cx es,\
                         s:dword
 
                 les     bx, s
@@ -179,29 +179,23 @@ qgl_sf_free         proc    public uses bx cx es,\
 
 @@justfree:     invoke  memFree, s
 @@done:         ret
-qgl_sf_free         endp
+qgl_sf_free     endp
 
 
 ;;::::::::::::::
-;; qgl_sf_row ( s:far ptr, y:word ) -> far ptr to row y
+;; qgl$row_cmem / qgl$row_ems -- the two halves of a row lookup.
 ;;
-;; Valid until this SAME surface is asked for a row in another page.
-;; Another surface asking for a row cannot disturb it: its slot is its
-;; own.
+;; INTERNAL, so registers, not the stack:
+;;      in   es:bx -> the surface
+;;           dx:ax  = byte offset of the row within its store
+;;      out  dx:ax  = far pointer to the row
+;;      uses cx si di
+;;
+;; Reached through qgl$typeTB, never by name. A third kind of surface is
+;; a table entry and a routine, not an edit to anything already working.
 ;;::::::::::::::
-qgl_sf_row          proc    public uses bx cx si di es,\
-                        s:dword, y:word
-
-                les     bx, s
-                mov     ax, es:[bx].SF.sfBps
-                mul     y                       ;; dx:ax = y * bps
-                add     ax, word ptr es:[bx].SF.sfOfs
-                adc     dx, word ptr es:[bx].SF.sfOfs+2
-
-                cmp     es:[bx].SF.sfWhere, SF_EMS
-                je      @@ems
-
-                ;; seg = sfHnd + linear>>4, off = linear and 15
+qgl$row_cmem    proc    near private
+                ;; seg = sfHnd + offset>>4, off = offset and 15
                 mov     cx, ax
                 and     cx, 000Fh
                 shr     ax, 4
@@ -212,27 +206,52 @@ qgl_sf_row          proc    public uses bx cx si di es,\
                 mov     dx, ax
                 mov     ax, cx
                 ret
+qgl$row_cmem    endp
 
-@@ems:          mov     di, ax
+
+qgl$row_ems     proc    near private
+                mov     di, ax
                 and     di, EMS_PAGE_MASK       ;; offset within the page
                 mov     cl, EMS_PAGE_SHIFT
                 shr     ax, cl
                 mov     si, dx
                 mov     cl, 16 - EMS_PAGE_SHIFT
                 shl     si, cl
-                or      ax, si                  ;; ax = logical page
+                or      ax, si                  ;; logical page
+                mov     si, ax
 
                 mov     cx, es:[bx].SF.sfHnd
-                xor     si, si
-                mov     si, ax
                 xor     ax, ax
                 mov     al, es:[bx].SF.sfSlot
-
                 invoke  qgl_gem_map, cx, si, ax
                 mov     dx, ax                  ;; segment, or 0
                 mov     ax, di
                 ret
-qgl_sf_row          endp
+qgl$row_ems     endp
+
+
+;;::::::::::::::
+;; qgl_sf_row ( s:far ptr, y:word ) -> far ptr to row y
+;;
+;; Good until the slot this surface maps through is remapped -- by this
+;; surface crossing a page, or by anything else sharing the slot.
+;;::::::::::::::
+qgl_sf_row      proc    public uses bx cx si di es,\
+                        s:dword, y:word
+
+                les     bx, s
+                mov     ax, es:[bx].SF.sfBps
+                mul     y                       ;; dx:ax = y * bps
+                add     ax, word ptr es:[bx].SF.sfOfs
+                adc     dx, word ptr es:[bx].SF.sfOfs+2
+
+                ;; sfWhere is already the byte offset into the table
+                mov     cl, es:[bx].SF.sfWhere
+                xor     ch, ch
+                mov     si, cx
+                call    qgl$typeTB[si].sftRow
+                ret
+qgl_sf_row      endp
 
 
 ;;::::::::::::::
@@ -242,7 +261,7 @@ qgl_sf_row          endp
 ;; Allocates nothing, owns nothing, and shares the parent's slot -- so a
 ;; view and its parent must never be walked at the same time.
 ;;::::::::::::::
-qgl_sf_view         proc    public uses bx si di es,\
+qgl_sf_view     proc    public uses bx si di es,\
                         v:dword, parent:dword, ofs:dword,\
                         wid:word, hgt:word, bps:word
 
@@ -273,7 +292,7 @@ qgl_sf_view         proc    public uses bx si di es,\
                 mov     ax, bps
                 mov     es:[bx].SF.sfBps, ax
                 ret
-qgl_sf_view         endp
+qgl_sf_view     endp
 
 
 ;;::::::::::::::
@@ -283,7 +302,7 @@ qgl_sf_view         endp
 ;; (-dumptex reads every atlas cell back through its own view) and not
 ;; for anything per frame.
 ;;::::::::::::::
-qgl_sf_pget         proc    public uses bx es,\
+qgl_sf_pget     proc    public uses bx es,\
                         s:dword, x:word, y:word
 
                 invoke  qgl_sf_row, s, y
@@ -293,13 +312,13 @@ qgl_sf_pget         proc    public uses bx es,\
                 mov     al, es:[bx]
                 xor     ah, ah
                 ret
-qgl_sf_pget         endp
+qgl_sf_pget     endp
 
 
 ;;::::::::::::::
 ;; qgl_sf_pset ( s:far ptr, x:word, y:word, c:word )
 ;;::::::::::::::
-qgl_sf_pset         proc    public uses bx es,\
+qgl_sf_pset     proc    public uses bx es,\
                         s:dword, x:word, y:word, col:word
 
                 invoke  qgl_sf_row, s, y
@@ -309,6 +328,12 @@ qgl_sf_pset         proc    public uses bx es,\
                 mov     al, byte ptr col
                 mov     es:[bx], al
                 ret
-qgl_sf_pset         endp
+qgl_sf_pset     endp
+
+
+.data
+;; One entry per surface kind, indexed by SF_CMEM / SF_EMS.
+qgl$typeTB      SFT     <offset qgl$row_cmem>
+                SFT     <offset qgl$row_ems>
 
                 end

@@ -42,7 +42,7 @@ qgl$emsok       dw      0
 ;; is populated on machines with no EMM at all, and the documented probe
 ;; is the device name sitting at offset 10 of the handler's segment.
 ;;::::::::::::::
-qgl_gem_init        proc    public uses bx si di es
+qgl_gem_init    proc    public uses bx si di es
 
                 mov     [qgl$emsok], 0
                 mov     [qgl$pgframe], 0
@@ -74,22 +74,22 @@ qgl_gem_init        proc    public uses bx si di es
 
 @@no:           xor     ax, ax
                 ret
-qgl_gem_init        endp
+qgl_gem_init    endp
 
 
 ;;::::::::::::::
 ;; qgl_gem_frame () -> ax = page frame segment, 0 if none
 ;;::::::::::::::
-qgl_gem_frame       proc    public
+qgl_gem_frame   proc    public
                 mov     ax, [qgl$pgframe]
                 ret
-qgl_gem_frame       endp
+qgl_gem_frame   endp
 
 
 ;;::::::::::::::
 ;; qgl_gem_alloc ( bytes:dword ) -> ax = handle, 0 on failure
 ;;::::::::::::::
-qgl_gem_alloc       proc    public uses bx cx dx,\
+qgl_gem_alloc   proc    public uses bx cx dx,\
                         nbytes:dword
 
                 cmp     [qgl$emsok], 0
@@ -124,13 +124,13 @@ qgl_gem_alloc       proc    public uses bx cx dx,\
 
 @@fail:         xor     ax, ax
                 ret
-qgl_gem_alloc       endp
+qgl_gem_alloc   endp
 
 
 ;;::::::::::::::
 ;; qgl_gem_free ( handle:word )
 ;;::::::::::::::
-qgl_gem_free        proc    public uses dx,\
+qgl_gem_free    proc    public uses dx,\
                         hnd:word
 
                 mov     dx, hnd
@@ -139,7 +139,7 @@ qgl_gem_free        proc    public uses dx,\
                 mov     ah, 45h
                 int     EMS_INT
 @@done:         ret
-qgl_gem_free        endp
+qgl_gem_free    endp
 
 
 ;;::::::::::::::
@@ -149,7 +149,7 @@ qgl_gem_free        endp
 ;; back the segment it now answers at. The caller owns the slot; nothing
 ;; here tracks or arbitrates them.
 ;;::::::::::::::
-qgl_gem_map         proc    public uses bx cx dx,\
+qgl_gem_map     proc    public uses bx cx dx,\
                         hnd:word, logpage:word, slot:word
 
                 mov     dx, hnd
@@ -169,7 +169,7 @@ qgl_gem_map         proc    public uses bx cx dx,\
 
 @@fail:         xor     ax, ax
                 ret
-qgl_gem_map         endp
+qgl_gem_map     endp
 
 
 .data
