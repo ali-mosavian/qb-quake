@@ -410,9 +410,13 @@ type Env
                                 '' tree moves the first and not the second,
                                 '' so a full-frame timing buries the effect
                                 '' under fill.
-    no_stats    as integer      '' -nostats: the overlay covers a third of the
-                                '' frame, which is a third of what a screenshot
-                                '' was taken to look at.
+    no_stats    as integer      '' -nostats: kept for scripts that already
+                                '' pass it -- the HUD is off by default now,
+                                '' so this is a no-op unless -stats also ran.
+    want_stats  as integer      '' -stats: the HUD defaults OFF (it covers a
+                                '' third of the frame, a third of what a
+                                '' screenshot was taken to look at); this
+                                '' opts back in for interactive use.
     bench_ticks as integer      '' -ticks N: stop after N simulation steps
                                 '' rather than N frames, so two runs at
                                 '' different framerates simulate exactly the

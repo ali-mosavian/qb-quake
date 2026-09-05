@@ -29,6 +29,7 @@ option explicit
 '$include: 'q_pl.bi'
 '$include: 'q_ent.bi'
 '$include: 'q_snd.bi'
+'$include: 'q_mdl.bi'
 '$include: 'q_game.bi'
 
 ''
@@ -170,6 +171,9 @@ sub sys_parse_args ( _
         end if
         if ( lcase$(argv(i)) = "-nostats" ) then
             g.env.no_stats = true
+        end if
+        if ( lcase$(argv(i)) = "-stats" ) then
+            g.env.want_stats = true
         end if
         if ( lcase$(argv(i)) = "-campath" ) then
             g.env.cam_path = true
