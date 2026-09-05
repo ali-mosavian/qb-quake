@@ -15,7 +15,7 @@ B      ?= $(ROOT)/build/qgl-test
 JWASM  := $(TC)/jwasm -c -Cp -Zg -omf -I$(QGL) -I.
 JWLINK := $(TC)/jwlink
 
-TESTS  := t01base t02mem
+TESTS  := t01base t02mem t03surf
 
 # The layer under test. Every test links all of it -- these are small and
 # a per-test object list would drift from reality the first time a module

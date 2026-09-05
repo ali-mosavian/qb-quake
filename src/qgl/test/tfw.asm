@@ -145,12 +145,12 @@ tshow           endp
 ;; alike.
 ;;::::::::::::::
 tfill           proc    far public uses bx cx di es,\
-                        sg:word, ofs:word, len:word, seed:byte
+                        sg:word, ofs:word, len:word, seed:word
 
                 mov     es, sg
                 mov     di, ofs
                 mov     cx, len
-                mov     al, seed
+                mov     ax, seed
 @@:             mov     es:[di], al
                 add     al, 7
                 inc     di
@@ -160,15 +160,15 @@ tfill           endp
 
 
 ;;::::::::::::::
-;; tvrfy ( sg:word, ofs:word, len:word, seed:byte ) -> ax = mismatches
+;; tvrfy ( sg:word, ofs:word, len:word, seed:word ) -> ax = mismatches
 ;;::::::::::::::
 tvrfy           proc    far public uses bx cx di es,\
-                        sg:word, ofs:word, len:word, seed:byte
+                        sg:word, ofs:word, len:word, seed:word
 
                 mov     es, sg
                 mov     di, ofs
                 mov     cx, len
-                mov     al, seed
+                mov     ax, seed
                 xor     bx, bx
 @@:             cmp     es:[di], al
                 je      @F

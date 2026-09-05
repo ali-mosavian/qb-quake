@@ -5,8 +5,8 @@ W               textequ <word ptr>
 D               textequ <dword ptr>
 
 tchk            proto   far :word, :word, :word
-tfill           proto   far :word, :word, :word, :byte
-tvrfy           proto   far :word, :word, :word, :byte
+tfill           proto   far :word, :word, :word, :word
+tvrfy           proto   far :word, :word, :word, :word
 tshow           proto   far :word, :dword
 
 ;; the layer under test

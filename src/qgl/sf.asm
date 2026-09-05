@@ -26,8 +26,8 @@
 ;;         header at part of another surface's store, which is what
 ;;         turned 648 texture dcs into 8 views.
 
-                .286
                 .model medium, pascal
+                .386
 
                 include qgl.inc
 
@@ -230,27 +230,106 @@ qgl$row_ems     endp
 
 
 ;;::::::::::::::
-;; qgl_sf_row ( s:far ptr, y:word ) -> far ptr to row y
+;; qgl$row -- row y of a surface, whichever kind it is.
 ;;
-;; Good until the slot this surface maps through is remapped -- by this
-;; surface crossing a page, or by anything else sharing the slot.
+;; INTERNAL: es:bx -> the surface, ax = y, dx:ax back. Everything else
+;; survives. This is the one that matters -- pget, pset and clear all go
+;; through it rather than paying a far call to reach their own module.
 ;;::::::::::::::
-qgl_sf_row      proc    public uses bx cx si di es,\
-                        s:dword, y:word
+qgl$row         proc    near private uses bx cx si
 
-                les     bx, s
-                mov     ax, es:[bx].Surface.stride
-                mul     y                       ;; dx:ax = y * bps
+                mov     cx, es:[bx].Surface.stride
+                mul     cx                      ;; dx:ax = y * stride
                 add     ax, word ptr es:[bx].Surface.base_ofs
                 adc     dx, word ptr es:[bx].Surface.base_ofs+2
 
-                ;; kind is already the byte offset into the table
+                ;; kind IS the byte offset into the table
                 mov     cl, es:[bx].Surface.kind
                 xor     ch, ch
                 mov     si, cx
                 call    qgl$typeTB[si].row
                 ret
+qgl$row         endp
+
+
+;;::::::::::::::
+;; qgl_sf_row ( s:far ptr, y:word ) -> far ptr to row y
+;;
+;; Good until the slot this surface maps through is remapped -- by this
+;; surface crossing a page, or by anything else sharing the slot.
+;;::::::::::::::
+qgl_sf_row      proc    public uses bx es,\
+                        s:dword, y:word
+
+                les     bx, s
+                mov     ax, y
+                call    qgl$row
+                ret
 qgl_sf_row      endp
+
+
+;;::::::::::::::
+;; qgl_sf_clear ( s:far ptr, val:word )
+;;
+;; Every pixel, one row at a time -- which is what makes it work for an
+;; EMS surface at all: qgl$row remaps as the rows cross pages, and a
+;; single flat run could not.
+;;
+;; Aligned then dword then tail, same shape as qgl_mem_copy, because the
+;; backbuffer clear is per frame and a quarter of the stores is a quarter
+;; of what the emulator bills for.
+;;::::::::::::::
+qgl_sf_clear    proc    public uses bx cx si di es,\
+                        s:dword, val:word
+
+                les     bx, s
+                xor     si, si                  ;; y
+
+@@row:          cmp     si, es:[bx].Surface.y_res
+                jae     @@done
+
+                mov     ax, si
+                call    qgl$row                 ;; dx:ax = this row
+                mov     cx, es:[bx].Surface.stride
+
+                push    es                      ;; qgl$row gave us a
+                push    bx                      ;; different segment
+                mov     es, dx
+                mov     di, ax
+                mov     bx, cx                  ;; bytes left in this row
+
+                ;; the fill byte, four to a dword
+                mov     al, byte ptr val
+                mov     ah, al
+                mov     dx, ax
+                shl     eax, 16
+                mov     ax, dx
+
+                ;; up to the next dword boundary, but never past the row
+                mov     cx, di
+                neg     cx
+                and     cx, 3
+                cmp     cx, bx
+                jbe     @F
+                mov     cx, bx
+@@:             sub     bx, cx
+                rep     stosb
+
+                mov     cx, bx                  ;; the bulk
+                shr     cx, 2
+                rep     stosd
+
+                mov     cx, bx                  ;; and the tail
+                and     cx, 3
+                rep     stosb
+
+                pop     bx
+                pop     es
+                inc     si
+                jmp     @@row
+
+@@done:         ret
+qgl_sf_clear    endp
 
 
 ;;::::::::::::::
@@ -304,7 +383,9 @@ qgl_sf_view     endp
 qgl_sf_pget     proc    public uses bx es,\
                         s:dword, x:word, y:word
 
-                invoke  qgl_sf_row, s, y
+                les     bx, s
+                mov     ax, y
+                call    qgl$row
                 mov     es, dx
                 mov     bx, ax
                 add     bx, x
@@ -320,7 +401,9 @@ qgl_sf_pget     endp
 qgl_sf_pset     proc    public uses bx es,\
                         s:dword, x:word, y:word, col:word
 
-                invoke  qgl_sf_row, s, y
+                les     bx, s
+                mov     ax, y
+                call    qgl$row
                 mov     es, dx
                 mov     bx, ax
                 add     bx, x
