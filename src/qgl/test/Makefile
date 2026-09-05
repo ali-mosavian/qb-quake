@@ -15,13 +15,7 @@ B      ?= $(ROOT)/build/qgl-test
 JWASM  := $(TC)/jwasm -c -Cp -Zg -omf -I$(QGL) -I.
 JWLINK := $(TC)/jwlink
 
-# t04txt is NOT here: it is known-failing. qgl_txt_load returns a
-# non-null pointer for a file that does not exist and a zeroed block
-# for one that does, while t05file exercises the same file module
-# underneath it and passes every case including the missing file. The
-# fault is in qgl_txt_load's use of the module, not the module.
-# Run it deliberately with `make t04txt` while chasing that.
-TESTS  := t01base t02mem t03surf t05file
+TESTS  := t01base t02mem t03surf t04txt t05file
 
 # The layer under test. Every test links all of it -- these are small and
 # a per-test object list would drift from reality the first time a module

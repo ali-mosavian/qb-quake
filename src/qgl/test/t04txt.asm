@@ -51,6 +51,7 @@ bnp             dd      0
 strp            dd      0
 lit             dw      0
 wrong           dw      0
+gbits           db      0       ;; the row's bits, out of dx's way
 dbgw            dd      0
 
 .code
@@ -122,7 +123,10 @@ tmain           proc    far public uses bx cx dx si di es
                 add     ax, si
                 add     ax, es:[bx].Font.bits_ofs
                 mov     di, ax
-                mov     dl, es:[bx+di]          ;; eight bits
+                mov     al, es:[bx+di]
+                mov     gbits, al               ;; NOT dl: qgl_sf_pget
+                                                ;; returns through qgl$row,
+                                                ;; which writes dx
 
                 xor     di, di                  ;; column
 @@col:          cmp     di, 8
@@ -134,7 +138,7 @@ tmain           proc    far public uses bx cx dx si di es
                 ;; was this bit set?
                 mov     cx, 7
                 sub     cx, di
-                mov     al, dl
+                mov     al, gbits
                 shr     al, cl
                 test    al, 1
                 jz      @@clear

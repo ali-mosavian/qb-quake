@@ -52,6 +52,19 @@
 ;;          call from a loop whose live set is the whole register file --
 ;;          the fillers, when they land.
 ;;
+;; NEVER NAME A RETURN REGISTER IN `uses`. The epilogue pops what the
+;; list holds, straight back over the answer, and the assembler says
+;; nothing. qgl_txt_load returned dx:ax while declaring `uses ... dx`,
+;; so every caller got the segment it happened to be holding already:
+;; a missing file came back non-null, and a real one came back pointing
+;; at a random segment whose bytes read as a plausible, wrong header.
+;; It cost most of a session, and it bit a second time the same day in
+;; a test that parked a glyph row in dl across a call returning dx:ax.
+;;
+;; The rule, therefore, both ways round: a routine must not `uses` what
+;; it returns, and a caller must not leave anything live in dx across a
+;; call that returns dx:ax.
+;;
 ;;          Near means same-module: .model medium gives each module its
 ;;          own code segment, so an internal is not reachable across
 ;;          files. Where two modules must share one, they do it through

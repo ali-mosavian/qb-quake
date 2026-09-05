@@ -70,7 +70,9 @@ qgl$nibTB       label   dword
 ;; Reads the whole file into one block: header, the advance table if it
 ;; has one, then the glyph bits.
 ;;::::::::::::::
-qgl_txt_load    proc    public uses bx cx dx si di es,\
+;; NOT `uses dx`: this returns dx:ax, and the uses epilogue would pop the
+;; segment straight back off over the answer. See qgl.inc's contract.
+qgl_txt_load    proc    public uses bx cx si di es,\
                         path:dword
 
                 local   fh:word
