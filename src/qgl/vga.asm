@@ -1,6 +1,6 @@
 ;; vga.asm -- VGA mode 13h: enter, leave, palette, and the screen surface.
 ;;
-;; name: vga_init / vga_shutdown / vga_screen / vga_palette
+;; name: qgl_vga_init / qgl_vga_shutdown / qgl_vga_screen / qgl_vga_palette
 ;; desc: mode 13h and nothing else. There is no mode table, no VESA, no
 ;;       banking and no page flipping -- stuff.ini has shipped
 ;;       display.usepaging = no throughout, so the renderer has always
@@ -19,7 +19,7 @@
 ;;       - the DAC is 6 bits a channel and Quake's palette is 8, so the
 ;;         load shifts down by two. Getting this wrong is not subtle: it
 ;;         shows as a picture four times too bright, clamped flat.
-;;       - vga_shutdown restores the mode found at vga_init rather than
+;;       - qgl_vga_shutdown restores the mode found at qgl_vga_init rather than
 ;;         assuming 3.
 
                 .286
@@ -36,67 +36,66 @@ DAC_DATA        equ     03C9h
 ;; The screen, as a surface. Static rather than allocated: there is
 ;; exactly one, it is always 320x200, and its pixels are always at
 ;; A000:0000. Nothing about it is discovered at run time.
-                public  vga_screen_sf
-vga_screen_sf   SF      <320, 200, 320, SF_CMEM, 0, VGA_SEG, 0>
-
-vga_prev_mode   db      3               ;; whatever was current at vga_init
+;; Internal: callers reach it through qgl_vga_screen, not by name.
+qgl$screen      SF      <320, 200, 320, SF_CMEM, 0, VGA_SEG, 0>
+qgl$prevmode    db      3               ;; whatever was current at init
 
 
 .code
 
 ;;::::::::::::::
-;; vga_init () -> far ptr to the screen surface
+;; qgl_vga_init () -> far ptr to the screen surface
 ;;
 ;; Records the current mode, sets 13h, hands back the screen. There is
 ;; no failure path worth reporting: INT 10h has none.
 ;;::::::::::::::
-vga_init        proc    public
+qgl_vga_init        proc    public
                 mov     ah, 0Fh
                 int     10h                     ;; al = current mode
-                mov     [vga_prev_mode], al
+                mov     [qgl$prevmode], al
 
                 mov     ax, 0013h
                 int     10h
 
                 ;; medium model: DS is DGROUP, and the surface is in it
                 mov     dx, ds
-                mov     ax, offset vga_screen_sf
+                mov     ax, offset qgl$screen
                 ret
-vga_init        endp
+qgl_vga_init        endp
 
 
 ;;::::::::::::::
-;; vga_shutdown ()
+;; qgl_vga_shutdown ()
 ;;::::::::::::::
-vga_shutdown    proc    public
-                mov     al, [vga_prev_mode]
+qgl_vga_shutdown    proc    public
+                mov     al, [qgl$prevmode]
                 xor     ah, ah
                 int     10h
                 ret
-vga_shutdown    endp
+qgl_vga_shutdown    endp
 
 
 ;;::::::::::::::
-;; vga_screen () -> far ptr to the screen surface
+;; qgl_vga_screen () -> far ptr to the screen surface
 ;;
-;; The same surface vga_init returned, for callers that did not run the
+;; The same surface qgl_vga_init returned, for callers that did not run the
 ;; init themselves.
 ;;::::::::::::::
-vga_screen      proc    public
+qgl_vga_screen      proc    public
                 mov     dx, ds
-                mov     ax, offset vga_screen_sf
+                mov     ax, offset qgl$screen
                 ret
-vga_screen      endp
+qgl_vga_screen      endp
 
 
 ;;::::::::::::::
-;; vga_palette ( pal:far ptr )
+;; qgl_vga_palette ( pal:far ptr )
 ;;
 ;; 768 bytes, R,G,B per entry, 8 bits each. Written from index 0 with no
 ;; retrace wait: the palette is set at load, not per frame, so tearing a
 ;; ramp for one frame costs nothing and waiting costs a scan.
 ;;::::::::::::::
-vga_palette     proc    public uses si ds,\
+qgl_vga_palette     proc    public uses si ds,\
                         pal:far ptr byte
 
                 lds     si, pal
@@ -114,6 +113,6 @@ vga_palette     proc    public uses si ds,\
                 loop    @@next
 
                 ret
-vga_palette     endp
+qgl_vga_palette     endp
 
                 end

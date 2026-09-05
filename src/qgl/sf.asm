@@ -1,11 +1,11 @@
 ;; sf.asm -- surfaces: pixels, and the one call that finds a row of them.
 ;;
-;; name: sf_init / sf_new / sf_free / sf_row / sf_view / sf_pget / sf_pset
+;; name: qgl_sf_init / qgl_sf_new / qgl_sf_free / qgl_sf_row / qgl_sf_view / qgl_sf_pget / qgl_sf_pset
 ;; desc: a surface is pixels plus a width, and it does not say where it
-;;       lives. sf_row answers with a far pointer either way: arithmetic
+;;       lives. qgl_sf_row answers with a far pointer either way: arithmetic
 ;;       for conventional memory, a page map for EMS.
 ;;
-;;       THE SLOT IS THE CALLER'S. sf_new takes it; this module never
+;;       THE SLOT IS THE CALLER'S. qgl_sf_new takes it; this module never
 ;;       arbitrates one. See sf.inc: mgl's emsMapEx already works that
 ;;       way and PAGE_SLOT already relies on it, and four private slots
 ;;       could not cover the nine-plus EMS objects live at once anyway.
@@ -13,8 +13,8 @@
 ;;       this surface crossing a page, or by anything else sharing it.
 ;;
 ;; obs.: - an EMS surface's bps must divide 16K, or a row would straddle
-;;         two physical pages and sf_row could not answer with one
-;;         pointer. sf_new REFUSES rather than padding: every EMS surface
+;;         two physical pages and qgl_sf_row could not answer with one
+;;         pointer. qgl_sf_new REFUSES rather than padding: every EMS surface
 ;;         this renderer has is a power of two already (atlas cells
 ;;         64/32/16/8, font 8), and silently padding would waste memory
 ;;         nobody asked to spend. Conventional surfaces have no such rule.
@@ -22,7 +22,7 @@
 ;;         surface. e1m1 dies creating a 64,048-byte backbuffer with
 ;;         183,504 free: the far heap's problem is fragmentation, not
 ;;         total, so every object here is one block.
-;;       - sf_view allocates nothing at all. It re-aims a caller-owned
+;;       - qgl_sf_view allocates nothing at all. It re-aims a caller-owned
 ;;         header at part of another surface's store, which is what
 ;;         turned 648 texture dcs into 8 views.
 
@@ -38,27 +38,27 @@ EMS_PAGE_SHIFT  equ     14
 memAlloc        proto   far pascal :dword
 memFree         proto   far pascal :dword
 
-gem_init        proto   far pascal
-gem_alloc       proto   far pascal :dword
-gem_free        proto   far pascal :word
-gem_map         proto   far pascal :word, :word, :word
+qgl_gem_init        proto   far pascal
+qgl_gem_alloc       proto   far pascal :dword
+qgl_gem_free        proto   far pascal :word
+qgl_gem_map         proto   far pascal :word, :word, :word
 
 
 .code
 
 ;;::::::::::::::
-;; sf_init () -> ax nonzero if EMS surfaces are possible
+;; qgl_sf_init () -> ax nonzero if EMS surfaces are possible
 ;;::::::::::::::
-sf_init         proc    public
-                invoke  gem_init
+qgl_sf_init         proc    public
+                invoke  qgl_gem_init
                 ret
-sf_init         endp
+qgl_sf_init         endp
 
 
 ;;::::::::::::::
-;; sf_new ( w:word, h:word, where:word ) -> far ptr, or 0:0
+;; qgl_sf_new ( w:word, h:word, where:word ) -> far ptr, or 0:0
 ;;::::::::::::::
-sf_new          proc    public uses bx cx si di es,\
+qgl_sf_new          proc    public uses bx cx si di es,\
                         wid:word, hgt:word, whr:word, slot:word
 
                 local   nbytes:dword
@@ -129,7 +129,7 @@ sf_new          proc    public uses bx cx si di es,\
                 or      ax, dx
                 jz      @@fail
 
-                invoke  gem_alloc, nbytes
+                invoke  qgl_gem_alloc, nbytes
                 test    ax, ax
                 jz      @@fail_free
                 mov     si, ax                  ;; handle
@@ -158,13 +158,13 @@ sf_new          proc    public uses bx cx si di es,\
 @@fail:         xor     ax, ax
                 xor     dx, dx
                 ret
-sf_new          endp
+qgl_sf_new          endp
 
 
 ;;::::::::::::::
-;; sf_free ( s:far ptr )
+;; qgl_sf_free ( s:far ptr )
 ;;::::::::::::::
-sf_free         proc    public uses bx cx es,\
+qgl_sf_free         proc    public uses bx cx es,\
                         s:dword
 
                 les     bx, s
@@ -175,21 +175,21 @@ sf_free         proc    public uses bx cx es,\
                 cmp     es:[bx].SF.sfWhere, SF_EMS
                 jne     @@justfree
 
-                invoke  gem_free, es:[bx].SF.sfHnd
+                invoke  qgl_gem_free, es:[bx].SF.sfHnd
 
 @@justfree:     invoke  memFree, s
 @@done:         ret
-sf_free         endp
+qgl_sf_free         endp
 
 
 ;;::::::::::::::
-;; sf_row ( s:far ptr, y:word ) -> far ptr to row y
+;; qgl_sf_row ( s:far ptr, y:word ) -> far ptr to row y
 ;;
 ;; Valid until this SAME surface is asked for a row in another page.
 ;; Another surface asking for a row cannot disturb it: its slot is its
 ;; own.
 ;;::::::::::::::
-sf_row          proc    public uses bx cx si di es,\
+qgl_sf_row          proc    public uses bx cx si di es,\
                         s:dword, y:word
 
                 les     bx, s
@@ -228,21 +228,21 @@ sf_row          proc    public uses bx cx si di es,\
                 xor     ax, ax
                 mov     al, es:[bx].SF.sfSlot
 
-                invoke  gem_map, cx, si, ax
+                invoke  qgl_gem_map, cx, si, ax
                 mov     dx, ax                  ;; segment, or 0
                 mov     ax, di
                 ret
-sf_row          endp
+qgl_sf_row          endp
 
 
 ;;::::::::::::::
-;; sf_view ( v:far ptr, parent:far ptr, ofs:dword, w:word, h:word, bps:word )
+;; qgl_sf_view ( v:far ptr, parent:far ptr, ofs:dword, w:word, h:word, bps:word )
 ;;
 ;; Re-aims a caller-owned header at part of another surface's store.
 ;; Allocates nothing, owns nothing, and shares the parent's slot -- so a
 ;; view and its parent must never be walked at the same time.
 ;;::::::::::::::
-sf_view         proc    public uses bx si di es,\
+qgl_sf_view         proc    public uses bx si di es,\
                         v:dword, parent:dword, ofs:dword,\
                         wid:word, hgt:word, bps:word
 
@@ -273,42 +273,42 @@ sf_view         proc    public uses bx si di es,\
                 mov     ax, bps
                 mov     es:[bx].SF.sfBps, ax
                 ret
-sf_view         endp
+qgl_sf_view         endp
 
 
 ;;::::::::::::::
-;; sf_pget ( s:far ptr, x:word, y:word ) -> al
+;; qgl_sf_pget ( s:far ptr, x:word, y:word ) -> al
 ;;
 ;; One pixel. Slow on purpose -- this exists for the round-trip checks
 ;; (-dumptex reads every atlas cell back through its own view) and not
 ;; for anything per frame.
 ;;::::::::::::::
-sf_pget         proc    public uses bx es,\
+qgl_sf_pget         proc    public uses bx es,\
                         s:dword, x:word, y:word
 
-                invoke  sf_row, s, y
+                invoke  qgl_sf_row, s, y
                 mov     es, dx
                 mov     bx, ax
                 add     bx, x
                 mov     al, es:[bx]
                 xor     ah, ah
                 ret
-sf_pget         endp
+qgl_sf_pget         endp
 
 
 ;;::::::::::::::
-;; sf_pset ( s:far ptr, x:word, y:word, c:word )
+;; qgl_sf_pset ( s:far ptr, x:word, y:word, c:word )
 ;;::::::::::::::
-sf_pset         proc    public uses bx es,\
+qgl_sf_pset         proc    public uses bx es,\
                         s:dword, x:word, y:word, col:word
 
-                invoke  sf_row, s, y
+                invoke  qgl_sf_row, s, y
                 mov     es, dx
                 mov     bx, ax
                 add     bx, x
                 mov     al, byte ptr col
                 mov     es:[bx], al
                 ret
-sf_pset         endp
+qgl_sf_pset         endp
 
                 end

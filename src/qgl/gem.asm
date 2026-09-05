@@ -1,6 +1,6 @@
 ;; ems.asm -- expanded memory: the four physical pages, and nothing else.
 ;;
-;; name: gem_init / gem_frame / gem_alloc / gem_free / gem_map
+;; name: qgl_gem_init / qgl_gem_frame / qgl_gem_alloc / qgl_gem_free / qgl_gem_map
 ;; desc: raw EMS 3.2. Who owns which physical page is the caller's
 ;;       business and never this module's -- the same contract mgl's own
 ;;       emsMapEx offers, and for the same stated reason: its plain
@@ -17,7 +17,7 @@
 ;;
 ;; obs.: - a page is 16K and there are exactly four physical ones, at
 ;;         frame + slot*400h. Both are the hardware's numbers, not ours.
-;;       - gem_alloc takes BYTES and rounds up; every caller had the byte
+;;       - qgl_gem_alloc takes BYTES and rounds up; every caller had the byte
 ;;         count and none of them wanted to do that arithmetic twice.
 
                 .286
@@ -29,23 +29,23 @@ EMS_PAGE_SHIFT  equ     14
 
 
 .data
-gem_pgframe     dw      0               ;; segment, 0 until gem_init says otherwise
-gem_present     dw      0
+qgl$pgframe     dw      0               ;; segment, 0 until qgl_gem_init says otherwise
+qgl$emsok       dw      0
 
 
 .code
 
 ;;::::::::::::::
-;; gem_init () -> ax nonzero if EMS is usable
+;; qgl_gem_init () -> ax nonzero if EMS is usable
 ;;
 ;; Checks the driver is really there before trusting INT 67h: the vector
 ;; is populated on machines with no EMM at all, and the documented probe
 ;; is the device name sitting at offset 10 of the handler's segment.
 ;;::::::::::::::
-gem_init        proc    public uses bx si di es
+qgl_gem_init        proc    public uses bx si di es
 
-                mov     [gem_present], 0
-                mov     [gem_pgframe], 0
+                mov     [qgl$emsok], 0
+                mov     [qgl$pgframe], 0
 
                 ;; "EMMXXXX0" at handler_seg:000A
                 mov     ax, 3567h               ;; get vector 67h
@@ -55,7 +55,7 @@ gem_init        proc    public uses bx si di es
                 jz      @@no
 
                 mov     di, 10
-                mov     si, offset gem_name
+                mov     si, offset qgl$emsname
                 mov     cx, 8
                 cld
                 repe    cmpsb
@@ -66,33 +66,33 @@ gem_init        proc    public uses bx si di es
                 int     EMS_INT
                 test    ah, ah
                 jnz     @@no
-                mov     [gem_pgframe], bx
+                mov     [qgl$pgframe], bx
 
-                mov     [gem_present], 1
+                mov     [qgl$emsok], 1
                 mov     ax, 1
                 ret
 
 @@no:           xor     ax, ax
                 ret
-gem_init        endp
+qgl_gem_init        endp
 
 
 ;;::::::::::::::
-;; gem_frame () -> ax = page frame segment, 0 if none
+;; qgl_gem_frame () -> ax = page frame segment, 0 if none
 ;;::::::::::::::
-gem_frame       proc    public
-                mov     ax, [gem_pgframe]
+qgl_gem_frame       proc    public
+                mov     ax, [qgl$pgframe]
                 ret
-gem_frame       endp
+qgl_gem_frame       endp
 
 
 ;;::::::::::::::
-;; gem_alloc ( bytes:dword ) -> ax = handle, 0 on failure
+;; qgl_gem_alloc ( bytes:dword ) -> ax = handle, 0 on failure
 ;;::::::::::::::
-gem_alloc       proc    public uses bx cx dx,\
+qgl_gem_alloc       proc    public uses bx cx dx,\
                         nbytes:dword
 
-                cmp     [gem_present], 0
+                cmp     [qgl$emsok], 0
                 je      @@fail
 
                 ;; pages = (bytes + 16383) >> 14, in dx:ax
@@ -124,13 +124,13 @@ gem_alloc       proc    public uses bx cx dx,\
 
 @@fail:         xor     ax, ax
                 ret
-gem_alloc       endp
+qgl_gem_alloc       endp
 
 
 ;;::::::::::::::
-;; gem_free ( handle:word )
+;; qgl_gem_free ( handle:word )
 ;;::::::::::::::
-gem_free        proc    public uses dx,\
+qgl_gem_free        proc    public uses dx,\
                         hnd:word
 
                 mov     dx, hnd
@@ -139,17 +139,17 @@ gem_free        proc    public uses dx,\
                 mov     ah, 45h
                 int     EMS_INT
 @@done:         ret
-gem_free        endp
+qgl_gem_free        endp
 
 
 ;;::::::::::::::
-;; gem_map ( handle:word, logpage:word, slot:word ) -> ax = segment, 0 on fail
+;; qgl_gem_map ( handle:word, logpage:word, slot:word ) -> ax = segment, 0 on fail
 ;;
 ;; Maps one logical page of a handle into one physical page, and hands
 ;; back the segment it now answers at. The caller owns the slot; nothing
 ;; here tracks or arbitrates them.
 ;;::::::::::::::
-gem_map         proc    public uses bx cx dx,\
+qgl_gem_map         proc    public uses bx cx dx,\
                         hnd:word, logpage:word, slot:word
 
                 mov     dx, hnd
@@ -164,15 +164,15 @@ gem_map         proc    public uses bx cx dx,\
                 mov     ax, slot
                 mov     cl, 10
                 shl     ax, cl
-                add     ax, [gem_pgframe]
+                add     ax, [qgl$pgframe]
                 ret
 
 @@fail:         xor     ax, ax
                 ret
-gem_map         endp
+qgl_gem_map         endp
 
 
 .data
-gem_name        db      "EMMXXXX0"
+qgl$emsname     db      "EMMXXXX0"
 
                 end
