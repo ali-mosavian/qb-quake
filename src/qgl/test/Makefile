@@ -15,13 +15,21 @@ B      ?= $(ROOT)/build/qgl-test
 JWASM  := $(TC)/jwasm -c -Cp -Zg -omf -I$(QGL) -I.
 JWLINK := $(TC)/jwlink
 
-TESTS  := t01base t02mem t03surf t04txt t05file
+TESTS  := t01base t02mem t03surf t04txt t05file t06adopt
 
 # The layer under test. Every test links all of it -- these are small and
 # a per-test object list would drift from reality the first time a module
 # grew a dependency.
-QGLSRC := $(QGL)/vga.asm $(QGL)/gem.asm $(QGL)/sf.asm $(QGL)/mem.asm $(QGL)/txt.asm $(QGL)/file.asm
-QGLOBJ  = $(patsubst $(QGL)/%.asm,$(B)/%/qgl_%.obj,$(QGLSRC))
+QGLSRC := $(QGL)/vga.asm $(QGL)/gem.asm $(QGL)/sf.asm $(QGL)/mem.asm $(QGL)/txt.asm $(QGL)/file.asm $(QGL)/mgldc.asm
+# Objects are DERIVED from QGLSRC, never listed again. Hand-listing them
+# meant every new module had to be added in three places, and twice a
+# careless substitution folded two assembles into one and broke the link.
+QGLOBJS = $(foreach s,$(QGLSRC),$(@D)/$(notdir $(s:.asm=.obj)))
+
+EMPTY :=
+SPACE := $(EMPTY) $(EMPTY)
+COMMA := ,
+commas = $(subst $(SPACE),$(COMMA),$(strip $(1)))
 
 all: $(TESTS:%=$(B)/%/pass)
 	@echo "qgl suite: $(words $(TESTS)) tests PASS"
@@ -35,14 +43,11 @@ $(B)/%/t.exe: %.asm tfw.asm tfw.inc $(QGLSRC) $(QGL)/qgl.inc
 	@mkdir -p $(@D)
 	@$(JWASM) -Fo$(@D)/test.obj $< > /dev/null
 	@$(JWASM) -Fo$(@D)/tfw.obj tfw.asm > /dev/null
-	@$(JWASM) -Fo$(@D)/vga.obj $(QGL)/vga.asm > /dev/null
-	@$(JWASM) -Fo$(@D)/gem.obj $(QGL)/gem.asm > /dev/null
-	@$(JWASM) -Fo$(@D)/sf.obj  $(QGL)/sf.asm  > /dev/null
-	@$(JWASM) -Fo$(@D)/mem.obj $(QGL)/mem.asm > /dev/null
-	@$(JWASM) -Fo$(@D)/txt.obj $(QGL)/txt.asm > /dev/null
-	@$(JWASM) -Fo$(@D)/file.obj $(QGL)/file.asm > /dev/null
+	@for s in $(QGLSRC); do \
+	    $(JWASM) -Fo$(@D)/`basename $$s .asm`.obj $$s > /dev/null || exit 1; \
+	done
 	@$(JWLINK) option quiet format dos name $@ \
-	    file $(@D)/test.obj,$(@D)/tfw.obj,$(@D)/vga.obj,$(@D)/gem.obj,$(@D)/sf.obj,$(@D)/mem.obj,$(@D)/txt.obj,$(@D)/file.obj
+	    file $(call commas,$(@D)/test.obj $(@D)/tfw.obj $(QGLOBJS))
 
 clean:
 	rm -rf $(B)
