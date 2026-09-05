@@ -29,7 +29,7 @@
                 .286
                 .model medium, pascal
 
-                include sf.inc
+                include qgl.inc
 
 EMS_PAGE_MASK   equ     3FFFh
 EMS_PAGE_SHIFT  equ     14
@@ -73,7 +73,7 @@ qgl_sf_new      proc    public uses bx cx si di es,\
                 mov     word ptr nbytes, ax
                 mov     word ptr nbytes+2, dx
 
-                cmp     whr, SF_EMS
+                cmp     whr, SURF_EMS
                 je      @@ems
 
                 ;;
@@ -81,7 +81,7 @@ qgl_sf_new      proc    public uses bx cx si di es,\
                 ;;
                 mov     ax, word ptr nbytes
                 mov     dx, word ptr nbytes+2
-                add     ax, SIZEOF SF
+                add     ax, SIZEOF Surface
                 adc     dx, 0
                 mov     word ptr nbytes, ax
                 mov     word ptr nbytes+2, dx
@@ -93,20 +93,20 @@ qgl_sf_new      proc    public uses bx cx si di es,\
 
                 les     bx, hdr
                 mov     ax, wid
-                mov     es:[bx].SF.sfWidth, ax
+                mov     es:[bx].Surface.x_res, ax
                 mov     ax, hgt
-                mov     es:[bx].SF.sfHeight, ax
+                mov     es:[bx].Surface.y_res, ax
                 mov     ax, bps
-                mov     es:[bx].SF.sfBps, ax
-                mov     es:[bx].SF.sfWhere, SF_CMEM
-                mov     es:[bx].SF.sfSlot, 0
+                mov     es:[bx].Surface.stride, ax
+                mov     es:[bx].Surface.kind, SURF_CMEM
+                mov     es:[bx].Surface.slot, 0
                 mov     ax, word ptr hdr+2
-                mov     es:[bx].SF.sfHnd, ax            ;; the segment
+                mov     es:[bx].Surface.handle, ax            ;; the segment
                 ;; pixels sit straight after the header
                 mov     ax, word ptr hdr
-                add     ax, SIZEOF SF
-                mov     word ptr es:[bx].SF.sfOfs, ax
-                mov     word ptr es:[bx].SF.sfOfs+2, 0
+                add     ax, SIZEOF Surface
+                mov     word ptr es:[bx].Surface.base_ofs, ax
+                mov     word ptr es:[bx].Surface.base_ofs+2, 0
                 jmp     @@ok
 
                 ;;
@@ -123,7 +123,7 @@ qgl_sf_new      proc    public uses bx cx si di es,\
                 test    ax, cx
                 jnz     @@fail                  ;; not a power of two
 
-                invoke  memAlloc, SIZEOF SF
+                invoke  memAlloc, SIZEOF Surface
                 mov     word ptr hdr, ax
                 mov     word ptr hdr+2, dx
                 or      ax, dx
@@ -138,17 +138,17 @@ qgl_sf_new      proc    public uses bx cx si di es,\
 
                 les     bx, hdr
                 mov     ax, wid
-                mov     es:[bx].SF.sfWidth, ax
+                mov     es:[bx].Surface.x_res, ax
                 mov     ax, hgt
-                mov     es:[bx].SF.sfHeight, ax
+                mov     es:[bx].Surface.y_res, ax
                 mov     ax, bps
-                mov     es:[bx].SF.sfBps, ax
-                mov     es:[bx].SF.sfWhere, SF_EMS
+                mov     es:[bx].Surface.stride, ax
+                mov     es:[bx].Surface.kind, SURF_EMS
                 mov     ax, di
-                mov     es:[bx].SF.sfSlot, al
-                mov     es:[bx].SF.sfHnd, si
-                mov     word ptr es:[bx].SF.sfOfs, 0
-                mov     word ptr es:[bx].SF.sfOfs+2, 0
+                mov     es:[bx].Surface.slot, al
+                mov     es:[bx].Surface.handle, si
+                mov     word ptr es:[bx].Surface.base_ofs, 0
+                mov     word ptr es:[bx].Surface.base_ofs+2, 0
 
 @@ok:           mov     ax, word ptr hdr
                 mov     dx, word ptr hdr+2
@@ -172,10 +172,10 @@ qgl_sf_free     proc    public uses bx cx es,\
                 or      ax, bx
                 jz      @@done
 
-                cmp     es:[bx].SF.sfWhere, SF_EMS
+                cmp     es:[bx].Surface.kind, SURF_EMS
                 jne     @@justfree
 
-                invoke  qgl_gem_free, es:[bx].SF.sfHnd
+                invoke  qgl_gem_free, es:[bx].Surface.handle
 
 @@justfree:     invoke  memFree, s
 @@done:         ret
@@ -195,14 +195,14 @@ qgl_sf_free     endp
 ;; a table entry and a routine, not an edit to anything already working.
 ;;::::::::::::::
 qgl$row_cmem    proc    near private
-                ;; seg = sfHnd + offset>>4, off = offset and 15
+                ;; seg = handle + offset>>4, off = offset and 15
                 mov     cx, ax
                 and     cx, 000Fh
                 shr     ax, 4
                 mov     si, dx
                 shl     si, 12
                 or      ax, si
-                add     ax, es:[bx].SF.sfHnd
+                add     ax, es:[bx].Surface.handle
                 mov     dx, ax
                 mov     ax, cx
                 ret
@@ -220,9 +220,9 @@ qgl$row_ems     proc    near private
                 or      ax, si                  ;; logical page
                 mov     si, ax
 
-                mov     cx, es:[bx].SF.sfHnd
+                mov     cx, es:[bx].Surface.handle
                 xor     ax, ax
-                mov     al, es:[bx].SF.sfSlot
+                mov     al, es:[bx].Surface.slot
                 invoke  qgl_gem_map, cx, si, ax
                 mov     dx, ax                  ;; segment, or 0
                 mov     ax, di
@@ -240,16 +240,16 @@ qgl_sf_row      proc    public uses bx cx si di es,\
                         s:dword, y:word
 
                 les     bx, s
-                mov     ax, es:[bx].SF.sfBps
+                mov     ax, es:[bx].Surface.stride
                 mul     y                       ;; dx:ax = y * bps
-                add     ax, word ptr es:[bx].SF.sfOfs
-                adc     dx, word ptr es:[bx].SF.sfOfs+2
+                add     ax, word ptr es:[bx].Surface.base_ofs
+                adc     dx, word ptr es:[bx].Surface.base_ofs+2
 
-                ;; sfWhere is already the byte offset into the table
-                mov     cl, es:[bx].SF.sfWhere
+                ;; kind is already the byte offset into the table
+                mov     cl, es:[bx].Surface.kind
                 xor     ch, ch
                 mov     si, cx
-                call    qgl$typeTB[si].sftRow
+                call    qgl$typeTB[si].row
                 ret
 qgl_sf_row      endp
 
@@ -266,31 +266,31 @@ qgl_sf_view     proc    public uses bx si di es,\
                         wid:word, hgt:word, bps:word
 
                 les     bx, parent
-                mov     al, es:[bx].SF.sfWhere
-                mov     ah, es:[bx].SF.sfSlot
-                mov     si, es:[bx].SF.sfHnd
-                mov     di, word ptr es:[bx].SF.sfOfs
-                mov     cx, word ptr es:[bx].SF.sfOfs+2
+                mov     al, es:[bx].Surface.kind
+                mov     ah, es:[bx].Surface.slot
+                mov     si, es:[bx].Surface.handle
+                mov     di, word ptr es:[bx].Surface.base_ofs
+                mov     cx, word ptr es:[bx].Surface.base_ofs+2
 
                 les     bx, v
-                mov     es:[bx].SF.sfWhere, al
-                mov     es:[bx].SF.sfSlot, ah
-                mov     es:[bx].SF.sfHnd, si
+                mov     es:[bx].Surface.kind, al
+                mov     es:[bx].Surface.slot, ah
+                mov     es:[bx].Surface.handle, si
 
                 ;; the view's own base is the parent's plus the offset
                 mov     ax, di
                 mov     dx, cx
                 add     ax, word ptr ofs
                 adc     dx, word ptr ofs+2
-                mov     word ptr es:[bx].SF.sfOfs, ax
-                mov     word ptr es:[bx].SF.sfOfs+2, dx
+                mov     word ptr es:[bx].Surface.base_ofs, ax
+                mov     word ptr es:[bx].Surface.base_ofs+2, dx
 
                 mov     ax, wid
-                mov     es:[bx].SF.sfWidth, ax
+                mov     es:[bx].Surface.x_res, ax
                 mov     ax, hgt
-                mov     es:[bx].SF.sfHeight, ax
+                mov     es:[bx].Surface.y_res, ax
                 mov     ax, bps
-                mov     es:[bx].SF.sfBps, ax
+                mov     es:[bx].Surface.stride, ax
                 ret
 qgl_sf_view     endp
 
@@ -332,8 +332,8 @@ qgl_sf_pset     endp
 
 
 .data
-;; One entry per surface kind, indexed by SF_CMEM / SF_EMS.
-qgl$typeTB      SFT     <offset qgl$row_cmem>
-                SFT     <offset qgl$row_ems>
+;; One entry per surface kind, indexed by SURF_CMEM / SURF_EMS.
+qgl$typeTB      SurfaceOps     <offset qgl$row_cmem>
+                SurfaceOps     <offset qgl$row_ems>
 
                 end

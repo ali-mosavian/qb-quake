@@ -25,7 +25,7 @@
                 .286
                 .model medium, pascal
 
-                include sf.inc
+                include qgl.inc
 
 VGA_SEG         equ     0A000h
 DAC_WRITE       equ     03C8h
@@ -37,7 +37,7 @@ DAC_DATA        equ     03C9h
 ;; exactly one, it is always 320x200, and its pixels are always at
 ;; A000:0000. Nothing about it is discovered at run time.
 ;; Internal: callers reach it through qgl_vga_screen, not by name.
-qgl$screen      SF      <320, 200, 320, SF_CMEM, 0, VGA_SEG, 0>
+qgl$screen      Surface <320, 200, 320, SURF_CMEM, 0, VGA_SEG, 0>
 qgl$prevmode    db      3               ;; whatever was current at init
 
 

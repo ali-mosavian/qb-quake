@@ -36,7 +36,9 @@ up=$(echo "$base" | tr 'a-z' 'A-Z')
 
 W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
 cp "$ROOT/$SRC_REL" "$W/"
-cp "$ROOT"/src/inc/*.h "$W/" 2>/dev/null || true
+for d in host render game qgl; do
+    cp "$ROOT"/src/$d/*.h "$W/" 2>/dev/null || true
+done
 
 { printf '[sdl]\nautolock=false\n[dosbox]\nmemsize=32\nstartbanner=false\nquit warning=false\n'
   printf '[cpu]\ncore=dynamic\ncycles=max\n[dos]\nxms=true\n[autoexec]\n'

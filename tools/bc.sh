@@ -42,7 +42,9 @@ W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
 cp "$ROOT/$SRC_REL" "$W/"
 # Headers live in src/inc; sources in one directory per subsystem. The
 # DOS side never sees either -- everything is copied flat into $W.
-cp "$ROOT"/src/inc/*.bi "$W/" 2>/dev/null || true
+for d in host render game qgl; do
+    cp "$ROOT"/src/$d/*.bi "$W/" 2>/dev/null || true
+done
 
 { printf '[sdl]\nautolock=false\n[dosbox]\nmemsize=32\nstartbanner=false\nquit warning=false\n'
   # core=dynamic/cycles=max: a compile's correctness does not depend on

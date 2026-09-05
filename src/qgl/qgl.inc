@@ -1,8 +1,8 @@
 ;;
-;; sf.inc -- the surface, shared by every module that draws.
+;; qgl.inc -- the surface, shared by every module that draws.
 ;;
 ;; A surface is pixels plus the two numbers needed to walk them, and it
-;; does not say where it lives: sf_row hands back a far pointer either
+;; does not say where it lives: qgl_sf_row hands back a far pointer either
 ;; way. Conventional memory answers with arithmetic; EMS answers with a
 ;; page map.
 ;;
@@ -53,24 +53,32 @@
 ;; adding the next per-kind routine does not move SF_CMEM and SF_EMS
 ;; out from under every surface already built with them.
 ;;
-SFT             struc
-sftRow          dw      ?               ;; near: es:bx = surface, dx:ax = byte
+SurfaceOps      struc
+row             dw      ?               ;; near: es:bx = surface, dx:ax = byte
                                         ;; offset of the row -> dx:ax far ptr
-SFT             ends
+SurfaceOps      ends
 
-SF_CMEM         equ     0 * (SIZEOF SFT)
-SF_EMS          equ     1 * (SIZEOF SFT)
+SURF_CMEM       equ     0 * (SIZEOF SurfaceOps)
+SURF_EMS        equ     1 * (SIZEOF SurfaceOps)
 
-;; EMS physical pages. The numbering is the hardware's: emsMapEx takes
+;; EMS physical pages. The numbering is the hardware's: the mapper takes
 ;; 0..3 and nothing else.
-SF_SLOT_MAX     equ     3
+SURF_SLOT_MAX   equ     3
 
-SF              struc
-sfWidth         dw      ?               ;; pixels
-sfHeight        dw      ?
-sfBps           dw      ?               ;; bytes per row
-sfWhere         db      ?               ;; SF_CMEM or SF_EMS
-sfSlot          db      ?               ;; physical page to map through, SF_EMS
-sfHnd           dw      ?               ;; EMS handle, or the segment if cmem
-sfOfs           dd      ?               ;; byte offset of row 0 in the store
-SF              ends
+;; Fields are unprefixed: they are scoped to the struct at every use
+;; (.Surface.stride), and two structs may share a field name -- measured,
+;; not assumed. The one real constraint is MASM's reserved words, which
+;; is why this is x_res and not width: WIDTH is an operator, ORG is a
+;; directive, and both fail at the STRUC rather than the use.
+;;
+;; stride, not bps: it is the row-to-row distance in bytes, and the old
+;; name needed a comment to say so.
+Surface         struc
+x_res           dw      ?               ;; pixels
+y_res           dw      ?
+stride          dw      ?               ;; row to row, in bytes
+kind            db      ?               ;; SURF_CMEM or SURF_EMS
+slot            db      ?               ;; physical page to map through, EMS
+handle          dw      ?               ;; EMS handle, or the segment if cmem
+base_ofs        dd      ?               ;; byte offset of row 0 in the store
+Surface         ends

@@ -47,7 +47,7 @@ if __name__ == '__main__':
     dirs = ['host', 'render', 'game', 'qgl']
     files = sorted([f for d in dirs
                       for f in glob.glob(os.path.join(root, d, '*.bas'))] +
-                   glob.glob(os.path.join(root, 'inc', '*.bi')))
+                   [f for d in dirs for f in glob.glob(os.path.join(root, d, '*.bi'))])
     fail = 0
     for f in files:
         for msg in check(f):

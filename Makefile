@@ -47,11 +47,11 @@ vpath %.asm $(SRC_DIRS)
 # sort would alphabetise main to the middle of the list.
 BAS_SRC  := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.bas))
 BAS_MODS := main $(filter-out main,$(basename $(notdir $(BAS_SRC))))
-HDRS     := $(wildcard src/inc/*.bi)
+HDRS     := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.bi))
 
 C_SRC  := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.c))
 C_MODS := $(basename $(notdir $(C_SRC)))
-C_HDRS := $(wildcard src/inc/*.h)
+C_HDRS := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.h))
 
 # This project's own assembly -- hot loops that are ours, not uGL's, and
 # so have no business living in mgl's tree. Assembled on the host: jwasm
@@ -98,7 +98,7 @@ $(BUILD)/%.obj: %.c $(C_HDRS) | $(BUILD)
 	$(BCC_QR) $< $@
 
 $(BUILD)/%.obj: %.asm | $(BUILD)
-	$(JWASM) -c -Cp -Zg -omf -I$(CURDIR)/src/inc -Fo$@ $<
+	$(JWASM) -c -Cp -Zg -omf -I$(CURDIR)/src/qgl -Fo$@ $<
 
 $(BUILD)/stuff.ini: data/stuff.ini | $(BUILD)
 	cp $< $@
