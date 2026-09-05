@@ -30,6 +30,15 @@
 
                 include qgl.inc
 
+;; BASIC's SETMEM, and the only thing in this layer wanting the
+;; BASIC runtime -- so it sits behind __BASIC__, which the
+;; renderer's build defines and the test suite does not. Without
+;; it qgl links free-standing and an allocation DOS refuses just
+;; fails, which is the honest answer for a standalone caller.
+IFDEF __BASIC__
+B$SETM          proto   far pascal :dword
+ENDIF
+
 MCB_SIG_LAST    equ     5Ah             ;; 'Z', last block in the chain
 MCB_SIG_MORE    equ     4Dh             ;; 'M', more follow
 MCB_OWNER_FREE  equ     0
@@ -42,25 +51,81 @@ MCB_OWNER_FREE  equ     0
 qgl_mem_alloc   proc    public uses bx cx,\
                         nbytes:dword
 
+IFDEF __BASIC__
+                local   before:dword
+                local   want:dword
+ENDIF
                 mov     eax, nbytes
                 add     eax, 15
                 shr     eax, 4                  ;; paragraphs
                 test    eax, 0FFFF0000h
-                jnz     @F                      ;; past 1MB: not from DOS
+                jnz     @@fail                  ;; past 1MB: not from DOS
                 mov     bx, ax
                 test    bx, bx
-                jz      @F
+                jz      @@fail
 
                 mov     ah, 48h
                 int     21h
-                jc      @F
+                jnc     @@got
 
-                mov     dx, ax                  ;; segment
-                xor     ax, ax                  ;; offset, always 0
+IFDEF __BASIC__
+                ;;
+                ;; DOS has nothing, which on this host means BASIC's far
+                ;; heap has it -- the whole gap between memAvail's 136,416
+                ;; and the 3,632 DOS will actually hand over. Ask BASIC to
+                ;; give some back and try again.
+                ;;
+                ;; VERIFIED, unlike mgl's bas_malloc, which this repo has
+                ;; recorded as corrupting on this arena (see
+                ;; docs/knowledge/qrender-memory-map.md). B$SETM's own
+                ;; source says what it returns: "DX:AX = 32-bit size of
+                ;; near and far heaps in bytes" -- the SIZE, not the free
+                ;; tail. mgl's comment calls it "largest free block size"
+                ;; and branches on it, then never checks that the shrink
+                ;; it asks for happened. BASIC cannot shrink past live
+                ;; data; it says so by returning a size that did not move,
+                ;; and mgl walks on into memory BASIC still owns.
+                ;;
+                push    bx
+                invoke  B$SETM, 0
+                mov     word ptr before, ax
+                mov     word ptr before+2, dx
+
+                pop     bx
+                push    bx
+                movzx   eax, bx
+                shl     eax, 4
+                add     eax, 16                 ;; the block's own MCB
+                mov     want, eax
+
+                neg     eax                     ;; SETMEM takes a delta
+                invoke  B$SETM, eax             ;; dx:ax = the new size
+
+                movzx   ebx, ax
+                movzx   ecx, dx
+                shl     ecx, 16
+                or      ebx, ecx                ;; ebx = new size
+
+                mov     eax, before
+                sub     eax, ebx                ;; what it really gave back
+                cmp     eax, want
+                jb      @@giveback              ;; less than asked: stop
+
+                pop     bx
+                mov     ah, 48h
+                int     21h
+                jnc     @@got
+                push    bx
+
+@@giveback:     pop     bx
+                invoke  B$SETM, 7FFFFFFFh       ;; take back what we can
+ENDIF
+@@fail:         xor     ax, ax
+                xor     dx, dx
                 ret
 
-@@:             xor     ax, ax
-                xor     dx, dx
+@@got:          mov     dx, ax                  ;; segment
+                xor     ax, ax                  ;; offset, always 0
                 ret
 qgl_mem_alloc   endp
 
@@ -225,13 +290,17 @@ qgl$avail_total proc    near private uses bx cx si di es
                 cmp     al, MCB_SIG_MORE
                 jne     @@done                  ;; chain is broken; stop
 
-                call    qgl$mcb_add
+                call    qgl$mcb_paras
+                add     cx, ax
+                adc     di, 0
                 mov     ax, es:[3]              ;; size in paragraphs
                 add     bx, ax
                 inc     bx                      ;; past the header
                 jmp     @@walk
 
-@@last:         call    qgl$mcb_add
+@@last:         call    qgl$mcb_paras
+                add     cx, ax
+                adc     di, 0
 
 @@done:         mov     ax, cx
                 mov     dx, di
@@ -241,20 +310,22 @@ qgl$avail_total endp
 
 
 ;;::::::::::::::
-;; qgl$mcb_add -- add this block's paragraphs to the total if it is free.
+;; qgl$mcb_paras -- this block's paragraphs, or 0 if it is owned.
 ;;
-;; INTERNAL: es -> the MCB, cx:di = running paragraph total. Clobbers ax
-;; alone, so the walk above keeps bx.
+;; INTERNAL: es -> the MCB, ax back, everything else untouched. It
+;; RETURNS the count rather than adding into the caller's accumulator --
+;; an internal that writes cx and di behind its caller's back is the
+;; thing qgl.inc's contract forbids, and the caller can add.
 ;;::::::::::::::
-qgl$mcb_add     proc    near private
+qgl$mcb_paras   proc    near private
                 mov     ax, es:[1]              ;; owner PSP
                 cmp     ax, MCB_OWNER_FREE
                 jne     @F
                 mov     ax, es:[3]              ;; paragraphs
-                add     cx, ax
-                adc     di, 0
-@@:             ret
-qgl$mcb_add     endp
+                ret
+@@:             xor     ax, ax
+                ret
+qgl$mcb_paras   endp
 
 
 ;;::::::::::::::

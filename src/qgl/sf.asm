@@ -188,12 +188,12 @@ qgl_sf_free     endp
 ;;      in   es:bx -> the surface
 ;;           dx:ax  = byte offset of the row within its store
 ;;      out  dx:ax  = far pointer to the row
-;;      uses cx si di
+;;      All other registers survive, per qgl.inc's contract.
 ;;
 ;; Reached through qgl$typeTB, never by name. A third kind of surface is
 ;; a table entry and a routine, not an edit to anything already working.
 ;;::::::::::::::
-qgl$row_cmem    proc    near private
+qgl$row_cmem    proc    near private uses cx si
                 ;; seg = handle + offset>>4, off = offset and 15
                 mov     cx, ax
                 and     cx, 000Fh
@@ -208,7 +208,7 @@ qgl$row_cmem    proc    near private
 qgl$row_cmem    endp
 
 
-qgl$row_ems     proc    near private
+qgl$row_ems     proc    near private uses bx cx si di es
                 mov     di, ax
                 and     di, EMS_PAGE_MASK       ;; offset within the page
                 mov     cl, EMS_PAGE_SHIFT

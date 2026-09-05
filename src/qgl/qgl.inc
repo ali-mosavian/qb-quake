@@ -39,6 +39,28 @@
 ;;
 
 ;;
+;; THE TWO KINDS OF ROUTINE, and the rules are not stylistic.
+;;
+;;   qgl_   the interface. FAR, pascal, arguments on the stack. This is
+;;          what BASIC and C call, so the convention is theirs, and it is
+;;          the only thing outside this layer may name.
+;;
+;;   qgl$   everything else. NEAR, arguments in registers, and it
+;;          PRESERVES EVERY REGISTER but the one it returns in. A caller
+;;          never has to know which internal it just called or what that
+;;          one happened to use, which is what makes an internal safe to
+;;          call from a loop whose live set is the whole register file --
+;;          the fillers, when they land.
+;;
+;;          Near means same-module: .model medium gives each module its
+;;          own code segment, so an internal is not reachable across
+;;          files. Where two modules must share one, they do it through
+;;          the qgl_ entry. If that ever costs too much, the fix is
+;;          mgl's -- one shared `segment para public use16` for the whole
+;;          layer, which is why UGL_CODE exists -- and not a far internal.
+;;
+
+;;
 ;; DISPATCH, not a compare. One entry per kind of surface, holding the
 ;; routines that kind needs -- mgl's ul$dctTB, narrowed to the two kinds
 ;; we have. The type constant IS the byte offset into the table, the

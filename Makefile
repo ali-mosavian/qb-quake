@@ -98,7 +98,10 @@ $(BUILD)/%.obj: %.c $(C_HDRS) | $(BUILD)
 	$(BCC_QR) $< $@
 
 $(BUILD)/%.obj: %.asm | $(BUILD)
-	$(JWASM) -c -Cp -Zg -omf -I$(CURDIR)/src/qgl -Fo$@ $<
+	# __BASIC__: this build links BASIC's runtime, so qgl may call
+	# B$$SETM to reclaim far-heap memory. The qgl test suite does not
+	# define it and links free-standing.
+	$(JWASM) -c -Cp -Zg -omf -D__BASIC__=1 -I$(CURDIR)/src/qgl -Fo$@ $<
 
 $(BUILD)/stuff.ini: data/stuff.ini | $(BUILD)
 	cp $< $@
