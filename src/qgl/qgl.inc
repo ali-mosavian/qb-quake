@@ -65,6 +65,19 @@ SURF_EMS        equ     1 * (SIZEOF SurfaceOps)
 ;; 0..3 and nothing else.
 SURF_SLOT_MAX   equ     3
 
+;;
+;; Which free figure qgl_mem_avail should report. LARGEST is what an
+;; allocation actually has to satisfy; TOTAL is every free block added
+;; up, and the gap between them is the fragmentation. Same pre-scaled
+;; table-offset trick as SURF_CMEM above.
+;;
+MemOps          struc
+query           dw      ?               ;; near: -> dx:ax = bytes
+MemOps          ends
+
+MEM_LARGEST     equ     0 * (SIZEOF MemOps)
+MEM_TOTAL       equ     1 * (SIZEOF MemOps)
+
 ;; Fields are unprefixed: they are scoped to the struct at every use
 ;; (.Surface.stride), and two structs may share a field name -- measured,
 ;; not assumed. The one real constraint is MASM's reserved words, which

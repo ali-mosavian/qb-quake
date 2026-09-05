@@ -17,8 +17,7 @@
 qgl_mem_alloc   proto   far :dword
 qgl_mem_free    proto   far :dword
 qgl_mem_copy    proto   far :dword, :dword, :dword
-qgl_mem_avail   proto   far
-qgl_mem_free_sum proto  far
+qgl_mem_avail   proto   far :word
 
 BLK             equ     4096
 
@@ -46,11 +45,11 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;
                 ;; The two numbers, reported rather than asserted.
                 ;;
-                invoke  qgl_mem_avail
+                invoke  qgl_mem_avail, MEM_LARGEST
                 SAVEP   avail
                 invoke  tshow, offset n_avail, avail
 
-                invoke  qgl_mem_free_sum
+                invoke  qgl_mem_avail, MEM_TOTAL
                 SAVEP   fsum
                 invoke  tshow, offset n_sum, fsum
 
@@ -89,7 +88,7 @@ tmain           proc    far public uses bx cx dx si di es
                 ;; block reports a total that barely moves, while still
                 ;; satisfying sum >= largest -- which is how the weaker
                 ;; assertion above let a deliberately broken walk pass.
-                invoke  qgl_mem_free_sum
+                invoke  qgl_mem_avail, MEM_TOTAL
                 SAVEP   fsum2
                 mov     ax, W fsum
                 sub     ax, W fsum2

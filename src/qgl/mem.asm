@@ -1,8 +1,7 @@
 ;; mem.asm -- conventional memory: allocate, free, copy, and how much
 ;;            there actually is.
 ;;
-;; name: qgl_mem_alloc / qgl_mem_free / qgl_mem_copy / qgl_mem_avail /
-;;       qgl_mem_free_sum
+;; name: qgl_mem_alloc / qgl_mem_free / qgl_mem_copy / qgl_mem_avail
 ;; desc: DOS blocks, straight from INT 21h. No pool and no sub-allocator
 ;;       -- every caller here wants one big block for the life of the
 ;;       program, and a free list would be bookkeeping nothing reads.
@@ -19,7 +18,7 @@
 ;;         big a block can I actually get -- by requesting 0FFFFh
 ;;         paragraphs and reading back what it says it could have given.
 ;;         That call is EXPECTED to fail; the answer is in bx.
-;;       - qgl_mem_free_sum walks the MCB chain from our own PSP forward
+;;       - MEM_TOTAL walks the MCB chain from our own PSP forward
 ;;         and adds up the unowned blocks. Larger than avail whenever
 ;;         free memory is fragmented, which is the interesting case: a
 ;;         64K allocation fails against 180K free if no single hole fits.
@@ -29,7 +28,10 @@
                 .model  medium, pascal
                 .386
 
+                include qgl.inc
+
 MCB_SIG_LAST    equ     5Ah             ;; 'Z', last block in the chain
+MCB_SIG_MORE    equ     4Dh             ;; 'M', more follow
 MCB_OWNER_FREE  equ     0
 
 .code
@@ -148,46 +150,66 @@ qgl_mem_copy    endp
 
 
 ;;::::::::::::::
-;; qgl_mem_avail () -> dx:ax = bytes in the LARGEST free block
+;; qgl_mem_avail ( what:word ) -> dx:ax = bytes
 ;;
-;; The only number an allocation actually has to satisfy. Asking for
-;; 0FFFFh paragraphs is meant to fail; DOS returns what it could have
-;; given in bx.
+;; MEM_LARGEST is what an allocation actually has to satisfy; MEM_TOTAL
+;; is every free block added up. Reporting only one of them is how "183
+;; kB free" and "the 64 kB allocation failed" were both true at once, so
+;; the caller says which it means.
+;;
+;; Dispatched, not branched: what IS the byte offset into qgl$memTB.
 ;;::::::::::::::
-qgl_mem_avail   proc    public uses bx
-                mov     bx, 0FFFFh
-                mov     ah, 48h
-                int     21h
-                jnc     @F                      ;; it actually gave us 1MB?
-                                                ;; then bx is the answer
-                mov     ax, bx
-                xor     dx, dx
-                mov     cx, 4
-@@shl:          shl     ax, 1
-                rcl     dx, 1
-                loop    @@shl
+qgl_mem_avail   proc    public uses bx,\
+                        what:word
+
+                mov     bx, what
+                cmp     bx, MEM_TOTAL
+                ja      @F                      ;; not a selector we have
+                call    qgl$memTB[bx].query
                 ret
 
-@@:             ;; succeeded, which should not happen -- hand it back and
-                ;; report nothing free rather than lie
-                mov     es, ax
-                mov     ah, 49h
-                int     21h
-                xor     ax, ax
+@@:             xor     ax, ax
                 xor     dx, dx
                 ret
 qgl_mem_avail   endp
 
 
 ;;::::::::::::::
-;; qgl_mem_free_sum () -> dx:ax = bytes free across EVERY free block
+;; qgl$avail_largest -- the biggest single block DOS will hand over.
 ;;
-;; Walks the MCB chain from our own PSP forward, summing the unowned
-;; blocks. Bigger than qgl_mem_avail exactly when free memory is
-;; fragmented, which is what "183,504 free" meant while a 64,048-byte
-;; allocation was failing.
+;; INTERNAL, no arguments, dx:ax back. Asking for 0FFFFh paragraphs is
+;; MEANT to fail; the answer is what DOS puts in bx on the way out.
 ;;::::::::::::::
-qgl_mem_free_sum proc   public uses bx cx si di es
+qgl$avail_largest proc  near private uses bx cx es
+                mov     bx, 0FFFFh
+                mov     ah, 48h
+                int     21h
+                jnc     @F                      ;; a whole megabyte? then
+                                                ;; bx is still the answer
+                mov     ax, bx
+                xor     dx, dx
+                call    qgl$paras_to_bytes
+                ret
+
+@@:             ;; it succeeded, which should not happen. Give it back and
+                ;; report nothing rather than report a lie.
+                mov     es, ax
+                mov     ah, 49h
+                int     21h
+                xor     ax, ax
+                xor     dx, dx
+                ret
+qgl$avail_largest endp
+
+
+;;::::::::::::::
+;; qgl$avail_total -- every free block in the chain, added up.
+;;
+;; INTERNAL, no arguments, dx:ax back. Walks the MCB chain from our own
+;; PSP forward. Bigger than largest exactly when free memory is
+;; fragmented, which is the case worth seeing.
+;;::::::::::::::
+qgl$avail_total proc    near private uses bx cx si di es
 
                 xor     cx, cx                  ;; running total, paragraphs
                 xor     di, di                  ;; high half
@@ -200,7 +222,7 @@ qgl_mem_free_sum proc   public uses bx cx si di es
                 mov     al, es:[0]              ;; signature
                 cmp     al, MCB_SIG_LAST
                 je      @@last
-                cmp     al, 4Dh                 ;; 'M'
+                cmp     al, MCB_SIG_MORE
                 jne     @@done                  ;; chain is broken; stop
 
                 call    qgl$mcb_add
@@ -211,22 +233,18 @@ qgl_mem_free_sum proc   public uses bx cx si di es
 
 @@last:         call    qgl$mcb_add
 
-@@done:         ;; paragraphs -> bytes
-                mov     ax, cx
+@@done:         mov     ax, cx
                 mov     dx, di
-                mov     cx, 4
-@@shl:          shl     ax, 1
-                rcl     dx, 1
-                loop    @@shl
+                call    qgl$paras_to_bytes
                 ret
-qgl_mem_free_sum endp
+qgl$avail_total endp
 
 
 ;;::::::::::::::
 ;; qgl$mcb_add -- add this block's paragraphs to the total if it is free.
 ;;
-;; INTERNAL, registers only: es -> the MCB, cx:di = running paragraph
-;; total, and it clobbers ax alone so the walk above keeps bx.
+;; INTERNAL: es -> the MCB, cx:di = running paragraph total. Clobbers ax
+;; alone, so the walk above keeps bx.
 ;;::::::::::::::
 qgl$mcb_add     proc    near private
                 mov     ax, es:[1]              ;; owner PSP
@@ -237,5 +255,26 @@ qgl$mcb_add     proc    near private
                 adc     di, 0
 @@:             ret
 qgl$mcb_add     endp
+
+
+;;::::::::::::::
+;; qgl$paras_to_bytes -- dx:ax paragraphs -> dx:ax bytes.
+;;
+;; INTERNAL. Both queries end here, which is the only reason it is a
+;; routine rather than five inline instructions twice.
+;;::::::::::::::
+qgl$paras_to_bytes proc near private uses cx
+                mov     cx, 4
+@@:             shl     ax, 1
+                rcl     dx, 1
+                loop    @B
+                ret
+qgl$paras_to_bytes endp
+
+
+.data
+;; One entry per selector, indexed by MEM_LARGEST / MEM_TOTAL.
+qgl$memTB       MemOps  <offset qgl$avail_largest>
+                MemOps  <offset qgl$avail_total>
 
                 end
