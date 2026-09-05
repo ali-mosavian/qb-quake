@@ -114,6 +114,27 @@ MEM_LARGEST     equ     0 * (SIZEOF MemOps)
 MEM_TOTAL       equ     1 * (SIZEOF MemOps)
 
 ;;
+;; Drawing mode and depth mode, and between them they ARE the index into
+;; the filler table: qgl$fillTB[mode + zmode], no multiply at the call
+;; site. Each mode owns three consecutive word entries, one per depth
+;; mode, so the constants are pre-scaled by the entry size exactly as
+;; SURF_CMEM and MEM_LARGEST are.
+;;
+;; The order within a mode is OFF, SET, TEST, and it is the order the
+;; renderer uses them in: a frame draws the world with SET and then the
+;; models with TEST.
+;;
+QGL_Z_OFF       equ     0 * 2
+QGL_Z_SET       equ     1 * 2
+QGL_Z_TEST      equ     2 * 2
+QGL_Z_SPAN      equ     3 * 2           ;; entries per drawing mode
+
+QGL_M_WIRE      equ     0 * QGL_Z_SPAN
+QGL_M_FLAT      equ     1 * QGL_Z_SPAN
+QGL_M_TEX       equ     2 * QGL_Z_SPAN
+QGL_M_PTEX      equ     3 * QGL_Z_SPAN
+
+;;
 ;; A loaded font: header and payload in ONE block, with the payload
 ;; addressed by OFFSET from the header rather than by pointer. Two bytes
 ;; instead of four, and it survives the block being moved.

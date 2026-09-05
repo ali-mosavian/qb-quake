@@ -26,7 +26,7 @@
                 include qgl.inc
                 include tfw.inc
 
-qgl_sf_clear    proto   far :dword, :word
+qgl_dr_fill     proto   far :dword, :word, :word, :word, :word, :word
 
 SMALL_W         equ     64
 SMALL_H         equ     16
@@ -57,7 +57,7 @@ n_ems_new       db      'ems surface made       $'
 n_ems_rt        db      'ems round trip         $'
 n_ems_cross     db      'ems across a page      $'
 n_view_rt       db      'view sees parent rows  $'
-n_clear         db      'clear fills every row  $'
+n_clear         db      'fill lands on every px $'
 n_odd_stride    db      'ems odd stride refused $'
 
 small           dd      0
@@ -107,6 +107,31 @@ sf_check        proc    near private uses bx cx dx si di es,\
 @@:             mov     ax, mism
                 ret
 sf_check        endp
+
+
+;; pixels in s that are NOT val -- 0 means the fill covered all of it
+sf_const        proc    near private uses bx cx dx si di es,\
+                        s:dword, w:word, h:word, val:word
+
+                mov     mism, 0
+                xor     si, si
+@@row:          cmp     si, h
+                jae     @@out
+                invoke  qgl_sf_row, s, si
+                mov     di, ax
+                mov     es, dx
+                mov     cx, w
+                mov     al, byte ptr val
+@@px:           cmp     es:[di], al
+                je      @F
+                inc     mism
+@@:             inc     di
+                loop    @@px
+                inc     si
+                jmp     @@row
+@@out:          mov     ax, mism
+                ret
+sf_const        endp
 
 
 tmain           proc    far public uses bx cx dx si di es
@@ -193,12 +218,13 @@ tmain           proc    far public uses bx cx dx si di es
 @@:             CHK     n_view_rt, ax, 1
 
                 ;;
-                ;; 5. clear, then confirm no row kept its pattern
+                ;; 5. fill the whole surface and require EVERY pixel to be
+                ;;    the fill colour. Counting rows that merely CHANGED
+                ;;    would pass for a fill that wrote one byte a row.
                 ;;
-                invoke  qgl_sf_clear, small, 0
-                invoke  sf_check, small, SMALL_W, SMALL_H
-                NZ      ax
-                CHK     n_clear, ax, 1
+                invoke  qgl_dr_fill, small, 0, 0, SMALL_W-1, SMALL_H-1, 07Eh
+                invoke  sf_const, small, SMALL_W, SMALL_H, 07Eh
+                CHK     n_clear, ax, 0
 
                 ;;
                 ;; 6. an EMS surface whose rows would straddle a page is

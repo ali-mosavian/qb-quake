@@ -1,6 +1,7 @@
 ;; sf.asm -- surfaces: pixels, and the one call that finds a row of them.
 ;;
-;; name: qgl_sf_init / qgl_sf_new / qgl_sf_free / qgl_sf_row / qgl_sf_view / qgl_sf_pget / qgl_sf_pset
+;; name: qgl_sf_init / qgl_sf_new / qgl_sf_free / qgl_sf_row /
+;;       qgl_sf_view / qgl_sf_load / qgl_sf_pget / qgl_sf_pset
 ;; desc: a surface is pixels plus a width, and it does not say where it
 ;;       lives. qgl_sf_row answers with a far pointer either way: arithmetic
 ;;       for conventional memory, a page map for EMS.
@@ -41,6 +42,10 @@ qgl_gem_init        proto   far pascal
 qgl_gem_alloc       proto   far pascal :dword
 qgl_gem_free        proto   far pascal :word
 qgl_gem_map         proto   far pascal :word, :word, :word
+
+qgl_file_open   proto   far pascal :dword
+qgl_file_read   proto   far pascal :word, :dword, :dword
+qgl_file_close  proto   far pascal :word
 
 
 .code
@@ -269,67 +274,68 @@ qgl_sf_row      endp
 
 
 ;;::::::::::::::
-;; qgl_sf_clear ( s:far ptr, val:word )
+;; qgl_sf_load ( s:far ptr, path:far ptr ) -> ax nonzero on success
 ;;
-;; Every pixel, one row at a time -- which is what makes it work for an
-;; EMS surface at all: qgl$row remaps as the rows cross pages, and a
-;; single flat run could not.
+;; A raw blob straight into the surface's own store: no header, no
+;; palette, no format. Everything this renderer loads is produced by its
+;; own tools and is already exactly the bytes the surface wants, which is
+;; why the BMP container went -- AGENTS.md's own note says "the BMP is
+;; just a container for that byte stream".
 ;;
-;; Aligned then dword then tail, same shape as qgl_mem_copy, because the
-;; backbuffer clear is per frame and a quarter of the stores is a quarter
-;; of what the emulator bills for.
+;; Page at a time, because an EMS surface has no single pointer covering
+;; it: each row's window comes from qgl$row, and the run stops at the
+;; end of that row. Slower than one read for a conventional surface and
+;; correct for both, which is the trade this whole layer makes.
 ;;::::::::::::::
-qgl_sf_clear    proc    public uses bx cx si di es,\
-                        s:dword, val:word
+qgl_sf_load     proc    public uses bx cx dx si di es,\
+                        s:dword, path:dword
+
+                local   fh:word
+                local   yy:word
+                local   rows:word
+                local   wide:word
+                local   ok:word
+                local   rowp:dword
+
+                mov     ok, 0
+
+                invoke  qgl_file_open, path
+                test    ax, ax
+                jz      @@out
+                mov     fh, ax
 
                 les     bx, s
-                xor     si, si                  ;; y
+                mov     ax, es:[bx].Surface.y_res
+                mov     rows, ax
+                mov     ax, es:[bx].Surface.x_res
+                mov     wide, ax
+                xor     ax, ax
+                mov     yy, ax
 
-@@row:          cmp     si, es:[bx].Surface.y_res
+@@row:          mov     ax, yy
+                cmp     ax, rows
                 jae     @@done
 
-                mov     ax, si
-                call    qgl$row                 ;; dx:ax = this row
-                mov     cx, es:[bx].Surface.stride
+                invoke  qgl_sf_row, s, yy
+                mov     word ptr rowp, ax
+                mov     word ptr rowp+2, dx
+                invoke  qgl_file_read, fh, rowp, wide
 
-                push    es                      ;; qgl$row gave us a
-                push    bx                      ;; different segment
-                mov     es, dx
-                mov     di, ax
-                mov     bx, cx                  ;; bytes left in this row
+                cmp     ax, wide
+                jne     @@done                  ;; short: the file ran out
 
-                ;; the fill byte, four to a dword
-                mov     al, byte ptr val
-                mov     ah, al
-                mov     dx, ax
-                shl     eax, 16
-                mov     ax, dx
-
-                ;; up to the next dword boundary, but never past the row
-                mov     cx, di
-                neg     cx
-                and     cx, 3
-                cmp     cx, bx
-                jbe     @F
-                mov     cx, bx
-@@:             sub     bx, cx
-                rep     stosb
-
-                mov     cx, bx                  ;; the bulk
-                shr     cx, 2
-                rep     stosd
-
-                mov     cx, bx                  ;; and the tail
-                and     cx, 3
-                rep     stosb
-
-                pop     bx
-                pop     es
-                inc     si
+                inc     yy
                 jmp     @@row
 
-@@done:         ret
-qgl_sf_clear    endp
+@@done:         mov     ax, yy
+                cmp     ax, rows
+                jne     @F
+                mov     ok, 1                   ;; every row arrived
+@@:             invoke  qgl_file_close, fh
+
+@@out:          mov     ax, ok
+                ret
+qgl_sf_load     endp
 
 
 ;;::::::::::::::

@@ -18,7 +18,7 @@ qgl_txt_free    proto   far :dword
 qgl_txt_char    proto   far :dword, :word, :word, :dword, :word, :word
 qgl_txt_str     proto   far :dword, :word, :word, :dword, :dword, :word
 qgl_txt_width   proto   far :dword, :dword
-qgl_sf_clear    proto   far :dword, :word
+qgl_dr_fill     proto   far :dword, :word, :word, :word, :word, :word
 
 SURF_W          equ     64
 SURF_H          equ     16
@@ -99,7 +99,7 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;
                 invoke  qgl_sf_new, SURF_W, SURF_H, SURF_CMEM, 0
                 SAVEP   sp_
-                invoke  qgl_sf_clear, sp_, BG
+                invoke  qgl_dr_fill, sp_, 0, 0, SURF_W-1, SURF_H-1, BG
 
                 invoke  qgl_txt_char, sp_, 0, 0, fp, 'A', FG
 
