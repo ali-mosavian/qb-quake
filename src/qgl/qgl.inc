@@ -180,6 +180,11 @@ QGL_SUBDIVS     equ     4
 QGL_SUBDIVP     equ     16
 QGL_SUBDIVF     textequ <16.0>          ;; the same 16, as a real4 initialiser
 
+;; Surfaces qgl_sf_scratch hands out. Four, because the slice that
+;; needs them wants a destination, a texture and a depth buffer, and one
+;; spare beats renumbering.
+QGL_SCRATCH     equ     4
+
 QGL_M_WIRE      equ     0
 QGL_M_FLAT      equ     1
 QGL_M_TEX       equ     2

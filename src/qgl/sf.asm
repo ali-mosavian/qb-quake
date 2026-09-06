@@ -622,6 +622,43 @@ qgl_sf_pset     proc    public uses bx cx si es,\
 qgl_sf_pset     endp
 
 
+;;::::::::::::::
+;; qgl_sf_scratch ( n:word ) -> dx:ax, a Surface this layer owns
+;;
+;; For callers that cannot spell the layout. qgl_sf_adopt_dc fills a
+;; Surface the CALLER owns, which is right -- the pixels are mgl's and
+;; nothing here should pretend otherwise -- but d_faces.c adopts a
+;; destination once a frame and a texture view once a face, and
+;; declaring those sixteen bytes in C would be the same fact kept in two
+;; places. That is exactly what qgl.bi is generated to prevent, and a C
+;; struct would have no generator watching it.
+;;
+;; A fixed few, by index, so the caller allocates nothing either. Out of
+;; range answers 0:0, which qgl_sf_adopt_dc already refuses, so a wrong
+;; index fails at adoption rather than writing through whatever lay at
+;; that offset.
+;;::::::::::::::
+qgl_sf_scratch  proc    public,\
+                        n:word
+
+                mov     ax, n
+                cmp     ax, QGL_SCRATCH         ;; unsigned: negative is huge
+                jae     @@none
+                imul    ax, T Surface
+                add     ax, O qgl$scratch
+                mov     dx, ds                  ;; DGROUP, as everywhere here
+                ret
+
+@@none:         xor     ax, ax
+                xor     dx, dx
+                ret
+qgl_sf_scratch  endp
+
+
+.data?
+qgl$scratch     Surface QGL_SCRATCH dup (<>)
+
+
 .data
 ;; One entry per surface kind, indexed by SURF_CMEM / SURF_EMS.
 ;; Indexed BY KIND, so there is a slot for every kind value and the one
