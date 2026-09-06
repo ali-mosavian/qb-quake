@@ -29,7 +29,7 @@
 
 qgl_mem_alloc   proto   far pascal :dword
 qgl_mem_free    proto   far pascal :dword
-qgl_sf_row      proto   far pascal :dword, :word
+qgl_sf_wr_row   proto   far pascal :dword, :word
 qgl_file_open   proto   far pascal :dword
 qgl_file_size   proto   far pascal :word
 qgl_file_read   proto   far pascal :word, :dword, :dword
@@ -210,6 +210,11 @@ qgl_txt_char    proc    public uses bx cx dx si di ds es,\
                 local   scan:word
                 local   advance:word
                 local   grow:byte
+                local   xres:word
+                local   yres:word
+                local   vis0:word               ;; first visible column
+                local   visn:word               ;; how many of them
+                local   whole:byte              ;; the glyph fits entirely
 
                 les     bx, f
                 mov     ax, glyph
@@ -235,6 +240,47 @@ qgl_txt_char    proc    public uses bx cx dx si di ds es,\
                 mov     ax, y
                 mov     scan, ax
 
+                ;;
+                ;; CLIP ONCE, HERE, so the row filler below never tests a
+                ;; bound. A glyph at the right-hand edge would otherwise
+                ;; run into the NEXT ROW of the same surface -- inside the
+                ;; allocation, so nothing faults and the picture simply
+                ;; grows four wrong pixels, which is the shape of bug a
+                ;; guard page never catches.
+                ;;
+                les     bx, dst
+                mov     ax, es:[bx].Surface.x_res
+                mov     xres, ax
+                mov     ax, es:[bx].Surface.y_res
+                mov     yres, ax
+
+                mov     ax, x                   ;; the glyph spans x..x+7
+                mov     cx, ax
+                add     cx, 8
+                cmp     cx, 0
+                jle     @@out                   ;; entirely left of it
+                cmp     ax, xres
+                jge     @@out                   ;; entirely right of it
+
+                mov     whole, 1
+                test    ax, ax
+                jl      @F
+                cmp     cx, xres
+                jle     @@span
+@@:             mov     whole, 0
+
+@@span:         ;; the visible run, as a column and a count
+                test    ax, ax
+                jge     @F
+                xor     ax, ax
+@@:             mov     vis0, ax
+                mov     dx, cx
+                cmp     dx, xres
+                jle     @F
+                mov     dx, xres
+@@:             sub     dx, ax
+                mov     visn, dx
+
 @@row:          cmp     rows, 0
                 je      @@out
 
@@ -244,22 +290,51 @@ qgl_txt_char    proc    public uses bx cx dx si di ds es,\
                 mov     al, es:[bx+si]
                 mov     grow, al
 
+                ;; a row off the top or bottom is not drawn at all
+                mov     ax, scan
+                cmp     ax, yres                ;; unsigned: a negative
+                jae     @@next                  ;; scan is a huge one
+
                 ;; and where they go. Re-derived every scanline: the
                 ;; destination may be an EMS surface whose window moved.
-                invoke  qgl_sf_row, dst, scan
+                invoke  qgl_sf_wr_row, dst, scan
                 mov     es, dx
                 mov     di, ax
-                add     di, x
 
                 mov     dh, byte ptr col
+                cmp     whole, 0
+                je      @@partial
+
+                add     di, x                   ;; the whole glyph fits
                 mov     bl, grow
                 shr     bl, 4                   ;; high nibble first
                 call    qgl$nib4
                 mov     bl, grow
                 and     bl, 0Fh
                 call    qgl$nib4
+                jmp     short @@next
 
-                les     bx, f
+                ;; the edge case, one pixel at a time. Only a glyph that
+                ;; straddles the border pays for it.
+@@partial:      add     di, vis0
+                mov     cx, visn
+                mov     si, vis0
+                sub     si, x                   ;; first visible bit
+@@pbit:         mov     bl, grow
+                mov     ax, 7
+                sub     ax, si
+                push    cx
+                mov     cl, al
+                shr     bl, cl
+                pop     cx
+                test    bl, 1
+                jz      @F
+                mov     es:[di], dh
+@@:             inc     di
+                inc     si
+                loop    @@pbit
+
+@@next:         les     bx, f
                 mov     al, es:[bx].Font.rowbytes
                 xor     ah, ah
                 add     src_ofs, ax

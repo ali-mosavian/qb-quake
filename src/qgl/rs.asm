@@ -37,6 +37,7 @@
                 include qgl.inc
 
 qgl_sf_rd_row   proto   far pascal :dword, :word
+qgl_cl_poly     proto   far pascal :dword, :word, :dword, :dword
 qgl_sf_wr_row   proto   far pascal :dword, :word
 qgl_sf_wr_row_ex proto  far pascal :dword, :word, :word
 
@@ -401,6 +402,7 @@ qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
                 local   lf_v:dword, lf_dvdy:dword
                 local   rg_x:dword, rg_dxdy:dword
                 local   lf_z:real4, lf_dzdy:real4
+                local   srcp:dword
 
                 mov     ax, @data
                 mov     fs, ax                  ;; DGROUP, for every filler
@@ -418,17 +420,27 @@ qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
                 cmp     ax, QGL_CLIPV
                 ja      @@done
 
-                ;; the caller's vertices, once, into our own segment
-                push    ds
-                pop     es
-                mov     di, O qgl$src
-                mov     cx, cnt
-                imul    cx, T QVert / 4
-                cld
-                lds     si, v
-                rep     movsd
-                push    es
-                pop     ds
+                ;;
+                ;; CLIP FIRST, and against the destination itself. The
+                ;; fillers do not test a bound -- their whole job is to
+                ;; fill as fast as the loop allows -- so nothing may reach
+                ;; them that does not fit. Sutherland-Hodgman against the
+                ;; four edges is mgl's arrangement too: SH_CLIP runs
+                ;; before drawPoly ever sees a vertex.
+                ;;
+                ;; This also replaces the copy that used to be here: the
+                ;; clipper reads the caller's far pointer and writes
+                ;; qgl$src, so the vertices are moved once instead of
+                ;; twice.
+                ;;
+                mov     ax, O qgl$src
+                mov     W srcp, ax
+                mov     ax, ds
+                mov     W srcp+2, ax
+                invoke  qgl_cl_poly, v, cnt, srcp, d
+                test    ax, ax
+                jz      @@done                  ;; nothing of it survived
+                mov     cnt, ax
 
                 ;; gradients, from a spread triple: 0, n/3 and 2n/3 are as
                 ;; far apart as three indices get on a convex ring, and on
@@ -731,17 +743,12 @@ qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
                 sub     si, ax
                 jle     @@advance               ;; the edges have crossed
 
-                ;; A SPAN MUST NOT LEAVE ITS ROW. The filler walks
-                ;; es:[di+bp] with no idea where the row ends, so a span
-                ;; running past x_res writes the polygon's texels straight
-                ;; through whatever follows -- and what follows a small
-                ;; surface is other live data. This is the guard that was
-                ;; missing: with the texture filled with 5Ah, 5A5Ah turned
-                ;; up inside a VERTEX of qgl$fx, and the walk then read its
-                ;; own corrupted geometry and ran further out of range.
-                ;;
-                ;; It cannot fire on a polygon that came through
-                ;; qgl_cl_poly, which is why the clipper is not optional.
+                ;; A SPAN MUST NOT LEAVE ITS ROW. qgl_cl_poly above makes
+                ;; that true geometrically, so this cannot fire -- it is
+                ;; kept because when it was absent a texture filled with
+                ;; 5Ah put 5A5Ah inside a VERTEX of qgl$fx, and the walk
+                ;; then read its own wreckage and ran further out of
+                ;; range. Two pounds of clamp against that.
                 test    ax, ax
                 jl      @@advance
                 cmp     ax, dstw

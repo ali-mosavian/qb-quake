@@ -42,6 +42,13 @@ ClipEdge        ends
 .data
 qgl$one         real4   1.0
 qgl$mone        real4   -1.0
+qgl$ix          dw      0
+qgl$iy          dw      0
+
+qgl$ux0         dw      0                       ;; the caller's viewport
+qgl$uy0         dw      0
+qgl$ux1         dw      7FFFh
+qgl$uy1         dw      7FFFh
 
 qgl$clx0        real4   0.0
 qgl$cly0        real4   0.0
@@ -268,24 +275,80 @@ qgl$pass        endp
 qgl_cl_rect     proc    public uses ax,\
                         x0:word, y0:word, x1:word, y1:word
 
-                fild    x0
-                fstp    qgl$clx0
-                fild    y0
-                fstp    qgl$cly0
-
+                mov     ax, x0
+                mov     qgl$ux0, ax
+                mov     ax, y0
+                mov     qgl$uy0, ax
                 mov     ax, x1
-                inc     ax
-                mov     x1, ax
-                fild    x1
-                fstp    qgl$clx1
-
+                mov     qgl$ux1, ax
                 mov     ax, y1
-                inc     ax
-                mov     y1, ax
-                fild    y1
-                fstp    qgl$cly1
+                mov     qgl$uy1, ax
                 ret
 qgl_cl_rect     endp
+
+
+;;::::::::::::::
+;; qgl$bounds -- the effective rect, into the float bounds the passes use.
+;;
+;; INTERNAL. es:bx -> the destination Surface, or es:bx null for the
+;; viewport alone. The rect is the caller's viewport INTERSECTED with the
+;; surface's own extents, so a polygon can never survive the clipper and
+;; still fall outside the thing it is drawn on. mgl keeps the same rect on
+;; the DC itself and SH_INIT reads it from there.
+;;
+;; x1 and y1 go in one larger than the last pixel, because the filler does
+;; not draw its final column or row -- SH_INIT does the same with `inc
+;; fs:[DC.xMax]`.
+;;::::::::::::::
+qgl$bounds      proc    near private uses ax cx dx
+
+                mov     ax, qgl$ux0
+                mov     cx, qgl$uy0
+                mov     dx, es
+                or      dx, bx
+                jz      @@lo                    ;; no surface named
+
+                test    ax, ax                  ;; a viewport may not start
+                jge     @F                      ;; left of the surface
+                xor     ax, ax
+@@:             test    cx, cx
+                jge     @@lo
+                xor     cx, cx
+
+@@lo:           mov     qgl$ix, ax
+                mov     qgl$iy, cx
+                fild    qgl$ix
+                fstp    qgl$clx0
+                fild    qgl$iy
+                fstp    qgl$cly0
+
+                mov     ax, qgl$ux1
+                mov     cx, qgl$uy1
+                mov     dx, es
+                or      dx, bx
+                jz      @@hi
+
+                mov     dx, es:[bx].Surface.x_res
+                dec     dx
+                cmp     ax, dx
+                jle     @F
+                mov     ax, dx
+@@:             mov     dx, es:[bx].Surface.y_res
+                dec     dx
+                cmp     cx, dx
+                jle     @@hi
+                mov     cx, dx
+
+@@hi:           inc     ax                      ;; the last column is not drawn
+                inc     cx
+                mov     qgl$ix, ax
+                mov     qgl$iy, cx
+                fild    qgl$ix
+                fstp    qgl$clx1
+                fild    qgl$iy
+                fstp    qgl$cly1
+                ret
+qgl$bounds      endp
 
 
 ;;::::::::::::::
@@ -297,10 +360,13 @@ qgl_cl_rect     endp
 ;; missing face.
 ;;::::::::::::::
 qgl_cl_poly     proc    public uses bx cx dx si di ds es,\
-                        src:dword, n:word, dst:dword
+                        src:dword, n:word, dst:dword, sf:dword
 
                 local   cnt:word
                 local   pass:word
+
+                les     bx, sf
+                call    qgl$bounds
 
                 mov     ax, n
                 mov     cnt, ax

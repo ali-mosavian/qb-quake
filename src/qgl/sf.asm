@@ -519,7 +519,13 @@ qgl_sf_pget     proc    public uses bx cx si es,\
                         s:dword, x:word, y:word
 
                 les     bx, s
+                mov     ax, x                   ;; unsigned: a negative x
+                cmp     ax, es:[bx].Surface.x_res       ;; is a huge one
+                jae     @@none
                 mov     ax, y
+                cmp     ax, es:[bx].Surface.y_res
+                jae     @@none
+
                 mov     si, SurfaceOps.rd_row
                 call    qgl$row
                 mov     es, dx
@@ -527,6 +533,9 @@ qgl_sf_pget     proc    public uses bx cx si es,\
                 add     bx, x
                 mov     al, es:[bx]
                 xor     ah, ah
+                ret
+
+@@none:         xor     ax, ax                  ;; off the surface reads 0
                 ret
 qgl_sf_pget     endp
 
@@ -537,8 +546,19 @@ qgl_sf_pget     endp
 qgl_sf_pset     proc    public uses bx cx si es,\
                         s:dword, x:word, y:word, col:word
 
+                ;; A PIXEL PAST THE LAST COLUMN LANDS IN THE NEXT ROW,
+                ;; inside the same allocation, so nothing faults and
+                ;; nothing downstream complains -- the picture just grows
+                ;; a wrong pixel. Past the last row it leaves the surface
+                ;; altogether. Both are refused here.
                 les     bx, s
+                mov     ax, x
+                cmp     ax, es:[bx].Surface.x_res
+                jae     @@none
                 mov     ax, y
+                cmp     ax, es:[bx].Surface.y_res
+                jae     @@none
+
                 mov     si, SurfaceOps.wr_row
                 call    qgl$row
                 mov     es, dx
@@ -546,7 +566,7 @@ qgl_sf_pset     proc    public uses bx cx si es,\
                 add     bx, x
                 mov     al, byte ptr col
                 mov     es:[bx], al
-                ret
+@@none:         ret
 qgl_sf_pset     endp
 
 
