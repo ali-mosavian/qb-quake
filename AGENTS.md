@@ -73,8 +73,19 @@ The rules below are for what gets written or touched from here:
   stays: in this repo it is the tool's usage text, and `imgdiff.py` is
   the model.
 - If a Python test suite appears: pytest, no test classes, parametrize
-  wherever one assertion runs over a set. The gates today are
-  `tools/check.sh` and `src/test/runall.sh`, not pytest.
+  wherever one assertion runs over a set. The gates today are `make test`
+  and `tools/check.sh`, not pytest.
+
+### The gates
+
+    make test           lint, header deps, the qgl suite -- native, ~15s
+    tools/check.sh      the above, then build, bench and compare
+    tools/check.sh --churn   two runs of one binary under eviction
+
+`make test` needs no DOS toolchain and no VBDOS, which is what makes it
+worth running between edits: a failure there names an assertion instead
+of producing a picture that came out wrong for reasons unknown.
+`check.sh` runs it first for the same reason.
 
 ### Writing
 

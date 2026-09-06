@@ -40,8 +40,14 @@ commas = $(subst $(SPACE),$(COMMA),$(strip $(1)))
 BENCH  := $(basename $(wildcard b*.asm))
 UGLLIB ?= $(ROOT)/build/vbd/UGLV.LIB
 
-all: $(TESTS:%=$(B)/%/pass)
+all: hangcheck $(TESTS:%=$(B)/%/pass)
 	@echo "qgl suite: $(words $(TESTS)) tests PASS"
+
+# The harness is part of the suite. run1.sh's timeout used to send a
+# signal dosbox-x ignores, so a test that never exited hung the gate
+# instead of failing -- and a gate that can hang is not a gate.
+hangcheck:
+	@sh hangcheck.sh
 
 $(TESTS): %: $(B)/%/pass
 
@@ -79,7 +85,7 @@ clean:
 	rm -rf $(B)
 
 .SECONDARY:
-.PHONY: all clean $(TESTS)
+.PHONY: all clean hangcheck $(TESTS)
 
 # The benchmarks link mgl as well, so the two rasterisers can be run
 # against each other inside one process. Not part of `all`: they take

@@ -27,7 +27,15 @@ t.exe > out.txt
 exit
 EOF
 rm -f "$d/OUT.TXT" "$d/out.txt" "$d/pass"
-SDL_VIDEODRIVER=dummy timeout 60 "$db" -nolog -conf "$d/run.conf" -exit >/dev/null 2>&1
+# -k, because dosbox-x IGNORES the SIGTERM `timeout` sends: a test that
+# does not exit sat here for eleven minutes with the timeout long since
+# fired and the emulator still burning a core. SIGKILL cannot be ignored,
+# so the suite fails the test instead of hanging the gate.
+#
+# QGL_TEST_TIMEOUT is for hangcheck.sh, which needs a test to time out on
+# purpose and should not cost a minute to say so.
+t=${QGL_TEST_TIMEOUT:-60}
+SDL_VIDEODRIVER=dummy timeout -k 5 "$t" "$db" -nolog -conf "$d/run.conf" -exit >/dev/null 2>&1
 out=$(ls "$d"/OUT.TXT "$d"/out.txt 2>/dev/null | head -1)
 if [ -n "$out" ] && grep -q "RESULT PASS" "$out"; then
     touch "$d/pass"

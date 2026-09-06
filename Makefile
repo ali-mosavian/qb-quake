@@ -58,6 +58,7 @@ C_HDRS := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.h))
 # needs no DOS, unlike BC and BCC.
 ASM_SRC  := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.asm))
 ASM_MODS := $(basename $(notdir $(ASM_SRC)))
+ASM_INC  := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.inc))
 JWASM    := $(TOOLCHAINS)/native/bin/jwasm
 
 BAS_OBJS := $(addprefix $(BUILD)/,$(addsuffix .obj,$(BAS_MODS)))
@@ -72,7 +73,7 @@ ASSETS := data/assets/assets.zip
 ASSET_FILES := $(wildcard data/assets/*)
 EXE  := $(BUILD)/qrender.exe
 
-.PHONY: all build run viz qb45 pds evidence assets clean help
+.PHONY: all build run viz qb45 pds evidence assets test clean help
 
 all: build                      ## build the renderer (default)
 build: $(EXE)
@@ -97,7 +98,13 @@ $(BUILD)/%.obj: %.bas $(HDRS) | $(BUILD)
 $(BUILD)/%.obj: %.c $(C_HDRS) | $(BUILD)
 	$(BCC_QR) $< $@
 
-$(BUILD)/%.obj: %.asm | $(BUILD)
+# On every .inc, for the same reason the BASIC rule takes every .bi:
+# qgl.inc carries the surface kinds and the struct layouts, so an edit
+# there changes what these objects mean while leaving every .asm file
+# untouched. Without the dependency the stale objects survive, LINK is
+# happy, and the EXE runs the old constants against the new BASIC
+# declarations. tools/depcheck.sh is the regression.
+$(BUILD)/%.obj: %.asm $(ASM_INC) | $(BUILD)
 	# __BASIC__: this build links BASIC's runtime, so qgl may call
 	# B$$SETM to reclaim far-heap memory. The qgl test suite does not
 	# define it and links free-standing.
@@ -122,6 +129,15 @@ $(BUILD)/.assets-stamp: $(ASSET_FILES) | $(BUILD)
 $(EXE): $(BAS_OBJS) $(C_OBJS) $(ASM_OBJS) $(BUILD)/stuff.ini $(BUILD)/base.dat $(BUILD)/UGLV.LIB $(BUILD)/.assets-stamp
 	@python3 tools/qblint.py
 	$(LINKQR) $(BUILD) "$(BAS_MODS)" "$(C_MODS) $(ASM_MODS)"
+
+# The native gates, in one target so tools/check.sh and a bare `make
+# test` cannot drift apart. ~15s from clean, no DOS toolchain and no
+# VBDOS -- which is the point: a failure here is qgl's, not the
+# renderer's around it.
+test:                           ## lint, header deps, the qgl suite
+	@python3 tools/qblint.py
+	@sh tools/depcheck.sh
+	@$(MAKE) --no-print-directory -C src/qgl/test
 
 run: $(EXE)                     ## headless run; 's' screenshots to build/vbd/
 	@VBD_OUT=$(BUILD) tools/dosbox.sh run $(MAP)

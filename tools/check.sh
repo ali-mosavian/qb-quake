@@ -28,6 +28,12 @@ REF="${REF:-$ROOT/tools/ref/bench.bmp}"
 PASSES="${PASSES:-2}"
 BENCH="${BENCH:--lm -nostats -bench 30}"
 
+# The native gates go first, and go before --churn as well: they take
+# fifteen seconds against the DOS build's minutes, and a qgl fault caught
+# here is a failing assertion by name rather than a picture that came out
+# wrong for reasons unknown.
+make -C "$ROOT" test || { echo "NATIVE GATES FAILED"; exit 1; }
+
 # --churn is a DETERMINISM check, not a reference-image one: it runs the
 # same binary twice and compares the two frames to each other.
 #
