@@ -95,13 +95,14 @@ bench: $(BENCH:%=bench-%)
 bench-%: $(B)/%/b.exe runbench.sh
 	@sh runbench.sh $(DOSBOX) $(<D)
 
-$(B)/%/b.exe: %.asm tfw.asm tfw.inc $(QGLSRC) $(QGL)/qgl.inc $(UGLLIB)
+$(B)/%/b.exe: %.asm tfw.asm tfw.inc mglstub.asm $(QGLSRC) $(QGL)/qgl.inc $(UGLLIB)
 	@mkdir -p $(@D)
 	@$(JWASM) -Fo$(@D)/test.obj $< > /dev/null
 	@$(JWASM) -Fo$(@D)/tfw.obj tfw.asm > /dev/null
+	@$(JWASM) -Fo$(@D)/mglstub.obj mglstub.asm > /dev/null
 	@for s in $(QGLSRC); do \
 	    $(JWASM) -Fo$(@D)/`basename $$s .asm`.obj $$s > /dev/null || exit 1; \
 	done
 	@$(JWLINK) option quiet format dos name $@ \
-	    file $(call commas,$(@D)/test.obj $(@D)/tfw.obj $(QGLOBJS)) \
+	    file $(call commas,$(@D)/test.obj $(@D)/tfw.obj $(@D)/mglstub.obj $(QGLOBJS)) \
 	    library $(UGLLIB) > $(@D)/link.out 2>&1

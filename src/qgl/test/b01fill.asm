@@ -84,16 +84,6 @@ reps            dw      0
 
 .code
 
-;; the BASIC runtime, as far as mgl's cold paths reference it. A filler
-;; never reaches either, and linking the library needs both defined.
-B_ONEXIT        proc    far public
-                ret
-B_ONEXIT        endp
-B$SETM          proc    far public
-                ret
-B$SETM          endp
-
-
 ;;::::::::::::::
 ;; bnow -> dx:ax, rising, 0.84us a unit
 ;;::::::::::::::
