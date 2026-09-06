@@ -102,6 +102,13 @@ qgl$65536       real4   65536.0
 qgl$half        real4   0.5
 qgl$eps         real4   0.00001
 
+;; The gradients come off the FPU already multiplied by 65536 and the
+;; perspective filler wants them unscaled -- per pixel to carry the span
+;; start across, per sub-span to walk it. Two multiplies rather than one
+;; folded constant, so QGL_SUBDIVP stays a fact kept in one place.
+qgl$r65536      real4   0.0000152587890625
+qgl$subdivf     real4   QGL_SUBDIVF
+
 ;; per texture
 qgl$tshift      dw      0                       ;; log2 of the width
 qgl$tumsk       dw      0                       ;; width-1
@@ -117,7 +124,19 @@ qgl$dvdx        dd      0
 qgl$fcol        dw      0
 qgl$mode        dw      QGL_M_TEX
 
+;; The same three gradients the perspective filler needs, and they are
+;; not the same numbers. It steps u/z, v/z and 1/z -- all three linear in
+;; screen space, which is the whole reason the divide can be amortised --
+;; and it steps them a sub-span at a time, so these are floats, unscaled,
+;; times QGL_SUBDIVP. The fixed-point pair above is what the AFFINE
+;; fillers add per pixel and means nothing here.
+qgl$fdudxn      real4   0.0
+qgl$fdvdxn      real4   0.0
+qgl$fdzdxn      real4   0.0
+qgl$fdzdx       real4   0.0                     ;; per PIXEL, for the start
+
                 public  qgl$dudx, qgl$dvdx, qgl$fcol, qgl$mode
+                public  qgl$fdudxn, qgl$fdvdxn, qgl$fdzdxn
                 public  qgl$tshift, qgl$tumsk, qgl$tvmsk, qgl$tofs
                 public  qgl$tseg
 
@@ -202,6 +221,11 @@ qgl$grad        proc    near uses ax bx cx dx si di
                 fld     st(0)
                 CALC_NOM vz
                 fmul
+                fld     st(0)                   ;; the perspective steps,
+                fmul    qgl$r65536              ;; unscaled: per pixel to
+                fst     qgl$fdzdx               ;; carry the span start
+                fmul    qgl$subdivf             ;; across, per sub-span to
+                fstp    qgl$fdzdxn              ;; walk it
                 fmul    D qgl$zscale
                 fistp   D qgl$zdzdx
 
@@ -219,11 +243,19 @@ qgl$grad        proc    near uses ax bx cx dx si di
                 CALC_NOM vu
                 fimul   D qgl$twhole            ;; one repeat spans the width
                 fmul
+                fld     st(0)
+                fmul    qgl$r65536
+                fmul    qgl$subdivf
+                fstp    qgl$fdudxn
                 fistp   D qgl$dudx
 
                 CALC_NOM vv
                 fimul   D qgl$thwhole
                 fmul                            ;; the last rdenom
+                fld     st(0)
+                fmul    qgl$r65536
+                fmul    qgl$subdivf
+                fstp    qgl$fdvdxn
                 fistp   D qgl$dvdx
 
                 clc
@@ -397,6 +429,8 @@ qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
                 local   rowo:word, rows:word, zsegv:word
                 local   dsth:word, dstw:word
                 local   fillp:word
+                local   persp:word
+                local   pfrac:dword, pu:dword, pv:dword
                 local   lf_s:word, lf_e:word, rg_s:word, rg_e:word
                 local   lf_hgt:word, rg_hgt:word, height:word
                 local   lf_x:dword, lf_dxdy:dword
@@ -476,6 +510,15 @@ qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
                 ;; the filler, ONCE per polygon
                 call    b8_span                 ;; ONCE per polygon
                 mov     fillp, ax
+
+                ;; and whether it is the one that wants the FPU triple,
+                ;; decided here rather than tested per scanline. The mode
+                ;; cannot change inside a polygon.
+                xor     ax, ax
+                cmp     qgl$mode, QGL_M_PTEX
+                jne     @F
+                inc     ax
+@@:             mov     persp, ax
 
                 ;; both chains start at the topmost vertex; the left walks
                 ;; backwards around the ring and the right forwards. n
@@ -728,6 +771,7 @@ qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
                 and     eax, 0FFFFh
                 mov     edi, 65536
                 sub     edi, eax
+                mov     pfrac, edi              ;; di is the row before the call
 
                 FXMUL   edi, qgl$dudx
                 mov     ecx, lf_u
@@ -737,6 +781,19 @@ qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
                 mov     edx, lf_v
                 add     edx, 32768
                 add     edx, eax
+
+                ;; The perspective filler wants the same point WITHOUT the
+                ;; half texel. That 32768 is a round-to-nearest for an
+                ;; affine filler that truncates; here the divide comes
+                ;; first, so half a texel added to u/z lands as half a
+                ;; texel times z -- an error that grows with depth. The
+                ;; filler's own fistp rounds instead.
+                mov     eax, ecx
+                sub     eax, 32768
+                mov     pu, eax
+                mov     eax, edx
+                sub     eax, 32768
+                mov     pv, eax
 
                 mov     eax, lf_x
                 FXFLOOR eax
@@ -762,6 +819,23 @@ qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
                 mov     si, bx
 @@:
 
+                ;; u/z, v/z and 1/z at the first pixel centre, in the
+                ;; order the perspective filler reads them: st(0) u',
+                ;; st(1) v', st(2) z'. Pushed here and not earlier
+                ;; because every path out of the clamp above skips the
+                ;; call, and three values left on the FPU stack per
+                ;; skipped scanline overflow it in eight.
+                cmp     persp, 0
+                je      @@affine
+                fild    D pfrac
+                fmul    qgl$r65536
+                fmul    qgl$fdzdx
+                fadd    lf_z                    ;; z'
+                fild    D pv
+                fmul    qgl$r65536              ;; v'
+                fild    D pu
+                fmul    qgl$r65536              ;; u'
+@@affine:
                 mov     bx, fillp
                 mov     di, rowo
                 mov     es, rows

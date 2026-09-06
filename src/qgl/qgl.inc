@@ -172,6 +172,14 @@ QGL_Z_SET       equ     1
 QGL_Z_TEST      equ     2
 QGL_Z_KINDS     equ     3               ;; depth modes per drawing mode
 
+;; How many pixels one perspective divide serves. mgl's SUBDIVP, and the
+;; same 16: a divide is the expensive instruction here, and sixteen
+;; pixels of affine drift stays under a texel for anything the renderer
+;; draws.
+QGL_SUBDIVS     equ     4
+QGL_SUBDIVP     equ     16
+QGL_SUBDIVF     textequ <16.0>          ;; the same 16, as a real4 initialiser
+
 QGL_M_WIRE      equ     0
 QGL_M_FLAT      equ     1
 QGL_M_TEX       equ     2

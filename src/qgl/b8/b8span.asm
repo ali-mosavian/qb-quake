@@ -30,6 +30,9 @@
                 externdef qgl$zmode:word
                 externdef qgl$dudx:dword
                 externdef qgl$dvdx:dword
+                externdef qgl$fdudxn:dword
+                externdef qgl$fdvdxn:dword
+                externdef qgl$fdzdxn:dword
                 externdef qgl$tshift:word
                 externdef qgl$tumsk:word
                 externdef qgl$tvmsk:word
@@ -523,6 +526,220 @@ FIX_COL         macro   ?p
                 mov     B cs:[?p&_col_e-1], al
 endm
 
+;;:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+;; PERSPECTIVE. The pieces above interpolate u and v straight down the
+;; span, which is only right where 1/z is flat. These divide.
+;;
+;; u/z, v/z and 1/z are all linear in screen space -- u is not -- so the
+;; filler walks those three and recovers u = (u/z)/(1/z) every
+;; QGL_SUBDIVP pixels, stepping affinely in between. That is Quake's
+;; arrangement and mgl's, and the constant is mgl's 16.
+;;
+;; The steps come from MEMORY here rather than a patched immediate,
+;; because unlike the affine ones they change every sub-span. Only what
+;; is fixed for the polygon -- the masks, the shift, the texture base --
+;; stays patched.
+;;:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+;;::::::::::::::
+;; 65536*u'/z' and 65536*v'/z' into the two named dwords.
+;;
+;;  FPU in : st0= u', st1= v', st2= z'
+;;  FPU out: unchanged
+;;
+;; fistp ROUNDS, which is where the affine path's half texel went. Adding
+;; it before the divide would scale it by z.
+PDIV            macro   ?u, ?v
+                fld     D fs:qgl$p65536         ;; k  u' v' z'
+                fdiv    st(0), st(3)            ;; zf u' v' z'
+                fld     st(0)                   ;; zf zf u' v' z'
+                fmul    st(0), st(2)            ;; uf zf u' v' z'
+                fxch    st(1)                   ;; zf uf u' v' z'
+                fmul    st(0), st(3)            ;; vf uf u' v' z'
+                fxch    st(1)                   ;; uf vf u' v' z'
+                fistp   D fs:?u                 ;; vf u' v' z'
+                fistp   D fs:?v                 ;; u' v' z'
+
+                ;; half a texel, on THIS side of the divide. The affine
+                ;; path adds it to u before the filler truncates, which
+                ;; makes the truncation a round-to-nearest; the same
+                ;; addition before a divide would land as half a texel
+                ;; times z. Added to both boundaries, so the step between
+                ;; them is untouched.
+                add     D fs:?u, 32768
+                add     D fs:?v, 32768
+endm
+
+;;:::::::::::::: the triple, one sub-span on
+PSTEP           macro
+                fadd    D fs:qgl$fdudxn         ;; u' v' z'
+                fxch    st(1)                   ;; v' u' z'
+                fadd    D fs:qgl$fdvdxn
+                fxch    st(2)                   ;; z' u' v'
+                fadd    D fs:qgl$fdzdxn
+                fxch    st(2)                   ;; v' u' z'
+                fxch    st(1)                   ;; u' v' z'
+endm
+
+;;::::::::::::::
+;; the per-pixel step across this sub-span, in the form the stepper adds.
+;;
+;; The v half is shifted by tshift and has every bit above tvmsk set, for
+;; the reason qgl$fixup gives at length: si carries v already shifted, and
+;; the carry out of the fractional add must not reach the bits the
+;; following AND sweeps off. Computed here rather than patched because it
+;; is different every sub-span.
+PMKSTEP         macro
+                mov     eax, D fs:qgl$plu
+                sub     eax, D fs:qgl$ppu
+                sar     eax, QGL_SUBDIVS
+                mov     D fs:qgl$psdu, eax
+
+                mov     eax, D fs:qgl$plv
+                sub     eax, D fs:qgl$ppv
+                sar     eax, QGL_SUBDIVS
+                mov     W fs:qgl$psdv+0, ax
+                mov     edx, eax
+                sar     edx, 16
+                mov     cl, B fs:qgl$tshift
+                shl     dx, cl
+                mov     cx, W fs:qgl$tvmsk
+                not     cx
+                or      dx, cx
+                mov     W fs:qgl$psdv+2, dx
+endm
+
+;;:::::::::::::: ecx, edx 16.16 -> bx:cx and si:dx, int:frac, masked
+PSPLIT          macro   ?p
+                mov     esi, edx
+                mov     ebx, ecx
+                shr     esi, 16
+                shr     ebx, 16
+?p&_shift:      shl     si, __IMM8__
+                ZEND    ?p&_shift
+?p&_umskp:      and     bx, __IMM16__
+                ZEND    ?p&_umskp
+?p&_vmskp:      and     si, __IMM16__
+                ZEND    ?p&_vmskp
+endm
+
+;;:::::::::::::: one pixel on, from memory
+PSTEPPX         macro   ?p
+                add     dx, W fs:qgl$psdv+0
+                adc     si, W fs:qgl$psdv+2
+                add     cx, W fs:qgl$psdu+0
+                adc     bx, W fs:qgl$psdu+2
+?p&_vmsk:       and     si, __IMM16__
+                ZEND    ?p&_vmsk
+endm
+
+;;::::::::::::::
+;; The body, once per depth mode.
+;;
+;; bp runs -width..0 across the WHOLE span, exactly as the affine
+;; fillers, which is what lets the depth displacement stay a single
+;; patched immediate and the two depth variants below reuse ZDISP and
+;; Z_STEP unaltered. The price is a compare against the sub-span boundary
+;; per pixel; mgl instead restarts bp every sub-span and would have to
+;; re-patch the displacement with it. Correct first -- the fast
+;; arrangement is a change to this macro and to nothing else.
+PTEX_BODY       macro   ?p, ?zwrite, ?ztest
+
+                PS      ebx, bp
+                add     di, ax
+                mov     bp, si
+                add     di, si
+                neg     bp
+
+        ifnb    <?ztest>
+                ZDISP   ?p&_zcmp, ?p&_zofs
+        else
+          ifnb  <?zwrite>
+                ZDISP   ?p&_zofs
+          endif
+        endif
+
+                PDIV    qgl$ppu, qgl$ppv
+
+;;              a sub-span, or what is left of one
+@@sub:          mov     ax, bp
+                add     ax, QGL_SUBDIVP
+                jle     @F
+                xor     ax, ax                  ;; the last one is short
+@@:             mov     W fs:qgl$pend, ax
+
+                PSTEP                           ;; one WHOLE sub-span on,
+                PDIV    qgl$plu, qgl$plv        ;; short tail or not: the
+                PMKSTEP                         ;; step is per pixel
+
+                mov     ecx, D fs:qgl$ppu
+                mov     edx, D fs:qgl$ppv
+                PSPLIT  ?p
+
+@@inner:
+        ifnb    <?ztest>
+                mov     ax, W fs:qgl$zacc+2
+?p&_zcmp:       cmp     gs:[ebp*2+__IMM32__], ax
+                ZEND    ?p&_zcmp
+                jae     @@behind
+?p&_zofs:       mov     gs:[ebp*2+__IMM32__], ax
+                ZEND    ?p&_zofs
+                TEX_FETCH ?p
+                mov     es:[di+bp], al
+@@behind:       PSTEPPX ?p
+?p&_umsk:       and     bx, __IMM16__
+                ZEND    ?p&_umsk
+                Z_STEP  ?p
+        else
+                TEX_FETCH ?p
+                PSTEPPX ?p
+                mov     es:[di+bp], al
+?p&_umsk:       and     bx, __IMM16__
+                ZEND    ?p&_umsk
+          ifnb  <?zwrite>
+                mov     ax, W fs:qgl$zacc+2
+?p&_zofs:       mov     gs:[ebp*2+__IMM32__], ax
+                ZEND    ?p&_zofs
+                Z_STEP  ?p
+          endif
+        endif
+
+                inc     bp
+                jz      @@done
+                cmp     bp, W fs:qgl$pend
+                jne     @@inner
+
+                mov     eax, D fs:qgl$plu       ;; this boundary becomes
+                mov     D fs:qgl$ppu, eax       ;; the next one's start
+                mov     eax, D fs:qgl$plv
+                mov     D fs:qgl$ppv, eax
+                jmp     @@sub
+
+;;              THE CALLER PUSHED THREE. Leaving them costs nothing on the
+;;              first span and overflows the stack on the third.
+@@done:         fstp    st(0)
+                fstp    st(0)
+                fstp    st(0)
+                PP      bp, ebx
+                ret
+endm
+
+;;:::::::::::::: perspective, no depth
+qgl$ptex_o      proc    near
+                PTEX_BODY po
+qgl$ptex_o      endp
+
+;;:::::::::::::: perspective, depth written and not tested
+qgl$ptex_w      proc    near
+                PTEX_BODY pw, 1
+qgl$ptex_w      endp
+
+;;:::::::::::::: perspective, tested then written
+qgl$ptex_t      proc    near
+                PTEX_BODY pt, 1, 1
+qgl$ptex_t      endp
+
+
 qgl$fixup       proc    near uses ax bx cx dx si di bp
 
                 mov     al, B qgl$tshift
@@ -532,6 +749,9 @@ qgl$fixup       proc    near uses ax bx cx dx si di bp
                 FIX_TEX to
                 FIX_TEX tw
                 FIX_TEX tt
+                FIX_TEX po
+                FIX_TEX pw
+                FIX_TEX pt
 
                 ;; dvdx_int IS NOT THE PLAIN INTEGER HALF. si carries v
                 ;; already shifted by tshift, so its step must be shifted
@@ -568,6 +788,8 @@ qgl$fixup       proc    near uses ax bx cx dx si di bp
                 mov     dx, W qgl$zdzdx+2
                 FIX_Z   tw
                 FIX_Z   tt
+                FIX_Z   pw
+                FIX_Z   pt
                 FIX_Z   fw
                 FIX_Z   ft
 
@@ -685,6 +907,26 @@ qgl_b8_selftest proc    far public
                 CKW     tt_dzdxf
                 CKW     tt_dzdxi
 
+                CKB     po_shift
+                CKW     po_umskp
+                CKW     po_vmskp
+                CKW     po_ofs
+                CKW     po_umsk
+                CKW     po_vmsk
+
+                CKB     pw_shift
+                CKW     pw_ofs
+                CKD     pw_zofs
+                CKW     pw_dzdxf
+                CKW     pw_dzdxi
+
+                CKB     pt_shift
+                CKW     pt_ofs
+                CKD     pt_zcmp
+                CKD     pt_zofs
+                CKW     pt_dzdxf
+                CKW     pt_dzdxi
+
                 CKB     fo_col
                 CKB     fw_col
                 CKD     fw_zofs
@@ -708,27 +950,39 @@ qgl_b8_selftest endp
 qgl$rzd         dw      0                       ;; depth displacement
 qgl$rbp0        dd      0                       ;; -width, sign extended
 
+;; The perspective filler's span state. Its LOOP state is in registers
+;; like every other filler's; what sits here is what changes once a
+;; sub-span, which is the whole point of a sub-span.
+qgl$p65536      real4   65536.0
+qgl$ppu         dd      0                       ;; u,v at this boundary
+qgl$ppv         dd      0
+qgl$plu         dd      0                       ;; and at the next
+qgl$plv         dd      0
+qgl$psdu        dd      0                       ;; per pixel, in between
+qgl$psdv        dd      0
+qgl$pend        dw      0                       ;; the bp that ends it
+
 
 
 ;;
 ;; Indexed qgl$mode + qgl$zmode, both pre-scaled, so a call site adds and
 ;; never multiplies -- SURF_CMEM's trick, twice.
 ;;
-;; Perspective shares the affine entries. The sub-span divide is not
-;; written, and the affine filler draws a face that is right where 1/z is
-;; flat and distorted where it is not, which is what "affine" means and is
-;; visible. An empty entry would draw a face that is right nowhere.
-;;
 
 qgl$fillTB      dw      qgl$wire_o, qgl$wire_w, qgl$wire_t
                 dw      qgl$flat_o, qgl$flat_w, qgl$flat_t
                 dw      qgl$tex_o,  qgl$tex_w,  qgl$tex_t
-                dw      qgl$tex_o,  qgl$tex_w,  qgl$tex_t
+                dw      qgl$ptex_o, qgl$ptex_w, qgl$ptex_t
 
+;; THE PERSPECTIVE ROW IS NOT qgl$ref. There is no reference perspective
+;; filler to compare against, and more to the point the scanner pushes
+;; three values onto the FPU stack for that mode: a filler that did not
+;; consume them would overflow it in three scanlines. The row is the real
+;; one, so qgl_rs_ref stays safe to call in any mode.
 qgl$refTB       dw      qgl$ref, qgl$ref, qgl$ref
                 dw      qgl$ref, qgl$ref, qgl$ref
                 dw      qgl$ref, qgl$ref, qgl$ref
-                dw      qgl$ref, qgl$ref, qgl$ref
+                dw      qgl$ptex_o, qgl$ptex_w, qgl$ptex_t
 
 qgl$curTB       dw      O qgl$fillTB
 
