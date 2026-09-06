@@ -19,9 +19,11 @@
 ;;              and the value that matters after 0 is 0FFFFh: clearing to
 ;;              "nearest" and drawing nothing is how a depth TEST is
 ;;              proved to be testing rather than passing everything.
-;;   odd     -- the mode constants are pre-scaled table offsets, so an odd
-;;              value is not a mode however small. Accepting one would
-;;              index the filler table between its entries.
+;;   range   -- a mode is a plain 0,1,2 and anything past the last one is
+;;              not a mode. It used to be a pre-scaled table offset, where
+;;              an ODD value was the impossible one; that is exactly the
+;;              coupling that let SURF_EMS drift from 2 to 10 under BASIC's
+;;              feet, and it is gone.
 
                 .model  medium, pascal
                 .386
@@ -47,7 +49,7 @@ n_high          db      'as tall as its target  $'
 n_set           db      'installs               $'
 n_mode0         db      'mode starts off        $'
 n_mode1         db      'mode reads back        $'
-n_odd           db      'refuses an odd mode    $'
+n_odd           db      'refuses a mode it has n$'
 n_nobuf         db      'no buffer forces off   $'
 n_clear         db      'clear fills WORDS      $'
 n_scale         db      'scale returns the old  $'
@@ -119,9 +121,9 @@ tmain           proc    far public uses bx cx dx si di es
                 invoke  qgl_z_mode, QGL_Z_SET
                 CHK     n_mode1, ax, QGL_Z_TEST
 
-                ;; an odd value is not a mode: it must be ignored, and the
+                ;; a value past the last mode must be ignored, and the
                 ;; mode in force must survive it
-                invoke  qgl_z_mode, QGL_Z_SET+1
+                invoke  qgl_z_mode, QGL_Z_TEST+1
                 invoke  qgl_z_mode, QGL_Z_OFF
                 CHK     n_odd, ax, QGL_Z_SET
 

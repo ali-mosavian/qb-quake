@@ -52,6 +52,38 @@ qgl_file_close  proto   far pascal :word
 .code
 
 ;;::::::::::::::
+;; qgl_abi ( what:word ) -> ax = the assembly's own value for a constant
+;;
+;; The ONE place a BASIC caller can ask the layer what it actually
+;; believes. qgl.bi is generated from qgl.inc so the two cannot drift on
+;; paper, but generated or not, nothing had ever checked that the EXE on
+;; disk agrees with the header the BASIC beside it was compiled against.
+;; abitest.bas asks here and compares.
+;;
+;; The order is the order qgl.bi declares them in, and adding a constant
+;; means adding it in both places -- which the test then notices.
+;;::::::::::::::
+qgl_abi         proc    public uses bx,\
+                        what:word
+
+                mov     bx, what
+                cmp     bx, ABI_N
+                jae     @@bad
+                shl     bx, 1
+                mov     ax, cs:qgl$abiTB[bx]
+                ret
+@@bad:          mov     ax, -1
+                ret
+qgl_abi         endp
+
+qgl$abiTB       dw      MEM_LARGEST, MEM_TOTAL
+                dw      SURF_CMEM, SURF_EMS
+                dw      QGL_Z_OFF, QGL_Z_SET, QGL_Z_TEST
+                dw      QGL_M_WIRE, QGL_M_FLAT, QGL_M_TEX, QGL_M_PTEX
+ABI_N           equ     11
+
+
+;;::::::::::::::
 ;; qgl_sf_init () -> ax nonzero if EMS surfaces are possible
 ;;::::::::::::::
 qgl_sf_init     proc    public
@@ -243,6 +275,13 @@ qgl$cmem_ex     proc    near private
                 ret
 qgl$cmem_ex     endp
 
+;;:::::::::::::: a kind that is not one
+qgl$row_none    proc    near private
+                xor     ax, ax
+                xor     dx, dx
+                ret
+qgl$row_none    endp
+
 
 ;;::::::::::::::
 ;; qgl$ems_ex -- the EMS mapper, through a page the CALLER names.
@@ -311,9 +350,17 @@ qgl$row         proc    near private uses bx cx si
                 PS      ax, dx, cx
                 mov     cl, es:[bx].Surface.kind
                 xor     ch, ch
-                add     si, cx                  ;; kind IS the byte offset
+                cmp     cx, SURF_KINDS
+                jae     @@nokind
+                imul    cx, T SurfaceOps        ;; kind indexes; it is not the index
+                add     si, cx
                 PP      cx, dx, ax
                 call    W qgl$typeTB[si]
+                ret
+
+@@nokind:       PP      cx, dx, ax
+                xor     ax, ax
+                xor     dx, dx
                 ret
 qgl$row         endp
 
@@ -379,8 +426,13 @@ qgl_sf_windows  proc    public uses bx si es,\
                 mov     si, SurfaceOps.windows
                 mov     al, es:[bx].Surface.kind
                 xor     ah, ah
+                cmp     ax, SURF_KINDS
+                jae     @@nokind
+                imul    ax, T SurfaceOps
                 add     si, ax
                 mov     ax, qgl$typeTB[si]
+                ret
+@@nokind:       xor     ax, ax
                 ret
 qgl_sf_windows  endp
 
@@ -572,7 +624,11 @@ qgl_sf_pset     endp
 
 .data
 ;; One entry per surface kind, indexed by SURF_CMEM / SURF_EMS.
+;; Indexed BY KIND, so there is a slot for every kind value and the one
+;; between SURF_CMEM and SURF_EMS is not a kind. It refuses rather than
+;; aliasing a real entry, so a bogus kind fails instead of drawing.
 qgl$typeTB      SurfaceOps <O qgl$row_cmem, O qgl$row_cmem, O qgl$cmem_ex, O qgl$cmem_ex, -1>
+                SurfaceOps <O qgl$row_none, O qgl$row_none, O qgl$row_none, O qgl$row_none, 0>
                 SurfaceOps <O qgl$rd_ems,   O qgl$wr_ems,   O qgl$ems_ex,  O qgl$ems_ex,   4>
 
                 end

@@ -243,14 +243,9 @@ qgl_z_mode      proc    public uses bx,\
                 or      bx, word ptr qgl$zsf+2
                 jz      @@off
 
-                ;; the constants are pre-scaled table offsets, so an odd
-                ;; value is not a mode however small it is -- accepting
-                ;; one would index the table between its entries
                 mov     bx, m
                 cmp     bx, QGL_Z_TEST
                 ja      @@out                   ;; nonsense leaves it alone
-                test    bl, 1
-                jnz     @@out
                 mov     qgl$zmode, bx
                 ret
 

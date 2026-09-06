@@ -113,8 +113,26 @@ SurfaceOps      ends
 ;; windows says how many can be live at once. ASK, DO NOT ASSUME: a
 ;; conventional surface has no window at all and answers with -1.
 
-SURF_CMEM       equ     0 * (SIZEOF SurfaceOps)
-SURF_EMS        equ     1 * (SIZEOF SurfaceOps)
+;; A KIND IS A KIND, NOT AN OFFSET, and these are the values BASIC has
+;; always been told -- 0 and 2. They are written out, not derived.
+;;
+;; They used to be the dispatch table's byte offsets, pre-scaled so a
+;; call site could index without a multiply, which is mgl's
+;; DC_MEM equ 0 * T DCT. The saving is one instruction. The price is that
+;; the constant CHANGES MEANING whenever the record grows: SurfaceOps
+;; went from one word to five, SURF_EMS silently became 10, qgl.bi still
+;; said 2, and a BASIC caller asking for an EMS surface would have
+;; indexed the middle of the conventional entry.
+;;
+;; An exported enum must never be a SIZEOF. If the dispatch wants a
+;; layout number it gets its own name, below.
+SURF_CMEM       equ     0
+SURF_EMS        equ     2
+
+;; The dispatch table is indexed BY KIND, so it has a slot per kind value
+;; and one of them is unused. Ten bytes to keep the exported enum and the
+;; table layout from ever being the same number again.
+SURF_KINDS      equ     3
 
 SURF_SLOT_MAX   equ     3
 
@@ -134,29 +152,30 @@ MemOps          struc
 query           dw      ?               ;; near: -> dx:ax = bytes
 MemOps          ends
 
-MEM_LARGEST     equ     0 * (SIZEOF MemOps)
-MEM_TOTAL       equ     1 * (SIZEOF MemOps)
+MEM_LARGEST     equ     0
+MEM_TOTAL       equ     2               ;; written out; BASIC has said 2 all along
+MEM_KINDS       equ     3               ;; slots, indexed by the selector
 
 ;;
-;; Drawing mode and depth mode, and between them they ARE the index into
-;; the filler table: qgl$fillTB[mode + zmode], no multiply at the call
-;; site. Each mode owns three consecutive word entries, one per depth
-;; mode, so the constants are pre-scaled by the entry size exactly as
-;; SURF_CMEM and MEM_LARGEST are.
+;; Drawing mode and depth mode. b8_span turns the pair into an index --
+;; (mode * QGL_Z_KINDS + zmode) * 2 -- so these stay semantic for the
+;; same reason the surface kinds do: they cross into BASIC, and a value
+;; that is also a table offset changes meaning when the table changes
+;; shape.
 ;;
 ;; The order within a mode is OFF, SET, TEST, and it is the order the
 ;; renderer uses them in: a frame draws the world with SET and then the
 ;; models with TEST.
 ;;
-QGL_Z_OFF       equ     0 * 2
-QGL_Z_SET       equ     1 * 2
-QGL_Z_TEST      equ     2 * 2
-QGL_Z_SPAN      equ     3 * 2           ;; entries per drawing mode
+QGL_Z_OFF       equ     0
+QGL_Z_SET       equ     1
+QGL_Z_TEST      equ     2
+QGL_Z_KINDS     equ     3               ;; depth modes per drawing mode
 
-QGL_M_WIRE      equ     0 * QGL_Z_SPAN
-QGL_M_FLAT      equ     1 * QGL_Z_SPAN
-QGL_M_TEX       equ     2 * QGL_Z_SPAN
-QGL_M_PTEX      equ     3 * QGL_Z_SPAN
+QGL_M_WIRE      equ     0
+QGL_M_FLAT      equ     1
+QGL_M_TEX       equ     2
+QGL_M_PTEX      equ     3
 
 ;;
 ;; Shortcuts, mgl's spelling (inc/equ.inc). They are here rather than

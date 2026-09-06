@@ -178,6 +178,9 @@ sub sys_parse_args ( _
         if ( lcase$(argv(i)) = "-campath" ) then
             g.env.cam_path = true
         end if
+        if ( lcase$(argv(i)) = "-qglcheck" ) then
+            g.qgl_check = true
+        end if
         if ( lcase$(argv(i)) = "-nodraw" ) then
             g.env.no_draw  = true
             g.env.no_stats = true     '' the overlay is rasterising too

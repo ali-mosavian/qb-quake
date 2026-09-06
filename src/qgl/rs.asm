@@ -328,8 +328,6 @@ qgl_rs_mode     proc    public uses bx,\
                 mov     bx, m
                 cmp     bx, QGL_M_PTEX
                 ja      @F
-                test    bl, 1                   ;; pre-scaled: odd is not a mode
-                jnz     @F
                 mov     qgl$mode, bx
 @@:             ret
 qgl_rs_mode     endp

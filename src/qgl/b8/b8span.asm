@@ -598,9 +598,14 @@ qgl$fixup       endp
 ;; is how a patched filler is judged against one that has no patch site.
 ;;::::::::::::::
 b8_span         proc    near
-                mov     ax, qgl$curTB
-                add     ax, qgl$mode
+                ;; (mode * QGL_Z_KINDS + zmode) * 2. The modes are
+                ;; semantic constants, so the scaling is here rather than
+                ;; baked into values that also cross into BASIC.
+                mov     ax, qgl$mode
+                imul    ax, QGL_Z_KINDS
                 add     ax, qgl$zmode
+                shl     ax, 1
+                add     ax, qgl$curTB
                 xchg    ax, bx
                 mov     bx, [bx]
                 xchg    ax, bx

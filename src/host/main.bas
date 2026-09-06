@@ -116,6 +116,8 @@ declare sub host_advance ( _
     host_ticks as long, _
     mdl_ent() as MdlEnt _
 )
+declare function qgl_check_all () as integer
+
 declare sub host_init ( _
     g as Game, _
     tri_buffer() as Face, _
@@ -637,6 +639,15 @@ sub host_init ( _
 
     '' arguments and subsystems
     sys_parse_args g
+
+    '' -qglcheck: the qgl ABI and behaviour test, before anything else is
+    '' set up. It is the only BASIC caller of qgl, and it exits.
+    if ( g.qgl_check ) then
+        dim qglbad as integer
+        qglbad = qgl_check_all()
+        system
+    end if
+
     sys_init_tables g, bit_array(), frustum()
     sys_mem_mark "start"
     d_init_turb

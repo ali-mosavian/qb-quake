@@ -124,8 +124,60 @@ ENDIF
                 xor     dx, dx
                 ret
 
-@@got:          mov     dx, ax                  ;; segment
+@@got:          ;;
+                ;; PROVE THE BLOCK IS MEMORY BEFORE HANDING IT OVER.
+                ;;
+                ;; DOS reported nothing free -- BASIC owns the arena --
+                ;; and 48h still returned carry clear with segment 9FFFh
+                ;; for a 33 paragraph request, one paragraph under the
+                ;; 640K line. A surface built there runs into VGA at
+                ;; A000h and every pixel reads back FFh.
+                ;;
+                ;; An address bound was tried first and did not fire: DOS
+                ;; does not preserve BX across a successful 48h, so the
+                ;; paragraph count to compare against was already gone. So
+                ;; this writes a sentinel to the first and last byte and
+                ;; reads it back, which tests the thing that actually
+                ;; matters and does not care why the block was wrong.
+                ;;
+                ;; This is the arena AGENTS.md records mgl's bas_malloc
+                ;; corrupting. The comment above claiming this path was
+                ;; VERIFIED was written before anything called it from
+                ;; BASIC; the first BASIC caller found it in one run.
+                ;;
+                PS      bx, cx, di, es
+                mov     es, ax
+                mov     ecx, nbytes
+                dec     ecx
+                cmp     ecx, 0FFFFh             ;; only the first 64K is
+                jbe     @F                      ;; reachable this way
+                mov     ecx, 0FFFFh
+@@:             mov     di, cx
+
+                mov     bl, es:[0]
+                mov     bh, es:[di]
+                mov     byte ptr es:[0], 05Ah
+                mov     byte ptr es:[di], 0A5h
+                cmp     byte ptr es:[0], 05Ah
+                jne     @@dead
+                cmp     byte ptr es:[di], 0A5h
+                jne     @@dead
+                mov     es:[0], bl              ;; leave it as we found it
+                mov     es:[di], bh
+                PP      es, di, cx, bx
+
+                mov     dx, ax                  ;; segment
                 xor     ax, ax                  ;; offset, always 0
+                ret
+
+@@dead:         PP      es, di, cx, bx
+                push    ax
+                mov     es, ax                  ;; give it straight back
+                mov     ah, 49h
+                int     21h
+                pop     ax
+                xor     ax, ax
+                xor     dx, dx
                 ret
 qgl_mem_alloc   endp
 
@@ -229,8 +281,9 @@ qgl_mem_avail   proc    public uses bx,\
                         what:word
 
                 mov     bx, what
-                cmp     bx, MEM_TOTAL
-                ja      @F                      ;; not a selector we have
+                cmp     bx, MEM_KINDS
+                jae     @F                      ;; not a selector we have
+                imul    bx, T MemOps            ;; a selector, not an index
                 call    qgl$memTB[bx].query
                 ret
 
@@ -309,6 +362,13 @@ qgl$avail_total proc    near private uses bx cx si di es
                 ret
 qgl$avail_total endp
 
+;;:::::::::::::: a selector that is not one
+qgl$avail_none  proc    near private
+                xor     ax, ax
+                xor     dx, dx
+                ret
+qgl$avail_none  endp
+
 
 ;;::::::::::::::
 ;; qgl$mcb_paras -- this block's paragraphs, or 0 if it is owned.
@@ -346,7 +406,8 @@ qgl$paras_to_bytes endp
 
 .data
 ;; One entry per selector, indexed by MEM_LARGEST / MEM_TOTAL.
-qgl$memTB       MemOps  <offset qgl$avail_largest>
-                MemOps  <offset qgl$avail_total>
+qgl$memTB       MemOps  <O qgl$avail_largest>
+                MemOps  <O qgl$avail_none>      ;; not a selector
+                MemOps  <O qgl$avail_total>
 
                 end
