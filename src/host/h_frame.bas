@@ -42,6 +42,7 @@ option explicit
 
 dim shared lm_want_dbg as integer
 dim shared lm_fall_dbg as integer
+dim shared qgl_faces_dbg as integer
 dim shared k_mip_dbg as long, k_sw_dbg as long
 dim shared k_sh_dbg as long, k_stag_dbg as long
 dim shared k_n_dbg as long
@@ -132,6 +133,7 @@ declare function d_turb_ptr ( ) as long
 '' and how many fell back to unlit. NOT in Game -- adding a field there
 '' shifts the offsets sb_build.c and r_walk.c hard-code.
 declare function dbg_lm_want ( ) as integer
+declare function dbg_qgl_faces ( ) as integer
 declare function dbg_lm_fall ( ) as integer
 declare function dbg_keys ( byval which as integer ) as long
 '' The whole face loop, in C, once per frame -- see d_faces.c.
@@ -423,6 +425,7 @@ sub host_render ( _
     dparm.use_mips    = g.rdr.use_mips
     dparm.poly_tp     = g.env.poly_tp
     dparm.span_draw   = g.env.span_draw
+    dparm.use_qgl     = g.qgl_slice
     dparm.x_res       = g.env.x_res
     dparm.y_res       = g.env.y_res
     dparm.prof        = (g.ft.n > 0)
@@ -437,6 +440,7 @@ sub host_render ( _
     g.rdr.tris  = g.rdr.tris + dparm.tris
     lm_want_dbg = dparm.lm_want
     lm_fall_dbg = dparm.lm_fallback
+    qgl_faces_dbg = dparm.qgl_faces
     k_mip_dbg = k_mip_dbg + dparm.k_mip
     k_sw_dbg = k_sw_dbg + dparm.k_sw
     k_sh_dbg = k_sh_dbg + dparm.k_sh
@@ -495,6 +499,16 @@ end function
 
 function dbg_lm_fall ( ) as integer
     dbg_lm_fall = lm_fall_dbg
+end function
+
+''
+'' Faces the -qgl slice actually drew. Without it a slice that fell
+'' back to mgl for every face produces a perfect picture and proves
+'' nothing, which is the one way this comparison can pass for the
+'' wrong reason.
+''
+function dbg_qgl_faces ( ) as integer
+    dbg_qgl_faces = qgl_faces_dbg
 end function
 
 function dbg_keys ( byval which as integer ) as long

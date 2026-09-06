@@ -60,6 +60,7 @@ type DrawParams
     use_mips    as integer
     poly_tp     as integer
     span_draw   as integer
+    use_qgl     as integer
     x_res       as integer
     y_res       as integer
     prof        as integer
@@ -67,6 +68,7 @@ type DrawParams
     tris        as integer   '' out
     lm_want     as integer   '' out: faces that asked for a surface
     lm_fallback as integer   '' out: ...and did not get one
+    qgl_faces   as integer   '' out: faces that went through qgl
     k_mip       as long      '' out: sums of the sc_find key inputs
     k_sw        as long
     k_sh        as long

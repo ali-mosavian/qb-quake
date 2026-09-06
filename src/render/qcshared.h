@@ -181,6 +181,7 @@ typedef struct {
     short use_mips;
     short poly_tp;
     short span_draw;
+    short use_qgl;          /* -qgl: draw the faces through qgl */
     short x_res, y_res;
     short prof;             /* g.ft.n > 0: accumulate build_us at all */
     /* out */
@@ -188,6 +189,7 @@ typedef struct {
     short tris;
     short lm_want;          /* faces that asked for a cached surface */
     short lm_fallback;      /* ...and did not get one, so drew unlit */
+    short qgl_faces;        /* out: faces that went through qgl */
     long  k_mip;            /* sums of the sc_find key inputs, for a  */
     long  k_sw;             /* two-sided trace against the BASIC      */
     long  k_sh;             /* original: if these match, the keys do  */
