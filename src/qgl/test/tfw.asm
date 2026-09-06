@@ -43,11 +43,26 @@ start:          mov     ax, es                  ;; DOS entered with ES = PSP
                 mov     ds, bx
                 mov     psp_seg, ax
 
-                mov     bx, ss
-                mov     ax, sp
-                shr     ax, 4
-                add     bx, ax
-                add     bx, 2                   ;; margin for the rounding
+                ;; KEEP THE WHOLE OF DGROUP, not just up to the stack.
+                ;;
+                ;; jwlink puts _BSS AFTER the stack. From a map of t11rep:
+                ;; _DATA at 0215, STACK at 0243 for 800h, _BSS at 02c3 for
+                ;; e18h, ending at 03a5. Releasing at ss:sp keeps only to
+                ;; 02c5 and hands DOS 3.5K of live .data? -- which the
+                ;; first qgl_mem_alloc takes straight back and hands to a
+                ;; surface, so drawing wrote through the scanner's own
+                ;; vertex arrays.
+                ;;
+                ;; That is why it followed the SURFACE and not the call
+                ;; order: only the first allocation landed on the BSS.
+                ;;
+                ;; DGROUP cannot exceed 64K, so a flat 1000h paragraphs is
+                ;; always enough and never wrong. The suite has 640K and
+                ;; wants 25K of it; being exact here would buy nothing and
+                ;; needs a symbol the linker will not promise to place
+                ;; last.
+                mov     bx, @data
+                add     bx, 1000h
                 sub     bx, psp_seg             ;; paragraphs to keep
                 mov     es, psp_seg
                 mov     ah, 4Ah

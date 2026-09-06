@@ -533,8 +533,28 @@ qgl$fixup       proc    near uses ax bx cx dx si di bp
                 FIX_TEX tw
                 FIX_TEX tt
 
-                mov     cx, W qgl$dudx+2
+                ;; dvdx_int IS NOT THE PLAIN INTEGER HALF. si carries v
+                ;; already shifted by tshift, so its step must be shifted
+                ;; the same way; and every bit above tvmsk is set, so the
+                ;; carry out of the fractional adc cannot walk into them
+                ;; before the `and si, vmsk` sweeps them off.
+                ;;
+                ;; HLINET_SM_CALC does exactly this and patching the raw
+                ;; half instead is the whole difference between the fast
+                ;; fillers and the reference one. It is what t10ref caught:
+                ;; wire and flat agreed, all three textured modes did not.
+                ;;
+                ;; The u step needs neither at one byte a pixel, which is
+                ;; why mgl passes HLINET_SM_CALC a shift of 0 for b8 and 1
+                ;; for b16.
                 mov     dx, W qgl$dvdx+2
+                mov     cl, B qgl$tshift
+                shl     dx, cl
+                mov     cx, qgl$tvmsk
+                not     cx
+                or      dx, cx
+
+                mov     cx, W qgl$dudx+2
                 FIX_STEP to
                 FIX_STEP tw
                 FIX_STEP tt
