@@ -412,12 +412,30 @@ qgl_dr_blit     proc    public uses bx cx dx si di ds es,\
                 local   swide:word
                 local   dseg:word
                 local   dofs:word
+                local   dcol:word
+                local   dlen:word
+                local   sskip:word
 
                 les     bx, s
                 mov     ax, es:[bx].Surface.y_res
                 mov     srows, ax
                 mov     ax, es:[bx].Surface.x_res
                 mov     swide, ax
+
+                ;; the columns, once: x and the source width do not
+                ;; change down the rows, so neither does the clip
+                les     bx, d
+                mov     cx, es:[bx].Surface.x_res
+                mov     ax, x
+                mov     bx, x
+                add     bx, swide
+                dec     bx                      ;; inclusive last column
+                call    qgl$clip_run
+                jc      @@out
+                mov     dcol, ax
+                mov     dlen, cx
+                sub     ax, x                   ;; columns clipped off the left
+                mov     sskip, ax
 
                 xor     ax, ax
                 mov     sy, ax
@@ -437,16 +455,17 @@ qgl_dr_blit     proc    public uses bx cx dx si di ds es,\
 
                 invoke  qgl_sf_wr_row, d, ax
                 mov     dseg, dx
-                add     ax, x
+                add     ax, dcol
                 mov     dofs, ax
 
                 invoke  qgl_sf_rd_row, s, sy
                 push    ds
                 mov     ds, dx
                 mov     si, ax
+                add     si, sskip
                 mov     es, dseg
                 mov     di, dofs
-                mov     cx, swide
+                mov     cx, dlen
                 call    qgl$run_copy
                 pop     ds
 
@@ -474,6 +493,9 @@ qgl_dr_blit_scl proc    public uses bx cx dx si di ds es,\
                 local   vacc:word
                 local   sseg:word
                 local   sofs:word
+                local   dcol:word
+                local   dlen:word
+                local   u0:word
 
                 mov     ax, w
                 test    ax, ax
@@ -482,7 +504,10 @@ qgl_dr_blit_scl proc    public uses bx cx dx si di ds es,\
                 test    ax, ax
                 jz      @@out
 
-                ;; 8.8 steps: source extent over destination extent
+                ;; 8.8 steps: source extent over destination extent. The
+                ;; shift is on eax while the divide is 16-bit, so a
+                ;; source wider than 255 truncates -- this is the present
+                ;; path, where it is 160.
                 les     bx, s
                 mov     ax, es:[bx].Surface.x_res
                 xor     dx, dx
@@ -496,6 +521,24 @@ qgl_dr_blit_scl proc    public uses bx cx dx si di ds es,\
                 shl     eax, 8
                 div     h
                 mov     vstep, ax
+
+                ;; the columns, once. u0 is where the accumulator starts
+                ;; when the left of the rectangle was cut off; the
+                ;; product stays inside a word for the same reason the
+                ;; divide above does.
+                les     bx, d
+                mov     cx, es:[bx].Surface.x_res
+                mov     ax, x
+                mov     bx, x
+                add     bx, w
+                dec     bx                      ;; inclusive last column
+                call    qgl$clip_run
+                jc      @@out
+                mov     dcol, ax
+                mov     dlen, cx
+                sub     ax, x
+                mul     ustep
+                mov     u0, ax
 
                 xor     ax, ax
                 mov     dy, ax
@@ -520,12 +563,12 @@ qgl_dr_blit_scl proc    public uses bx cx dx si di ds es,\
                 invoke  qgl_sf_wr_row, d, ax
                 mov     es, dx
                 mov     di, ax
-                add     di, x
+                add     di, dcol
 
                 push    ds
                 mov     ds, sseg
-                mov     cx, w
-                xor     bx, bx                  ;; 8.8 u accumulator
+                mov     cx, dlen
+                mov     bx, u0                  ;; 8.8 u accumulator
 @@px:           mov     si, bx
                 shr     si, 8
                 add     si, sofs
