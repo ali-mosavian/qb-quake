@@ -114,6 +114,7 @@ qgl$dvdx        dd      0
 qgl$fcol        dw      0
 qgl$mode        dw      QGL_M_TEX
 
+
 ;; qgl$ref's span constants. Its LOOP STATE is in registers like every
 ;; other filler's; only what is fixed for the span is here.
 qgl$rzd         dw      0                       ;; depth displacement
@@ -949,7 +950,7 @@ qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
                 local   li:word, ri:word
                 local   lines:word, yy:word, ycnt:word
                 local   rowo:word, rows:word, zsegv:word
-                local   dsth:word
+                local   dsth:word, dstw:word
                 local   fillp:word
                 local   lf_s:word, lf_e:word, rg_s:word, rg_e:word
                 local   lf_hgt:word, rg_hgt:word, height:word
@@ -966,6 +967,8 @@ qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
                 les     bx, d
                 mov     ax, es:[bx].Surface.y_res
                 mov     dsth, ax                ;; scanlines that exist
+                mov     ax, es:[bx].Surface.x_res
+                mov     dstw, ax                ;; pixels that exist
                 mov     ax, n
                 mov     cnt, ax
                 cmp     ax, 3
@@ -1078,6 +1081,8 @@ qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
                 FXFLOOR ecx
                 sub     ax, cx
                 mov     lf_hgt, ax
+
+
                 jl      @@done
                 jz      @@lf_next
 
@@ -1287,6 +1292,28 @@ qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
                 sub     si, ax
                 jle     @@advance               ;; the edges have crossed
 
+                ;; A SPAN MUST NOT LEAVE ITS ROW. The filler walks
+                ;; es:[di+bp] with no idea where the row ends, so a span
+                ;; running past x_res writes the polygon's texels straight
+                ;; through whatever follows -- and what follows a small
+                ;; surface is other live data. This is the guard that was
+                ;; missing: with the texture filled with 5Ah, 5A5Ah turned
+                ;; up inside a VERTEX of qgl$fx, and the walk then read its
+                ;; own corrupted geometry and ran further out of range.
+                ;;
+                ;; It cannot fire on a polygon that came through
+                ;; qgl_cl_poly, which is why the clipper is not optional.
+                test    ax, ax
+                jl      @@advance
+                cmp     ax, dstw
+                jge     @@advance
+                mov     bx, dstw
+                sub     bx, ax
+                cmp     si, bx
+                jle     @F
+                mov     si, bx
+@@:
+
                 mov     bx, fillp
                 mov     di, rowo
                 mov     es, rows
@@ -1325,5 +1352,7 @@ qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
 @@done:         mov     ax, lines
                 ret
 qgl_rs_poly     endp
+
+
 
                 end
