@@ -47,6 +47,7 @@ qgl_sf_row      proto   far pascal :dword, :word
 ;;::::::::::::::
 qgl$run_fill    proc    near private uses ax bx cx
 
+                cld
                 jcxz    @@out
                 mov     ah, al                  ;; the byte, four to a dword
                 mov     bx, ax
@@ -82,6 +83,7 @@ qgl$run_fill    endp
 ;;::::::::::::::
 qgl$run_copy    proc    near private uses ax bx cx
 
+                cld
                 jcxz    @@out
                 mov     bx, cx
                 mov     cx, di

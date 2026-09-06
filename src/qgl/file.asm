@@ -66,6 +66,7 @@ qgl$asciiz      proc    near private uses ax cx si di ds es
                 mov     di, offset qgl$path
                 mov     cx, PATH_MAX-1
 
+                cld
 @@ch:           lodsb
                 test    al, al
                 jz      @F
@@ -127,6 +128,7 @@ qgl_file_open_bas proc  public uses bx cx dx si di ds es,\
                 mov     es, ax
                 mov     di, offset qgl$path
                 jcxz    @F
+                cld
                 rep     movsb
 @@:             xor     al, al
                 stosb

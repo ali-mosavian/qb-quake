@@ -119,6 +119,7 @@ qgl$lerp        endp
 ;;::::::::::::::
 qgl$copyv       proc    near private uses cx
 
+                cld
                 mov     cx, SIZEOF QVert / 4
                 rep     movsd
                 ret

@@ -135,6 +135,53 @@ QGL_M_TEX       equ     2 * QGL_Z_SPAN
 QGL_M_PTEX      equ     3 * QGL_Z_SPAN
 
 ;;
+;; Shortcuts, mgl's spelling (inc/equ.inc). They are here rather than
+;; re-invented per module because a size override reads as noise and
+;; every filler is full of them.
+;;
+O               equ     offset
+T               equ     type
+D               equ     dword ptr
+W               equ     word ptr
+B               equ     byte ptr
+
+PS              macro   args:vararg
+                local   a
+        for     a, <args>
+                push    a
+        endm
+endm
+
+PP              macro   args:vararg
+                local   a
+        for     a, <args>
+                pop     a
+        endm
+endm
+
+;;
+;; Self-patched operands. The placeholders are mgl's, and they are
+;; deliberately conspicuous: an unpatched site draws with 0DEADh as its
+;; mask, which is visibly wrong rather than subtly so.
+;;
+__IMM8__        equ     0DEh
+__IMM16__       equ     0DEADh
+__IMM32__       equ     0DEADBEEFh
+
+;; A PATCH SITE IS ADDRESSED FROM THE END OF ITS INSTRUCTION, never by an
+;; offset counted forward from its label. The immediate is always the
+;; last field, so end-1 is a byte, end-2 a word and end-4 a dword,
+;; whatever prefixes the assembler decided to put in front.
+;;
+;; Counting forward is how mgl's 8plxtp.asm came to patch at +4 an
+;; operand a segment override had moved to +5: half the word went into
+;; the operand's own address, and every step then landed on a DGROUP
+;; offset the routine did not own.
+ZEND            macro   nm
+nm&_e           equ     $
+endm
+
+;;
 ;; A vertex, in screen space, floats. ONE layout, which is the whole
 ;; reason qgl's clipper is a procedure where mgl's is four hundred lines
 ;; of macro: mgl has seven vertex structures (f2d, g2d, gp2d, t2d, tp2d,

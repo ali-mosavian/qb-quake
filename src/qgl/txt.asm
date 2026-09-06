@@ -179,6 +179,7 @@ qgl_txt_width   proc    public uses bx cx dx si di ds es,\
                 les     bx, f
                 lds     si, s
                 xor     di, di                  ;; running width
+                cld
 @@ch:           lodsb
                 test    al, al
                 jz      @F

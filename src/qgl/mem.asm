@@ -159,6 +159,7 @@ qgl_mem_free    endp
 qgl_mem_copy    proc    public uses bx cx si di ds es,\
                         dst:dword, src:dword, nbytes:dword
 
+                cld
                 mov     eax, nbytes
                 test    eax, eax
                 jz      @@done

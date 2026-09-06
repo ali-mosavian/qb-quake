@@ -210,6 +210,7 @@ qgl_z_clear     proc    public uses ax bx cx dx si di es,\
                 or      ax, word ptr qgl$zsf+2
                 jz      @@out
 
+                cld
                 xor     si, si                  ;; row
 @@row:          cmp     si, qgl$zh
                 jae     @@out

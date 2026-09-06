@@ -106,6 +106,7 @@ qgl_vga_palette proc    public uses si ds,\
                 inc     dx                      ;; DAC_DATA
 
                 mov     cx, 768
+                cld
 @@:             lodsb
                 shr     al, 1
                 shr     al, 1                   ;; 8-bit -> the DAC's 6
