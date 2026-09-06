@@ -949,6 +949,7 @@ qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
                 local   li:word, ri:word
                 local   lines:word, yy:word, ycnt:word
                 local   rowo:word, rows:word, zsegv:word
+                local   dsth:word
                 local   fillp:word
                 local   lf_s:word, lf_e:word, rg_s:word, rg_e:word
                 local   lf_hgt:word, rg_hgt:word, height:word
@@ -962,6 +963,9 @@ qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
                 mov     fs, ax                  ;; DGROUP, for every filler
 
                 mov     lines, 0
+                les     bx, d
+                mov     ax, es:[bx].Surface.y_res
+                mov     dsth, ax                ;; scanlines that exist
                 mov     ax, n
                 mov     cnt, ax
                 cmp     ax, 3
@@ -1231,7 +1235,16 @@ qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
 ;;
 ;; ---- one scanline ----------------------------------------------------
 ;;
-@@outer:        invoke  qgl_sf_row, d, yy
+@@outer:        ;; A SCANLINE PAST THE SURFACE IS NOT A SCANLINE. qgl_sf_row
+                ;; answers for any y it is asked about -- the arithmetic
+                ;; does not know where the store ends -- so an overrunning
+                ;; walk gets a valid pointer into whatever was allocated
+                ;; next and writes a picture into it.
+                mov     ax, yy
+                cmp     ax, dsth
+                jae     @@done
+
+                invoke  qgl_sf_row, d, yy
                 mov     rowo, ax
                 mov     rows, dx
                 mov     zsegv, dx               ;; harmless when depth is off
