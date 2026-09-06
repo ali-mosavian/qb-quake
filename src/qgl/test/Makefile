@@ -23,15 +23,10 @@ TESTS  := $(filter-out tfw,$(basename $(wildcard t*.asm)))
 # The layer under test. Every test links all of it -- these are small and
 # a per-test object list would drift from reality the first time a module
 # grew a dependency.
-# b8span MUST BE FIRST. Its fillers patch their own immediates through
-# cs:[label-N], and those addresses only come out right when its
-# contribution to QGL_CODE starts at offset 0 -- measured: with txt.asm
-# also in that segment and linked ahead of it, t10ref's depth-tested
-# textured cases fail, and putting b8span back in front fixes them.
-QGLSRC := $(QGL)/b8/b8span.asm $(QGL)/b8/b8fill.asm \
-          $(QGL)/vga.asm $(QGL)/gem.asm $(QGL)/sf.asm $(QGL)/mem.asm \
+QGLSRC := $(QGL)/vga.asm $(QGL)/gem.asm $(QGL)/sf.asm $(QGL)/mem.asm \
           $(QGL)/txt.asm $(QGL)/file.asm $(QGL)/mgldc.asm $(QGL)/dr.asm \
-          $(QGL)/z.asm $(QGL)/clip.asm $(QGL)/rs.asm
+          $(QGL)/z.asm $(QGL)/clip.asm $(QGL)/rs.asm \
+          $(QGL)/b8/b8fill.asm $(QGL)/b8/b8span.asm
 # Objects are DERIVED from QGLSRC, never listed again. Hand-listing them
 # meant every new module had to be added in three places, and twice a
 # careless substitution folded two assembles into one and broke the link.

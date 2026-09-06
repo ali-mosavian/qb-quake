@@ -37,7 +37,7 @@
                 externdef qgl$fcol:word
                 externdef qgl$mode:word
 
-                public  qgl$fixup, b8_span
+                public  qgl$fixup, b8_span, qgl_b8_selftest
 
 ;;:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 ;; The pieces every textured filler is built from. ?p is the label
@@ -619,6 +619,81 @@ qgl_rs_ref      proc    far public uses ax,\
 @@:             mov     qgl$curTB, ax
                 ret
 qgl_rs_ref      endp
+
+;;::::::::::::::
+;; qgl_b8_selftest -> ax = patch sites that are not where they claim
+;;
+;; Every site here is a placeholder chosen to be conspicuous: 0DEADh for
+;; a word, 0DEADBEEFh for a dword, 0DEh for a byte. If cs:[label-N] still
+;; reads its own placeholder then the address the fixup will write to is
+;; the instruction it belongs to. If it does not, the site has been
+;; relocated out from under the code that patches it, and the filler will
+;; draw a plausible wrong picture with nothing to say so.
+;;
+;; MUST RUN BEFORE ANY FIXUP, which is the whole point: afterwards the
+;; placeholders are gone and there is nothing left to check against.
+;;::::::::::::::
+CKB             macro   nm
+                cmp     B cs:[nm&_e-1], 0DEh
+                je      @F
+                inc     ax
+@@:
+endm
+
+CKW             macro   nm
+                cmp     W cs:[nm&_e-2], 0DEADh
+                je      @F
+                inc     ax
+@@:
+endm
+
+CKD             macro   nm
+                cmp     D cs:[nm&_e-4], 0DEADBEEFh
+                je      @F
+                inc     ax
+@@:
+endm
+
+qgl_b8_selftest proc    far public
+
+                xor     ax, ax
+
+                CKB     to_shift
+                CKW     to_umskp
+                CKW     to_vmskp
+                CKW     to_ofs
+                CKW     to_dudxi
+                CKW     to_dvdxi
+                CKW     to_umsk
+                CKW     to_vmsk
+
+                CKB     tw_shift
+                CKW     tw_ofs
+                CKD     tw_zofs
+                CKW     tw_dzdxf
+                CKW     tw_dzdxi
+
+                CKB     tt_shift
+                CKW     tt_ofs
+                CKD     tt_zcmp
+                CKD     tt_zofs
+                CKW     tt_dzdxf
+                CKW     tt_dzdxi
+
+                CKB     fo_col
+                CKB     fw_col
+                CKD     fw_zofs
+                CKB     ft_col
+                CKD     ft_zcmp
+                CKD     ft_zofs
+
+                CKB     wo_col
+                CKB     ww_col
+                CKB     wwr_col
+                CKB     wt_col
+                CKB     wtr_col
+                ret
+qgl_b8_selftest endp
 
                 QGL_ENDS
 
