@@ -97,11 +97,18 @@ extern short pascal far uglZMode ( short mode );
    that made QGL_SURF_EMS mean 10 on one side and 2 on the other, so it
    is written down here rather than left as a bare 2 and 3. */
 #define QGL_M_TEX   2
+/* The physical page the texture window takes. mgl reads through 0,
+   writes through 1 and puts depth in 3, so 2 is the free one. The
+   window is good only until something else claims the slot, which
+   is why it is taken per face and used inside a single
+   qgl_rs_poly call that maps nothing itself. */
+#define QGL_TEX_SLOT 2
 #define QGL_M_PTEX  3
 
 typedef struct { float x, y, z, u, v; } QglVtx;
 
-extern short pascal far qgl_sf_adopt_dc( long dc, long s );
+extern short pascal far qgl_sf_adopt_dc ( long dc, long s );
+extern short pascal far qgl_sf_adopt_ems( long dc, short slot, long s );
 extern long  pascal far qgl_sf_scratch ( short n );
 extern short pascal far qgl_rs_tex     ( long s );
 extern void  pascal far qgl_rs_mode    ( short m );
@@ -681,7 +688,7 @@ void pascal far d_draw_faces(
                  * through to mgl for that face rather than dropping it.
                  */
                 q_gate++;
-                if ( q_dst && qgl_sf_adopt_dc( src_dc, q_tex )
+                if ( q_dst && qgl_sf_adopt_ems( src_dc, QGL_TEX_SLOT, q_tex )
                            && qgl_rs_tex( q_tex ) ) {
                     for ( j = 0; j < cnt; j++ ) {
                         qvtx[j].x = px[j]; qvtx[j].y = py[j]; qvtx[j].z = pw[j];
