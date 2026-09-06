@@ -163,6 +163,30 @@ QGL_M_PTEX      equ     3 * QGL_Z_SPAN
 ;; re-invented per module because a size override reads as noise and
 ;; every filler is full of them.
 ;;
+
+;;::::::::::::::
+;; ONE CODE SEGMENT FOR THE WHOLE LAYER, which is ugl.inc's UGL_CODE and
+;; exists for one reason: the scanner picks a filler out of a table and
+;; CALLS it, and a near call cannot cross the per-module segments that
+;; .model medium hands out. mgl put its scanners in ugl/ and its fillers
+;; in cfmt/b8/ and shares one `segment para public use16` between them.
+;;
+;; The alternative -- far pointers in the table -- costs a far call per
+;; span, on the one path where that is not free.
+;;::::::::::::::
+QGL_CODE        macro
+qgl_text        segment para public use16 'CODE'
+                assume  cs:qgl_text, ds:DGROUP, ss:DGROUP, es:nothing
+endm
+                QGL_ENDS        equ     <qgl_text ends>
+
+
+;; 16.16 to integer. Shared: the scanner steps in fixed point and the
+;; fillers land on whole texels.
+FXFLOOR         macro   a:req
+                shr     a, 16
+endm
+
 O               equ     offset
 T               equ     type
 D               equ     dword ptr

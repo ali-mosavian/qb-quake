@@ -37,7 +37,7 @@ LINKQR := $(CURDIR)/tools/link-qr.sh
 # host-side concern only and basenames must therefore stay unique across
 # the tree. vpath is what lets the pattern rules below keep matching on
 # the bare name.
-SRC_DIRS := src/host src/render src/game src/qgl
+SRC_DIRS := src/host src/render src/game src/qgl src/qgl/b8
 vpath %.bas $(SRC_DIRS)
 vpath %.c   $(SRC_DIRS)
 vpath %.asm $(SRC_DIRS)
