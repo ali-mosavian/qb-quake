@@ -735,7 +735,13 @@ sub host_init ( _
     mdl_load g, "soldier", mdltri_buffer()
     g.mdl_count = 0
     if ( g.mdl.loaded ) then
-        randomize timer
+        '' mdl_pick_section places every model from rnd, so a clock
+        '' seed leaves the saved frame unrepeatable. Bench only.
+        if ( g.env.bench_frames > 0 or g.env.bench_ticks > 0 ) then
+            randomize 1
+        else
+            randomize timer
+        end if
         dim mdl_i as integer
         dim mdl_spawn_rad as single, mdl_spawn_fallback as Vec3, mdl_spawn_org as Vec3
         redim mdl_ent( MDL_MAX_ENTS% - 1 ) as MdlEnt
