@@ -34,6 +34,9 @@ SPACE := $(EMPTY) $(EMPTY)
 COMMA := ,
 commas = $(subst $(SPACE),$(COMMA),$(strip $(1)))
 
+BENCH  := $(basename $(wildcard b*.asm))
+UGLLIB ?= $(ROOT)/build/vbd/UGLV.LIB
+
 all: $(TESTS:%=$(B)/%/pass)
 	@echo "qgl suite: $(words $(TESTS)) tests PASS"
 
@@ -57,3 +60,22 @@ clean:
 
 .SECONDARY:
 .PHONY: all clean $(TESTS)
+
+# The benchmarks link mgl as well, so the two rasterisers can be run
+# against each other inside one process. Not part of `all`: they take
+# minutes and they measure rather than assert.
+bench: $(BENCH:%=bench-%)
+
+bench-%: $(B)/%/b.exe runbench.sh
+	@sh runbench.sh $(DOSBOX) $(<D)
+
+$(B)/%/b.exe: %.asm tfw.asm tfw.inc $(QGLSRC) $(QGL)/qgl.inc $(UGLLIB)
+	@mkdir -p $(@D)
+	@$(JWASM) -Fo$(@D)/test.obj $< > /dev/null
+	@$(JWASM) -Fo$(@D)/tfw.obj tfw.asm > /dev/null
+	@for s in $(QGLSRC); do \
+	    $(JWASM) -Fo$(@D)/`basename $$s .asm`.obj $$s > /dev/null || exit 1; \
+	done
+	@$(JWLINK) option quiet format dos name $@ \
+	    file $(call commas,$(@D)/test.obj $(@D)/tfw.obj $(QGLOBJS)) \
+	    library $(UGLLIB) > $(@D)/link.out 2>&1

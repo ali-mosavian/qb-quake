@@ -118,6 +118,7 @@ qgl$mode        dw      QGL_M_TEX
 
                 public  qgl$dudx, qgl$dvdx, qgl$fcol, qgl$mode
                 public  qgl$tshift, qgl$tumsk, qgl$tvmsk, qgl$tofs
+                public  qgl$tseg
 
 
 
