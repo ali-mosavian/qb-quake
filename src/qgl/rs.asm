@@ -186,8 +186,6 @@ qgl$f2fx        endp
 ;;::::::::::::::
 qgl$grad        proc    near uses ax bx cx dx si di
 
-                local   tmp:dword
-
                 CALC_NOM vx                     ;; denom
                 fld     st(0)
                 fabs
@@ -207,20 +205,26 @@ qgl$grad        proc    near uses ax bx cx dx si di
                 fmul    D qgl$zscale
                 fistp   D qgl$zdzdx
 
+                ;; fiSTp, like the z store above it. rdenom carries the
+                ;; 65536, so what is on the stack is already the 16.16
+                ;; value and wants converting to an integer, not writing
+                ;; out as a float. fstp put 1.0 texel per pixel into the
+                ;; gradient as 47800000h, whose top word is 4780h -- a
+                ;; multiple of 64, so masking to a 64 wide texture gave a
+                ;; step of exactly zero and the whole polygon sampled one
+                ;; column. See src/host/qgldiff.bas for how that was
+                ;; found; it is invisible to any test that takes its
+                ;; gradients from here.
                 fld     st(0)
                 CALC_NOM vu
                 fimul   D qgl$twhole            ;; one repeat spans the width
                 fmul
-                fstp    tmp
-                mov     eax, tmp
-                mov     qgl$dudx, eax
+                fistp   D qgl$dudx
 
                 CALC_NOM vv
                 fimul   D qgl$thwhole
                 fmul                            ;; the last rdenom
-                fstp    tmp
-                mov     eax, tmp
-                mov     qgl$dvdx, eax
+                fistp   D qgl$dvdx
 
                 clc
                 ret

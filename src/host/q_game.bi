@@ -34,6 +34,7 @@ type Game
     '' moves both and the startup layout check fails, which is exactly
     '' what it did when this went into Env instead.
     qgl_check   as integer        '' -qglcheck: run the qgl ABI test and exit
+    qgl_diff    as integer        '' -qgldiff: qgl against mgl, then exit
 end type
 
 ''

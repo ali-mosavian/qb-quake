@@ -97,6 +97,27 @@ res=$(tr -d '\r' < "$VBD_OUT/RESULT.TXT" 2>/dev/null)
 [[ "$res" == "PASS" ]] || {
     echo "LINK FAILED ($res)"; grep -i error "$VBD_OUT/LINK.OUT" | head -5; exit 1; }
 
+# The two BASIC-side qgl gates, before any timing. They run in the built
+# EXE against the same UGLV.LIB the renderer links, which is the only
+# place either can say anything: the ABI is BASIC's to get wrong, and the
+# differential needs an mgl that is initialised the way the renderer
+# initialises it.
+#
+# The map argument comes FIRST. sys_parse_args takes argv(0) as the map
+# name and scans options from index 1, so `qrender.exe -qgldiff` makes
+# the flag the map name and the check silently never runs.
+for pair in "qglcheck:QGLCHK.LOG" "qgldiff:QGLDIFF.LOG"; do
+    f="${pair%%:*}"
+    log="$VBD_OUT/${pair##*:}"
+    rm -f "$log"
+    QFLAGS="-$f" TIMEOUT=300 "$ROOT/tools/dosbox.sh" run > /dev/null 2>&1
+    if [[ "$(tr -d '\r' < "$log" 2>/dev/null | tail -1)" != "RESULT PASS" ]]; then
+        echo "-$f FAILED"; tr -d '\r' < "$log" 2>/dev/null | grep -v '^ ' | head -10
+        exit 1
+    fi
+done
+echo "== qgl: -qglcheck and -qgldiff both PASS"
+
 ticks=()
 for ((i=0; i<PASSES; i++)); do
     QFLAGS="$BENCH" TIMEOUT=600 "$ROOT/tools/dosbox.sh" run > /dev/null 2>&1

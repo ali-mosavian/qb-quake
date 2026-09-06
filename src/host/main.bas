@@ -117,6 +117,7 @@ declare sub host_advance ( _
     mdl_ent() as MdlEnt _
 )
 declare function qgl_check_all () as integer
+declare function qgl_diff_all () as integer
 
 declare sub host_init ( _
     g as Game, _
@@ -653,6 +654,17 @@ sub host_init ( _
     d_init_turb
     vid_init_ugl
     sys_mem_mark "ugl"
+
+    '' -qgldiff: qgl's rasteriser against mgl's. AFTER vid_init_ugl,
+    '' because it is mgl that needs initialising -- uglNew refuses
+    '' before uglInit has filled the DC-type table -- and before the map,
+    '' because nothing it draws comes from one.
+    if ( g.qgl_diff ) then
+        dim qgldbad as integer
+        qgldbad = qgl_diff_all()
+        uglRestore
+        system
+    end if
     s_init g
     s_start_music g
     draw_init_font g, bit_array()
