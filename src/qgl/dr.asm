@@ -38,73 +38,12 @@ qgl_sf_rd_row   proto   far pascal :dword, :word
 qgl_sf_wr_row   proto   far pascal :dword, :word
 
 
-.code
+                QGL_CODE
 
-;;::::::::::::::
-;; qgl$run_fill -- one run of a constant byte.
-;;
-;; INTERNAL: es:di -> the run, cx = length, al = the colour. Everything
-;; survives except di, which is left past the run.
-;;::::::::::::::
-qgl$run_fill    proc    near private uses ax bx cx
-
-                cld
-                jcxz    @@out
-                mov     ah, al                  ;; the byte, four to a dword
-                mov     bx, ax
-                shl     eax, 16
-                mov     ax, bx
-
-                mov     bx, cx                  ;; bytes left
-                mov     cx, di                  ;; up to the next boundary
-                neg     cx
-                and     cx, 3
-                cmp     cx, bx
-                jbe     @F
-                mov     cx, bx
-@@:             sub     bx, cx
-                rep     stosb
-
-                mov     cx, bx                  ;; the bulk
-                shr     cx, 2
-                rep     stosd
-
-                mov     cx, bx                  ;; and the tail
-                and     cx, 3
-                rep     stosb
-@@out:          ret
-qgl$run_fill    endp
+                externdef qgl$run_fill:near
+                externdef qgl$run_copy:near
 
 
-;;::::::::::::::
-;; qgl$run_copy -- one run copied, ds:si -> es:di.
-;;
-;; INTERNAL: cx = length. Everything survives except si and di, left
-;; past the run.
-;;::::::::::::::
-qgl$run_copy    proc    near private uses ax bx cx
-
-                cld
-                jcxz    @@out
-                mov     bx, cx
-                mov     cx, di
-                neg     cx
-                and     cx, 3
-                cmp     cx, bx
-                jbe     @F
-                mov     cx, bx
-@@:             sub     bx, cx
-                rep     movsb
-
-                mov     cx, bx
-                shr     cx, 2
-                rep     movsd
-
-                mov     cx, bx
-                and     cx, 3
-                rep     movsb
-@@out:          ret
-qgl$run_copy    endp
 
 
 ;;::::::::::::::
@@ -605,4 +544,7 @@ qgl_dr_blit_scl proc    public uses bx cx dx si di ds es,\
 @@out:          ret
 qgl_dr_blit_scl endp
 
+                
+
+                QGL_ENDS
                 end

@@ -42,27 +42,12 @@ FNT_HDR         equ     20              ;; mkfont.py's header IS the Font struct
 ;; Nibble -> four bytes of 00 or FF. Four pixels a lookup, and the write
 ;; is (colour AND mask) OR (dst AND NOT mask) with no branch: a per-pixel
 ;; test-and-jump is the one thing an inner loop over text cannot afford.
-qgl$nibTB       label   dword
-                db      000h,000h,000h,000h     ;; 0000
-                db      000h,000h,000h,0FFh     ;; 0001
-                db      000h,000h,0FFh,000h     ;; 0010
-                db      000h,000h,0FFh,0FFh
-                db      000h,0FFh,000h,000h     ;; 0100
-                db      000h,0FFh,000h,0FFh
-                db      000h,0FFh,0FFh,000h
-                db      000h,0FFh,0FFh,0FFh
-                db      0FFh,000h,000h,000h     ;; 1000
-                db      0FFh,000h,000h,0FFh
-                db      0FFh,000h,0FFh,000h
-                db      0FFh,000h,0FFh,0FFh
-                db      0FFh,0FFh,000h,000h
-                db      0FFh,0FFh,000h,0FFh
-                db      0FFh,0FFh,0FFh,000h
-                db      0FFh,0FFh,0FFh,0FFh     ;; 1111
 
 
 
-.code
+                QGL_CODE
+
+                externdef qgl$nib4:near
 
 ;;::::::::::::::
 ;; qgl_txt_load ( path:far ptr ) -> far ptr to the font, or 0:0
@@ -347,31 +332,7 @@ qgl_txt_char    proc    public uses bx cx dx si di ds es,\
 qgl_txt_char    endp
 
 
-;;::::::::::::::
-;; qgl$nib4 -- four pixels from one nibble, no branch per pixel.
-;;
-;; INTERNAL: bl = the nibble, es:di -> the destination, col on the stack
-;; frame of the caller is NOT reachable, so the colour arrives in dh.
-;; di advances by four. Everything else survives.
-;;::::::::::::::
-qgl$nib4        proc    near private uses ax bx cx si
-                xor     bh, bh
-                shl     bx, 2                   ;; four bytes an entry
-                mov     si, offset qgl$nibTB
-                add     si, bx
-                mov     cx, 4
-@@px:           mov     al, ds:[si]             ;; 00 or FF
-                mov     ah, al
-                not     ah
-                and     al, dh                  ;; colour where lit
-                and     ah, es:[di]             ;; keep dst where clear
-                or      al, ah
-                mov     es:[di], al
-                inc     si
-                inc     di
-                loop    @@px
-                ret
-qgl$nib4        endp
+
 
 
 ;;::::::::::::::
@@ -401,4 +362,7 @@ qgl_txt_str     proc    public uses bx cx dx si di ds es,\
 @@:             ret
 qgl_txt_str     endp
 
+                
+
+                QGL_ENDS
                 end

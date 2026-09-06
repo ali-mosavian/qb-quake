@@ -226,7 +226,7 @@ __IMM32__       equ     0DEADBEEFh
 ;; the operand's own address, and every step then landed on a DGROUP
 ;; offset the routine did not own.
 ZEND            macro   nm
-nm&_e           equ     $
+nm&_e           label   byte
 endm
 
 ;;
