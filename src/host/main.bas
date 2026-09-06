@@ -118,6 +118,7 @@ declare sub host_advance ( _
 )
 declare function qgl_check_all () as integer
 declare function qgl_diff_all () as integer
+declare function qgl_tex_all ( g as Game ) as integer
 
 declare sub host_init ( _
     g as Game, _
@@ -692,6 +693,16 @@ sub host_init ( _
     mod_load_texinfo g, tex_inf_buff(), mip_buff_inf()
     mod_load_textures g, mip_buff_inf()
     sys_mem_mark "textures"
+
+    '' -qgltex: the EMS texture bridge against mgl's own reads. Here
+    '' and not earlier because it needs the real atlas and the views
+    '' onto it, which mod_load_textures has just built.
+    if ( g.qgl_tex ) then
+        dim qgltbad as integer
+        qgltbad = qgl_tex_all( g )
+        uglRestore
+        system
+    end if
     mod_close g
     sys_mem_mark "mapclose"
 

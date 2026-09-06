@@ -36,6 +36,7 @@ type Game
     qgl_check   as integer        '' -qglcheck: run the qgl ABI test and exit
     qgl_diff    as integer        '' -qgldiff: qgl against mgl, then exit
     qgl_slice   as integer        '' -qgl: the face loop draws through qgl
+    qgl_tex     as integer        '' -qgltex: the EMS texture bridge, then exit
 end type
 
 ''
