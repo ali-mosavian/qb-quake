@@ -32,7 +32,9 @@
 
                 include qgl.inc
 
-qgl_sf_row      proto   far pascal :dword, :word
+qgl_sf_rd_row   proto   far pascal :dword, :word
+qgl_sf_wr_row   proto   far pascal :dword, :word
+qgl_sf_wr_row_ex proto  far pascal :dword, :word, :word
 
                 externdef qgl$zsf:dword
                 externdef qgl$zmode:word
@@ -840,7 +842,7 @@ qgl_rs_tex      proc    public uses bx cx dx si di es,\
 
                 ;; row 0's pointer IS the base: the whole texture is one
                 ;; page, so an EMS one maps here and stays mapped
-                invoke  qgl_sf_row, t, 0
+                invoke  qgl_sf_rd_row, t, 0
                 mov     qgl$tofs, ax
                 mov     qgl$tseg, dx
 
@@ -1249,14 +1251,14 @@ qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
                 cmp     ax, dsth
                 jae     @@done
 
-                invoke  qgl_sf_row, d, yy
+                invoke  qgl_sf_wr_row, d, yy
                 mov     rowo, ax
                 mov     rows, dx
                 mov     zsegv, dx               ;; harmless when depth is off
 
                 cmp     qgl$zmode, QGL_Z_OFF
                 je      @@nodepth
-                invoke  qgl_sf_row, qgl$zsf, yy
+                invoke  qgl_sf_wr_row_ex, qgl$zsf, yy, QGL_Z_SLOT
                 mov     qgl$zline, ax
                 mov     zsegv, dx
 

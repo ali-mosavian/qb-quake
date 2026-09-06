@@ -32,7 +32,7 @@
 
 qgl_sf_new_ex   proto   far pascal :word, :word, :word, :word, :word
 qgl_sf_free     proto   far pascal :dword
-qgl_sf_row      proto   far pascal :dword, :word
+qgl_sf_wr_row   proto   far pascal :dword, :word
 
 
 .data
@@ -214,7 +214,7 @@ qgl_z_clear     proc    public uses ax bx cx dx si di es,\
                 xor     si, si                  ;; row
 @@row:          cmp     si, qgl$zh
                 jae     @@out
-                invoke  qgl_sf_row, qgl$zsf, si
+                invoke  qgl_sf_wr_row, qgl$zsf, si
                 mov     di, ax
                 mov     es, dx
                 mov     cx, qgl$zw

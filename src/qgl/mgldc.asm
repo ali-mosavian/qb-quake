@@ -88,7 +88,8 @@ qgl_sf_adopt_dc proc    public uses bx cx dx si di es,\
                 mov     es:[bx].Surface.y_res, dx
                 mov     es:[bx].Surface.stride, si
                 mov     es:[bx].Surface.kind, SURF_CMEM
-                mov     es:[bx].Surface.slot, 0
+                mov     es:[bx].Surface.wr_slot, 0
+                mov     es:[bx].Surface.rd_slot, 0
                 mov     es:[bx].Surface.handle, di      ;; the segment
                 mov     word ptr es:[bx].Surface.base_ofs, ax
                 mov     word ptr es:[bx].Surface.base_ofs+2, 0

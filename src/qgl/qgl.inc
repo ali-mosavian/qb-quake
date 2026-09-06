@@ -89,16 +89,40 @@
 ;; out from under every surface already built with them.
 ;;
 SurfaceOps      struc
-row             dw      ?               ;; near: es:bx = surface, dx:ax = byte
-                                        ;; offset of the row -> dx:ax far ptr
+rd_row          dw      ?               ;; near: map row for READING
+wr_row          dw      ?               ;; near: map row for WRITING
+rd_row_ex       dw      ?               ;; near: as rd_row, cl = the slot
+wr_row_ex       dw      ?               ;; near: as wr_row, cl = the slot
+windows         dw      ?               ;; slots this kind holds at once
 SurfaceOps      ends
+
+;; READ AND WRITE ARE SEPARATE ENTRIES, which is dct.inc's arrangement
+;; and not ceremony. For conventional memory all four are the same
+;; arithmetic. For EMS they are not: a texture being read and a
+;; destination being written at the same instant need two different
+;; physical pages, and one accessor cannot give both. mgl learned this
+;; the same way -- its own span filler gave up depth over it
+;; (uglspan.asm: "the depth window wants a fourth EMS slot").
+;;
+;; The Ex forms take the slot in cl and hand the pointer back in dx:ax
+;; rather than clobbering a segment register on the caller's behalf,
+;; so one routine can hold several surfaces mapped at once, each in
+;; whatever register it likes. That is what the depth buffer needs, and
+;; it is why mgl grew rdAccessEx/wrAccessEx.
+;;
+;; windows says how many can be live at once. ASK, DO NOT ASSUME: a
+;; conventional surface has no window at all and answers with -1.
 
 SURF_CMEM       equ     0 * (SIZEOF SurfaceOps)
 SURF_EMS        equ     1 * (SIZEOF SurfaceOps)
 
-;; EMS physical pages. The numbering is the hardware's: the mapper takes
-;; 0..3 and nothing else.
 SURF_SLOT_MAX   equ     3
+
+;; The depth buffer's own page, mgl's Z_SLOT. It is the LAST one so it
+;; cannot collide with a texture or a destination that took theirs in
+;; order, which is the disjointness sb_build has been relying on by
+;; accident rather than by statement.
+QGL_Z_SLOT      equ     3
 
 ;;
 ;; Which free figure qgl_mem_avail should report. LARGEST is what an
@@ -257,7 +281,9 @@ x_res           dw      ?               ;; pixels
 y_res           dw      ?
 stride          dw      ?               ;; row to row, in bytes
 kind            db      ?               ;; SURF_CMEM or SURF_EMS
-slot            db      ?               ;; physical page to map through, EMS
+wr_slot         db      ?               ;; page this surface writes through
+rd_slot         db      ?               ;; and the one it reads through
+spad            db      ?
 handle          dw      ?               ;; EMS handle, or the segment if cmem
 base_ofs        dd      ?               ;; byte offset of row 0 in the store
 Surface         ends

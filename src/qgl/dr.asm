@@ -34,7 +34,8 @@
 
                 include qgl.inc
 
-qgl_sf_row      proto   far pascal :dword, :word
+qgl_sf_rd_row   proto   far pascal :dword, :word
+qgl_sf_wr_row   proto   far pascal :dword, :word
 
 
 .code
@@ -166,7 +167,7 @@ qgl_dr_hline    proc    public uses bx cx dx si di es,\
                 mov     runx, ax
                 mov     runlen, cx
 
-                invoke  qgl_sf_row, d, y
+                invoke  qgl_sf_wr_row, d, y
                 mov     es, dx
                 mov     di, ax
                 add     di, runx
@@ -216,7 +217,7 @@ qgl_dr_fill     proc    public uses bx cx dx si di es,\
                 cmp     ax, ylast
                 ja      @@out
 
-                invoke  qgl_sf_row, d, yy
+                invoke  qgl_sf_wr_row, d, yy
                 mov     es, dx
                 mov     di, ax
                 add     di, runx
@@ -259,7 +260,7 @@ qgl_dr_vline    proc    public uses bx cx dx si di es,\
                 cmp     ax, ylast
                 ja      @@out
 
-                invoke  qgl_sf_row, d, yy
+                invoke  qgl_sf_wr_row, d, yy
                 mov     es, dx
                 mov     di, ax
                 add     di, x
@@ -345,7 +346,7 @@ qgl_dr_line     proc    public uses bx cx dx si di es,\
                 cmp     ax, es:[bx].Surface.y_res
                 jae     @@skip
 
-                invoke  qgl_sf_row, d, cy
+                invoke  qgl_sf_wr_row, d, cy
                 mov     es, dx
                 mov     di, ax
                 add     di, cx_
@@ -435,7 +436,7 @@ qgl_dr_shade    proc    public uses bx cx dx si di ds es,\
                 cmp     ax, ylast
                 ja      @@out
 
-                invoke  qgl_sf_row, d, yy
+                invoke  qgl_sf_wr_row, d, yy
                 mov     es, dx
                 mov     di, ax
                 add     di, runx
@@ -495,12 +496,12 @@ qgl_dr_blit     proc    public uses bx cx dx si di ds es,\
                 cmp     ax, es:[bx].Surface.y_res
                 jae     @@next
 
-                invoke  qgl_sf_row, d, ax
+                invoke  qgl_sf_wr_row, d, ax
                 mov     dseg, dx
                 add     ax, x
                 mov     dofs, ax
 
-                invoke  qgl_sf_row, s, sy
+                invoke  qgl_sf_rd_row, s, sy
                 push    ds
                 mov     ds, dx
                 mov     si, ax
@@ -567,7 +568,7 @@ qgl_dr_blit_scl proc    public uses bx cx dx si di ds es,\
 
                 mov     ax, vacc
                 shr     ax, 8                   ;; source row
-                invoke  qgl_sf_row, s, ax
+                invoke  qgl_sf_rd_row, s, ax
                 mov     sseg, dx
                 mov     sofs, ax
 
@@ -577,7 +578,7 @@ qgl_dr_blit_scl proc    public uses bx cx dx si di ds es,\
                 cmp     ax, es:[bx].Surface.y_res
                 jae     @@next
 
-                invoke  qgl_sf_row, d, ax
+                invoke  qgl_sf_wr_row, d, ax
                 mov     es, dx
                 mov     di, ax
                 add     di, x

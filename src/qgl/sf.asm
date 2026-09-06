@@ -125,7 +125,8 @@ qgl_sf_new_ex   proc    public uses bx cx si di es,\
                 mov     ax, bps
                 mov     es:[bx].Surface.stride, ax
                 mov     es:[bx].Surface.kind, SURF_CMEM
-                mov     es:[bx].Surface.slot, 0
+                mov     es:[bx].Surface.wr_slot, 0
+                mov     es:[bx].Surface.rd_slot, 0
                 mov     ax, word ptr hdr+2
                 mov     es:[bx].Surface.handle, ax            ;; the segment
                 ;; pixels sit straight after the header
@@ -171,7 +172,8 @@ qgl_sf_new_ex   proc    public uses bx cx si di es,\
                 mov     es:[bx].Surface.stride, ax
                 mov     es:[bx].Surface.kind, SURF_EMS
                 mov     ax, di
-                mov     es:[bx].Surface.slot, al
+                mov     es:[bx].Surface.wr_slot, al
+                mov     es:[bx].Surface.rd_slot, al
                 mov     es:[bx].Surface.handle, si
                 mov     word ptr es:[bx].Surface.base_ofs, 0
                 mov     word ptr es:[bx].Surface.base_ofs+2, 0
@@ -235,10 +237,24 @@ qgl$row_cmem    proc    near private uses cx si
                 ret
 qgl$row_cmem    endp
 
+;;:::::::::::::: cmem has no window; the slot means nothing to it
+qgl$cmem_ex     proc    near private
+                call    qgl$row_cmem
+                ret
+qgl$cmem_ex     endp
 
-qgl$row_ems     proc    near private uses bx cx si di es
+
+;;::::::::::::::
+;; qgl$ems_ex -- the EMS mapper, through a page the CALLER names.
+;;
+;; INTERNAL: es:bx -> the surface, dx:ax = the row's byte offset,
+;; cl = the physical page. dx:ax back.
+;;::::::::::::::
+qgl$ems_ex      proc    near private uses bx cx si di es
+
                 mov     di, ax
                 and     di, EMS_PAGE_MASK       ;; offset within the page
+                push    cx                      ;; the slot
                 mov     cl, EMS_PAGE_SHIFT
                 shr     ax, cl
                 mov     si, dx
@@ -246,51 +262,139 @@ qgl$row_ems     proc    near private uses bx cx si di es
                 shl     si, cl
                 or      ax, si                  ;; logical page
                 mov     si, ax
+                pop     cx
 
+                xor     ch, ch
+                mov     ax, cx                  ;; slot
                 mov     cx, es:[bx].Surface.handle
-                xor     ax, ax
-                mov     al, es:[bx].Surface.slot
                 invoke  qgl_gem_map, cx, si, ax
                 mov     dx, ax                  ;; segment, or 0
                 mov     ax, di
                 ret
-qgl$row_ems     endp
+qgl$ems_ex      endp
+
+;;:::::::::::::: through the surface's own READ page
+qgl$rd_ems      proc    near private
+                mov     cl, es:[bx].Surface.rd_slot
+                call    qgl$ems_ex
+                ret
+qgl$rd_ems      endp
+
+;;:::::::::::::: and its WRITE page, which is a different one
+qgl$wr_ems      proc    near private
+                mov     cl, es:[bx].Surface.wr_slot
+                call    qgl$ems_ex
+                ret
+qgl$wr_ems      endp
 
 
 ;;::::::::::::::
-;; qgl$row -- row y of a surface, whichever kind it is.
+;; qgl$row -- row y, through whichever accessor the caller names.
 ;;
-;; INTERNAL: es:bx -> the surface, ax = y, dx:ax back. Everything else
-;; survives. This is the one that matters -- pget, pset and clear all go
-;; through it rather than paying a far call to reach their own module.
+;; INTERNAL: es:bx -> the surface, ax = y, si = the SurfaceOps field,
+;; cl = the slot (the Ex entries only). dx:ax back.
+;;
+;; THE FIELD IS AN ARGUMENT because read and write are different routines
+;; for EMS and the same one for cmem, and only the caller knows which it
+;; is doing. That is dct.inc's arrangement: rdAccess and wrAccess are two
+;; entries, not one with a flag.
 ;;::::::::::::::
 qgl$row         proc    near private uses bx cx si
 
+                push    cx                      ;; the slot, for the Ex forms
                 mov     cx, es:[bx].Surface.stride
                 mul     cx                      ;; dx:ax = y * stride
-                add     ax, word ptr es:[bx].Surface.base_ofs
-                adc     dx, word ptr es:[bx].Surface.base_ofs+2
+                add     ax, W es:[bx].Surface.base_ofs
+                adc     dx, W es:[bx].Surface.base_ofs+2
+                pop     cx
 
-                ;; kind IS the byte offset into the table
+                PS      ax, dx, cx
                 mov     cl, es:[bx].Surface.kind
                 xor     ch, ch
-                mov     si, cx
-                call    qgl$typeTB[si].row
+                add     si, cx                  ;; kind IS the byte offset
+                PP      cx, dx, ax
+                call    W qgl$typeTB[si]
                 ret
 qgl$row         endp
 
 
 ;;::::::::::::::
-;; qgl_sf_row ( s:far ptr, y:word ) -> far ptr to row y
+;; qgl_sf_rd_row / qgl_sf_wr_row ( s:far ptr, y:word ) -> far ptr
+;; qgl_sf_rd_row_ex / qgl_sf_wr_row_ex ( s, y, slot:word ) -> far ptr
 ;;
-;; Good until the slot this surface maps through is remapped -- by this
-;; surface crossing a page, or by anything else sharing the slot.
+;; Say which you are doing. For a conventional surface the four are one
+;; routine; for an EMS one they are not, and a texture read that came in
+;; through the write accessor takes the destination's window with it.
+;;
+;; Good until that window is remapped -- by this surface crossing a page,
+;; or by anything else sharing the slot.
 ;;::::::::::::::
-qgl_sf_row      proc    public uses bx es,\
+qgl_sf_rd_row   proc    public uses bx cx si es,\
                         s:dword, y:word
-
                 les     bx, s
                 mov     ax, y
+                mov     si, SurfaceOps.rd_row
+                call    qgl$row
+                ret
+qgl_sf_rd_row   endp
+
+qgl_sf_wr_row   proc    public uses bx cx si es,\
+                        s:dword, y:word
+                les     bx, s
+                mov     ax, y
+                mov     si, SurfaceOps.wr_row
+                call    qgl$row
+                ret
+qgl_sf_wr_row   endp
+
+qgl_sf_rd_row_ex proc   public uses bx cx si es,\
+                        s:dword, y:word, slot:word
+                les     bx, s
+                mov     ax, y
+                mov     cx, slot
+                mov     si, SurfaceOps.rd_row_ex
+                call    qgl$row
+                ret
+qgl_sf_rd_row_ex endp
+
+qgl_sf_wr_row_ex proc   public uses bx cx si es,\
+                        s:dword, y:word, slot:word
+                les     bx, s
+                mov     ax, y
+                mov     cx, slot
+                mov     si, SurfaceOps.wr_row_ex
+                call    qgl$row
+                ret
+qgl_sf_wr_row_ex endp
+
+;;::::::::::::::
+;; qgl_sf_windows ( s:far ptr ) -> ax = slots this kind holds at once
+;;
+;; ASK, DO NOT ASSUME, which is dct.inc's own instruction. -1 means the
+;; surface has no window and any number of rows may be live.
+;;::::::::::::::
+qgl_sf_windows  proc    public uses bx si es,\
+                        s:dword
+                les     bx, s
+                mov     si, SurfaceOps.windows
+                mov     al, es:[bx].Surface.kind
+                xor     ah, ah
+                add     si, ax
+                mov     ax, qgl$typeTB[si]
+                ret
+qgl_sf_windows  endp
+
+;;::::::::::::::
+;; qgl_sf_row ( s:far ptr, y:word ) -> far ptr
+;;
+;; The READ spelling, kept because most callers only look. Anything that
+;; is about to write should say so.
+;;::::::::::::::
+qgl_sf_row      proc    public uses bx cx si es,\
+                        s:dword, y:word
+                les     bx, s
+                mov     ax, y
+                mov     si, SurfaceOps.rd_row
                 call    qgl$row
                 ret
 qgl_sf_row      endp
@@ -368,20 +472,22 @@ qgl_sf_load     endp
 ;; Allocates nothing, owns nothing, and shares the parent's slot -- so a
 ;; view and its parent must never be walked at the same time.
 ;;::::::::::::::
-qgl_sf_view     proc    public uses bx si di es,\
+qgl_sf_view     proc    public uses bx dx si di es,\
                         v:dword, parent:dword, ofs:dword,\
                         wid:word, hgt:word, bps:word
 
                 les     bx, parent
                 mov     al, es:[bx].Surface.kind
-                mov     ah, es:[bx].Surface.slot
+                mov     ah, es:[bx].Surface.wr_slot
+                mov     dl, es:[bx].Surface.rd_slot
                 mov     si, es:[bx].Surface.handle
                 mov     di, word ptr es:[bx].Surface.base_ofs
                 mov     cx, word ptr es:[bx].Surface.base_ofs+2
 
                 les     bx, v
                 mov     es:[bx].Surface.kind, al
-                mov     es:[bx].Surface.slot, ah
+                mov     es:[bx].Surface.wr_slot, ah
+                mov     es:[bx].Surface.rd_slot, dl
                 mov     es:[bx].Surface.handle, si
 
                 ;; the view's own base is the parent's plus the offset
@@ -409,11 +515,12 @@ qgl_sf_view     endp
 ;; (-dumptex reads every atlas cell back through its own view) and not
 ;; for anything per frame.
 ;;::::::::::::::
-qgl_sf_pget     proc    public uses bx es,\
+qgl_sf_pget     proc    public uses bx cx si es,\
                         s:dword, x:word, y:word
 
                 les     bx, s
                 mov     ax, y
+                mov     si, SurfaceOps.rd_row
                 call    qgl$row
                 mov     es, dx
                 mov     bx, ax
@@ -427,11 +534,12 @@ qgl_sf_pget     endp
 ;;::::::::::::::
 ;; qgl_sf_pset ( s:far ptr, x:word, y:word, c:word )
 ;;::::::::::::::
-qgl_sf_pset     proc    public uses bx es,\
+qgl_sf_pset     proc    public uses bx cx si es,\
                         s:dword, x:word, y:word, col:word
 
                 les     bx, s
                 mov     ax, y
+                mov     si, SurfaceOps.wr_row
                 call    qgl$row
                 mov     es, dx
                 mov     bx, ax
@@ -444,7 +552,7 @@ qgl_sf_pset     endp
 
 .data
 ;; One entry per surface kind, indexed by SURF_CMEM / SURF_EMS.
-qgl$typeTB      SurfaceOps     <offset qgl$row_cmem>
-                SurfaceOps     <offset qgl$row_ems>
+qgl$typeTB      SurfaceOps <O qgl$row_cmem, O qgl$row_cmem, O qgl$cmem_ex, O qgl$cmem_ex, -1>
+                SurfaceOps <O qgl$rd_ems,   O qgl$wr_ems,   O qgl$ems_ex,  O qgl$ems_ex,   4>
 
                 end
