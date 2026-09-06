@@ -55,7 +55,14 @@ $(B)/%/$(FONT): $(ROOT)/data/base.dat $(ROOT)/tools/mkfont.py
 	@mkdir -p $(@D)
 	@python3 $(ROOT)/tools/mkfont.py $< font/4x6.fnt $@ > /dev/null
 
-$(B)/%/pass: $(B)/%/t.exe $(B)/%/$(FONT) run1.sh
+# The real atlas, straight out of the project's own asset archive --
+# 114688 bytes, the size the renderer actually transfers. A synthesized
+# fixture of a convenient size would not have caught the wrap.
+$(B)/%/fgeom.bin: $(ROOT)/data/assets/assets.zip
+	@mkdir -p $(@D)
+	@unzip -p $< fgeom.bin > $@
+
+$(B)/%/pass: $(B)/%/t.exe $(B)/%/$(FONT) $(B)/%/fgeom.bin run1.sh
 	@sh run1.sh $(DOSBOX) $(@D)
 
 $(B)/%/t.exe: %.asm tfw.asm tfw.inc $(QGLSRC) $(QGL)/qgl.inc

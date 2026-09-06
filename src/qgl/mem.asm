@@ -216,6 +216,17 @@ qgl_mem_copy    proc    public uses bx cx si di ds es,\
                 test    eax, eax
                 jz      @@done
 
+                ;; NORMALISE BOTH ENDS FIRST. Capping a run at 32K only
+                ;; keeps it inside a segment if the pointer started near
+                ;; the bottom of one; a caller may hand in any valid far
+                ;; pointer, and one at offset FFF0h has sixteen bytes left
+                ;; before rep movsb wraps to the start of the same segment
+                ;; and overwrites what it just read. Folding the offset
+                ;; into the segment makes every run below safe by
+                ;; construction rather than by the caller's good manners.
+                FARADD  dst, 0
+                FARADD  src, 0
+
 @@chunk:        ;; how much is left, capped at 32K so neither side can
                 ;; run off the end of its segment inside one run
                 mov     ecx, nbytes
@@ -256,11 +267,12 @@ qgl_mem_copy    proc    public uses bx cx si di ds es,\
                 mov     ds, ax
 
                 movzx   eax, dx
-                add     word ptr dst, dx
-                adc     word ptr dst+2, 0
-                add     word ptr src, dx
-                adc     word ptr src+2, 0
-                sub     nbytes, eax
+                sub     nbytes, eax             ;; before FARADD takes ax
+
+                FARADD  dst, dx
+                FARADD  src, dx
+
+                cmp     nbytes, 0
                 jnz     @@chunk
 
 @@done:         ret

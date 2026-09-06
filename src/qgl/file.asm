@@ -185,8 +185,13 @@ qgl_file_read   proc    public uses bx cx si di ds es,\
                         h:word, dst:dword, nbytes:dword
 
                 local   total:dword
+                local   gotn:word
 
                 mov     total, 0
+
+                ;; normalised before the first read, so no single INT 21h
+                ;; is handed a buffer that runs off the end of its segment
+                FARADD  dst, 0
 
 @@chunk:        mov     eax, nbytes
                 test    eax, eax
@@ -215,9 +220,14 @@ qgl_file_read   proc    public uses bx cx si di ds es,\
                 test    ax, ax
                 jz      @@done                  ;; end of file
 
-                add     word ptr dst, ax
-                adc     word ptr dst+2, 0
+                ;; every count settled BEFORE the pointer moves: FARADD
+                ;; takes ax, bx and cx, and ecx is still the byte count
+                mov     gotn, ax
                 sub     nbytes, ecx
+
+                FARADD  dst, gotn
+
+                mov     ax, gotn
                 cmp     ax, si
                 jb      @@done                  ;; short read: that is EOF
                 jmp     @@chunk

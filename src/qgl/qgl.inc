@@ -200,6 +200,47 @@ endm
                 QGL_ENDS        equ     <qgl_text ends>
 
 
+
+;;::::::::::::::
+;; FARADD -- advance the far pointer at `p` by `n` bytes.
+;;
+;; n is a word register, memory operand or immediate, at most 8000h, and
+;; MUST NOT be ax, bx or cx, which this uses.
+;;
+;; ADD, THEN FOLD THE OFFSET INTO THE SEGMENT. Both callers previously
+;; did `adc seg, 0`,
+;; which adds ONE to the segment when the offset wraps -- but a wrapped
+;; offset is 65536 bytes, which is 4096 paragraphs, so everything past
+;; the first 64K landed 65520 bytes short. Nothing had crossed that line:
+;; the suite's surfaces are kilobytes and the fillers work a row at a
+;; time. The renderer's atlas is 114688 bytes and would have crossed on
+;; its first transfer.
+;;
+;; One fold, at the end, is all of it. It leaves the offset in 0..15, so
+;; the NEXT add cannot carry however large n is -- there is no carry case
+;; to get right and none left untested. A second fold before the add was
+;; written first and removed: it was redundant with this one, and neither
+;; could be mutated away without the other still covering it, which is
+;; the definition of a branch no test can reach. It also means no run below can reach
+;; the end of its segment, so no single DOS read or string move is ever
+;; handed a range that straddles the boundary -- which capping a run at
+;; 32K does NOT guarantee when the caller's pointer starts at FFF0h.
+;;::::::::::::::
+FARADD          macro   p, n
+                mov     ax, W p
+                mov     bx, W p+2
+                add     ax, n                   ;; 800Fh at the very most:
+                                                ;; the fold below leaves the
+                                                ;; offset in 0..15, so the
+                                                ;; next add cannot carry
+                mov     cx, ax
+                shr     cx, 4
+                add     bx, cx                  ;; fold the offset into the
+                and     ax, 15                  ;; segment, every time
+                mov     W p, ax
+                mov     W p+2, bx
+endm
+
 ;; 16.16 to integer. Shared: the scanner steps in fixed point and the
 ;; fillers land on whole texels.
 FXFLOOR         macro   a:req
