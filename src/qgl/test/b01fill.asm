@@ -30,10 +30,10 @@
                 include qgl.inc
                 include tfw.inc
 
-qgl_dr_fill     proto   far :dword, :word, :word, :word, :word, :word
-qgl_rs_tex      proto   far :dword
-qgl_rs_mode     proto   far :word
-qgl_sf_wr_row   proto   far :dword, :word
+qglDrFill     proto   far :dword, :word, :word, :word, :word, :word
+qglRsTex      proto   far :dword
+qglRsMode     proto   far :word
+qglSfWrRow   proto   far :dword, :word
 
                 externdef qgl$dudx:dword
                 externdef qgl$dvdx:dword
@@ -54,23 +54,40 @@ LOOPS           equ     60000                   ;; spans per call of an arm
 REPS            equ     4                       ;; arm calls per timed section
 ROUNDS          equ     6
 
-;; a gradient that walks the whole texture across the span
+;; A gradient that walks the whole texture across the span in u, and HALF
+;; of it in v.
+;;
+;; The two were equal, which made u and v indistinguishable: with u == v
+;; at every pixel, swapping them -- or applying the row shift to the
+;; wrong one -- produces identical bytes, and no oracle over this span
+;; could ever see it. Different rates cost nothing and remove the blind
+;; spot. The texel count per span is unchanged, so the timed work is too.
 DUDX            equ     (TEXW * 10000h) / SPANW
-DVDX            equ     (TEXH * 10000h) / SPANW
+DVDX            equ     (TEXH * 10000h) / (SPANW * 2)
 
 .data
 n_same          db      'both fillers draw alike$'
+n_qok           db      'qgl span vs oracle     $'
+n_mok           db      'mgl span vs oracle     $'
+n_dur           db      'duration >= 20 ticks   $'
 m2              db      'B qgl arm ran          $'
 n_qgl           db      'qgl  ticks             $'
 n_mgl           db      'mgl  ticks             $'
+n_qmed          db      'qgl  median ticks      $'
+n_mmed          db      'mgl  median ticks      $'
 
 dst             dd      0
 tex             dd      0
 rowo            dw      0
 rows            dw      0
 qbuf            db      SPANW dup (0)           ;; qgl's span, copied out
+mbuf            db      SPANW dup (0)           ;; mgl's, kept beside it
+expect          db      SPANW dup (0)           ;; the oracle
 showv           dd      0
 t0              dd      0
+qsamp           dd      ROUNDS dup (0)
+msamp           dd      ROUNDS dup (0)
+ssort           dd      ROUNDS dup (0)
 
 ;; BOTH ARMS CLOBBER bp -- qgl's with the filler's address, mgl's with
 ;; tex_v_msk, which hlinet_fixup's contract demands -- and bp is the
@@ -81,11 +98,12 @@ bseg            dw      0
 bofs            dw      0
 bfill           dw      0
 reps            dw      0
+slot            dw      0
 
 .code
 
 ;;::::::::::::::
-;; bnow -> dx:ax, rising, 0.84us a unit
+;; bnow -> dx:ax, rising BIOS ticks (about 54.9ms each)
 ;;::::::::::::::
 bnow            proc    near private uses bx cx es
 
@@ -102,7 +120,7 @@ bnow            endp
 
                 QGL_CODE
 
-                externdef qgl$fixup:near
+                externdef qgl$Fixup:near
                 externdef b8_span:near
 
 ;;::::::::::::::
@@ -123,7 +141,7 @@ qgl_arm         proc    far public uses bx cx dx si di bp ds es,\
                 mov     ax, dofs
                 mov     bofs, ax                ;; the frame is done with
 
-                call    qgl$fixup
+                call    qgl$Fixup
                 call    b8_span
                 mov     bfill, ax
 
@@ -211,80 +229,251 @@ ugl_text        ends
 qgl_arm         proto   far :word, :word, :word
 mgl_arm         proto   far :word, :word, :word
 
+;;::::::::::::::
+;; build_expect -- the span this test's own inputs imply, texel by texel.
+;;
+;; Derived from DUDX/DVDX and the seed the texture was written with, NOT
+;; read back out of the texture and NOT obtained from either filler. That
+;; is what makes it an oracle rather than a second opinion: it is still
+;; correct on the day mgl is deleted.
+;;
+;;   u = x*DUDX, v = x*DVDX, both 16.16
+;;   texel = seed( u>>16 and TEXW-1, v>>16 and TEXH-1 )
+;;   seed( sx, sy ) = (sx*7 + sy*3) and 255
+;;::::::::::::::
+build_expect    proc    near private uses ax bx cx dx si di
+
+                xor     si, si                  ;; x
+@@px:           cmp     si, SPANW
+                jae     @@out
+
+                movzx   eax, si                 ;; u >> 16, wrapped
+                imul    eax, DUDX
+                shr     eax, 16
+                and     ax, TEXW-1
+                imul    ax, 7
+                mov     bx, ax
+
+                movzx   eax, si                 ;; v >> 16, wrapped
+                imul    eax, DVDX
+                shr     eax, 16
+                and     ax, TEXH-1
+                imul    ax, 3
+
+                add     ax, bx
+                mov     expect[si], al
+
+                inc     si
+                jmp     @@px
+@@out:          ret
+build_expect    endp
+
+
+;;::::::::::::::
+;; copy_span -- the drawn row out of the destination, into ds:di.
+;;::::::::::::::
+copy_span       proc    near private uses ax cx si di ds es
+
+                mov     si, rowo
+                mov     ax, @data
+                mov     es, ax
+                mov     ds, rows
+                mov     cx, SPANW
+                cld
+                rep     movsb
+                ret
+copy_span       endp
+
+
+;;::::::::::::::
+;; cmp_span -- ds:si against ds:di, SPANW bytes, mismatches -> ax.
+;;::::::::::::::
+cmp_span        proc    near private uses bx cx si di
+
+                xor     ax, ax
+                mov     cx, SPANW
+@@b:            mov     bl, [si]
+                cmp     bl, [di]
+                je      @F
+                inc     ax
+@@:             inc     si
+                inc     di
+                loop    @@b
+                ret
+cmp_span        endp
+
+
+;;::::::::::::::
+;; keepsamp ( nam:word, base:word, idx:word ) -- show one sample, assert it
+;; clears the tick floor, and keep it for the median.
+;;
+;; The floor matters as much as the comparison: BIOS ticks are 54.9ms, so
+;; an arm that finishes in two of them is being measured against the
+;; clock's resolution and not against the other arm.
+;;::::::::::::::
+keepsamp          proc    near private uses ax bx cx dx si di,\
+                        nam:word, base:word, idx:word
+
+                invoke  tshow, nam, showv
+
+                mov     bx, 1                   ;; assume it clears
+                mov     dx, W showv+2
+                test    dx, dx
+                jnz     @@keep
+                mov     ax, W showv
+                cmp     ax, 20
+                jae     @@keep
+                xor     bx, bx
+@@keep:         invoke  tchk, offset n_dur, bx, 1
+
+                mov     di, base
+                mov     ax, idx
+                shl     ax, 2
+                add     di, ax
+                mov     ax, W showv
+                mov     [di], ax
+                mov     ax, W showv+2
+                mov     [di+2], ax
+                ret
+keepsamp          endp
+
+
+;;::::::::::::::
+;; median ( base:word ) -> dx:ax -- the middle of ROUNDS samples.
+;;
+;; Six is even, so it is the mean of the two middle ones. Selection sort:
+;; six elements, once, outside every timed region.
+;;::::::::::::::
+median          proc    near private uses bx cx si di,\
+                        base:word
+
+                mov     si, base                ;; copy out, sort in place
+                mov     di, offset ssort
+                mov     cx, ROUNDS*2
+                push    ds
+                pop     es
+                cld
+                rep     movsw
+
+                xor     si, si                  ;; i, in bytes
+@@i:            cmp     si, ROUNDS*4
+                jae     @@mid
+                mov     di, si                  ;; the smallest seen
+                mov     bx, si
+                add     bx, 4
+@@j:            cmp     bx, ROUNDS*4
+                jae     @@swap
+                mov     eax, D ssort[bx]
+                cmp     eax, D ssort[di]
+                jae     @F
+                mov     di, bx
+@@:             add     bx, 4
+                jmp     @@j
+@@swap:         mov     eax, D ssort[si]
+                mov     ecx, D ssort[di]
+                mov     D ssort[si], ecx
+                mov     D ssort[di], eax
+                add     si, 4
+                jmp     @@i
+
+@@mid:          mov     eax, D ssort[(ROUNDS/2-1)*4]
+                add     eax, D ssort[(ROUNDS/2)*4]
+                shr     eax, 1
+                mov     edx, eax
+                shr     edx, 16
+                ret
+median          endp
+
 tmain           proc    far public uses bx cx dx si di es
 
-                invoke  qgl_sf_init
-                invoke  qgl_sf_new, DSTW, DSTH, SURF_CMEM, 0
+                invoke  qglSfInit
+                invoke  qglSfNew, DSTW, DSTH, SURF_CMEM, 0
                 SAVEP   dst
-                invoke  qgl_sf_new, TEXW, TEXH, SURF_CMEM, 0
+                invoke  qglSfNew, TEXW, TEXH, SURF_CMEM, 0
                 SAVEP   tex
 
-                ;; a texture where no two texels agree, so a u or v error
-                ;; cannot hide
+                ;; 4096 texels over 256 values must repeat, so this cannot
+                ;; and does not make every texel unique. What it does is
+                ;; make the repeats fall where a u or v error will not land:
+                ;; the weights are different and coprime to the texture
+                ;; size, so a shift along either axis changes the value.
+                ;; x+y was symmetric, and a transposed fetch reads a
+                ;; symmetric texture correctly -- the same blind spot the
+                ;; gradients above had.
                 xor     si, si
 @@ty:           cmp     si, TEXH
                 jae     @@tdone
                 xor     di, di
 @@tx:           cmp     di, TEXW
                 jae     @F
-                mov     ax, si
-                add     ax, di
+                mov     ax, di
+                imul    ax, 7
+                mov     bx, si
+                imul    bx, 3
+                add     ax, bx
                 and     ax, 0FFh
-                invoke  qgl_sf_pset, tex, di, si, ax
+                invoke  qglSfPset, tex, di, si, ax
                 inc     di
                 jmp     @@tx
 @@:             inc     si
                 jmp     @@ty
 @@tdone:
-                invoke  qgl_rs_tex, tex
-                invoke  qgl_rs_mode, QGL_M_TEX
+                invoke  qglRsTex, tex
+                invoke  qglRsMode, QGL_M_TEX
                 mov     qgl$zmode, QGL_Z_OFF
                 mov     D qgl$dudx, DUDX
                 mov     D qgl$dvdx, DVDX
 
-                invoke  qgl_sf_wr_row, dst, 0
+                invoke  qglSfWrRow, dst, 0
                 mov     rowo, ax
                 mov     rows, dx
 
                 ;;
-                ;; 1. the same picture, or none of the rest means anything
+                ;; 1. EACH filler against the oracle, separately.
                 ;;
-                invoke  qgl_dr_fill, dst, 0, 0, DSTW-1, DSTH-1, 0
-                invoke  qgl_arm, 1, rows, rowo
-                mov     si, rowo
-                mov     di, offset qbuf
-                mov     cx, SPANW
-                push    ds
-                mov     ds, rows
-                push    es
-                mov     ax, @data
-                mov     es, ax
-                cld
-                rep     movsb
-                pop     es
-                pop     ds
+                ;; Not qgl against mgl: agreeing with the library we are
+                ;; replacing is not evidence either is right, and every
+                ;; such check dies with mgl. `expect` is built here from
+                ;; the gradients and the seed this test chose, so it
+                ;; stands on its own. The two arms are still compared,
+                ;; afterwards and as an extra.
+                ;;
+                call    build_expect
 
-                invoke  qgl_dr_fill, dst, 0, 0, DSTW-1, DSTH-1, 0
-                invoke  mgl_arm, 1, rows, rowo
+                invoke  qglDrFill, dst, 0, 0, DSTW-1, DSTH-1, 0
+                invoke  qgl_arm, 1, rows, rowo
+                mov     di, offset qbuf
+                call    copy_span               ;; qgl's row
                 mov     si, offset qbuf
-                mov     di, rowo
-                mov     cx, SPANW
-                mov     ax, 0
-                mov     es, rows
-@@cmp:          mov     bl, ds:[si]
-                cmp     bl, es:[di]
-                je      @F
-                inc     ax
-@@:             inc     si
-                inc     di
-                loop    @@cmp
+                mov     di, offset expect
+                call    cmp_span
+                CHK     n_qok, ax, 0
+
+                invoke  qglDrFill, dst, 0, 0, DSTW-1, DSTH-1, 0
+                invoke  mgl_arm, 1, rows, rowo
+                mov     di, offset mbuf
+                call    copy_span               ;; mgl's row
+                mov     si, offset mbuf
+                mov     di, offset expect
+                call    cmp_span
+                CHK     n_mok, ax, 0
+
+                ;; and, as a secondary, that they agree with each other
+                mov     si, offset qbuf
+                mov     di, offset mbuf
+                call    cmp_span
                 CHK     n_same, ax, 0
 
                 ;;
                 ;; 2. and now the clock, alternating
                 ;;
                 mov     si, ROUNDS
-@@round:        call    bnow
+@@round:        mov     ax, ROUNDS              ;; si counts down; slot counts up
+                sub     ax, si
+                mov     slot, ax
+                call    bnow
+                test    si, 1
+                jz      @@mfirst
                 mov     W t0, ax
                 mov     W t0+2, dx
                 mov     reps, REPS
@@ -296,7 +485,7 @@ tmain           proc    far public uses bx cx dx si di es
                 sbb     dx, W t0+2
                 mov     W showv, ax
                 mov     W showv+2, dx
-                invoke  tshow, offset n_qgl, showv
+                invoke  keepsamp, offset n_qgl, offset qsamp, slot
 
                 call    bnow
                 mov     W t0, ax
@@ -310,10 +499,51 @@ tmain           proc    far public uses bx cx dx si di es
                 sbb     dx, W t0+2
                 mov     W showv, ax
                 mov     W showv+2, dx
-                invoke  tshow, offset n_mgl, showv
+                invoke  keepsamp, offset n_mgl, offset msamp, slot
+                jmp     @@next_round
 
+@@mfirst:       mov     W t0, ax
+                mov     W t0+2, dx
+                mov     reps, REPS
+@@mr2:          invoke  mgl_arm, LOOPS, rows, rowo
+                dec     reps
+                jnz     @@mr2
+                call    bnow
+                sub     ax, W t0
+                sbb     dx, W t0+2
+                mov     W showv, ax
+                mov     W showv+2, dx
+                invoke  keepsamp, offset n_mgl, offset msamp, slot
+
+                call    bnow
+                mov     W t0, ax
+                mov     W t0+2, dx
+                mov     reps, REPS
+@@qr2:          invoke  qgl_arm, LOOPS, rows, rowo
+                dec     reps
+                jnz     @@qr2
+                call    bnow
+                sub     ax, W t0
+                sbb     dx, W t0+2
+                mov     W showv, ax
+                mov     W showv+2, dx
+                invoke  keepsamp, offset n_qgl, offset qsamp, slot
+
+@@next_round:
                 dec     si
                 jnz     @@round
+
+                ;; every sample is above, in the order it was taken; the
+                ;; medians go last so the two numbers to compare are not
+                ;; buried in twelve lines of samples
+                invoke  median, offset qsamp
+                mov     W showv, ax
+                mov     W showv+2, dx
+                invoke  tshow, offset n_qmed, showv
+                invoke  median, offset msamp
+                mov     W showv, ax
+                mov     W showv+2, dx
+                invoke  tshow, offset n_mmed, showv
                 ret
 tmain           endp
                 end

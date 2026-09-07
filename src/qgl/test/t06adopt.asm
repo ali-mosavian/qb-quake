@@ -15,7 +15,7 @@
                 include qgl.inc
                 include tfw.inc
 
-qgl_sf_adopt_dc proto   far :dword, :dword
+qglSfAdoptDc proto   far :dword, :dword
 
 PIX_W           equ     40
 PIX_H           equ     10
@@ -31,7 +31,7 @@ n_ems           db      'refuses a non-MEM dc   $'
 n_bad           db      'refuses a broken dc    $'
 n_null          db      'refuses a null dc      $'
 
-;; mgl's DC, field for field, up to the pointer we need
+;; mgl's DC, field for field, through row zero of DC_addrTB
 fakedc          label   byte
                 dw      0               ;; +0  fmt
                 dw      0               ;; +2  typ = DC_MEM
@@ -43,8 +43,11 @@ fakedc          label   byte
                 dw      0               ;; +14 startSL
                 dd      0               ;; +16 _size
                 dw      0,0,0,0         ;; +20 clip rect
-                dd      0               ;; +28 MEM_DC.fptr -- filled below
+                dd      0               ;; +28 raw allocation pointer
+                dw      0               ;; +32 row-0 segment
+                dw      0               ;; +34 row-0 offset
 
+raw             db      PIX_BPS*PIX_H dup (0CCh)
 pixels          db      PIX_BPS*PIX_H dup (0)
 
 dcp             dd      0
@@ -54,29 +57,32 @@ sf              Surface <>
 .code
 tmain           proc    far public uses bx cx dx si di es
 
-                ;; point the fake dc at the real buffer
-                mov     word ptr fakedc+28, offset pixels
+                ;; The raw pointer is a decoy: adopting it was the bug.
+                ;; MGL draws through the normalised address table.
+                mov     word ptr fakedc+28, offset raw
                 mov     word ptr fakedc+30, ds
+                mov     word ptr fakedc+32, ds
+                mov     word ptr fakedc+34, offset pixels
 
                 mov     word ptr dcp, offset fakedc
                 mov     word ptr dcp+2, ds
                 mov     word ptr sfp, offset sf
                 mov     word ptr sfp+2, ds
 
-                invoke  qgl_sf_adopt_dc, dcp, sfp
+                invoke  qglSfAdoptDc, dcp, sfp
                 CHK     n_adopt, ax, 1
 
                 CHK     n_w,      sf.x_res,  PIX_W
                 CHK     n_stride, sf.stride, PIX_BPS
 
                 ;; write through the Surface, read back through the buffer
-                invoke  qgl_sf_pset, sfp, 3, 0, 0A5h
+                invoke  qglSfPset, sfp, 3, 0, 0A5h
                 mov     al, pixels+3
                 xor     ah, ah
                 CHK     n_write, ax, 0A5h
 
                 ;; row 1 must land a whole stride along, not a width along
-                invoke  qgl_sf_pset, sfp, 0, 1, 05Ah
+                invoke  qglSfPset, sfp, 0, 1, 05Ah
                 mov     al, pixels+PIX_BPS
                 xor     ah, ah
                 CHK     n_row1, ax, 05Ah
@@ -85,16 +91,16 @@ tmain           proc    far public uses bx cx dx si di es
                 ;; and the refusals
                 ;;
                 mov     word ptr fakedc+2, 2            ;; not DC_MEM
-                invoke  qgl_sf_adopt_dc, dcp, sfp
+                invoke  qglSfAdoptDc, dcp, sfp
                 CHK     n_ems, ax, 0
                 mov     word ptr fakedc+2, 0
 
                 mov     word ptr fakedc+10, PIX_W-1     ;; stride < width
-                invoke  qgl_sf_adopt_dc, dcp, sfp
+                invoke  qglSfAdoptDc, dcp, sfp
                 CHK     n_bad, ax, 0
                 mov     word ptr fakedc+10, PIX_BPS
 
-                invoke  qgl_sf_adopt_dc, 0, sfp
+                invoke  qglSfAdoptDc, 0, sfp
                 CHK     n_null, ax, 0
 
                 ret

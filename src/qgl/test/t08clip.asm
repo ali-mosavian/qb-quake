@@ -24,8 +24,8 @@
                 include qgl.inc
                 include tfw.inc
 
-qgl_cl_rect     proto   far :word, :word, :word, :word
-qgl_cl_poly     proto   far :dword, :word, :dword, :dword
+qglClRect     proto   far :word, :word, :word, :word
+qglClPoly     proto   far :dword, :word, :dword, :dword
 
 .data
 n_in            db      'inside passes through  $'
@@ -97,14 +97,14 @@ tmain           proc    far public uses bx cx dx si di es
                 mov     word ptr dstp, offset dst
                 mov     word ptr dstp+2, ds
 
-                invoke  qgl_cl_rect, 0, 0, 63, 63
+                invoke  qglClRect, 0, 0, 63, 63
 
                 ;;
                 ;; 1. wholly inside: through untouched
                 ;;
                 mov     word ptr srcp, offset sq_in
                 mov     word ptr srcp+2, ds
-                invoke  qgl_cl_poly, srcp, 4, dstp, 0
+                invoke  qglClPoly, srcp, 4, dstp, 0
                 CHK     n_in, ax, 4
                 invoke  q_at, 2, QVert.vx, 1
                 CHK     n_inx, ax, 50
@@ -113,7 +113,7 @@ tmain           proc    far public uses bx cx dx si di es
                 ;; 2. across the left edge
                 ;;
                 mov     word ptr srcp, offset sq_lf
-                invoke  qgl_cl_poly, srcp, 4, dstp, 0
+                invoke  qglClPoly, srcp, 4, dstp, 0
                 CHK     n_bn, ax, 4
                 invoke  q_at, 0, QVert.vx, 1
                 CHK     n_bx0, ax, 0
@@ -127,7 +127,7 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;    the survivors come back rotated
                 ;;
                 mov     word ptr srcp, offset tri_cn
-                invoke  qgl_cl_poly, srcp, 3, dstp, 0
+                invoke  qglClPoly, srcp, 3, dstp, 0
                 CHK     n_cn, ax, 5
                 invoke  q_at, 0, QVert.vx, 1
                 mov     bx, ax
@@ -144,14 +144,14 @@ tmain           proc    far public uses bx cx dx si di es
                 ;; 4. the refusals
                 ;;
                 mov     word ptr srcp, offset tri_out
-                invoke  qgl_cl_poly, srcp, 3, dstp, 0
+                invoke  qglClPoly, srcp, 3, dstp, 0
                 CHK     n_out, ax, 0
 
                 mov     word ptr srcp, offset sq_in
-                invoke  qgl_cl_poly, srcp, 2, dstp, 0
+                invoke  qglClPoly, srcp, 2, dstp, 0
                 CHK     n_few, ax, 0
 
-                invoke  qgl_cl_poly, srcp, QGL_MAXV+1, dstp, 0
+                invoke  qglClPoly, srcp, QGL_MAXV+1, dstp, 0
                 CHK     n_many, ax, 0
                 ret
 tmain           endp

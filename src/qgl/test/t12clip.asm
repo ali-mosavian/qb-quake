@@ -18,13 +18,13 @@
                 include qgl.inc
                 include tfw.inc
 
-qgl_dr_fill     proto   far :dword, :word, :word, :word, :word, :word
-qgl_txt_load    proto   far :dword
-qgl_txt_str     proto   far :dword, :word, :word, :dword, :dword, :word
-qgl_cl_rect     proto   far :word, :word, :word, :word
-qgl_rs_tex      proto   far :dword
-qgl_rs_mode     proto   far :word
-qgl_rs_poly     proto   far :dword, :dword, :word
+qglDrFill     proto   far :dword, :word, :word, :word, :word, :word
+qglTxtLoad    proto   far :dword
+qglTxtStr     proto   far :dword, :word, :word, :dword, :dword, :word
+qglClRect     proto   far :word, :word, :word, :word
+qglRsTex      proto   far :dword
+qglRsMode     proto   far :word
+qglRsPoly     proto   far :dword, :dword, :word
 
 SFW             equ     64
 SFH             equ     16
@@ -67,7 +67,7 @@ sums            proc    near private uses bx cx dx si di es,\
                 xor     si, si
 @@row:          cmp     si, h
                 jae     @@out
-                invoke  qgl_sf_rd_row, p, si
+                invoke  qglSfRdRow, p, si
                 mov     di, ax
                 mov     es, dx
                 mov     cx, w
@@ -84,7 +84,7 @@ sums            endp
 
 ;; bytes of the guard that are no longer GUARDB
 gfill           proc    near private
-                invoke  qgl_dr_fill, guard, 0, 0, SFW-1, GDH-1, GUARDB
+                invoke  qglDrFill, guard, 0, 0, SFW-1, GDH-1, GUARDB
                 ret
 gfill           endp
 
@@ -97,7 +97,7 @@ colchk          proc    near private uses bx cx dx si di es,\
                 xor     si, si
 @@row:          cmp     si, SFH
                 jae     @@out
-                invoke  qgl_sf_rd_row, sf, si
+                invoke  qglSfRdRow, sf, si
                 mov     di, ax
                 mov     es, dx
                 mov     cx, w
@@ -117,7 +117,7 @@ gchk            proc    near private uses bx cx dx si di es
                 xor     si, si
 @@row:          cmp     si, GDH
                 jae     @@out
-                invoke  qgl_sf_rd_row, guard, si
+                invoke  qglSfRdRow, guard, si
                 mov     di, ax
                 mov     es, dx
                 mov     cx, SFW
@@ -135,12 +135,12 @@ gchk            endp
 
 tmain           proc    far public uses bx cx dx si di es
 
-                invoke  qgl_sf_init
-                invoke  qgl_sf_new, SFW, SFH, SURF_CMEM, 0
+                invoke  qglSfInit
+                invoke  qglSfNew, SFW, SFH, SURF_CMEM, 0
                 SAVEP   sf
-                invoke  qgl_sf_new, SFW, GDH, SURF_CMEM, 0
+                invoke  qglSfNew, SFW, GDH, SURF_CMEM, 0
                 SAVEP   guard
-                invoke  qgl_sf_new, 8, 8, SURF_CMEM, 0
+                invoke  qglSfNew, 8, 8, SURF_CMEM, 0
                 SAVEP   tex
 
                 mov     word ptr pp, offset poly
@@ -150,17 +150,17 @@ tmain           proc    far public uses bx cx dx si di es
                 mov     word ptr fnp, offset fname
                 mov     word ptr fnp+2, ds
 
-                invoke  qgl_dr_fill, tex, 0, 0, 7, 7, 99
-                invoke  qgl_dr_fill, guard, 0, 0, SFW-1, GDH-1, GUARDB
+                invoke  qglDrFill, tex, 0, 0, 7, 7, 99
+                invoke  qglDrFill, guard, 0, 0, SFW-1, GDH-1, GUARDB
 
                 ;;
                 ;; 1. a pixel past the last column lands in the next ROW,
                 ;;    inside the same allocation, where no guard can see it
                 ;;
-                invoke  qgl_dr_fill, sf, 0, 0, SFW-1, SFH-1, FILLB
+                invoke  qglDrFill, sf, 0, 0, SFW-1, SFH-1, FILLB
                 invoke  sums, sf, SFW, SFH
                 mov     bx, ax
-                invoke  qgl_sf_pset, sf, SFW+4, 0, 0FFh
+                invoke  qglSfPset, sf, SFW+4, 0, 0FFh
                 invoke  sums, sf, SFW, SFH
                 CHK     n_psetx, ax, bx
 
@@ -168,47 +168,47 @@ tmain           proc    far public uses bx cx dx si di es
                 ;; 2. and past the last row lands outside it entirely
                 ;;
                 invoke  gfill
-                invoke  qgl_sf_pset, sf, 0, SFH+40, 0FFh
+                invoke  qglSfPset, sf, 0, SFH+40, 0FFh
                 invoke  gchk
                 CHK     n_psety, ax, 0
 
                 ;;
                 ;; 3. reading out of range answers, it does not wander
                 ;;
-                invoke  qgl_sf_pget, sf, SFW+4, SFH+40
+                invoke  qglSfPget, sf, SFW+4, SFH+40
                 CHK     n_pgetx, ax, 0
 
                 ;;
                 ;; 4. text at the edges
                 ;;
-                invoke  qgl_txt_load, fnp
+                invoke  qglTxtLoad, fnp
                 SAVEP   fnt
-                invoke  qgl_dr_fill, sf, 0, 0, SFW-1, SFH-1, FILLB
+                invoke  qglDrFill, sf, 0, 0, SFW-1, SFH-1, FILLB
                 invoke  sums, sf, SFW, SFH
                 mov     bx, ax
                 invoke  gfill
-                invoke  qgl_txt_str, sf, SFW-2, 0, fnt, msgp, 0FFh
+                invoke  qglTxtStr, sf, SFW-2, 0, fnt, msgp, 0FFh
                 invoke  colchk, 8               ;; the far side, untouched
                 mov     cx, ax
                 invoke  gchk
                 add     ax, cx
                 CHK     n_txtr, ax, 0
 
-                invoke  qgl_dr_fill, sf, 0, 0, SFW-1, SFH-1, FILLB
+                invoke  qglDrFill, sf, 0, 0, SFW-1, SFH-1, FILLB
                 invoke  gfill
-                invoke  qgl_txt_str, sf, 0, SFH-2, fnt, msgp, 0FFh
+                invoke  qglTxtStr, sf, 0, SFH-2, fnt, msgp, 0FFh
                 invoke  gchk                    ;; below the last row
                 CHK     n_txtb, ax, 0
 
                 ;;
                 ;; 5. a polygon reaching well past both edges
                 ;;
-                invoke  qgl_rs_tex, tex
-                invoke  qgl_rs_mode, QGL_M_TEX
-                invoke  qgl_cl_rect, 0, 0, SFW-1, SFH-1
-                invoke  qgl_dr_fill, sf, 0, 0, SFW-1, SFH-1, FILLB
+                invoke  qglRsTex, tex
+                invoke  qglRsMode, QGL_M_TEX
+                invoke  qglClRect, 0, 0, SFW-1, SFH-1
+                invoke  qglDrFill, sf, 0, 0, SFW-1, SFH-1, FILLB
                 invoke  gfill
-                invoke  qgl_rs_poly, sf, pp, 4
+                invoke  qglRsPoly, sf, pp, 4
                 invoke  gchk
                 CHK     n_poly, ax, 0
 

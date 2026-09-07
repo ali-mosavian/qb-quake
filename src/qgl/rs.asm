@@ -1,7 +1,7 @@
 ;;
 ;; rs.asm -- the convex scanner. The pixels are b8/'s.
 ;;
-;; name: qgl_rs_tex / qgl_rs_flat / qgl_rs_mode / qgl_rs_poly
+;; name: qglRsTex / qglRsFlat / qglRsMode / qglRsPoly
 ;; desc: two edge chains walk down from the topmost vertex and hand one
 ;;       span per scanline to a filler. The scanner is the same code for
 ;;       every mode; only the filler differs, and b8_span decides which
@@ -36,10 +36,10 @@
 
                 include qgl.inc
 
-qgl_sf_rd_row   proto   far pascal :dword, :word
-qgl_cl_poly     proto   far pascal :dword, :word, :dword, :dword
-qgl_sf_wr_row   proto   far pascal :dword, :word
-qgl_sf_wr_row_ex proto  far pascal :dword, :word, :word
+qglSfRdRow   proto   far pascal :dword, :word
+qglClPoly     proto   far pascal :dword, :word, :dword, :dword
+qglSfWrRow   proto   far pascal :dword, :word
+qglSfWrRowEx proto  far pascal :dword, :word, :word
 
                 externdef qgl$zsf:dword
                 externdef qgl$zmode:word
@@ -150,11 +150,11 @@ qgl$ztmp        dq      ?
 
                 QGL_CODE
 
-                externdef qgl$fixup:near
+                externdef qgl$Fixup:near
                 externdef b8_span:near
 
 ;;::::::::::::::
-;; qgl$f2fx -- one vertex into the walk's form.
+;; qgl$F2fx -- one vertex into the walk's form.
 ;;
 ;;  in: si-> QVert, di-> QVertFx, both in ds
 ;;
@@ -162,7 +162,7 @@ qgl$ztmp        dq      ?
 ;; which is what makes the sub-scanline correction symmetric. u and v are
 ;; scaled to texels here so nothing downstream has to remember to.
 ;;::::::::::::::
-qgl$f2fx        proc    near uses ax
+qgl$F2fx        proc    near uses ax
 
                 fld     [si].QVert.vx
                 fadd    qgl$half
@@ -187,11 +187,11 @@ qgl$f2fx        proc    near uses ax
                 fmul    qgl$65536
                 fistp   D [di].QVertFx.kv
                 ret
-qgl$f2fx        endp
+qgl$F2fx        endp
 
 
 ;;::::::::::::::
-;; qgl$grad -- d(u)/dx, d(v)/dx and d(1/z)/dx for the whole polygon.
+;; qgl$Grad -- d(u)/dx, d(v)/dx and d(1/z)/dx for the whole polygon.
 ;;
 ;;  in: si-> a, di-> b, bx-> c, three QVert in ds
 ;; out: CF set if the triple is too near degenerate to divide by
@@ -203,7 +203,7 @@ qgl$f2fx        endp
 ;; polygon, not just the triangle they span -- so the caller picks a
 ;; spread triple and this refuses what is left.
 ;;::::::::::::::
-qgl$grad        proc    near uses ax bx cx dx si di
+qgl$Grad        proc    near uses ax bx cx dx si di
 
                 CALC_NOM vx                     ;; denom
                 fld     st(0)
@@ -264,18 +264,18 @@ qgl$grad        proc    near uses ax bx cx dx si di
 @@degenerate:   fstp    st(0)
                 stc
                 ret
-qgl$grad        endp
+qgl$Grad        endp
 
 
 ;;::::::::::::::
-;; qgl_rs_tex ( t:far ptr Surface ) -> ax nonzero if it took
+;; qglRsTex ( t:far ptr Surface ) -> ax nonzero if it took
 ;;
 ;; Refuses anything whose sides are not powers of two, because the filler
 ;; wraps with an AND, and anything past one 16K page, because the texel
 ;; base is a patched immediate that is never remapped mid-polygon.
 ;; Exceeding that page cost mgl a measured 15.5% triangle dropout.
 ;;::::::::::::::
-qgl_rs_tex      proc    public uses bx cx dx si di es,\
+qglRsTex      proc    public uses bx cx dx si di es,\
                         t:dword
 
                 les     bx, t
@@ -335,7 +335,7 @@ qgl_rs_tex      proc    public uses bx cx dx si di es,\
 
                 ;; row 0's pointer IS the base: the whole texture is one
                 ;; page, so an EMS one maps here and stays mapped
-                invoke  qgl_sf_rd_row, t, 0
+                invoke  qglSfRdRow, t, 0
                 mov     qgl$tofs, ax
                 mov     qgl$tseg, dx
 
@@ -344,20 +344,20 @@ qgl_rs_tex      proc    public uses bx cx dx si di es,\
 
 @@no:           xor     ax, ax
                 ret
-qgl_rs_tex      endp
+qglRsTex      endp
 
 
-;;:::::::::::::: qgl_rs_flat ( col:word )
-qgl_rs_flat     proc    public uses ax,\
+;;:::::::::::::: qglRsFlat ( col:word )
+qglRsFlat     proc    public uses ax,\
                         col:word
                 mov     ax, col
                 mov     qgl$fcol, ax
                 ret
-qgl_rs_flat     endp
+qglRsFlat     endp
 
 
-;;:::::::::::::: qgl_rs_mode ( m:word ) -> ax= the mode that was in force
-qgl_rs_mode     proc    public uses bx,\
+;;:::::::::::::: qglRsMode ( m:word ) -> ax= the mode that was in force
+qglRsMode     proc    public uses bx,\
                         m:word
 
                 mov     ax, qgl$mode
@@ -366,13 +366,13 @@ qgl_rs_mode     proc    public uses bx,\
                 ja      @F
                 mov     qgl$mode, bx
 @@:             ret
-qgl_rs_mode     endp
+qglRsMode     endp
 
 
 
 
 ;;::::::::::::::
-;; qgl$top -- the index of the topmost vertex of qgl$src.
+;; qgl$Top -- the index of the topmost vertex of qgl$src.
 ;;
 ;;  in: cx= count
 ;; out: ax= its INDEX
@@ -382,7 +382,7 @@ qgl_rs_mode     endp
 ;; to put the top first -- which this did -- is an O(n^2) memmove to avoid
 ;; two compares in the step.
 ;;::::::::::::::
-qgl$top         proc    near uses bx cx dx si
+qgl$Top         proc    near uses bx cx dx si
 
                 local   best:real4
 
@@ -410,17 +410,17 @@ qgl$top         proc    near uses bx cx dx si
 
 @@done:         mov     ax, dx
                 ret
-qgl$top         endp
+qgl$Top         endp
 
 
 ;;::::::::::::::
-;; qgl_rs_poly ( d:far ptr Surface, v:far ptr QVert, n:word ) -> ax
+;; qglRsPoly ( d:far ptr Surface, v:far ptr QVert, n:word ) -> ax
 ;;
 ;; Draws one convex polygon and returns the scanlines it covered. The
-;; vertices arrive clipped -- qgl_cl_poly's output -- in ring order and
+;; vertices arrive clipped -- qglClPoly's output -- in ring order and
 ;; clockwise; vtx[0] need not be the topmost.
 ;;::::::::::::::
-qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
+qglRsPoly     proc    public uses bx cx dx si di ds es,\
                         d:dword, v:dword, n:word
 
                 local   cnt:word, edges:word
@@ -473,7 +473,7 @@ qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
                 mov     W srcp, ax
                 mov     ax, ds
                 mov     W srcp+2, ax
-                invoke  qgl_cl_poly, v, cnt, srcp, d
+                invoke  qglClPoly, v, cnt, srcp, d
                 test    ax, ax
                 jz      @@done                  ;; nothing of it survived
                 mov     cnt, ax
@@ -493,16 +493,16 @@ qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
                 shl     bx, 1
                 imul    bx, T QVert
                 add     bx, si
-                call    qgl$grad
+                call    qgl$Grad
                 jc      @@done
 
-                call    qgl$fixup               ;; ONCE per polygon
+                call    qgl$Fixup               ;; ONCE per polygon
 
                 ;; and into the walk's form
                 mov     si, O qgl$src
                 mov     di, O qgl$fx
                 mov     cx, cnt
-@@conv:         call    qgl$f2fx
+@@conv:         call    qgl$F2fx
                 add     si, T QVert
                 add     di, T QVertFx
                 loop    @@conv
@@ -525,7 +525,7 @@ qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
                 ;; edges close a ring of n vertices, and the two chains
                 ;; between them consume exactly that many.
                 mov     cx, cnt
-                call    qgl$top                 ;; ax = the top vertex's INDEX
+                call    qgl$Top                 ;; ax = the top vertex's INDEX
                 mov     li, ax
                 mov     ri, ax
                 imul    ax, T QVertFx
@@ -736,7 +736,7 @@ qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
 ;;
 ;; ---- one scanline ----------------------------------------------------
 ;;
-@@outer:        ;; A SCANLINE PAST THE SURFACE IS NOT A SCANLINE. qgl_sf_row
+@@outer:        ;; A SCANLINE PAST THE SURFACE IS NOT A SCANLINE. qglSfRow
                 ;; answers for any y it is asked about -- the arithmetic
                 ;; does not know where the store ends -- so an overrunning
                 ;; walk gets a valid pointer into whatever was allocated
@@ -745,14 +745,14 @@ qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
                 cmp     ax, dsth
                 jae     @@done
 
-                invoke  qgl_sf_wr_row, d, yy
+                invoke  qglSfWrRow, d, yy
                 mov     rowo, ax
                 mov     rows, dx
                 mov     zsegv, dx               ;; harmless when depth is off
 
                 cmp     qgl$zmode, QGL_Z_OFF
                 je      @@nodepth
-                invoke  qgl_sf_wr_row_ex, qgl$zsf, yy, QGL_Z_SLOT
+                invoke  qglSfWrRowEx, qgl$zsf, yy, QGL_Z_SLOT
                 mov     qgl$zline, ax
                 mov     zsegv, dx
 
@@ -802,7 +802,7 @@ qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
                 sub     si, ax
                 jle     @@advance               ;; the edges have crossed
 
-                ;; A SPAN MUST NOT LEAVE ITS ROW. qgl_cl_poly above makes
+                ;; A SPAN MUST NOT LEAVE ITS ROW. qglClPoly above makes
                 ;; that true geometrically, so this cannot fire -- it is
                 ;; kept because when it was absent a texture filled with
                 ;; 5Ah put 5A5Ah inside a VERTEX of qgl$fx, and the walk
@@ -841,7 +841,7 @@ qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
                 mov     es, rows
                 mov     gs, zsegv
 
-                ;; ds is DGROUP for the walk -- qgl_sf_row above reaches
+                ;; ds is DGROUP for the walk -- qglSfRow above reaches
                 ;; its own dispatch table through it -- and the texture
                 ;; for the filler. Two instructions a scanline against a
                 ;; table of row addresses that an EMS destination would
@@ -873,7 +873,7 @@ qgl_rs_poly     proc    public uses bx cx dx si di ds es,\
 
 @@done:         mov     ax, lines
                 ret
-qgl_rs_poly     endp
+qglRsPoly     endp
 
 
 

@@ -1,9 +1,9 @@
 ;; t17scr -- the Surfaces qgl hands out to callers that cannot spell one.
 ;;
-;; qgl_sf_adopt_dc fills a Surface the CALLER owns. d_faces.c is the
+;; qglSfAdoptDc fills a Surface the CALLER owns. d_faces.c is the
 ;; caller and is C, so the sixteen bytes would have to be declared there
 ;; -- the same fact in two places, with no generator watching it, which
-;; is the drift qgl.bi exists to have stopped. qgl_sf_scratch hands out
+;; is the drift qgl.bi exists to have stopped. qglSfScratch hands out
 ;; storage instead.
 ;;
 ;; THE TEST IS NOT THAT THE POINTERS LOOK RIGHT. Three plausible
@@ -20,7 +20,7 @@
                 include qgl.inc
                 include tfw.inc
 
-qgl_sf_scratch  proto   far :word
+qglSfScratch  proto   far :word
 
 SFW             equ     32
 SFH             equ     8
@@ -85,28 +85,28 @@ schk            endp
 
 tmain           proc    far public uses bx cx dx si di es
 
-                invoke  qgl_sf_init
+                invoke  qglSfInit
 
-                invoke  qgl_sf_scratch, 0
+                invoke  qglSfScratch, 0
                 SAVEP   s0
                 mov     ax, word ptr s0+2
                 NZ      ax
                 CHK     n_zero, ax, 1
 
-                invoke  qgl_sf_scratch, 1
+                invoke  qglSfScratch, 1
                 SAVEP   s1
                 mov     ax, word ptr s1
                 sub     ax, word ptr s0
                 CHK     n_apart, ax, T Surface
 
-                ;; the two refusals. 0:0 is what qgl_sf_adopt_dc rejects,
+                ;; the two refusals. 0:0 is what qglSfAdoptDc rejects,
                 ;; so a wrong index fails there rather than writing
                 ;; through whatever lay at that offset.
-                invoke  qgl_sf_scratch, QGL_SCRATCH
+                invoke  qglSfScratch, QGL_SCRATCH
                 or      ax, dx
                 CHK     n_range, ax, 0
 
-                invoke  qgl_sf_scratch, -1
+                invoke  qglSfScratch, -1
                 or      ax, dx
                 CHK     n_neg, ax, 0
 
@@ -116,19 +116,19 @@ tmain           proc    far public uses bx cx dx si di es
                 ;; which is the only thing that says the storage is
                 ;; reachable and writable from here.
                 ;;
-                invoke  qgl_sf_new, SFW, SFH, SURF_CMEM, 0
+                invoke  qglSfNew, SFW, SFH, SURF_CMEM, 0
                 SAVEP   sf
                 invoke  ssave, s1
                 invoke  scopy, s0, sf
 
-                invoke  qgl_sf_pset, s0, 5, 3, 0A7h
-                invoke  qgl_sf_pget, s0, 5, 3
+                invoke  qglSfPset, s0, 5, 3, 0A7h
+                invoke  qglSfPget, s0, 5, 3
                 CHK     n_use, ax, 0A7h
 
                 invoke  schk, s1
                 CHK     n_spill, ax, 0
 
-                invoke  qgl_sf_free, sf
+                invoke  qglSfFree, sf
                 ret
 tmain           endp
                 end

@@ -1,10 +1,10 @@
-;; t18txtrow -- qgl_txt_row against the already-proven glyph draw.
+;; t18txtrow -- qglTxtRow against the already-proven glyph draw.
 ;;
 ;; No hand-derived bitmap: b03font.asm already established that
-;; qgl_txt_char draws the real glyph bits. So the oracle here is that
+;; qglTxtChar draws the real glyph bits. So the oracle here is that
 ;; draw, not a transcribed pattern -- 'A' is rendered once through
-;; qgl_txt_char into a small surface, and qgl_txt_row's bits are checked
-;; against every pixel qgl_sf_pget reads back from that same drawing.
+;; qglTxtChar into a small surface, and qglTxtRow's bits are checked
+;; against every pixel qglSfPget reads back from that same drawing.
 ;; Two independently-walked views of the same glyph have to agree.
 
                 .model  medium, pascal
@@ -13,18 +13,18 @@
                 include qgl.inc
                 include tfw.inc
 
-qgl_txt_load    proto   far :dword
-qgl_txt_free    proto   far :dword
-qgl_txt_row     proto   far :dword, :word, :word
-qgl_txt_char    proto   far :dword, :word, :word, :dword, :word, :word
-qgl_dr_fill     proto   far :dword, :word, :word, :word, :word, :word
+qglTxtLoad    proto   far :dword
+qglTxtFree    proto   far :dword
+qglTxtRow     proto   far :dword, :word, :word
+qglTxtChar    proto   far :dword, :word, :word, :dword, :word, :word
+qglDrFill     proto   far :dword, :word, :word, :word, :word, :word
 
 GLYPH           equ     41h             ;; 'A'
 FG              equ     1
 BG              equ     0
 
 .data
-n_init          db      'qgl_sf_init            $'
+n_init          db      'qglSfInit            $'
 n_font          db      'the font loads         $'
 n_bit           db      'row bit matches the draw$'
 n_oob_glyph     db      'a glyph past the font is blank$'
@@ -45,32 +45,32 @@ tmain           proc    far public uses bx cx dx si di es
                 local   mism:word
                 local   expect:word
 
-                invoke  qgl_sf_init
+                invoke  qglSfInit
                 CHK     n_init, ax, 1
 
                 mov     word ptr fpath, offset fname
                 mov     word ptr fpath+2, ds
-                invoke  qgl_txt_load, fpath
+                invoke  qglTxtLoad, fpath
                 SAVEP   f
                 mov     ax, word ptr f+2
                 NZ      ax
                 CHK     n_font, ax, 1
 
-                invoke  qgl_sf_new, 8, 8, SURF_CMEM, 0
+                invoke  qglSfNew, 8, 8, SURF_CMEM, 0
                 SAVEP   sf
 
-                invoke  qgl_dr_fill, sf, 0, 0, 7, 7, BG
-                invoke  qgl_txt_char, sf, 0, 0, f, GLYPH, FG
+                invoke  qglDrFill, sf, 0, 0, 7, 7, BG
+                invoke  qglTxtChar, sf, 0, 0, f, GLYPH, FG
 
                 mov     mism, 0
                 mov     row, 0
 @@rowloop:      mov     ax, row
-                invoke  qgl_txt_row, f, GLYPH, ax
+                invoke  qglTxtRow, f, GLYPH, ax
                 mov     bits, ax
 
                 mov     col, 0
-@@colloop:      invoke  qgl_sf_pget, sf, col, row
-                mov     dx, ax                  ;; dx = the pixel qgl_sf_pget got
+@@colloop:      invoke  qglSfPget, sf, col, row
+                mov     dx, ax                  ;; dx = the pixel qglSfPget got
 
                 ;; expected = (bits >> (7-col)) and 1
                 mov     ax, 7
@@ -96,14 +96,14 @@ tmain           proc    far public uses bx cx dx si di es
                 mov     ax, mism
                 CHK     n_bit, ax, 0
 
-                invoke  qgl_txt_row, f, 0FFh, 0
+                invoke  qglTxtRow, f, 0FFh, 0
                 CHK     n_oob_glyph, ax, 0
 
-                invoke  qgl_txt_row, f, GLYPH, 99
+                invoke  qglTxtRow, f, GLYPH, 99
                 CHK     n_oob_row, ax, 0
 
-                invoke  qgl_sf_free, sf
-                invoke  qgl_txt_free, f
+                invoke  qglSfFree, sf
+                invoke  qglTxtFree, f
                 ret
 tmain           endp
                 end

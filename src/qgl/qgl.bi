@@ -10,7 +10,7 @@
 '' indexed the middle of the conventional-memory entry.
 ''
 
-'' Which free figure qgl_mem_avail should report.
+'' Which free figure qglMemAvail should report.
 const QGL_MEM_LARGEST = 0
 const QGL_MEM_TOTAL   = 2
 
@@ -18,12 +18,12 @@ const QGL_MEM_TOTAL   = 2
 const QGL_SURF_CMEM = 0
 const QGL_SURF_EMS  = 2
 
-'' Depth mode, for qgl_z_mode.
+'' Depth mode, for qglZMode.
 const QGL_Z_OFF  = 0
 const QGL_Z_SET  = 1
 const QGL_Z_TEST = 2
 
-'' Drawing mode, for qgl_rs_mode.
+'' Drawing mode, for qglRsMode.
 const QGL_M_WIRE = 0
 const QGL_M_FLAT = 1
 const QGL_M_TEX  = 2

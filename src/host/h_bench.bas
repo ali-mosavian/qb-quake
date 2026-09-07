@@ -83,7 +83,7 @@ declare function r_span_edge_peak ( ) as integer
 declare function r_span_ael_peak ( ) as integer
 declare function sys_tick_hz ( ) as single
 '' qgl/mem.asm -- DOS's own numbers, not BASIC's. See the use site.
-declare function qgl_mem_avail ( byval what as integer ) as long
+declare function qglMemAvail ( byval what as integer ) as long
 declare function mod_cm_bytes ( g as Game ) as long
 declare function mod_geom_rows ( g as Game ) as integer
 declare function mod_lm_bytes ( g as Game ) as long
@@ -276,8 +276,8 @@ sub host_bench_report ( _
     '' ~260,000. qgl_avail is what an allocation can actually get;
     '' qgl_free_sum is every free block added up, so the gap between
     '' the two is the fragmentation.
-    print #benchf, "qgl_avail " + ltrim$(str$( qgl_mem_avail&( QGL_MEM_LARGEST ) ))
-    print #benchf, "qgl_free_sum " + ltrim$(str$( qgl_mem_avail&( QGL_MEM_TOTAL ) ))
+    print #benchf, "qgl_avail " + ltrim$(str$( qglMemAvail&( QGL_MEM_LARGEST ) ))
+    print #benchf, "qgl_free_sum " + ltrim$(str$( qglMemAvail&( QGL_MEM_TOTAL ) ))
     print #benchf, "lm_size " + ltrim$(str$( mod_lm_bytes( g ) ))
     print #benchf, "lm_read " + ltrim$(str$( mod_lm_got( g ) ))
     print #benchf, "geom_rows " + ltrim$(str$( mod_geom_rows( g ) ))

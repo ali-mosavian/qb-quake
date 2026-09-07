@@ -1,6 +1,6 @@
 ;; t14far -- far pointers that cross a 64K offset wrap.
 ;;
-;; qgl_mem_copy and qgl_file_read both advance a far pointer by adding to
+;; qglMemCopy and qglFileRead both advance a far pointer by adding to
 ;; the offset and carrying into the segment with `adc seg, 0`. That adds
 ;; ONE to the segment when the offset wraps, and a wrapped offset is
 ;; 65536 bytes, which is 4096 paragraphs. So everything past the first
@@ -27,12 +27,12 @@
                 include qgl.inc
                 include tfw.inc
 
-qgl_mem_alloc   proto   far :dword
-qgl_mem_free    proto   far :dword
-qgl_mem_copy    proto   far :dword, :dword, :dword
-qgl_file_open   proto   far :dword
-qgl_file_read   proto   far :word, :dword, :dword
-qgl_file_close  proto   far :word
+qglMemAlloc   proto   far :dword
+qglMemFree    proto   far :dword
+qglMemCopy    proto   far :dword, :dword, :dword
+qglFileOpen   proto   far :dword
+qglFileRead   proto   far :word, :dword, :dword
+qglFileClose  proto   far :word
 
 ATLAS           equ     114688                  ;; fgeom.bin, exactly
 
@@ -151,13 +151,13 @@ check           endp
 fverify         proc    near private uses bx cx dx si di es,\
                         base:word
 
-                invoke  qgl_file_open, fnp
+                invoke  qglFileOpen, fnp
                 mov     fh, ax
                 mov     bad, 0
                 mov     esi, 0
 @@piece:        cmp     esi, ATLAS
                 jae     @@fdone
-                invoke  qgl_file_read, fh, chunkp, 4096
+                invoke  qglFileRead, fh, chunkp, 4096
                 xor     ecx, ecx
 @@byte:         cmp     cx, 4096
                 jae     @@next
@@ -178,7 +178,7 @@ fverify         proc    near private uses bx cx dx si di es,\
 @@next:         add     esi, 4096
                 jmp     @@piece
 
-@@fdone:        invoke  qgl_file_close, fh
+@@fdone:        invoke  qglFileClose, fh
                 mov     ax, bad
                 ret
 fverify         endp
@@ -186,11 +186,11 @@ fverify         endp
 
 tmain           proc    far public uses bx cx dx si di es
 
-                invoke  qgl_sf_init
+                invoke  qglSfInit
 
-                invoke  qgl_mem_alloc, ATLAS
+                invoke  qglMemAlloc, ATLAS
                 SAVEP   srcb
-                invoke  qgl_mem_alloc, ATLAS
+                invoke  qglMemAlloc, ATLAS
                 SAVEP   dstb
                 mov     ax, word ptr srcb+2
                 mov     bx, word ptr dstb+2
@@ -216,21 +216,21 @@ tmain           proc    far public uses bx cx dx si di es
                 invoke  farof, word ptr srcb+2, 07000h
                 mov     word ptr srcoff, ax
                 mov     word ptr srcoff+2, dx
-                invoke  qgl_mem_copy, dstb, srcoff, 03000h
+                invoke  qglMemCopy, dstb, srcoff, 03000h
                 invoke  check, word ptr dstb+2, 07000h, 03000h
                 CHK     n_near32, ax, 0
 
                 ;;
                 ;; 2. straight over the 64K line
                 ;;
-                invoke  qgl_mem_copy, dstb, srcb, 018000h
+                invoke  qglMemCopy, dstb, srcb, 018000h
                 invoke  check, word ptr dstb+2, 0, 018000h
                 CHK     n_at64, ax, 0
 
                 ;;
                 ;; 3. and the whole atlas
                 ;;
-                invoke  qgl_mem_copy, dstb, srcb, ATLAS
+                invoke  qglMemCopy, dstb, srcb, ATLAS
                 invoke  check, word ptr dstb+2, 0, ATLAS
                 CHK     n_atlas, ax, 0
 
@@ -248,22 +248,22 @@ tmain           proc    far public uses bx cx dx si di es
                 sub     ax, 0FFFh
                 mov     word ptr srchi+2, ax
                 mov     word ptr srchi, 0FFF0h
-                invoke  qgl_mem_copy, dstb, srchi, ATLAS
+                invoke  qglMemCopy, dstb, srchi, ATLAS
                 invoke  check, word ptr dstb+2, 0, ATLAS
                 CHK     n_hiofs, ax, 0
 
                 ;;
                 ;; 5. the same distance, off disk, in ONE read
                 ;;
-                invoke  qgl_file_open, fnp
+                invoke  qglFileOpen, fnp
                 mov     fh, ax
                 NZ      ax
                 CHK     n_fopen, ax, 1
 
-                invoke  qgl_file_read, fh, dstb, ATLAS
+                invoke  qglFileRead, fh, dstb, ATLAS
                 mov     bx, dx
                 CHK     n_fread, ax, ATLAS and 0FFFFh
-                invoke  qgl_file_close, fh
+                invoke  qglFileClose, fh
 
                 invoke  fverify, word ptr dstb+2
                 CHK     n_fdata, ax, 0
@@ -277,15 +277,15 @@ tmain           proc    far public uses bx cx dx si di es
                 sub     ax, 0FFFh
                 mov     word ptr dsthi+2, ax
                 mov     word ptr dsthi, 0FFF0h
-                invoke  qgl_file_open, fnp
+                invoke  qglFileOpen, fnp
                 mov     fh, ax
-                invoke  qgl_file_read, fh, dsthi, ATLAS
-                invoke  qgl_file_close, fh
+                invoke  qglFileRead, fh, dsthi, ATLAS
+                invoke  qglFileClose, fh
                 invoke  fverify, word ptr dstb+2
                 CHK     n_fhi, ax, 0
 
-                invoke  qgl_mem_free, srcb
-                invoke  qgl_mem_free, dstb
+                invoke  qglMemFree, srcb
+                invoke  qglMemFree, dstb
                 ret
 tmain           endp
                 end

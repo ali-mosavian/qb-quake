@@ -1,6 +1,6 @@
 ;; clip.asm -- Sutherland-Hodgman against the view rectangle.
 ;;
-;; name: qgl_cl_rect / qgl_cl_poly
+;; name: qglClRect / qglClPoly
 ;; desc: four passes over the polygon, one per screen edge, ping-ponging
 ;;       between two buffers. No near plane: d_faces.c already clips w
 ;;       before it projects, and mgl never had one either.
@@ -70,12 +70,12 @@ qgl$buf1        QVert   QGL_CLIPV dup (<>)
 .code
 
 ;;::::::::::::::
-;; qgl$dist -- signed distance of a vertex from the current boundary.
+;; qgl$Dist -- signed distance of a vertex from the current boundary.
 ;;
 ;; INTERNAL. ds:si -> QVert, bx -> the ClipEdge. Leaves the distance on
 ;; the FPU and touches no register.
 ;;::::::::::::::
-qgl$dist        proc    near private uses ax bx si
+qgl$Dist        proc    near private uses ax bx si
 
                 mov     ax, [bx].ClipEdge.cofs
                 add     si, ax                  ;; si+ax is not an address
@@ -85,11 +85,11 @@ qgl$dist        proc    near private uses ax bx si
                 mov     si, [bx].ClipEdge.sofs
                 fmul    dword ptr [si]
                 ret
-qgl$dist        endp
+qgl$Dist        endp
 
 
 ;;::::::::::::::
-;; qgl$lerp -- one vertex between two, at the fraction on the FPU.
+;; qgl$Lerp -- one vertex between two, at the fraction on the FPU.
 ;;
 ;; INTERNAL. ds:si -> the far vertex, ds:bx -> the near one, es:di -> out,
 ;; st(0) = t. The fraction is LEFT on the stack: the caller pops it, so
@@ -98,7 +98,7 @@ qgl$dist        endp
 ;; The boundary coordinate is not lerped, it is assigned: snapping is
 ;; what keeps the next pass from clipping the same vertex again.
 ;;::::::::::::::
-qgl$lerp        proc    near private uses bx cx si di
+qgl$Lerp        proc    near private uses bx cx si di
 
                 ;; the pointers walk; dx as an index is not a 16-bit
                 ;; addressing mode and a 32-bit one would want a prefix
@@ -116,30 +116,30 @@ qgl$lerp        proc    near private uses bx cx si di
                 add     di, 4
                 loop    @@fld
                 ret
-qgl$lerp        endp
+qgl$Lerp        endp
 
 
 ;;::::::::::::::
-;; qgl$copyv -- one vertex, ds:si -> es:di. Both pointers advance.
+;; qgl$Copyv -- one vertex, ds:si -> es:di. Both pointers advance.
 ;;
 ;; INTERNAL. Everything but si and di survives.
 ;;::::::::::::::
-qgl$copyv       proc    near private uses cx
+qgl$Copyv       proc    near private uses cx
 
                 cld
                 mov     cx, SIZEOF QVert / 4
                 rep     movsd
                 ret
-qgl$copyv       endp
+qgl$Copyv       endp
 
 
 ;;::::::::::::::
-;; qgl$pass -- one boundary.
+;; qgl$Pass -- one boundary.
 ;;
 ;; INTERNAL. bx -> ClipEdge, ds:si -> input, es:di -> output, cx = input
 ;; count. Returns the output count in ax; every other register survives.
 ;;::::::::::::::
-qgl$pass        proc    near private uses bx cx dx si di
+qgl$Pass        proc    near private uses bx cx dx si di
 
                 local   edge:word
                 local   ivtx:word
@@ -172,7 +172,7 @@ qgl$pass        proc    near private uses bx cx dx si di
                 mov     prev, ax
 
                 mov     si, ax
-                call    qgl$dist
+                call    qgl$Dist
                 fstp    dprev
                 ;; A FLOAT'S SIGN IS AN INTEGER COMPARE. IEEE puts the
                 ;; sign in the top bit, so read as a SIGNED dword every
@@ -188,7 +188,7 @@ qgl$pass        proc    near private uses bx cx dx si di
                 mov     idx, 0
 
 @@vtx:          mov     bx, edge
-                call    qgl$dist
+                call    qgl$Dist
                 fstp    dcur
 
                 ;; cur_in and prev_in decide which of the four cases this
@@ -208,7 +208,7 @@ qgl$pass        proc    near private uses bx cx dx si di
                 push    si
                 push    bx
                 mov     bx, prev
-                call    qgl$lerp                ;; leaves t on the stack
+                call    qgl$Lerp                ;; leaves t on the stack
                 pop     bx
                 pop     si
                 fstp    st(0)                   ;; done with t
@@ -230,7 +230,7 @@ qgl$pass        proc    near private uses bx cx dx si di
 @@nocross:      cmp     dword ptr dcur, 0
                 jl      @@next                  ;; outside: nothing to emit
 
-                call    qgl$copyv               ;; advances si and di
+                call    qgl$Copyv               ;; advances si and di
                 sub     si, SIZEOF QVert        ;; copyv consumed it
                 inc     nout
 
@@ -262,17 +262,17 @@ qgl$pass        proc    near private uses bx cx dx si di
 
 @@out:          mov     ax, nout
                 ret
-qgl$pass        endp
+qgl$Pass        endp
 
 
 ;;::::::::::::::
-;; qgl_cl_rect ( x0:word, y0:word, x1:word, y1:word )
+;; qglClRect ( x0:word, y0:word, x1:word, y1:word )
 ;;
 ;; The view rectangle, inclusive as the caller means it. Stored with x1
 ;; and y1 one larger, because the filler does not draw its last column or
 ;; row: a polygon reaching the right edge must survive to it.
 ;;::::::::::::::
-qgl_cl_rect     proc    public uses ax,\
+qglClRect     proc    public uses ax,\
                         x0:word, y0:word, x1:word, y1:word
 
                 mov     ax, x0
@@ -284,11 +284,11 @@ qgl_cl_rect     proc    public uses ax,\
                 mov     ax, y1
                 mov     qgl$uy1, ax
                 ret
-qgl_cl_rect     endp
+qglClRect     endp
 
 
 ;;::::::::::::::
-;; qgl$bounds -- the effective rect, into the float bounds the passes use.
+;; qgl$Bounds -- the effective rect, into the float bounds the passes use.
 ;;
 ;; INTERNAL. es:bx -> the destination Surface, or es:bx null for the
 ;; viewport alone. The rect is the caller's viewport INTERSECTED with the
@@ -300,7 +300,7 @@ qgl_cl_rect     endp
 ;; not draw its final column or row -- SH_INIT does the same with `inc
 ;; fs:[DC.xMax]`.
 ;;::::::::::::::
-qgl$bounds      proc    near private uses ax cx dx
+qgl$Bounds      proc    near private uses ax cx dx
 
                 mov     ax, qgl$ux0
                 mov     cx, qgl$uy0
@@ -348,25 +348,25 @@ qgl$bounds      proc    near private uses ax cx dx
                 fild    qgl$iy
                 fstp    qgl$cly1
                 ret
-qgl$bounds      endp
+qgl$Bounds      endp
 
 
 ;;::::::::::::::
-;; qgl_cl_poly ( src:far ptr QVert, n:word, dst:far ptr QVert ) -> ax
+;; qglClPoly ( src:far ptr QVert, n:word, dst:far ptr QVert ) -> ax
 ;;
 ;; ax is the surviving vertex count, 0 if nothing does. dst must hold
 ;; QGL_CLIPV vertices; n past QGL_MAXV is refused rather than truncated,
 ;; because a truncated polygon is a wrong picture and a refused one is a
 ;; missing face.
 ;;::::::::::::::
-qgl_cl_poly     proc    public uses bx cx dx si di ds es,\
+qglClPoly     proc    public uses bx cx dx si di ds es,\
                         src:dword, n:word, dst:dword, sf:dword
 
                 local   cnt:word
                 local   pass:word
 
                 les     bx, sf
-                call    qgl$bounds
+                call    qgl$Bounds
 
                 mov     ax, n
                 mov     cnt, ax
@@ -385,7 +385,7 @@ qgl_cl_poly     proc    public uses bx cx dx si di ds es,\
                 lds     si, src
                 mov     cx, cnt
                 mov     ax, cx
-@@in:           call    qgl$copyv
+@@in:           call    qgl$Copyv
                 dec     ax
                 jnz     @@in
                 push    es
@@ -401,7 +401,7 @@ qgl_cl_poly     proc    public uses bx cx dx si di ds es,\
                 mov     cx, cnt
                 push    ds
                 pop     es
-                call    qgl$pass
+                call    qgl$Pass
                 mov     cnt, ax
                 test    ax, ax
                 jz      @@none
@@ -418,7 +418,7 @@ qgl_cl_poly     proc    public uses bx cx dx si di ds es,\
                 les     di, dst
                 mov     cx, cnt
                 mov     ax, cx
-@@copy:         call    qgl$copyv
+@@copy:         call    qgl$Copyv
                 dec     ax
                 jnz     @@copy
 
@@ -427,6 +427,6 @@ qgl_cl_poly     proc    public uses bx cx dx si di ds es,\
 
 @@none:         xor     ax, ax
                 ret
-qgl_cl_poly     endp
+qglClPoly     endp
 
                 end

@@ -1,7 +1,7 @@
 ;;
 ;; b8span.asm -- 8bpp scanline fillers, one per (mode, depth mode).
 ;;
-;; name: b8_span / qgl$fixup
+;; name: b8_span / qgl$Fixup
 ;; desc: the pixels, and nothing about polygons. rs.asm walks the edges
 ;;       and this fills what lies between them, which is mgl's own split:
 ;;       ugl/uglplxt.asm scans and cfmt/b8/8plxt.asm fills.
@@ -40,7 +40,7 @@
                 externdef qgl$fcol:word
                 externdef qgl$mode:word
 
-                public  qgl$fixup, b8_span, qgl_b8_selftest
+                public  qgl$Fixup, b8_span, qglB8Selftest
 
 ;;:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 ;; The pieces every textured filler is built from. ?p is the label
@@ -172,7 +172,7 @@ endm
 ;; si and di and consume them, exactly as mgl's do. What they must
 ;; preserve is bp, ds and es -- bp because it is the scanner's frame
 ;; pointer, ds and es because the scanner set them. Everything else here
-;; obeys the rule, and qgl$fixup breaking it -- using bp as scratch for a
+;; obeys the rule, and qgl$Fixup breaking it -- using bp as scratch for a
 ;; mask -- cost a silent fault with no output at all.
 ;;
 ;; The constants are patched rather than read because there is nowhere to
@@ -193,7 +193,7 @@ endm
 ;;:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 ;;:::::::::::::: textured, no depth
-qgl$tex_o       proc    near
+qgl$TexO       proc    near
                 PS      ebx, bp
                 TEX_HEAD to
 
@@ -206,11 +206,11 @@ qgl$tex_o       proc    near
 
                 PP      bp, ebx
                 ret
-qgl$tex_o       endp
+qgl$TexO       endp
 
 ;;:::::::::::::: textured, depth written and not tested: the first
 ;;               surface into a frame, or anything known to be in front
-qgl$tex_w       proc    near
+qgl$TexW       proc    near
                 PS      ebx, bp
                 TEX_HEAD_Z tw, tw_zofs
 
@@ -230,15 +230,15 @@ tw_zofs:        mov     gs:[ebp*2+__IMM32__], ax
 
                 PP      bp, ebx
                 ret
-qgl$tex_w       endp
+qgl$TexW       endp
 
 ;;:::::::::::::: textured, tested then written. Depth is 1/z, so nearer
 ;;               is LARGER and the test rejects on "already >= ours".
 ;;
 ;; The compare goes first and the texel is fetched only if it passes,
 ;; which is why this is a separate routine and not a branch inside
-;; qgl$tex_w: a hidden pixel costs the compare and nothing else.
-qgl$tex_t       proc    near
+;; qgl$TexW: a hidden pixel costs the compare and nothing else.
+qgl$TexT       proc    near
                 PS      ebx, bp
                 TEX_HEAD_Z tt, tt_zcmp, tt_zofs
 
@@ -261,11 +261,11 @@ tt_zofs:        mov     gs:[ebp*2+__IMM32__], ax
 
                 PP      bp, ebx
                 ret
-qgl$tex_t       endp
+qgl$TexT       endp
 
 
 ;;:::::::::::::: flat, no depth: the span is one string store
-qgl$flat_o      proc    near
+qgl$FlatO      proc    near
                 PS      cx, di
                 add     di, ax
                 mov     cx, si
@@ -275,7 +275,7 @@ fo_col:         mov     al, __IMM8__
                 rep     stosb
                 PP      di, cx
                 ret
-qgl$flat_o      endp
+qgl$FlatO      endp
 
 ;;:::::::::::::: the two flat depth variants differ only in the compare
 FLAT_Z          macro   ?p, ?tst
@@ -311,13 +311,13 @@ FLAT_Z          macro   ?p, ?tst
                 ret
 endm
 
-qgl$flat_w      proc    near
+qgl$FlatW      proc    near
                 FLAT_Z  fw
-qgl$flat_w      endp
+qgl$FlatW      endp
 
-qgl$flat_t      proc    near
+qgl$FlatT      proc    near
                 FLAT_Z  ft, TEST
-qgl$flat_t      endp
+qgl$FlatT      endp
 
 
 ;;:::::::::::::: wireframe: the two ends of the span, nothing between.
@@ -325,7 +325,7 @@ qgl$flat_t      endp
 ;; Two pixels, so the right end's depth is computed outright rather than
 ;; stepped to. A per-pixel loop that wrote twice would have the shape of
 ;; the fillers above and none of their reason.
-qgl$wire_o      proc    near
+qgl$WireO      proc    near
                 PS      di
                 add     di, ax
 wo_col:         mov     al, __IMM8__
@@ -336,7 +336,7 @@ wo_col:         mov     al, __IMM8__
                 mov     es:[di], al
                 PP      di
                 ret
-qgl$wire_o      endp
+qgl$WireO      endp
 
 ;;::::::::::::::
 ;;  in: es:di-> the pixel, bx= its depth offset, dx= 1/z there
@@ -383,17 +383,17 @@ WIRE_Z          macro   ?p, ?tst
                 ret
 endm
 
-qgl$wire_w      proc    near
+qgl$WireW      proc    near
                 WIRE_Z  ww
-qgl$wire_w      endp
+qgl$WireW      endp
 
-qgl$wire_t      proc    near
+qgl$WireT      proc    near
                 WIRE_Z  wt, TEST
-qgl$wire_t      endp
+qgl$WireT      endp
 
 
 ;;:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-;; qgl$ref -- the same span, drawn a second way.
+;; qgl$Ref -- the same span, drawn a second way.
 ;;
 ;; Takes the filler contract and honours the same modes, but reads every
 ;; constant out of memory: no patched immediate, no fixup, nothing that
@@ -407,7 +407,7 @@ qgl$wire_t      endp
 ;; is plausible. mgl has no such oracle and its fillers carried the
 ;; xRes-1 bug for years.
 ;;:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-qgl$ref         proc    near
+qgl$Ref         proc    near
                 PS      ebx, ecx, edx, esi, edi, bp
 
                 add     di, ax
@@ -484,11 +484,11 @@ qgl$ref         proc    near
 
                 PP      bp, edi, esi, edx, ecx, ebx
                 ret
-qgl$ref         endp
+qgl$Ref         endp
 
 
 ;;:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-;; qgl$fixup -- every per-polygon constant, into every filler.
+;; qgl$Fixup -- every per-polygon constant, into every filler.
 ;;
 ;;  in: ds= DGROUP
 ;;
@@ -585,7 +585,7 @@ endm
 ;; the per-pixel step across this sub-span, in the form the stepper adds.
 ;;
 ;; The v half is shifted by tshift and has every bit above tvmsk set, for
-;; the reason qgl$fixup gives at length: si carries v already shifted, and
+;; the reason qgl$Fixup gives at length: si carries v already shifted, and
 ;; the carry out of the fractional add must not reach the bits the
 ;; following AND sweeps off. Computed here rather than patched because it
 ;; is different every sub-span.
@@ -725,22 +725,22 @@ PTEX_BODY       macro   ?p, ?zwrite, ?ztest
 endm
 
 ;;:::::::::::::: perspective, no depth
-qgl$ptex_o      proc    near
+qgl$PtexO      proc    near
                 PTEX_BODY po
-qgl$ptex_o      endp
+qgl$PtexO      endp
 
 ;;:::::::::::::: perspective, depth written and not tested
-qgl$ptex_w      proc    near
+qgl$PtexW      proc    near
                 PTEX_BODY pw, 1
-qgl$ptex_w      endp
+qgl$PtexW      endp
 
 ;;:::::::::::::: perspective, tested then written
-qgl$ptex_t      proc    near
+qgl$PtexT      proc    near
                 PTEX_BODY pt, 1, 1
-qgl$ptex_t      endp
+qgl$PtexT      endp
 
 
-qgl$fixup       proc    near uses ax bx cx dx si di bp
+qgl$Fixup       proc    near uses ax bx cx dx si di bp
 
                 mov     al, B qgl$tshift
                 mov     bx, qgl$tumsk
@@ -803,7 +803,7 @@ qgl$fixup       proc    near uses ax bx cx dx si di bp
                 FIX_COL wt
                 FIX_COL wtr
                 ret
-qgl$fixup       endp
+qgl$Fixup       endp
 
 
 ;;::::::::::::::
@@ -816,7 +816,7 @@ qgl$fixup       endp
 ;; and the routine it hands back tests nothing. qgl$mode and qgl$zmode are
 ;; pre-scaled table offsets, so choosing is an add and a load.
 ;;
-;; qgl_rs_ref swings the whole table over to the reference filler, which
+;; qglRsRef swings the whole table over to the reference filler, which
 ;; is how a patched filler is judged against one that has no patch site.
 ;;::::::::::::::
 b8_span         proc    near
@@ -835,9 +835,9 @@ b8_span         proc    near
 b8_span         endp
 
 ;;::::::::::::::
-;; qgl_rs_ref ( on:word ) -- send every mode to the reference filler.
+;; qglRsRef ( on:word ) -- send every mode to the reference filler.
 ;;::::::::::::::
-qgl_rs_ref      proc    far public uses ax,\
+qglRsRef      proc    far public uses ax,\
                         on:word
                 mov     ax, O qgl$fillTB
                 cmp     on, 0
@@ -845,10 +845,10 @@ qgl_rs_ref      proc    far public uses ax,\
                 mov     ax, O qgl$refTB
 @@:             mov     qgl$curTB, ax
                 ret
-qgl_rs_ref      endp
+qglRsRef      endp
 
 ;;::::::::::::::
-;; qgl_b8_selftest -> ax = patch sites that are not where they claim
+;; qglB8Selftest -> ax = patch sites that are not where they claim
 ;;
 ;; Every site here is a placeholder chosen to be conspicuous: 0DEADh for
 ;; a word, 0DEADBEEFh for a dword, 0DEh for a byte. If cs:[label-N] still
@@ -881,7 +881,7 @@ CKD             macro   nm
 @@:
 endm
 
-qgl_b8_selftest proc    far public
+qglB8Selftest proc    far public
 
                 xor     ax, ax
 
@@ -940,12 +940,12 @@ qgl_b8_selftest proc    far public
                 CKB     wt_col
                 CKB     wtr_col
                 ret
-qgl_b8_selftest endp
+qglB8Selftest endp
 
                 QGL_ENDS
 
 .data
-;; qgl$ref's span constants. Its LOOP STATE is in registers like every
+;; qgl$Ref's span constants. Its LOOP STATE is in registers like every
 ;; other filler's; only what is fixed for the span sits here.
 qgl$rzd         dw      0                       ;; depth displacement
 qgl$rbp0        dd      0                       ;; -width, sign extended
@@ -969,20 +969,20 @@ qgl$pend        dw      0                       ;; the bp that ends it
 ;; never multiplies -- SURF_CMEM's trick, twice.
 ;;
 
-qgl$fillTB      dw      qgl$wire_o, qgl$wire_w, qgl$wire_t
-                dw      qgl$flat_o, qgl$flat_w, qgl$flat_t
-                dw      qgl$tex_o,  qgl$tex_w,  qgl$tex_t
-                dw      qgl$ptex_o, qgl$ptex_w, qgl$ptex_t
+qgl$fillTB      dw      qgl$WireO, qgl$WireW, qgl$WireT
+                dw      qgl$FlatO, qgl$FlatW, qgl$FlatT
+                dw      qgl$TexO,  qgl$TexW,  qgl$TexT
+                dw      qgl$PtexO, qgl$PtexW, qgl$PtexT
 
-;; THE PERSPECTIVE ROW IS NOT qgl$ref. There is no reference perspective
+;; THE PERSPECTIVE ROW IS NOT qgl$Ref. There is no reference perspective
 ;; filler to compare against, and more to the point the scanner pushes
 ;; three values onto the FPU stack for that mode: a filler that did not
 ;; consume them would overflow it in three scanlines. The row is the real
-;; one, so qgl_rs_ref stays safe to call in any mode.
-qgl$refTB       dw      qgl$ref, qgl$ref, qgl$ref
-                dw      qgl$ref, qgl$ref, qgl$ref
-                dw      qgl$ref, qgl$ref, qgl$ref
-                dw      qgl$ptex_o, qgl$ptex_w, qgl$ptex_t
+;; one, so qglRsRef stays safe to call in any mode.
+qgl$refTB       dw      qgl$Ref, qgl$Ref, qgl$Ref
+                dw      qgl$Ref, qgl$Ref, qgl$Ref
+                dw      qgl$Ref, qgl$Ref, qgl$Ref
+                dw      qgl$PtexO, qgl$PtexW, qgl$PtexT
 
 qgl$curTB       dw      O qgl$fillTB
 

@@ -10,21 +10,21 @@ tvrfy           proto   far :word, :word, :word, :word
 tshow           proto   far :word, :dword
 
 ;; the layer under test
-qgl_vga_screen  proto   far
-qgl_gem_init    proto   far
-qgl_gem_frame   proto   far
-qgl_gem_alloc   proto   far :dword
-qgl_gem_free    proto   far :word
-qgl_gem_map     proto   far :word, :word, :word
-qgl_sf_init     proto   far
-qgl_sf_new      proto   far :word, :word, :word, :word
-qgl_sf_free     proto   far :dword
-qgl_sf_row      proto   far :dword, :word
-qgl_sf_rd_row   proto   far :dword, :word
-qgl_sf_wr_row   proto   far :dword, :word
-qgl_sf_view     proto   far :dword, :dword, :dword, :word, :word, :word
-qgl_sf_pget     proto   far :dword, :word, :word
-qgl_sf_pset     proto   far :dword, :word, :word, :word
+qglVgaScreen  proto   far
+qglGemInit    proto   far
+qglGemFrame   proto   far
+qglGemAlloc   proto   far :dword
+qglGemFree    proto   far :word
+qglGemMap     proto   far :word, :word, :word
+qglSfInit     proto   far
+qglSfNew      proto   far :word, :word, :word, :word
+qglSfFree     proto   far :dword
+qglSfRow      proto   far :dword, :word
+qglSfRdRow   proto   far :dword, :word
+qglSfWrRow   proto   far :dword, :word
+qglSfView     proto   far :dword, :dword, :dword, :word, :word, :word
+qglSfPget     proto   far :dword, :word, :word
+qglSfPset     proto   far :dword, :word, :word, :word
 
 CHK             macro   nam, got, want          ;; got == want -> ok
                 invoke  tchk, offset nam, got, want

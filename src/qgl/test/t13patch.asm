@@ -21,7 +21,7 @@
                 include qgl.inc
                 include tfw.inc
 
-qgl_b8_selftest proto   far
+qglB8Selftest proto   far
 
 .data
 n_sites         db      'patch sites addressable$'
@@ -29,7 +29,7 @@ n_sites         db      'patch sites addressable$'
 .code
 tmain           proc    far public uses bx cx dx si di es
 
-                invoke  qgl_b8_selftest
+                invoke  qglB8Selftest
                 CHK     n_sites, ax, 0
                 ret
 tmain           endp

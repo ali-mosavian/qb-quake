@@ -1,7 +1,7 @@
 ;;
 ;; b8fill.asm -- the 8bpp span primitives everything else fills through.
 ;;
-;; name: qgl$run_fill / qgl$run_copy / qgl$nib4
+;; name: qgl$RunFill / qgl$RunCopy / qgl$Nib4
 ;; desc: a run of one colour, a run copied, and a glyph row expanded from
 ;;       packed bits. No routine here looks at a surface, a clip rectangle
 ;;       or a coordinate; it is given a pointer and a count and it fills.
@@ -45,12 +45,12 @@ qgl$nibTB       label   dword
                 QGL_CODE
 
 ;;::::::::::::::
-;; qgl$run_fill -- one run of a constant byte.
+;; qgl$RunFill -- one run of a constant byte.
 ;;
 ;; INTERNAL: es:di -> the run, cx = length, al = the colour. Everything
 ;; survives except di, which is left past the run.
 ;;::::::::::::::
-qgl$run_fill    proc    near public uses ax bx cx
+qgl$RunFill    proc    near public uses ax bx cx
 
                 cld
                 jcxz    @@out
@@ -77,16 +77,16 @@ qgl$run_fill    proc    near public uses ax bx cx
                 and     cx, 3
                 rep     stosb
 @@out:          ret
-qgl$run_fill    endp
+qgl$RunFill    endp
 
 
 ;;::::::::::::::
-;; qgl$run_copy -- one run copied, ds:si -> es:di.
+;; qgl$RunCopy -- one run copied, ds:si -> es:di.
 ;;
 ;; INTERNAL: cx = length. Everything survives except si and di, left
 ;; past the run.
 ;;::::::::::::::
-qgl$run_copy    proc    near public uses ax bx cx
+qgl$RunCopy    proc    near public uses ax bx cx
 
                 cld
                 jcxz    @@out
@@ -108,19 +108,19 @@ qgl$run_copy    proc    near public uses ax bx cx
                 and     cx, 3
                 rep     movsb
 @@out:          ret
-qgl$run_copy    endp
+qgl$RunCopy    endp
 
 
 
 
 ;;::::::::::::::
-;; qgl$nib4 -- four pixels from one nibble, no branch per pixel.
+;; qgl$Nib4 -- four pixels from one nibble, no branch per pixel.
 ;;
 ;; INTERNAL: bl = the nibble, es:di -> the destination, col on the stack
 ;; frame of the caller is NOT reachable, so the colour arrives in dh.
 ;; di advances by four. Everything else survives.
 ;;::::::::::::::
-qgl$nib4        proc    near public uses ax bx cx si
+qgl$Nib4        proc    near public uses ax bx cx si
                 xor     bh, bh
                 shl     bx, 2                   ;; four bytes an entry
                 mov     si, offset qgl$nibTB
@@ -137,7 +137,7 @@ qgl$nib4        proc    near public uses ax bx cx si
                 inc     di
                 loop    @@px
                 ret
-qgl$nib4        endp
+qgl$Nib4        endp
 
                 QGL_ENDS
                 end

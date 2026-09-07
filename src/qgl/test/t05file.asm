@@ -1,5 +1,5 @@
 ;; t05file -- the file module on its own, nothing else linked in front of
-;;            it. Exists because a failure inside qgl_txt_load could not
+;;            it. Exists because a failure inside qglTxtLoad could not
 ;;            be told apart from a failure underneath it.
 
                 .model  medium, pascal
@@ -8,10 +8,10 @@
                 include qgl.inc
                 include tfw.inc
 
-qgl_file_open   proto   far :dword
-qgl_file_size   proto   far :word
-qgl_file_read   proto   far :word, :dword, :dword
-qgl_file_close  proto   far :word
+qglFileOpen   proto   far :dword
+qglFileSize   proto   far :word
+qglFileRead   proto   far :word, :dword, :dword
+qglFileClose  proto   far :word
 
 .data
 n_open          db      'open of a real file    $'
@@ -42,24 +42,24 @@ tmain           proc    far public uses bx cx dx si di es
 
                 ;; a name that is not there must fail, and this is the
                 ;; assertion that has been red all along
-                invoke  qgl_file_open, badp
+                invoke  qglFileOpen, badp
                 NZ      ax
                 CHK     n_bad, ax, 0
 
-                invoke  qgl_file_open, goodp
+                invoke  qglFileOpen, goodp
                 mov     fh, ax
                 NZ      ax
                 CHK     n_open, ax, 1
 
-                invoke  qgl_file_size, fh
+                invoke  qglFileSize, fh
                 mov     word ptr fsz, ax
                 mov     word ptr fsz+2, dx
                 CHK     n_size, ax, 2068
 
-                invoke  qgl_file_read, fh, bufp, 64
+                invoke  qglFileRead, fh, bufp, 64
                 CHK     n_read, ax, 64
 
-                invoke  qgl_file_close, fh
+                invoke  qglFileClose, fh
 
                 mov     ax, word ptr buf
                 CHK     n_magic, ax, 4E46h      ;; "FN" little-endian

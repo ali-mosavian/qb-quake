@@ -1,7 +1,7 @@
 ;; txt.asm -- text from a packed 1bpp font.
 ;;
-;; name: qgl_txt_load / qgl_txt_free / qgl_txt_char / qgl_txt_str /
-;;       qgl_txt_width
+;; name: qglTxtLoad / qglTxtFree / qglTxtChar / qglTxtStr /
+;;       qglTxtWidth
 ;; desc: the glyphs stay 1 bit a pixel and are expanded as they are drawn.
 ;;       screen.bas's own path builds 256 separate 8x8 DCs at load
 ;;       (uglNewMult) and a live MCB walk measured those at 16,400 bytes
@@ -27,16 +27,16 @@
 
                 include qgl.inc
 
-qgl_mem_alloc   proto   far pascal :dword
-qgl_mem_free    proto   far pascal :dword
-qgl_sf_wr_row   proto   far pascal :dword, :word
-qgl_file_open   proto   far pascal :dword
-qgl_file_size   proto   far pascal :word
-qgl_file_read   proto   far pascal :word, :dword, :dword
-qgl_file_close  proto   far pascal :word
+qglMemAlloc   proto   far pascal :dword
+qglMemFree    proto   far pascal :dword
+qglSfWrRow   proto   far pascal :dword, :word
+qglFileOpen   proto   far pascal :dword
+qglFileSize   proto   far pascal :word
+qglFileRead   proto   far pascal :word, :dword, :dword
+qglFileClose  proto   far pascal :word
 
 IFDEF __BASIC__
-qgl_file_open_bas proto far pascal :word
+qglFileOpenBas proto far pascal :word
 ENDIF
 
 FNT_HDR         equ     20              ;; mkfont.py's header IS the Font struct
@@ -51,11 +51,11 @@ FNT_HDR         equ     20              ;; mkfont.py's header IS the Font struct
 
                 QGL_CODE
 
-                externdef qgl$nib4:near
+                externdef qgl$Nib4:near
 
 ;;::::::::::::::
-;; qgl$txt_load_fh -- given an already-open handle, the shared body of
-;; qgl_txt_load and qgl_txt_load_bas: size it, read it whole, check the
+;; qgl$TxtLoadFh -- given an already-open handle, the shared body of
+;; qglTxtLoad and qglTxtLoadBas: size it, read it whole, check the
 ;; magic, hand back the block or free it.
 ;;
 ;; INTERNAL: fh:word, the open handle -> dx:ax = far ptr to the font, or
@@ -63,13 +63,13 @@ FNT_HDR         equ     20              ;; mkfont.py's header IS the Font struct
 ;;::::::::::::::
 ;; NOT `uses dx`: this returns dx:ax, and the uses epilogue would pop the
 ;; segment straight back off over the answer. See qgl.inc's contract.
-qgl$txt_load_fh proc    near private uses bx cx si di es,\
+qgl$TxtLoadFh proc    near private uses bx cx si di es,\
                         fh:word
 
                 local   fsize:dword
                 local   blk:dword
 
-                invoke  qgl_file_size, fh
+                invoke  qglFileSize, fh
                 mov     word ptr fsize, ax
                 mov     word ptr fsize+2, dx
 
@@ -79,16 +79,16 @@ qgl$txt_load_fh proc    near private uses bx cx si di es,\
                 cmp     word ptr fsize, FNT_HDR
                 jbe     @@closefail
 
-                invoke  qgl_mem_alloc, fsize
+                invoke  qglMemAlloc, fsize
                 mov     word ptr blk, ax
                 mov     word ptr blk+2, dx
                 or      ax, dx
                 jz      @@closefail
 
-                invoke  qgl_file_read, fh, blk, fsize
+                invoke  qglFileRead, fh, blk, fsize
                 cmp     ax, word ptr fsize
                 jne     @@freefail
-                invoke  qgl_file_close, fh
+                invoke  qglFileClose, fh
 
                 ;; The file IS the struct, magic included, and mkfont.py
                 ;; wrote bits_ofs and adv_ofs because that end knew them.
@@ -104,76 +104,76 @@ qgl$txt_load_fh proc    near private uses bx cx si di es,\
                 mov     dx, word ptr blk+2
                 ret
 
-@@freefail2:    invoke  qgl_mem_free, blk
+@@freefail2:    invoke  qglMemFree, blk
                 jmp     @@nofile
-@@freefail:     invoke  qgl_mem_free, blk
-@@closefail:    invoke  qgl_file_close, fh
+@@freefail:     invoke  qglMemFree, blk
+@@closefail:    invoke  qglFileClose, fh
 @@nofile:       xor     ax, ax
                 xor     dx, dx
                 ret
-qgl$txt_load_fh endp
+qgl$TxtLoadFh endp
 
 
 ;;::::::::::::::
-;; qgl_txt_load ( path:far ptr to ASCIIZ ) -> far ptr to the font, or 0:0
+;; qglTxtLoad ( path:far ptr to ASCIIZ ) -> far ptr to the font, or 0:0
 ;;
 ;; Reads the whole file into one block: header, the advance table if it
 ;; has one, then the glyph bits.
 ;;::::::::::::::
-qgl_txt_load    proc    public uses bx cx si di es,\
+qglTxtLoad    proc    public uses bx cx si di es,\
                         path:dword
 
-                invoke  qgl_file_open, path
+                invoke  qglFileOpen, path
                 test    ax, ax
                 jz      @@nofile
-                invoke  qgl$txt_load_fh, ax
+                invoke  qgl$TxtLoadFh, ax
                 ret
 @@nofile:       xor     ax, ax
                 xor     dx, dx
                 ret
-qgl_txt_load    endp
+qglTxtLoad    endp
 
 
 IFDEF __BASIC__
 ;;::::::::::::::
-;; qgl_txt_load_bas ( s:BASIC string ) -> far ptr to the font, or 0:0
+;; qglTxtLoadBas ( s:BASIC string ) -> far ptr to the font, or 0:0
 ;;
 ;; The BASIC-callable entry point: same shared loader, opened through
-;; qgl_file_open_bas instead of an ASCIIZ far pointer -- see file.asm's
+;; qglFileOpenBas instead of an ASCIIZ far pointer -- see file.asm's
 ;; header for why a BASIC string needs its own opener.
 ;;::::::::::::::
-qgl_txt_load_bas proc   public uses bx cx si di es,\
+qglTxtLoadBas proc   public uses bx cx si di es,\
                         s:word
 
-                invoke  qgl_file_open_bas, s
+                invoke  qglFileOpenBas, s
                 test    ax, ax
                 jz      @@nofile
-                invoke  qgl$txt_load_fh, ax
+                invoke  qgl$TxtLoadFh, ax
                 ret
 @@nofile:       xor     ax, ax
                 xor     dx, dx
                 ret
-qgl_txt_load_bas endp
+qglTxtLoadBas endp
 ENDIF
 
 
 ;;::::::::::::::
-;; qgl_txt_free ( f:far ptr )
+;; qglTxtFree ( f:far ptr )
 ;;::::::::::::::
-qgl_txt_free    proc    public,\
+qglTxtFree    proc    public,\
                         f:dword
-                invoke  qgl_mem_free, f
+                invoke  qglMemFree, f
                 ret
-qgl_txt_free    endp
+qglTxtFree    endp
 
 
 ;;::::::::::::::
-;; qgl$adv_of -- how far this glyph moves the pen.
+;; qgl$AdvOf -- how far this glyph moves the pen.
 ;;
 ;; INTERNAL: es:bx -> the font, al = the character. ax back, everything
 ;; else preserved.
 ;;::::::::::::::
-qgl$adv_of      proc    near private uses si
+qgl$AdvOf      proc    near private uses si
                 xor     ah, ah
                 mov     si, ax
                 sub     si, es:[bx].Font.first
@@ -191,17 +191,17 @@ qgl$adv_of      proc    near private uses si
 @@dflt:         mov     al, es:[bx].Font.adv
                 xor     ah, ah
                 ret
-qgl$adv_of      endp
+qgl$AdvOf      endp
 
 
 ;;::::::::::::::
-;; qgl_txt_width ( f:far ptr, s:far ptr ) -> ax = pixels
+;; qglTxtWidth ( f:far ptr, s:far ptr ) -> ax = pixels
 ;;
 ;; Walks the advances rather than multiplying by a cell size, so it is
 ;; still right when the font is proportional. draw_string_r needs this to
 ;; right-align without assuming anything about the glyphs.
 ;;::::::::::::::
-qgl_txt_width   proc    public uses bx cx dx si di ds es,\
+qglTxtWidth   proc    public uses bx cx dx si di ds es,\
                         f:dword, s:dword
 
                 les     bx, f
@@ -211,24 +211,24 @@ qgl_txt_width   proc    public uses bx cx dx si di ds es,\
 @@ch:           lodsb
                 test    al, al
                 jz      @F
-                call    qgl$adv_of
+                call    qgl$AdvOf
                 add     di, ax
                 jmp     @@ch
 @@:             mov     ax, di
                 ret
-qgl_txt_width   endp
+qglTxtWidth   endp
 
 
 ;;::::::::::::::
-;; qgl_txt_row ( f:far ptr, glyph:word, row:word ) -> ax = the row's bits,
+;; qglTxtRow ( f:far ptr, glyph:word, row:word ) -> ax = the row's bits,
 ;;                                                    MSB leftmost, 0-cell_h-1
 ;;
 ;; For a caller that recolours per pixel -- draw_logo's ember gradient,
-;; hud_num's chosen colour -- and so cannot use qgl_txt_char's fixed
+;; hud_num's chosen colour -- and so cannot use qglTxtChar's fixed
 ;; colour. Out of range answers 0 rather than faulting, matching
-;; qgl_txt_char's own silent no-draw for a glyph outside the font.
+;; qglTxtChar's own silent no-draw for a glyph outside the font.
 ;;::::::::::::::
-qgl_txt_row     proc    public uses bx cx dx si es,\
+qglTxtRow     proc    public uses bx cx dx si es,\
                         f:dword, glyph:word, row:word
 
                 les     bx, f
@@ -262,11 +262,11 @@ qgl_txt_row     proc    public uses bx cx dx si es,\
 
 @@zero:         xor     ax, ax
                 ret
-qgl_txt_row     endp
+qglTxtRow     endp
 
 
 ;;::::::::::::::
-;; qgl_txt_char ( dst:far ptr, x:word, y:word, f:far ptr, glyph:word,
+;; qglTxtChar ( dst:far ptr, x:word, y:word, f:far ptr, glyph:word,
 ;;                col:word ) -> ax = the advance
 ;;
 ;; One glyph. Returns what it advanced, so a caller drawing a string does
@@ -276,7 +276,7 @@ qgl_txt_row     endp
 ;; one es, so each row is fetched from the font FIRST, into a local, and
 ;; only then is the destination row asked for.
 ;;::::::::::::::
-qgl_txt_char    proc    public uses bx cx dx si di ds es,\
+qglTxtChar    proc    public uses bx cx dx si di ds es,\
                         dst:dword, x:word, y:word, f:dword, glyph:word, col:word
 
                 local   src_ofs:word
@@ -292,7 +292,7 @@ qgl_txt_char    proc    public uses bx cx dx si di ds es,\
 
                 les     bx, f
                 mov     ax, glyph
-                call    qgl$adv_of
+                call    qgl$AdvOf
                 mov     advance, ax
 
                 mov     ax, glyph
@@ -371,7 +371,7 @@ qgl_txt_char    proc    public uses bx cx dx si di ds es,\
 
                 ;; and where they go. Re-derived every scanline: the
                 ;; destination may be an EMS surface whose window moved.
-                invoke  qgl_sf_wr_row, dst, scan
+                invoke  qglSfWrRow, dst, scan
                 mov     es, dx
                 mov     di, ax
 
@@ -382,10 +382,10 @@ qgl_txt_char    proc    public uses bx cx dx si di ds es,\
                 add     di, x                   ;; the whole glyph fits
                 mov     bl, grow
                 shr     bl, 4                   ;; high nibble first
-                call    qgl$nib4
+                call    qgl$Nib4
                 mov     bl, grow
                 and     bl, 0Fh
-                call    qgl$nib4
+                call    qgl$Nib4
                 jmp     short @@next
 
                 ;; the edge case, one pixel at a time. Only a glyph that
@@ -418,17 +418,17 @@ qgl_txt_char    proc    public uses bx cx dx si di ds es,\
 
 @@out:          mov     ax, advance
                 ret
-qgl_txt_char    endp
+qglTxtChar    endp
 
 
 
 
 
 ;;::::::::::::::
-;; qgl_txt_str ( dst:far ptr, x:word, y:word, f:far ptr, s:far ptr,
+;; qglTxtStr ( dst:far ptr, x:word, y:word, f:far ptr, s:far ptr,
 ;;               col:word )
 ;;::::::::::::::
-qgl_txt_str     proc    public uses bx cx dx si di ds es,\
+qglTxtStr     proc    public uses bx cx dx si di ds es,\
                         dst:dword, x:word, y:word, f:dword, s:dword, col:word
 
                 local   penx:word
@@ -444,12 +444,12 @@ qgl_txt_str     proc    public uses bx cx dx si di ds es,\
                 jz      @F
 
                 xor     ah, ah
-                invoke  qgl_txt_char, dst, penx, y, f, ax, col
+                invoke  qglTxtChar, dst, penx, y, f, ax, col
                 add     penx, ax
                 inc     word ptr s
                 jmp     @@ch
 @@:             ret
-qgl_txt_str     endp
+qglTxtStr     endp
 
                 
 

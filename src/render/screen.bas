@@ -10,7 +10,7 @@ option explicit
 '' separate 8x8 DCs, which measured at 16,400 bytes of conventional
 '' memory for 2,048 bytes of pixels. draw_string and friends adopt
 '' whatever mgl DC they were handed for the length of one call, through
-'' qgl_sf_scratch -- the same scratch index vid_present uses for the
+'' qglSfScratch -- the same scratch index vid_present uses for the
 '' final blit, safe because the two never run at the same instant in a
 '' frame.
 ''
@@ -207,23 +207,23 @@ declare function mod_cm_ready ( _
 ''
 ''
 '' Not BYVAL: VBDOS passes a plain "as string" parameter as a near
-'' pointer to the descriptor, which is exactly what qgl_txt_load_bas's
-'' s:word wants -- see file.asm's own qgl_file_open_bas for the source
+'' pointer to the descriptor, which is exactly what qglTxtLoadBas's
+'' s:word wants -- see file.asm's own qglFileOpenBas for the source
 '' of that convention.
 ''
-declare function qgl_txt_load_bas ( _
+declare function qglTxtLoadBas ( _
     flname as string _
 ) as long
-declare sub qgl_txt_free ( _
+declare sub qglTxtFree ( _
     byval f as long _
 )
 ''
-'' The font mkfont.py builds is fixed-advance, so qgl_txt_char's return
+'' The font mkfont.py builds is fixed-advance, so qglTxtChar's return
 '' (how far it advanced) is never needed here -- every caller already
 '' steps by the font's own fixed 4 -- and it is declared a SUB rather
 '' than read and discarded.
 ''
-declare sub qgl_txt_char ( _
+declare sub qglTxtChar ( _
     byval dst as long, _
     byval x as integer, _
     byval y as integer, _
@@ -231,19 +231,19 @@ declare sub qgl_txt_char ( _
     byval glyph as integer, _
     byval col as integer _
 )
-declare function qgl_txt_row ( _
+declare function qglTxtRow ( _
     byval f as long, _
     byval glyph as integer, _
     byval row as integer _
 ) as integer
-declare function qgl_sf_scratch ( _
+declare function qglSfScratch ( _
     byval n as integer _
 ) as long
-declare function qgl_sf_adopt_dc ( _
+declare function qglSfAdoptDc ( _
     byval dc as long, _
     byval s as long _
 ) as integer
-declare sub qgl_sf_pset ( _
+declare sub qglSfPset ( _
     byval s as long, _
     byval x as integer, _
     byval y as integer, _
@@ -293,7 +293,7 @@ const LP_TEXT   = 254            '' the one colour draw_string draws in
 
 '' The scratch Surface every draw_string call briefly adopts its
 '' destination DC into. Index 0, the same one vid.bas's vid_present and
-'' d_faces.c's -qgl path use: all four of qgl_sf_scratch's slots are
+'' d_faces.c's -qgl path use: all four of qglSfScratch's slots are
 '' already spoken for, and reuse is safe because HUD text, the present,
 '' and a qgl-routed face draw never run at the same instant within a
 '' frame -- see vid.bas's own note on VID_QGL_SURF.
@@ -379,7 +379,7 @@ const MIPBAR_H  = 4
 '' are allocated at load with no code to run, so non-main modules must
 '' declare their arrays here.
 '$static
-dim shared g_font as long        '' qgl_txt_load's block; 0 until loaded
+dim shared g_font as long        '' qglTxtLoad's block; 0 until loaded
 
 '' The loading stage line, redrawn in place rather than appended down the
 '' screen the way the old bare draw_string did it.
@@ -619,7 +619,7 @@ end sub
 ''       above), a hard drop shadow, and edges nibbled by the coordinate
 ''       hash so the outline reads as hand-cut rather than geometric.
 ''
-''       The glyph bits come straight from qgl_txt_row rather than a
+''       The glyph bits come straight from qglTxtRow rather than a
 ''       drawn-then-read-back DC, one call per row rather than one per
 ''       pixel -- which is what frees the lettering from the one-colour
 ''       rule everything else on screen lives under.
@@ -641,7 +641,7 @@ sub draw_logo ( _
         for i = 1 to len( text )
             ch = asc( mid$( text, i, 1 ) )
             for gy = 0 to 7
-                bits = qgl_txt_row( g_font, ch, gy )
+                bits = qglTxtRow( g_font, ch, gy )
                 if ( bits = 0 ) then goto dl_next_row
                 for gx = 0 to 7
                     if ( (bits and (128 \ (2^gx))) <> 0 ) then
@@ -785,9 +785,9 @@ end sub
 '' desc: Scaled and right-aligned text.
 ''
 ''       Scaled is a masked draw, pixel by pixel: qgl has no scaled
-''       masked blit (qgl_dr_blit_scl is opaque, made for the present
+''       masked blit (qglDrBlitScl is opaque, made for the present
 ''       path's whole-frame magnify, where every destination pixel is
-''       meant to be overwritten), so this samples qgl_txt_row's bits
+''       meant to be overwritten), so this samples qglTxtRow's bits
 ''       directly at the destination's own resolution and only plots
 ''       where a bit is set -- which is what uglBlitMskScl's colour key
 ''       did, one call per glyph instead of one call per pixel.
@@ -808,8 +808,8 @@ sub draw_string_scl ( _
     dim sx as integer, sy as integer, gx as integer, gy as integer
     dim bits as integer
 
-    qs = qgl_sf_scratch( TXT_QGL_SURF )
-    if ( qgl_sf_adopt_dc( dc, qs ) = 0 ) then exit sub
+    qs = qglSfScratch( TXT_QGL_SURF )
+    if ( qglSfAdoptDc( dc, qs ) = 0 ) then exit sub
 
     dw = cint( 8 * scale )
     if ( dw < 1 ) then exit sub
@@ -820,12 +820,12 @@ sub draw_string_scl ( _
 
         for sy = 0 to dw-1
             gy = int( sy * 8 / dw )
-            bits = qgl_txt_row( g_font, char, gy )
+            bits = qglTxtRow( g_font, char, gy )
             if ( bits <> 0 ) then
                 for sx = 0 to dw-1
                     gx = int( sx * 8 / dw )
                     if ( (bits and (128 \ (2^gx))) <> 0 ) then
-                        qgl_sf_pset qs, posx+sx, y+sy, LP_TEXT
+                        qglSfPset qs, posx+sx, y+sy, LP_TEXT
                     end if
                 next sx
             end if
@@ -1007,14 +1007,14 @@ end sub
 '' name: draw_load_font
 '' desc: flname is a loose DOS file -- mkfont.py's own converted format,
 ''       not the UAR archive member the renderer's other assets come
-''       from -- because qgl_txt_load_bas reads it straight off disk with
+''       from -- because qglTxtLoadBas reads it straight off disk with
 ''       no archive layer between. See txt.asm's header for why.
 ''::::::::::
 function draw_load_font ( _
     flname as string _
 ) as integer
 
-    g_font = qgl_txt_load_bas( flname )
+    g_font = qglTxtLoadBas( flname )
     draw_load_font = ( g_font <> 0 )
 
 end function
@@ -1027,7 +1027,7 @@ end function
 '' desc: Adopts dc as a qgl Surface for the length of this one call --
 ''       see TXT_QGL_SURF's own note on why that scratch index is safe
 ''       to share. A DC that fails to adopt (drifted layout, or none of
-''       this frame's callers is the shape qgl_sf_adopt_dc checks for)
+''       this frame's callers is the shape qglSfAdoptDc checks for)
 ''       draws nothing rather than faulting.
 ''::::::::::
 sub draw_string ( _
@@ -1040,8 +1040,8 @@ sub draw_string ( _
     dim i as integer, char as integer
     dim qs as long
 
-    qs = qgl_sf_scratch( TXT_QGL_SURF )
-    if ( qgl_sf_adopt_dc( dc, qs ) = 0 ) then exit sub
+    qs = qglSfScratch( TXT_QGL_SURF )
+    if ( qglSfAdoptDc( dc, qs ) = 0 ) then exit sub
 
     posx = x
 
@@ -1050,7 +1050,7 @@ sub draw_string ( _
         char = asc( mid$( text, i+1 ) )
 
         if ( (char >= 0) or (char <= 255) ) then
-            qgl_txt_char qs, posx, y, g_font, char, LP_TEXT
+            qglTxtChar qs, posx, y, g_font, char, LP_TEXT
         end if
 
         posx = posx + 4
@@ -1182,7 +1182,7 @@ end sub
 ''::::::::::
 '' name: hud_num
 '' desc: A number painted in a CHOSEN colour, which draw_string's one
-''       fixed colour cannot do: qgl_txt_row's bits are re-plotted block
+''       fixed colour cannot do: qglTxtRow's bits are re-plotted block
 ''       by block, with a one-pixel shadow so it sits on the slab
 ''       instead of floating.
 ''::::::::::
@@ -1203,7 +1203,7 @@ sub hud_num ( _
         for i = 1 to len( txt )
             ch = asc( mid$( txt, i, 1 ) )
             for gy = 0 to 7
-                bits = qgl_txt_row( g_font, ch, gy )
+                bits = qglTxtRow( g_font, ch, gy )
                 if ( bits = 0 ) then goto hn_next_row
                 for gx = 0 to 7
                     if ( (bits and (128 \ (2^gx))) <> 0 ) then

@@ -56,6 +56,17 @@ declare sub mod_load_nodes ( _
     g as Game, _
     nodes() as Node _
 )
+'' qgl_ar_* store types, mirroring src/qgl/qgl.inc. A store is MEM or
+'' EMS; faces is MEM, one flat window, so no page ever changes under it.
+const QGL_AR_MEM = 0
+const QGL_AR_EMS = 1
+
+declare function qglArNew ( byval typ as integer, byval elsz as integer, _
+                              byval cnt as long, byval slot as integer ) as long
+declare function qglArMap ( byval h as long, a() as any, _
+                              byval idx as long ) as long
+declare function qglArWin ( byval h as long, byval idx as long ) as long
+
 declare sub mod_load_clipnodes ( _
     g as Game _
 )
@@ -284,6 +295,9 @@ sub mod_load_faces ( _
     faces() as Face _
 )
     dim mapped as long
+    dim u as UAR
+    dim p as long
+    dim nbytes as long
 
     scr_load_stage "faces"
 
@@ -291,9 +305,30 @@ sub mod_load_faces ( _
     '' cost an INT 67h each time. A MEM-backed store needs no slot at all,
     '' so it also cannot collide with the geometry window d_poly maps
     '' between these reads.
-    g.wld.store.faces = uglArrLoad&( "assets.zip::faces.pag", UGL.MEM, len( faces(0) ), _
-                                     clng( g.wld.count.faces ), 0 )
-    if ( g.wld.store.faces = 0 ) then sys_error "0x0039, faces.pag would not load"
+    ''
+    '' A qgl store, not uglArrLoad. Faces was the first migration because
+    '' it is MEM-only: no EMS fallback here, so the hot read path is
+    '' unchanged and no access policy had to be decided. Six interleaved
+    '' pairs against the mgl version were neutral -- identical min and
+    '' max, medians inside one quantisation step -- and the rendered
+    '' frame was byte-identical, so the switch that ran the A/B is gone.
+    nbytes = clng( g.wld.count.faces ) * len( faces(0) )
+    g.wld.store.faces = qglArNew( QGL_AR_MEM, len( faces(0) ), _
+                                    clng( g.wld.count.faces ), 0 )
+    if ( g.wld.store.faces = 0 ) then sys_error "0x0039, no qgl store for faces"
+
+    '' The block, then the bytes. uarReadH is mgl's reader and is proven;
+    '' what changed hands is where the bytes land.
+    p = qglArWin( g.wld.store.faces, 0 )
+    if ( p = 0 ) then sys_error "0x0039, qgl faces store would not map"
+    if ( uarOpen( u, "assets.zip::faces.pag", F4READ ) = 0 ) then
+        sys_error "0x0039, faces.pag would not open"
+    end if
+    if ( uarReadH( u, p, nbytes ) <> nbytes ) then
+        uarClose u
+        sys_error "0x0039, faces.pag came up short"
+    end if
+    uarClose u
 
     '' Hands the descriptor over. NOT ceremony: this is what takes
     '' it out of the far heap's chain, and only BASIC can do that
@@ -308,7 +343,7 @@ sub mod_load_faces ( _
     '' the descriptor at the entire block and every subscript works from
     '' here on with no further calls.
     ''
-    mapped = uglArrMap&( g.wld.store.faces, faces(), 0 )
+    mapped = qglArMap( g.wld.store.faces, faces(), 0 )
 
     scr_load_step
 end sub

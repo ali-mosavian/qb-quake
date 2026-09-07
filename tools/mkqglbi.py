@@ -24,13 +24,13 @@ import sys
 # Every constant BASIC is allowed to name, and what it is for. Anything
 # not listed here stays inside the layer.
 EXPORT = [
-    ("Which free figure qgl_mem_avail should report.", [
+    ("Which free figure qglMemAvail should report.", [
         "QGL_MEM_LARGEST", "QGL_MEM_TOTAL"]),
     ("Where a surface's pixels live.", [
         "QGL_SURF_CMEM", "QGL_SURF_EMS"]),
-    ("Depth mode, for qgl_z_mode.", [
+    ("Depth mode, for qglZMode.", [
         "QGL_Z_OFF", "QGL_Z_SET", "QGL_Z_TEST"]),
-    ("Drawing mode, for qgl_rs_mode.", [
+    ("Drawing mode, for qglRsMode.", [
         "QGL_M_WIRE", "QGL_M_FLAT", "QGL_M_TEX", "QGL_M_PTEX"]),
 ]
 

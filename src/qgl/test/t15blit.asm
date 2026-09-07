@@ -31,9 +31,9 @@
                 include qgl.inc
                 include tfw.inc
 
-qgl_dr_fill     proto   far :dword, :word, :word, :word, :word, :word
-qgl_dr_blit     proto   far :dword, :word, :word, :dword
-qgl_dr_blit_scl proto   far :dword, :word, :word, :word, :word, :dword
+qglDrFill     proto   far :dword, :word, :word, :word, :word, :word
+qglDrBlit     proto   far :dword, :word, :word, :dword
+qglDrBlitScl proto   far :dword, :word, :word, :word, :word, :dword
 
 SFW             equ     512     ;; * SFH > 64K, so the wrap lands inside
 SFH             equ     144
@@ -79,7 +79,7 @@ vrfy            proc    near private uses bx cx dx si di es,\
                 xor     si, si                  ;; py
 @@row:          cmp     si, SFH
                 jae     @@out
-                invoke  qgl_sf_rd_row, sf, si
+                invoke  qglSfRdRow, sf, si
                 mov     es, dx
                 mov     di, ax
                 xor     cx, cx                  ;; px
@@ -130,7 +130,7 @@ gchk            proc    near private uses bx cx dx si di es
                 xor     si, si
 @@row:          cmp     si, GDH
                 jae     @@out
-                invoke  qgl_sf_rd_row, guard, si
+                invoke  qglSfRdRow, guard, si
                 mov     es, dx
                 mov     di, ax
                 mov     cx, SFW
@@ -148,20 +148,20 @@ gchk            endp
 
 ;;:::::::::::::: put both surfaces back to their known bytes
 reset           proc    near private
-                invoke  qgl_dr_fill, sf, 0, 0, SFW-1, SFH-1, FILLB
-                invoke  qgl_dr_fill, guard, 0, 0, SFW-1, GDH-1, GUARDB
+                invoke  qglDrFill, sf, 0, 0, SFW-1, SFH-1, FILLB
+                invoke  qglDrFill, guard, 0, 0, SFW-1, GDH-1, GUARDB
                 ret
 reset           endp
 
 
 tmain           proc    far public uses bx cx dx si di es
 
-                invoke  qgl_sf_init
-                invoke  qgl_sf_new, SFW, SFH, SURF_CMEM, 0
+                invoke  qglSfInit
+                invoke  qglSfNew, SFW, SFH, SURF_CMEM, 0
                 SAVEP   sf
-                invoke  qgl_sf_new, SFW, GDH, SURF_CMEM, 0
+                invoke  qglSfNew, SFW, GDH, SURF_CMEM, 0
                 SAVEP   guard
-                invoke  qgl_sf_new, SRCW, SRCH, SURF_CMEM, 0
+                invoke  qglSfNew, SRCW, SRCH, SURF_CMEM, 0
                 SAVEP   src
 
                 ;; the ramp: column c holds SRC0 + c
@@ -170,7 +170,7 @@ tmain           proc    far public uses bx cx dx si di es
                 jae     @@ramped
                 mov     ax, si
                 add     ax, SRC0
-                invoke  qgl_dr_fill, src, si, 0, si, SRCH-1, ax
+                invoke  qglDrFill, src, si, 0, si, SRCH-1, ax
                 inc     si
                 jmp     @@col
 @@ramped:
@@ -180,7 +180,7 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;    against a case with nothing to clip
                 ;;
                 invoke  reset
-                invoke  qgl_dr_blit, sf, 4, 4, src
+                invoke  qglDrBlit, sf, 4, 4, src
                 invoke  vrfy, 4, 4, SRCW, SRCH, 0
                 CHK     n_in, ax, 0
 
@@ -191,7 +191,7 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;    would never see it.
                 ;;
                 invoke  reset
-                invoke  qgl_dr_blit, sf, -3, 4, src
+                invoke  qglDrBlit, sf, -3, 4, src
                 invoke  vrfy, -3, 4, SRCW, SRCH, 0
                 CHK     n_left, ax, 0
 
@@ -199,7 +199,7 @@ tmain           proc    far public uses bx cx dx si di es
                 ;; 3. running off the right, into the next row's left
                 ;;
                 invoke  reset
-                invoke  qgl_dr_blit, sf, SFW-3, 4, src
+                invoke  qglDrBlit, sf, SFW-3, 4, src
                 invoke  vrfy, SFW-3, 4, SRCW, SRCH, 0
                 CHK     n_right, ax, 0
 
@@ -207,12 +207,12 @@ tmain           proc    far public uses bx cx dx si di es
                 ;; 4. and the two that must draw nothing at all
                 ;;
                 invoke  reset
-                invoke  qgl_dr_blit, sf, -SRCW, 4, src
+                invoke  qglDrBlit, sf, -SRCW, 4, src
                 invoke  vrfy, -SRCW, 4, SRCW, SRCH, 0
                 CHK     n_allleft, ax, 0
 
                 invoke  reset
-                invoke  qgl_dr_blit, sf, SFW, 4, src
+                invoke  qglDrBlit, sf, SFW, 4, src
                 invoke  vrfy, SFW, 4, SRCW, SRCH, 0
                 CHK     n_allright, ax, 0
 
@@ -221,7 +221,7 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;    the horizontal side has no business breaking it
                 ;;
                 invoke  reset
-                invoke  qgl_dr_blit, sf, 4, -2, src
+                invoke  qglDrBlit, sf, 4, -2, src
                 invoke  vrfy, 4, -2, SRCW, SRCH, 0
                 CHK     n_up, ax, 0
 
@@ -230,31 +230,31 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;    column is (px - x) >> 1
                 ;;
                 invoke  reset
-                invoke  qgl_dr_blit_scl, sf, 4, 4, SRCW*2, SRCH*2, src
+                invoke  qglDrBlitScl, sf, 4, 4, SRCW*2, SRCH*2, src
                 invoke  vrfy, 4, 4, SRCW*2, SRCH*2, 1
                 CHK     n_sin, ax, 0
 
                 invoke  reset
-                invoke  qgl_dr_blit_scl, sf, -5, 4, SRCW*2, SRCH*2, src
+                invoke  qglDrBlitScl, sf, -5, 4, SRCW*2, SRCH*2, src
                 invoke  vrfy, -5, 4, SRCW*2, SRCH*2, 1
                 CHK     n_sleft, ax, 0
 
                 invoke  reset
-                invoke  qgl_dr_blit_scl, sf, SFW-5, 4, SRCW*2, SRCH*2, src
+                invoke  qglDrBlitScl, sf, SFW-5, 4, SRCW*2, SRCH*2, src
                 invoke  vrfy, SFW-5, 4, SRCW*2, SRCH*2, 1
                 CHK     n_sright, ax, 0
 
                 invoke  reset
-                invoke  qgl_dr_blit_scl, sf, -SRCW*2, 4, SRCW*2, SRCH*2, src
+                invoke  qglDrBlitScl, sf, -SRCW*2, 4, SRCW*2, SRCH*2, src
                 invoke  vrfy, -SRCW*2, 4, SRCW*2, SRCH*2, 1
                 CHK     n_sall, ax, 0
 
                 invoke  gchk
                 CHK     n_guard, ax, 0
 
-                invoke  qgl_sf_free, src
-                invoke  qgl_sf_free, guard
-                invoke  qgl_sf_free, sf
+                invoke  qglSfFree, src
+                invoke  qglSfFree, guard
+                invoke  qglSfFree, sf
                 ret
 tmain           endp
                 end

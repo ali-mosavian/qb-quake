@@ -1,12 +1,12 @@
 ;; sf.asm -- surfaces: pixels, and the one call that finds a row of them.
 ;;
-;; name: qgl_sf_init / qgl_sf_new / qgl_sf_free / qgl_sf_row /
-;;       qgl_sf_view / qgl_sf_load / qgl_sf_pget / qgl_sf_pset
+;; name: qglSfInit / qglSfNew / qglSfFree / qglSfRow /
+;;       qglSfView / qglSfLoad / qglSfPget / qglSfPset
 ;; desc: a surface is pixels plus a width, and it does not say where it
-;;       lives. qgl_sf_row answers with a far pointer either way: arithmetic
+;;       lives. qglSfRow answers with a far pointer either way: arithmetic
 ;;       for conventional memory, a page map for EMS.
 ;;
-;;       THE SLOT IS THE CALLER'S. qgl_sf_new takes it; this module never
+;;       THE SLOT IS THE CALLER'S. qglSfNew takes it; this module never
 ;;       arbitrates one. See sf.inc: mgl's emsMapEx already works that
 ;;       way and PAGE_SLOT already relies on it, and four private slots
 ;;       could not cover the nine-plus EMS objects live at once anyway.
@@ -14,8 +14,8 @@
 ;;       this surface crossing a page, or by anything else sharing it.
 ;;
 ;; obs.: - an EMS surface's bps must divide 16K, or a row would straddle
-;;         two physical pages and qgl_sf_row could not answer with one
-;;         pointer. qgl_sf_new REFUSES rather than padding: every EMS surface
+;;         two physical pages and qglSfRow could not answer with one
+;;         pointer. qglSfNew REFUSES rather than padding: every EMS surface
 ;;         this renderer has is a power of two already (atlas cells
 ;;         64/32/16/8, font 8), and silently padding would waste memory
 ;;         nobody asked to spend. Conventional surfaces have no such rule.
@@ -23,7 +23,7 @@
 ;;         surface. e1m1 dies creating a 64,048-byte backbuffer with
 ;;         183,504 free: the far heap's problem is fragmentation, not
 ;;         total, so every object here is one block.
-;;       - qgl_sf_view allocates nothing at all. It re-aims a caller-owned
+;;       - qglSfView allocates nothing at all. It re-aims a caller-owned
 ;;         header at part of another surface's store, which is what
 ;;         turned 648 texture dcs into 8 views.
 
@@ -35,24 +35,24 @@
 EMS_PAGE_MASK   equ     3FFFh
 EMS_PAGE_SHIFT  equ     14
 
-qgl_mem_alloc   proto   far pascal :dword
-qgl_sf_new_ex   proto   far pascal :word, :word, :word, :word, :word
-qgl_mem_free    proto   far pascal :dword
+qglMemAlloc   proto   far pascal :dword
+qglSfNewEx   proto   far pascal :word, :word, :word, :word, :word
+qglMemFree    proto   far pascal :dword
 
-qgl_gem_init        proto   far pascal
-qgl_gem_alloc       proto   far pascal :dword
-qgl_gem_free        proto   far pascal :word
-qgl_gem_map         proto   far pascal :word, :word, :word
+qglGemInit        proto   far pascal
+qglGemAlloc       proto   far pascal :dword
+qglGemFree        proto   far pascal :word
+qglGemMap         proto   far pascal :word, :word, :word
 
-qgl_file_open   proto   far pascal :dword
-qgl_file_read   proto   far pascal :word, :dword, :dword
-qgl_file_close  proto   far pascal :word
+qglFileOpen   proto   far pascal :dword
+qglFileRead   proto   far pascal :word, :dword, :dword
+qglFileClose  proto   far pascal :word
 
 
 .code
 
 ;;::::::::::::::
-;; qgl_abi ( what:word ) -> ax = the assembly's own value for a constant
+;; qglAbi ( what:word ) -> ax = the assembly's own value for a constant
 ;;
 ;; The ONE place a BASIC caller can ask the layer what it actually
 ;; believes. qgl.bi is generated from qgl.inc so the two cannot drift on
@@ -63,7 +63,7 @@ qgl_file_close  proto   far pascal :word
 ;; The order is the order qgl.bi declares them in, and adding a constant
 ;; means adding it in both places -- which the test then notices.
 ;;::::::::::::::
-qgl_abi         proc    public uses bx,\
+qglAbi         proc    public uses bx,\
                         what:word
 
                 mov     bx, what
@@ -74,7 +74,7 @@ qgl_abi         proc    public uses bx,\
                 ret
 @@bad:          mov     ax, -1
                 ret
-qgl_abi         endp
+qglAbi         endp
 
 qgl$abiTB       dw      MEM_LARGEST, MEM_TOTAL
                 dw      SURF_CMEM, SURF_EMS
@@ -84,29 +84,29 @@ ABI_N           equ     11
 
 
 ;;::::::::::::::
-;; qgl_sf_init () -> ax nonzero if EMS surfaces are possible
+;; qglSfInit () -> ax nonzero if EMS surfaces are possible
 ;;::::::::::::::
-qgl_sf_init     proc    public
-                invoke  qgl_gem_init
+qglSfInit     proc    public
+                invoke  qglGemInit
                 ret
-qgl_sf_init     endp
+qglSfInit     endp
 
 
 ;;::::::::::::::
-;; qgl_sf_new ( w:word, h:word, where:word, slot:word ) -> far ptr, or 0:0
+;; qglSfNew ( w:word, h:word, where:word, slot:word ) -> far ptr, or 0:0
 ;;
 ;; The common case: one byte a pixel, so the stride is the width.
 ;;::::::::::::::
-qgl_sf_new      proc    public uses bx,\
+qglSfNew      proc    public uses bx,\
                         wid:word, hgt:word, whr:word, slot:word
 
-                invoke  qgl_sf_new_ex, wid, hgt, wid, whr, slot
+                invoke  qglSfNewEx, wid, hgt, wid, whr, slot
                 ret
-qgl_sf_new      endp
+qglSfNew      endp
 
 
 ;;::::::::::::::
-;; qgl_sf_new_ex ( w:word, h:word, stride:word, where:word, slot:word )
+;; qglSfNewEx ( w:word, h:word, stride:word, where:word, slot:word )
 ;;
 ;; A stride wider than the row is what a depth buffer needs -- two bytes
 ;; a pixel -- and what padding an EMS row up to a power of two needs. The
@@ -114,7 +114,7 @@ qgl_sf_new      endp
 ;; pget indexes against, and a surface that lies about it makes each of
 ;; those wrong by exactly the factor it lied by.
 ;;::::::::::::::
-qgl_sf_new_ex   proc    public uses bx cx si di es,\
+qglSfNewEx   proc    public uses bx cx si di es,\
                         wid:word, hgt:word, strd:word, whr:word, slot:word
 
                 local   nbytes:dword
@@ -143,7 +143,7 @@ qgl_sf_new_ex   proc    public uses bx cx si di es,\
                 adc     dx, 0
                 mov     word ptr nbytes, ax
                 mov     word ptr nbytes+2, dx
-                invoke  qgl_mem_alloc, nbytes
+                invoke  qglMemAlloc, nbytes
                 mov     word ptr hdr, ax
                 mov     word ptr hdr+2, dx
                 or      ax, dx
@@ -182,13 +182,13 @@ qgl_sf_new_ex   proc    public uses bx cx si di es,\
                 test    ax, cx
                 jnz     @@fail                  ;; not a power of two
 
-                invoke  qgl_mem_alloc, SIZEOF Surface
+                invoke  qglMemAlloc, SIZEOF Surface
                 mov     word ptr hdr, ax
                 mov     word ptr hdr+2, dx
                 or      ax, dx
                 jz      @@fail
 
-                invoke  qgl_gem_alloc, nbytes
+                invoke  qglGemAlloc, nbytes
                 test    ax, ax
                 jz      @@fail_free
                 mov     si, ax                  ;; handle
@@ -214,18 +214,18 @@ qgl_sf_new_ex   proc    public uses bx cx si di es,\
                 mov     dx, word ptr hdr+2
                 ret
 
-@@fail_free:    invoke  qgl_mem_free, hdr
+@@fail_free:    invoke  qglMemFree, hdr
 @@refuse:
 @@fail:         xor     ax, ax
                 xor     dx, dx
                 ret
-qgl_sf_new_ex   endp
+qglSfNewEx   endp
 
 
 ;;::::::::::::::
-;; qgl_sf_free ( s:far ptr )
+;; qglSfFree ( s:far ptr )
 ;;::::::::::::::
-qgl_sf_free     proc    public uses bx cx es,\
+qglSfFree     proc    public uses bx cx es,\
                         s:dword
 
                 les     bx, s
@@ -236,15 +236,15 @@ qgl_sf_free     proc    public uses bx cx es,\
                 cmp     es:[bx].Surface.kind, SURF_EMS
                 jne     @@justfree
 
-                invoke  qgl_gem_free, es:[bx].Surface.handle
+                invoke  qglGemFree, es:[bx].Surface.handle
 
-@@justfree:     invoke  qgl_mem_free, s
+@@justfree:     invoke  qglMemFree, s
 @@:             ret
-qgl_sf_free     endp
+qglSfFree     endp
 
 
 ;;::::::::::::::
-;; qgl$row_cmem / qgl$row_ems -- the two halves of a row lookup.
+;; qgl$RowCmem / qgl$row_ems -- the two halves of a row lookup.
 ;;
 ;; INTERNAL, so registers, not the stack:
 ;;      in   es:bx -> the surface
@@ -255,7 +255,7 @@ qgl_sf_free     endp
 ;; Reached through qgl$typeTB, never by name. A third kind of surface is
 ;; a table entry and a routine, not an edit to anything already working.
 ;;::::::::::::::
-qgl$row_cmem    proc    near private uses cx si
+qgl$RowCmem    proc    near private uses cx si
                 ;; seg = handle + offset>>4, off = offset and 15
                 mov     cx, ax
                 and     cx, 000Fh
@@ -267,29 +267,29 @@ qgl$row_cmem    proc    near private uses cx si
                 mov     dx, ax
                 mov     ax, cx
                 ret
-qgl$row_cmem    endp
+qgl$RowCmem    endp
 
 ;;:::::::::::::: cmem has no window; the slot means nothing to it
-qgl$cmem_ex     proc    near private
-                call    qgl$row_cmem
+qgl$CmemEx     proc    near private
+                call    qgl$RowCmem
                 ret
-qgl$cmem_ex     endp
+qgl$CmemEx     endp
 
 ;;:::::::::::::: a kind that is not one
-qgl$row_none    proc    near private
+qgl$RowNone    proc    near private
                 xor     ax, ax
                 xor     dx, dx
                 ret
-qgl$row_none    endp
+qgl$RowNone    endp
 
 
 ;;::::::::::::::
-;; qgl$ems_ex -- the EMS mapper, through a page the CALLER names.
+;; qgl$EmsEx -- the EMS mapper, through a page the CALLER names.
 ;;
 ;; INTERNAL: es:bx -> the surface, dx:ax = the row's byte offset,
 ;; cl = the physical page. dx:ax back.
 ;;::::::::::::::
-qgl$ems_ex      proc    near private uses bx cx si di es
+qgl$EmsEx      proc    near private uses bx cx si di es
 
                 mov     di, ax
                 and     di, EMS_PAGE_MASK       ;; offset within the page
@@ -306,29 +306,29 @@ qgl$ems_ex      proc    near private uses bx cx si di es
                 xor     ch, ch
                 mov     ax, cx                  ;; slot
                 mov     cx, es:[bx].Surface.handle
-                invoke  qgl_gem_map, cx, si, ax
+                invoke  qglGemMap, cx, si, ax
                 mov     dx, ax                  ;; segment, or 0
                 mov     ax, di
                 ret
-qgl$ems_ex      endp
+qgl$EmsEx      endp
 
 ;;:::::::::::::: through the surface's own READ page
-qgl$rd_ems      proc    near private
+qgl$RdEms      proc    near private
                 mov     cl, es:[bx].Surface.rd_slot
-                call    qgl$ems_ex
+                call    qgl$EmsEx
                 ret
-qgl$rd_ems      endp
+qgl$RdEms      endp
 
 ;;:::::::::::::: and its WRITE page, which is a different one
-qgl$wr_ems      proc    near private
+qgl$WrEms      proc    near private
                 mov     cl, es:[bx].Surface.wr_slot
-                call    qgl$ems_ex
+                call    qgl$EmsEx
                 ret
-qgl$wr_ems      endp
+qgl$WrEms      endp
 
 
 ;;::::::::::::::
-;; qgl$row -- row y, through whichever accessor the caller names.
+;; qgl$Row -- row y, through whichever accessor the caller names.
 ;;
 ;; INTERNAL: es:bx -> the surface, ax = y, si = the SurfaceOps field,
 ;; cl = the slot (the Ex entries only). dx:ax back.
@@ -338,7 +338,7 @@ qgl$wr_ems      endp
 ;; is doing. That is dct.inc's arrangement: rdAccess and wrAccess are two
 ;; entries, not one with a flag.
 ;;::::::::::::::
-qgl$row         proc    near private uses bx cx si
+qgl$Row         proc    near private uses bx cx si
 
                 push    cx                      ;; the slot, for the Ex forms
                 mov     cx, es:[bx].Surface.stride
@@ -362,12 +362,12 @@ qgl$row         proc    near private uses bx cx si
                 xor     ax, ax
                 xor     dx, dx
                 ret
-qgl$row         endp
+qgl$Row         endp
 
 
 ;;::::::::::::::
-;; qgl_sf_rd_row / qgl_sf_wr_row ( s:far ptr, y:word ) -> far ptr
-;; qgl_sf_rd_row_ex / qgl_sf_wr_row_ex ( s, y, slot:word ) -> far ptr
+;; qglSfRdRow / qglSfWrRow ( s:far ptr, y:word ) -> far ptr
+;; qglSfRdRowEx / qglSfWrRowEx ( s, y, slot:word ) -> far ptr
 ;;
 ;; Say which you are doing. For a conventional surface the four are one
 ;; routine; for an EMS one they are not, and a texture read that came in
@@ -376,51 +376,51 @@ qgl$row         endp
 ;; Good until that window is remapped -- by this surface crossing a page,
 ;; or by anything else sharing the slot.
 ;;::::::::::::::
-qgl_sf_rd_row   proc    public uses bx cx si es,\
+qglSfRdRow   proc    public uses bx cx si es,\
                         s:dword, y:word
                 les     bx, s
                 mov     ax, y
                 mov     si, SurfaceOps.rd_row
-                call    qgl$row
+                call    qgl$Row
                 ret
-qgl_sf_rd_row   endp
+qglSfRdRow   endp
 
-qgl_sf_wr_row   proc    public uses bx cx si es,\
+qglSfWrRow   proc    public uses bx cx si es,\
                         s:dword, y:word
                 les     bx, s
                 mov     ax, y
                 mov     si, SurfaceOps.wr_row
-                call    qgl$row
+                call    qgl$Row
                 ret
-qgl_sf_wr_row   endp
+qglSfWrRow   endp
 
-qgl_sf_rd_row_ex proc   public uses bx cx si es,\
+qglSfRdRowEx proc   public uses bx cx si es,\
                         s:dword, y:word, slot:word
                 les     bx, s
                 mov     ax, y
                 mov     cx, slot
                 mov     si, SurfaceOps.rd_row_ex
-                call    qgl$row
+                call    qgl$Row
                 ret
-qgl_sf_rd_row_ex endp
+qglSfRdRowEx endp
 
-qgl_sf_wr_row_ex proc   public uses bx cx si es,\
+qglSfWrRowEx proc   public uses bx cx si es,\
                         s:dword, y:word, slot:word
                 les     bx, s
                 mov     ax, y
                 mov     cx, slot
                 mov     si, SurfaceOps.wr_row_ex
-                call    qgl$row
+                call    qgl$Row
                 ret
-qgl_sf_wr_row_ex endp
+qglSfWrRowEx endp
 
 ;;::::::::::::::
-;; qgl_sf_windows ( s:far ptr ) -> ax = slots this kind holds at once
+;; qglSfWindows ( s:far ptr ) -> ax = slots this kind holds at once
 ;;
 ;; ASK, DO NOT ASSUME, which is dct.inc's own instruction. -1 means the
 ;; surface has no window and any number of rows may be live.
 ;;::::::::::::::
-qgl_sf_windows  proc    public uses bx si es,\
+qglSfWindows  proc    public uses bx si es,\
                         s:dword
                 les     bx, s
                 mov     si, SurfaceOps.windows
@@ -434,26 +434,26 @@ qgl_sf_windows  proc    public uses bx si es,\
                 ret
 @@nokind:       xor     ax, ax
                 ret
-qgl_sf_windows  endp
+qglSfWindows  endp
 
 ;;::::::::::::::
-;; qgl_sf_row ( s:far ptr, y:word ) -> far ptr
+;; qglSfRow ( s:far ptr, y:word ) -> far ptr
 ;;
 ;; The READ spelling, kept because most callers only look. Anything that
 ;; is about to write should say so.
 ;;::::::::::::::
-qgl_sf_row      proc    public uses bx cx si es,\
+qglSfRow      proc    public uses bx cx si es,\
                         s:dword, y:word
                 les     bx, s
                 mov     ax, y
                 mov     si, SurfaceOps.rd_row
-                call    qgl$row
+                call    qgl$Row
                 ret
-qgl_sf_row      endp
+qglSfRow      endp
 
 
 ;;::::::::::::::
-;; qgl_sf_load ( s:far ptr, path:far ptr ) -> ax nonzero on success
+;; qglSfLoad ( s:far ptr, path:far ptr ) -> ax nonzero on success
 ;;
 ;; A raw blob straight into the surface's own store: no header, no
 ;; palette, no format. Everything this renderer loads is produced by its
@@ -462,11 +462,11 @@ qgl_sf_row      endp
 ;; just a container for that byte stream".
 ;;
 ;; Page at a time, because an EMS surface has no single pointer covering
-;; it: each row's window comes from qgl$row, and the run stops at the
+;; it: each row's window comes from qgl$Row, and the run stops at the
 ;; end of that row. Slower than one read for a conventional surface and
 ;; correct for both, which is the trade this whole layer makes.
 ;;::::::::::::::
-qgl_sf_load     proc    public uses bx cx dx si di es,\
+qglSfLoad     proc    public uses bx cx dx si di es,\
                         s:dword, path:dword
 
                 local   fh:word
@@ -478,7 +478,7 @@ qgl_sf_load     proc    public uses bx cx dx si di es,\
 
                 mov     ok, 0
 
-                invoke  qgl_file_open, path
+                invoke  qglFileOpen, path
                 test    ax, ax
                 jz      @@out
                 mov     fh, ax
@@ -495,10 +495,10 @@ qgl_sf_load     proc    public uses bx cx dx si di es,\
                 cmp     ax, rows
                 jae     @@done
 
-                invoke  qgl_sf_row, s, yy
+                invoke  qglSfRow, s, yy
                 mov     word ptr rowp, ax
                 mov     word ptr rowp+2, dx
-                invoke  qgl_file_read, fh, rowp, wide
+                invoke  qglFileRead, fh, rowp, wide
 
                 cmp     ax, wide
                 jne     @@done                  ;; short: the file ran out
@@ -510,21 +510,21 @@ qgl_sf_load     proc    public uses bx cx dx si di es,\
                 cmp     ax, rows
                 jne     @F
                 mov     ok, 1                   ;; every row arrived
-@@:             invoke  qgl_file_close, fh
+@@:             invoke  qglFileClose, fh
 
 @@out:          mov     ax, ok
                 ret
-qgl_sf_load     endp
+qglSfLoad     endp
 
 
 ;;::::::::::::::
-;; qgl_sf_view ( v:far ptr, parent:far ptr, ofs:dword, w:word, h:word, bps:word )
+;; qglSfView ( v:far ptr, parent:far ptr, ofs:dword, w:word, h:word, bps:word )
 ;;
 ;; Re-aims a caller-owned header at part of another surface's store.
 ;; Allocates nothing, owns nothing, and shares the parent's slot -- so a
 ;; view and its parent must never be walked at the same time.
 ;;::::::::::::::
-qgl_sf_view     proc    public uses bx dx si di es,\
+qglSfView     proc    public uses bx dx si di es,\
                         v:dword, parent:dword, ofs:dword,\
                         wid:word, hgt:word, bps:word
 
@@ -557,17 +557,17 @@ qgl_sf_view     proc    public uses bx dx si di es,\
                 mov     ax, bps
                 mov     es:[bx].Surface.stride, ax
                 ret
-qgl_sf_view     endp
+qglSfView     endp
 
 
 ;;::::::::::::::
-;; qgl_sf_pget ( s:far ptr, x:word, y:word ) -> al
+;; qglSfPget ( s:far ptr, x:word, y:word ) -> al
 ;;
 ;; One pixel. Slow on purpose -- this exists for the round-trip checks
 ;; (-dumptex reads every atlas cell back through its own view) and not
 ;; for anything per frame.
 ;;::::::::::::::
-qgl_sf_pget     proc    public uses bx cx si es,\
+qglSfPget     proc    public uses bx cx si es,\
                         s:dword, x:word, y:word
 
                 les     bx, s
@@ -579,7 +579,7 @@ qgl_sf_pget     proc    public uses bx cx si es,\
                 jae     @@none
 
                 mov     si, SurfaceOps.rd_row
-                call    qgl$row
+                call    qgl$Row
                 mov     es, dx
                 mov     bx, ax
                 add     bx, x
@@ -589,13 +589,13 @@ qgl_sf_pget     proc    public uses bx cx si es,\
 
 @@none:         xor     ax, ax                  ;; off the surface reads 0
                 ret
-qgl_sf_pget     endp
+qglSfPget     endp
 
 
 ;;::::::::::::::
-;; qgl_sf_pset ( s:far ptr, x:word, y:word, c:word )
+;; qglSfPset ( s:far ptr, x:word, y:word, c:word )
 ;;::::::::::::::
-qgl_sf_pset     proc    public uses bx cx si es,\
+qglSfPset     proc    public uses bx cx si es,\
                         s:dword, x:word, y:word, col:word
 
                 ;; A PIXEL PAST THE LAST COLUMN LANDS IN THE NEXT ROW,
@@ -612,20 +612,20 @@ qgl_sf_pset     proc    public uses bx cx si es,\
                 jae     @@none
 
                 mov     si, SurfaceOps.wr_row
-                call    qgl$row
+                call    qgl$Row
                 mov     es, dx
                 mov     bx, ax
                 add     bx, x
                 mov     al, byte ptr col
                 mov     es:[bx], al
 @@none:         ret
-qgl_sf_pset     endp
+qglSfPset     endp
 
 
 ;;::::::::::::::
-;; qgl_sf_scratch ( n:word ) -> dx:ax, a Surface this layer owns
+;; qglSfScratch ( n:word ) -> dx:ax, a Surface this layer owns
 ;;
-;; For callers that cannot spell the layout. qgl_sf_adopt_dc fills a
+;; For callers that cannot spell the layout. qglSfAdoptDc fills a
 ;; Surface the CALLER owns, which is right -- the pixels are mgl's and
 ;; nothing here should pretend otherwise -- but d_faces.c adopts a
 ;; destination once a frame and a texture view once a face, and
@@ -634,11 +634,11 @@ qgl_sf_pset     endp
 ;; struct would have no generator watching it.
 ;;
 ;; A fixed few, by index, so the caller allocates nothing either. Out of
-;; range answers 0:0, which qgl_sf_adopt_dc already refuses, so a wrong
+;; range answers 0:0, which qglSfAdoptDc already refuses, so a wrong
 ;; index fails at adoption rather than writing through whatever lay at
 ;; that offset.
 ;;::::::::::::::
-qgl_sf_scratch  proc    public,\
+qglSfScratch  proc    public,\
                         n:word
 
                 mov     ax, n
@@ -652,7 +652,7 @@ qgl_sf_scratch  proc    public,\
 @@none:         xor     ax, ax
                 xor     dx, dx
                 ret
-qgl_sf_scratch  endp
+qglSfScratch  endp
 
 
 .data?
@@ -664,8 +664,8 @@ qgl$scratch     Surface QGL_SCRATCH dup (<>)
 ;; Indexed BY KIND, so there is a slot for every kind value and the one
 ;; between SURF_CMEM and SURF_EMS is not a kind. It refuses rather than
 ;; aliasing a real entry, so a bogus kind fails instead of drawing.
-qgl$typeTB      SurfaceOps <O qgl$row_cmem, O qgl$row_cmem, O qgl$cmem_ex, O qgl$cmem_ex, -1>
-                SurfaceOps <O qgl$row_none, O qgl$row_none, O qgl$row_none, O qgl$row_none, 0>
-                SurfaceOps <O qgl$rd_ems,   O qgl$wr_ems,   O qgl$ems_ex,  O qgl$ems_ex,   4>
+qgl$typeTB      SurfaceOps <O qgl$RowCmem, O qgl$RowCmem, O qgl$CmemEx, O qgl$CmemEx, -1>
+                SurfaceOps <O qgl$RowNone, O qgl$RowNone, O qgl$RowNone, O qgl$RowNone, 0>
+                SurfaceOps <O qgl$RdEms,   O qgl$WrEms,   O qgl$EmsEx,  O qgl$EmsEx,   4>
 
                 end

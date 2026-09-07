@@ -7,7 +7,7 @@
 ;; screenshot does not either.
 ;;
 ;; So the same polygon is drawn twice through the same scanner -- once
-;; through the patched fillers, once through qgl$ref, which reads every
+;; through the patched fillers, once through qgl$Ref, which reads every
 ;; constant from memory and has no patch site at all -- and the two
 ;; surfaces must be identical to the byte.
 ;;
@@ -26,18 +26,18 @@
                 include qgl.inc
                 include tfw.inc
 
-qgl_dr_fill     proto   far :dword, :word, :word, :word, :word, :word
-qgl_cl_rect     proto   far :word, :word, :word, :word
-qgl_rs_tex      proto   far :dword
-qgl_rs_flat     proto   far :word
-qgl_rs_mode     proto   far :word
-qgl_rs_ref      proto   far :word
-qgl_rs_poly     proto   far :dword, :dword, :word
-qgl_z_new       proto   far :dword, :word, :word
-qgl_z_set       proto   far :dword
-qgl_z_clear     proto   far :word
-qgl_z_mode      proto   far :word
-qgl_z_scale     proto   far :dword
+qglDrFill     proto   far :dword, :word, :word, :word, :word, :word
+qglClRect     proto   far :word, :word, :word, :word
+qglRsTex      proto   far :dword
+qglRsFlat     proto   far :word
+qglRsMode     proto   far :word
+qglRsRef      proto   far :word
+qglRsPoly     proto   far :dword, :dword, :word
+qglZNew       proto   far :dword, :word, :word
+qglZSet       proto   far :dword
+qglZClear     proto   far :word
+qglZMode      proto   far :word
+qglZScale     proto   far :dword
 
 SFW             equ     64
 SFH             equ     64
@@ -93,10 +93,10 @@ cmpsf           proc    near private uses bx cx dx si di fs es,\
                 xor     si, si
 @@row:          cmp     si, h
                 jae     @@out
-                invoke  qgl_sf_row, p, si
+                invoke  qglSfRow, p, si
                 mov     po, ax
                 mov     fs, dx
-                invoke  qgl_sf_row, q, si
+                invoke  qglSfRow, q, si
                 mov     di, ax
                 mov     es, dx
                 mov     bx, po
@@ -122,20 +122,20 @@ cmpsf           endp
 
 ;; draw once each way and diff. ?nm names the assertion.
 BOTH            macro   ?nm, ?md, ?zm
-                invoke  qgl_rs_mode, ?md
-                invoke  qgl_z_mode, ?zm
+                invoke  qglRsMode, ?md
+                invoke  qglZMode, ?zm
 
-                invoke  qgl_rs_ref, 0                   ;; the patched fillers
-                invoke  qgl_dr_fill, sa, 0, 0, SFW-1, SFH-1, 0
-                invoke  qgl_z_set, za
-                invoke  qgl_z_clear, 50
-                invoke  qgl_rs_poly, sa, pp, 4
+                invoke  qglRsRef, 0                   ;; the patched fillers
+                invoke  qglDrFill, sa, 0, 0, SFW-1, SFH-1, 0
+                invoke  qglZSet, za
+                invoke  qglZClear, 50
+                invoke  qglRsPoly, sa, pp, 4
 
-                invoke  qgl_rs_ref, 1                   ;; the reference
-                invoke  qgl_dr_fill, sb, 0, 0, SFW-1, SFH-1, 0
-                invoke  qgl_z_set, zbb
-                invoke  qgl_z_clear, 50
-                invoke  qgl_rs_poly, sb, pp, 4
+                invoke  qglRsRef, 1                   ;; the reference
+                invoke  qglDrFill, sb, 0, 0, SFW-1, SFH-1, 0
+                invoke  qglZSet, zbb
+                invoke  qglZClear, 50
+                invoke  qglRsPoly, sb, pp, 4
 
 
                 invoke  cmpsf, sa, sb, SFW, SFH
@@ -146,13 +146,13 @@ endm
 
 tmain           proc    far public uses bx cx dx si di es
 
-                invoke  qgl_sf_init
+                invoke  qglSfInit
 
-                invoke  qgl_sf_new, SFW, SFH, SURF_CMEM, 0
+                invoke  qglSfNew, SFW, SFH, SURF_CMEM, 0
                 SAVEP   sa
-                invoke  qgl_sf_new, SFW, SFH, SURF_CMEM, 0
+                invoke  qglSfNew, SFW, SFH, SURF_CMEM, 0
                 SAVEP   sb
-                invoke  qgl_sf_new, 8, 8, SURF_CMEM, 0
+                invoke  qglSfNew, 8, 8, SURF_CMEM, 0
                 SAVEP   tx
 
                 mov     word ptr pp, offset poly
@@ -168,7 +168,7 @@ tmain           proc    far public uses bx cx dx si di es
                 mov     ax, si
                 shl     ax, 3
                 add     ax, di
-                invoke  qgl_sf_pset, tx, di, si, ax
+                invoke  qglSfPset, tx, di, si, ax
                 inc     di
                 jmp     @@tx
 @@:             inc     si
@@ -176,24 +176,24 @@ tmain           proc    far public uses bx cx dx si di es
 @@tdone:
                 ;; and prove it, so a flat texture can never silently make
                 ;; the comparisons below vacuous
-                invoke  qgl_sf_pget, tx, 3, 5
+                invoke  qglSfPget, tx, 3, 5
                 mov     bx, ax
-                invoke  qgl_sf_pget, tx, 4, 5
+                invoke  qglSfPget, tx, 4, 5
                 sub     ax, bx
                 CHK     n_notflat, ax, 1
 
-                invoke  qgl_rs_tex, tx
-                invoke  qgl_rs_flat, 37
-                invoke  qgl_cl_rect, 0, 0, SFW-1, SFH-1
+                invoke  qglRsTex, tx
+                invoke  qglRsFlat, 37
+                invoke  qglClRect, 0, 0, SFW-1, SFH-1
 
                 ;; a depth buffer each, so the two runs cannot see each
                 ;; other's writes
-                invoke  qgl_z_new, sa, SURF_CMEM, 0
+                invoke  qglZNew, sa, SURF_CMEM, 0
                 SAVEP   za
-                invoke  qgl_z_new, sa, SURF_CMEM, 0
+                invoke  qglZNew, sa, SURF_CMEM, 0
                 SAVEP   zbb
-                invoke  qgl_z_set, za
-                invoke  qgl_z_scale, dword ptr zs
+                invoke  qglZSet, za
+                invoke  qglZScale, dword ptr zs
 
 
                 ;; With all five blocks live, does writing each of the

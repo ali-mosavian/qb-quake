@@ -37,7 +37,7 @@ option explicit
 '$include: 'q_mdl.bi'
 '$include: 'q_game.bi'
 
-declare function qgl_pres_all ( _
+declare function qglPresAll ( _
     g as Game _
 ) as integer
 
@@ -238,11 +238,11 @@ end function
 
 
 ''::::::::::
-'' name: qgl_pres_all
+'' name: qglPresAll
 '' desc: Returns the number of failures. Runs after vid_init: it drives
 ''       the real mode, the real video DC and the real backbuffer.
 ''::::::::::
-function qgl_pres_all ( _
+function qglPresAll ( _
     g as Game _
 ) as integer
     dim bad as integer
@@ -279,7 +279,7 @@ function qgl_pres_all ( _
         print #1, "  FAIL fixture: not the non-paged 8-bit exact-2x shape"
         print #1, "RESULT FAIL"
         close #1
-        qgl_pres_all = 1
+        qglPresAll = 1
         exit function
     end if
 
@@ -292,7 +292,7 @@ function qgl_pres_all ( _
         print #1, "  FAIL could not allocate the reference dc"
         print #1, "RESULT FAIL"
         close #1
-        qgl_pres_all = 1
+        qglPresAll = 1
         exit function
     end if
 
@@ -374,6 +374,6 @@ function qgl_pres_all ( _
     end if
     close #1
 
-    qgl_pres_all = bad
+    qglPresAll = bad
 
 end function

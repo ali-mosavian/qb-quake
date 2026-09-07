@@ -38,7 +38,38 @@ COMMA := ,
 commas = $(subst $(SPACE),$(COMMA),$(strip $(1)))
 
 BENCH  := $(basename $(wildcard b*.asm))
-UGLLIB ?= $(ROOT)/build/vbd/UGLV.LIB
+# The application links this native rebuild. Do not benchmark whichever copy
+# happened to be staged by the last VBDOS build.
+UGLLIB ?= $(ROOT)/build/native-mgl/UGLV.LIB
+
+# Link only the qgl modules each benchmark reaches. MGL is an archive and
+# already gets demand-loaded; linking every qgl object beside it made EXE/map
+# footprint comparisons structurally biased against qgl.
+$(B)/b02prim/b.exe: QGLSRC := $(QGL)/gem.asm $(QGL)/sf.asm $(QGL)/mem.asm \
+                              $(QGL)/file.asm \
+                              $(QGL)/mgldc.asm $(QGL)/dr.asm \
+                              $(QGL)/b8/b8fill.asm
+$(B)/b03font/b.exe: QGLSRC := $(QGL)/gem.asm $(QGL)/sf.asm $(QGL)/mem.asm \
+                              $(QGL)/txt.asm $(QGL)/file.asm \
+                              $(QGL)/mgldc.asm $(QGL)/dr.asm \
+                              $(QGL)/b8/b8fill.asm
+# z.asm for the depth pair, mgldc.asm for the adopt bridge the depth
+# case needs: qgl_z_new shapes from a Surface, uglNewZ from a DC, so one
+# retained MEM DC is adopted to give both arms the same parent.
+$(B)/b04mem/b.exe: QGLSRC := $(QGL)/gem.asm $(QGL)/sf.asm $(QGL)/mem.asm \
+                             $(QGL)/file.asm $(QGL)/z.asm $(QGL)/mgldc.asm
+$(B)/b07scale/b.exe: QGLSRC := $(QGL)/gem.asm $(QGL)/sf.asm $(QGL)/mem.asm \
+                               $(QGL)/file.asm \
+                               $(QGL)/mgldc.asm $(QGL)/dr.asm \
+                               $(QGL)/b8/b8fill.asm
+$(B)/b06movq/b.exe: QGLSRC := $(QGL)/gem.asm $(QGL)/sf.asm $(QGL)/mem.asm \
+                              $(QGL)/file.asm \
+                              $(QGL)/mgldc.asm $(QGL)/dr.asm \
+                              $(QGL)/b8/b8fill.asm
+$(B)/b05blit/b.exe: QGLSRC := $(QGL)/gem.asm $(QGL)/sf.asm $(QGL)/mem.asm \
+                              $(QGL)/file.asm \
+                              $(QGL)/mgldc.asm $(QGL)/dr.asm \
+                              $(QGL)/b8/b8fill.asm
 
 all: hangcheck $(TESTS:%=$(B)/%/pass)
 	@echo "qgl suite: $(words $(TESTS)) tests PASS"
@@ -92,7 +123,7 @@ clean:
 # minutes and they measure rather than assert.
 bench: $(BENCH:%=bench-%)
 
-bench-%: $(B)/%/b.exe runbench.sh
+bench-%: $(B)/%/b.exe $(B)/%/$(FONT) runbench.sh
 	@sh runbench.sh $(DOSBOX) $(<D)
 
 $(B)/%/b.exe: %.asm tfw.asm tfw.inc mglstub.asm $(QGLSRC) $(QGL)/qgl.inc $(UGLLIB)
@@ -103,6 +134,11 @@ $(B)/%/b.exe: %.asm tfw.asm tfw.inc mglstub.asm $(QGLSRC) $(QGL)/qgl.inc $(UGLLI
 	@for s in $(QGLSRC); do \
 	    $(JWASM) -Fo$(@D)/`basename $$s .asm`.obj $$s > /dev/null || exit 1; \
 	done
-	@$(JWLINK) option quiet format dos name $@ \
+	@shasum -a 256 $(UGLLIB) > $(@D)/mgl.sha256
+	@$(JWLINK) option quiet format dos name $@ option map=$(@D)/b.map \
 	    file $(call commas,$(@D)/test.obj $(@D)/tfw.obj $(@D)/mglstub.obj $(QGLOBJS)) \
 	    library $(UGLLIB) > $(@D)/link.out 2>&1
+	@if [ -s $(@D)/link.out ]; then \
+	    echo "LINKERR $(@D) -- link.out is not empty:"; \
+	    cat $(@D)/link.out; rm -f $@; exit 1; \
+	fi

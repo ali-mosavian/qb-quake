@@ -22,15 +22,46 @@ s_pass          db      'RESULT PASS',13,10,'$'
 s_fail          db      'RESULT FAIL',13,10,'$'
 s_hexpfx        db      '0x'
 s_hex           db      '00000000$'
+result_name     db      'OUT.TXT',0
+t_handle        dw      -1
 
 .data
 psp_seg         dw      0
 
 .code
+;; Write CX bytes through stdout and the owned result file. Keeping the
+;; measurement file separate from command-shell redirection avoids the MGL
+;; process changing or closing stdout before DOS flushes it.
+twrite_n        proc    near private uses ax bx cx dx
+                mov     bx, 1
+                mov     ah, 40h
+                int     21h
+                mov     bx, t_handle
+                cmp     bx, -1
+                je      @@out
+                mov     ah, 40h
+                int     21h
+@@out:          ret
+twrite_n        endp
+
+;; Write a '$'-terminated framework string through stdout handle 1. AH=09
+;; ignores redirection in this environment; AH=40 needs the exact length.
+twrite          proc    near private uses ax bx cx si
+                mov     si, dx
+                xor     cx, cx
+@@scan:         cmp     byte ptr [si], '$'
+                je      @@write
+                inc     si
+                inc     cx
+                jmp     @@scan
+@@write:        call    twrite_n
+                ret
+twrite          endp
+
 ;; Release the tail of our own memory block before anything runs.
 ;;
 ;; Not housekeeping: DOS hands a .EXE every free byte in the machine, so
-;; INT 21h/48h has nothing left to give and qgl_mem_alloc returns 0 for
+;; INT 21h/48h has nothing left to give and qglMemAlloc returns 0 for
 ;; every request. Measured before this was added -- avail and the MCB
 ;; free-sum both read 0x00000000 and the first allocation failed. Any
 ;; real program does this at startup; the test framework has to as well
@@ -49,7 +80,7 @@ start:          mov     ax, es                  ;; DOS entered with ES = PSP
                 ;; _DATA at 0215, STACK at 0243 for 800h, _BSS at 02c3 for
                 ;; e18h, ending at 03a5. Releasing at ss:sp keeps only to
                 ;; 02c5 and hands DOS 3.5K of live .data? -- which the
-                ;; first qgl_mem_alloc takes straight back and hands to a
+                ;; first qglMemAlloc takes straight back and hands to a
                 ;; surface, so drawing wrote through the scanner's own
                 ;; vertex arrays.
                 ;;
@@ -68,17 +99,38 @@ start:          mov     ax, es                  ;; DOS entered with ES = PSP
                 mov     ah, 4Ah
                 int     21h
 
+                ;; VBDOS medium model keeps SS = DS. MGL addresses its
+                ;; runtime state and BASIC descriptors through SS, so a
+                ;; standalone caller must establish the same contract.
+                ;; The retained block reserves the full 64K DGROUP; the
+                ;; live data in these tests stays well below this stack.
+                cli
                 mov     ax, @data
+                mov     ss, ax
+                mov     sp, 0FFFEh
+                sti
                 mov     ds, ax
                 cld
+                mov     dx, offset result_name
+                xor     cx, cx
+                mov     ah, 3Ch
+                int     21h
+                jc      @F
+                mov     t_handle, ax
+@@:
                 call    tmain
 
                 mov     dx, offset s_pass
                 cmp     t_fails, 0
                 je      @F
                 mov     dx, offset s_fail
-@@:             mov     ah, 9
+@@:             call    twrite
+                mov     bx, t_handle
+                cmp     bx, -1
+                je      @F
+                mov     ah, 3Eh
                 int     21h
+@@:
                 mov     al, byte ptr t_fails
                 mov     ah, 4Ch
                 int     21h
@@ -99,14 +151,11 @@ tchk            proc    far public uses bx cx dx si di es,\
                 je      @F
                 inc     t_fails
                 mov     dx, offset s_bad
-@@:             mov     ah, 9
-                int     21h
+@@:             call    twrite
                 mov     dx, nam
-                mov     ah, 9
-                int     21h
+                call    twrite
                 mov     dx, offset s_nl
-                mov     ah, 9
-                int     21h
+                call    twrite
                 ret
 tchk            endp
 
@@ -123,8 +172,7 @@ tshow           proc    far public uses bx cx dx si di es,\
                         nam:word, val:dword
 
                 mov     dx, nam
-                mov     ah, 9
-                int     21h
+                call    twrite
 
                 mov     eax, val
                 mov     cx, 8
@@ -143,11 +191,9 @@ tshow           proc    far public uses bx cx dx si di es,\
                 loop    @@digit
 
                 mov     dx, offset s_hexpfx
-                mov     ah, 9
-                int     21h
+                call    twrite
                 mov     dx, offset s_nl
-                mov     ah, 9
-                int     21h
+                call    twrite
                 ret
 tshow           endp
 

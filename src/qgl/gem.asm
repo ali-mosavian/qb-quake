@@ -1,6 +1,6 @@
 ;; ems.asm -- expanded memory: the four physical pages, and nothing else.
 ;;
-;; name: qgl_gem_init / qgl_gem_frame / qgl_gem_alloc / qgl_gem_free / qgl_gem_map
+;; name: qglGemInit / qglGemFrame / qglGemAlloc / qglGemFree / qglGemMap
 ;; desc: raw EMS 3.2. Who owns which physical page is the caller's
 ;;       business and never this module's -- the same contract mgl's own
 ;;       emsMapEx offers, and for the same stated reason: its plain
@@ -17,7 +17,7 @@
 ;;
 ;; obs.: - a page is 16K and there are exactly four physical ones, at
 ;;         frame + slot*400h. Both are the hardware's numbers, not ours.
-;;       - qgl_gem_alloc takes BYTES and rounds up; every caller had the byte
+;;       - qglGemAlloc takes BYTES and rounds up; every caller had the byte
 ;;         count and none of them wanted to do that arithmetic twice.
 
                 .286
@@ -29,20 +29,20 @@ EMS_PAGE_SHIFT  equ     14
 
 
 .data
-qgl$pgframe     dw      0               ;; segment, 0 until qgl_gem_init says otherwise
+qgl$pgframe     dw      0               ;; segment, 0 until qglGemInit says otherwise
 qgl$emsok       dw      0
 
 
 .code
 
 ;;::::::::::::::
-;; qgl_gem_init () -> ax nonzero if EMS is usable
+;; qglGemInit () -> ax nonzero if EMS is usable
 ;;
 ;; Checks the driver is really there before trusting INT 67h: the vector
 ;; is populated on machines with no EMM at all, and the documented probe
 ;; is the device name sitting at offset 10 of the handler's segment.
 ;;::::::::::::::
-qgl_gem_init    proc    public uses bx si di es
+qglGemInit    proc    public uses bx si di es
 
                 mov     [qgl$emsok], 0
                 mov     [qgl$pgframe], 0
@@ -74,22 +74,22 @@ qgl_gem_init    proc    public uses bx si di es
 
 @@no:           xor     ax, ax
                 ret
-qgl_gem_init    endp
+qglGemInit    endp
 
 
 ;;::::::::::::::
-;; qgl_gem_frame () -> ax = page frame segment, 0 if none
+;; qglGemFrame () -> ax = page frame segment, 0 if none
 ;;::::::::::::::
-qgl_gem_frame   proc    public
+qglGemFrame   proc    public
                 mov     ax, [qgl$pgframe]
                 ret
-qgl_gem_frame   endp
+qglGemFrame   endp
 
 
 ;;::::::::::::::
-;; qgl_gem_alloc ( bytes:dword ) -> ax = handle, 0 on failure
+;; qglGemAlloc ( bytes:dword ) -> ax = handle, 0 on failure
 ;;::::::::::::::
-qgl_gem_alloc   proc    public uses bx cx dx,\
+qglGemAlloc   proc    public uses bx cx dx,\
                         nbytes:dword
 
                 cmp     [qgl$emsok], 0
@@ -124,13 +124,13 @@ qgl_gem_alloc   proc    public uses bx cx dx,\
 
 @@fail:         xor     ax, ax
                 ret
-qgl_gem_alloc   endp
+qglGemAlloc   endp
 
 
 ;;::::::::::::::
-;; qgl_gem_free ( handle:word )
+;; qglGemFree ( handle:word )
 ;;::::::::::::::
-qgl_gem_free    proc    public uses dx,\
+qglGemFree    proc    public uses dx,\
                         hnd:word
 
                 mov     dx, hnd
@@ -139,17 +139,17 @@ qgl_gem_free    proc    public uses dx,\
                 mov     ah, 45h
                 int     EMS_INT
 @@:             ret
-qgl_gem_free    endp
+qglGemFree    endp
 
 
 ;;::::::::::::::
-;; qgl_gem_map ( handle:word, logpage:word, slot:word ) -> ax = segment, 0 on fail
+;; qglGemMap ( handle:word, logpage:word, slot:word ) -> ax = segment, 0 on fail
 ;;
 ;; Maps one logical page of a handle into one physical page, and hands
 ;; back the segment it now answers at. The caller owns the slot; nothing
 ;; here tracks or arbitrates them.
 ;;::::::::::::::
-qgl_gem_map     proc    public uses bx cx dx,\
+qglGemMap     proc    public uses bx cx dx,\
                         hnd:word, logpage:word, slot:word
 
                 mov     dx, hnd
@@ -169,7 +169,7 @@ qgl_gem_map     proc    public uses bx cx dx,\
 
 @@:             xor     ax, ax
                 ret
-qgl_gem_map     endp
+qglGemMap     endp
 
 
 .data

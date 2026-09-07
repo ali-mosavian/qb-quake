@@ -1,6 +1,6 @@
 ;; mglems.asm -- a qgl Surface over a view onto one of mgl's EMS dcs.
 ;;
-;; name: qgl_sf_adopt_ems
+;; name: qglSfAdoptEms
 ;; desc: TRANSITIONAL, like mgldc.asm beside it, and for the same reason:
 ;;       it exists so qgl can draw from pixels mgl still owns.
 ;;
@@ -33,7 +33,7 @@
 ;;       - THE WINDOW IS ONLY GOOD UNTIL SOMETHING ELSE TAKES THE SLOT.
 ;;         That is AGENTS.md's "a mapped EMS pointer is only as good as
 ;;         its lock", and what makes it safe here is the bounded use: one
-;;         qgl_rs_poly call, a conventional destination, no depth.
+;;         qglRsPoly call, a conventional destination, no depth.
 ;;         Nothing inside that call maps anything. Widen the use and this
 ;;         needs a lock.
 
@@ -72,16 +72,16 @@ emsMapEx        proto   far pascal :word, :word, :word
 .code
 
 ;;::::::::::::::
-;; qgl_sf_adopt_ems ( dc:dword, slot:word, s:far ptr Surface ) -> ax nonzero
+;; qglSfAdoptEms ( dc:dword, slot:word, s:far ptr Surface ) -> ax nonzero
 ;;
-;; Fills a caller-owned Surface. qgl_sf_free must NOT be called on it:
+;; Fills a caller-owned Surface. qglSfFree must NOT be called on it:
 ;; the bytes are mgl's and the window is the EMS frame's.
 ;;
 ;; A cell must not straddle a page, or one window would not cover it.
 ;; mkassets guarantees that -- sizes are 4096/1024/256/64 and each sits
 ;; at a multiple of its own size -- and this checks rather than trusts.
 ;;::::::::::::::
-qgl_sf_adopt_ems proc   public uses bx cx dx si di es,\
+qglSfAdoptEms proc   public uses bx cx dx si di es,\
                         dc:dword, slot:word, s:dword
 
                 local   a0:word, o0:word
@@ -109,7 +109,7 @@ qgl_sf_adopt_ems proc   public uses bx cx dx si di es,\
                 ;;
                 ;; mul writes dx:ax, so the height is gone the moment it
                 ;; runs and has to come back off the dc -- the same trap
-                ;; qgl_rs_tex records, where reusing dx built the v mask
+                ;; qglRsTex records, where reusing dx built the v mask
                 ;; out of the product's high word and sent one row in
                 ;; eight past the end of the texture.
                 mov     ax, cx
@@ -152,6 +152,6 @@ qgl_sf_adopt_ems proc   public uses bx cx dx si di es,\
 
 @@no:           xor     ax, ax
                 ret
-qgl_sf_adopt_ems endp
+qglSfAdoptEms endp
 
                 end

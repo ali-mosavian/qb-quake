@@ -12,13 +12,13 @@
                 include qgl.inc
                 include tfw.inc
 
-qgl_dr_fill     proto   far :dword, :word, :word, :word, :word, :word
-qgl_cl_rect     proto   far :word, :word, :word, :word
-qgl_rs_tex      proto   far :dword
-qgl_rs_flat     proto   far :word
-qgl_rs_mode     proto   far :word
-qgl_rs_ref      proto   far :word
-qgl_rs_poly     proto   far :dword, :dword, :word
+qglDrFill     proto   far :dword, :word, :word, :word, :word, :word
+qglClRect     proto   far :word, :word, :word, :word
+qglRsTex      proto   far :dword
+qglRsFlat     proto   far :word
+qglRsMode     proto   far :word
+qglRsRef      proto   far :word
+qglRsPoly     proto   far :dword, :dword, :word
 
 SFW             equ     64
 SFH             equ     64
@@ -54,7 +54,7 @@ chksum          proc    near private uses bx cx dx si di es,\
                 xor     si, si
 @@row:          cmp     si, h
                 jae     @@out
-                invoke  qgl_sf_row, p, si
+                invoke  qglSfRow, p, si
                 mov     di, ax
                 mov     es, dx
                 mov     cx, w
@@ -76,7 +76,7 @@ cntne           proc    near private uses bx cx dx si di es,\
                 xor     si, si
 @@row:          cmp     si, h
                 jae     @@out
-                invoke  qgl_sf_row, p, si
+                invoke  qglSfRow, p, si
                 mov     di, ax
                 mov     es, dx
                 mov     cx, w
@@ -97,38 +97,38 @@ cntne           endp
 
 tmain           proc    far public uses bx cx dx si di es
 
-                invoke  qgl_sf_init
-                invoke  qgl_sf_new, SFW, SFH, SURF_CMEM, 0
+                invoke  qglSfInit
+                invoke  qglSfNew, SFW, SFH, SURF_CMEM, 0
                 SAVEP   sf
-                invoke  qgl_sf_new, SFW, SFH, SURF_CMEM, 0
+                invoke  qglSfNew, SFW, SFH, SURF_CMEM, 0
                 SAVEP   sf2
-                invoke  qgl_sf_new, 8, 8, SURF_CMEM, 0
+                invoke  qglSfNew, 8, 8, SURF_CMEM, 0
                 SAVEP   tx
 
                 mov     word ptr pp, offset poly
                 mov     word ptr pp+2, ds
 
-                invoke  qgl_dr_fill, tx, 0, 0, 7, 7, 99
-                invoke  qgl_rs_tex, tx
-                invoke  qgl_rs_flat, 37
-                invoke  qgl_cl_rect, 0, 0, SFW-1, SFH-1
-                invoke  qgl_rs_ref, 0
-                invoke  qgl_rs_mode, QGL_M_TEX
+                invoke  qglDrFill, tx, 0, 0, 7, 7, 99
+                invoke  qglRsTex, tx
+                invoke  qglRsFlat, 37
+                invoke  qglClRect, 0, 0, SFW-1, SFH-1
+                invoke  qglRsRef, 0
+                invoke  qglRsMode, QGL_M_TEX
 
 
                 invoke  cntne, tx, 8, 8, 99
                 CHK     n_t1, ax, 0
 
                 ;; the SECOND-allocated surface, drawn FIRST
-                invoke  qgl_dr_fill, sf2, 0, 0, SFW-1, SFH-1, 0
-                invoke  qgl_rs_poly, sf2, pp, 4
+                invoke  qglDrFill, sf2, 0, 0, SFW-1, SFH-1, 0
+                invoke  qglRsPoly, sf2, pp, 4
                 mov     lines1, ax
                 invoke  chksum, sf2, SFW, SFH
                 mov     sum1, ax
 
                 ;; again, same surface
-                invoke  qgl_dr_fill, sf2, 0, 0, SFW-1, SFH-1, 0
-                invoke  qgl_rs_poly, sf2, pp, 4
+                invoke  qglDrFill, sf2, 0, 0, SFW-1, SFH-1, 0
+                invoke  qglRsPoly, sf2, pp, 4
                 mov     bx, lines1
                 CHK     n_l2, ax, bx
                 invoke  chksum, sf2, SFW, SFH
@@ -136,8 +136,8 @@ tmain           proc    far public uses bx cx dx si di es
                 CHK     n_s2, ax, bx
 
                 ;; the FIRST-allocated surface, drawn LAST
-                invoke  qgl_dr_fill, sf, 0, 0, SFW-1, SFH-1, 0
-                invoke  qgl_rs_poly, sf, pp, 4
+                invoke  qglDrFill, sf, 0, 0, SFW-1, SFH-1, 0
+                invoke  qglRsPoly, sf, pp, 4
                 mov     bx, lines1
                 CHK     n_l3, ax, bx
                 invoke  chksum, sf, SFW, SFH

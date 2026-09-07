@@ -1,12 +1,12 @@
 ;; mem.asm -- conventional memory: allocate, free, copy, and how much
 ;;            there actually is.
 ;;
-;; name: qgl_mem_alloc / qgl_mem_free / qgl_mem_copy / qgl_mem_avail
+;; name: qglMemAlloc / qglMemFree / qglMemCopy / qglMemAvail
 ;; desc: DOS blocks, straight from INT 21h. No pool and no sub-allocator
 ;;       -- every caller here wants one big block for the life of the
 ;;       program, and a free list would be bookkeeping nothing reads.
 ;;
-;;       The reason this module exists at all is qgl_mem_avail. mgl's
+;;       The reason this module exists at all is qglMemAvail. mgl's
 ;;       memAvail returns MAX(DOS's largest free block, BASIC's far-heap
 ;;       size via B$SETM(0)), so it can report the SIZE of a heap rather
 ;;       than how much of it is free: a live MCB walk found 9,312 bytes
@@ -14,7 +14,7 @@
 ;;       decision in this renderer has been made against that number, and
 ;;       it was the wrong number.
 ;;
-;; obs.: - qgl_mem_avail asks DOS the only question that matters -- how
+;; obs.: - qglMemAvail asks DOS the only question that matters -- how
 ;;         big a block can I actually get -- by requesting 0FFFFh
 ;;         paragraphs and reading back what it says it could have given.
 ;;         That call is EXPECTED to fail; the answer is in bx.
@@ -46,9 +46,9 @@ MCB_OWNER_FREE  equ     0
 .code
 
 ;;::::::::::::::
-;; qgl_mem_alloc ( nbytes:dword ) -> dx:ax far ptr, 0:0 on failure
+;; qglMemAlloc ( nbytes:dword ) -> dx:ax far ptr, 0:0 on failure
 ;;::::::::::::::
-qgl_mem_alloc   proc    public uses bx cx,\
+qglMemAlloc   proc    public uses bx cx,\
                         nbytes:dword
 
 IFDEF __BASIC__
@@ -179,16 +179,16 @@ ENDIF
                 xor     ax, ax
                 xor     dx, dx
                 ret
-qgl_mem_alloc   endp
+qglMemAlloc   endp
 
 
 ;;::::::::::::::
-;; qgl_mem_free ( p:dword )
+;; qglMemFree ( p:dword )
 ;;
 ;; Takes the pointer alloc handed back, not a segment, so a caller never
 ;; has to remember which half to keep.
 ;;::::::::::::::
-qgl_mem_free    proc    public uses es,\
+qglMemFree    proc    public uses es,\
                         p:dword
 
                 mov     ax, word ptr p+2
@@ -198,17 +198,17 @@ qgl_mem_free    proc    public uses es,\
                 mov     ah, 49h
                 int     21h
 @@:             ret
-qgl_mem_free    endp
+qglMemFree    endp
 
 
 ;;::::::::::::::
-;; qgl_mem_copy ( dst:dword, src:dword, nbytes:dword )
+;; qglMemCopy ( dst:dword, src:dword, nbytes:dword )
 ;;
 ;; Copies in runs that cannot cross a segment, so a length past 64K is
 ;; the caller's business and not a trap: an atlas is 114,688 bytes and
 ;; every one of them has to arrive.
 ;;::::::::::::::
-qgl_mem_copy    proc    public uses bx cx si di ds es,\
+qglMemCopy    proc    public uses bx cx si di ds es,\
                         dst:dword, src:dword, nbytes:dword
 
                 cld
@@ -276,11 +276,11 @@ qgl_mem_copy    proc    public uses bx cx si di ds es,\
                 jnz     @@chunk
 
 @@done:         ret
-qgl_mem_copy    endp
+qglMemCopy    endp
 
 
 ;;::::::::::::::
-;; qgl_mem_avail ( what:word ) -> dx:ax = bytes
+;; qglMemAvail ( what:word ) -> dx:ax = bytes
 ;;
 ;; MEM_LARGEST is what an allocation actually has to satisfy; MEM_TOTAL
 ;; is every free block added up. Reporting only one of them is how "183
@@ -289,7 +289,7 @@ qgl_mem_copy    endp
 ;;
 ;; Dispatched, not branched: what IS the byte offset into qgl$memTB.
 ;;::::::::::::::
-qgl_mem_avail   proc    public uses bx,\
+qglMemAvail   proc    public uses bx,\
                         what:word
 
                 mov     bx, what
@@ -302,16 +302,16 @@ qgl_mem_avail   proc    public uses bx,\
 @@:             xor     ax, ax
                 xor     dx, dx
                 ret
-qgl_mem_avail   endp
+qglMemAvail   endp
 
 
 ;;::::::::::::::
-;; qgl$avail_largest -- the biggest single block DOS will hand over.
+;; qgl$AvailLargest -- the biggest single block DOS will hand over.
 ;;
 ;; INTERNAL, no arguments, dx:ax back. Asking for 0FFFFh paragraphs is
 ;; MEANT to fail; the answer is what DOS puts in bx on the way out.
 ;;::::::::::::::
-qgl$avail_largest proc  near private uses bx cx es
+qgl$AvailLargest proc  near private uses bx cx es
                 mov     bx, 0FFFFh
                 mov     ah, 48h
                 int     21h
@@ -319,7 +319,7 @@ qgl$avail_largest proc  near private uses bx cx es
                                                 ;; bx is still the answer
                 mov     ax, bx
                 xor     dx, dx
-                call    qgl$paras_to_bytes
+                call    qgl$ParasToBytes
                 ret
 
 @@:             ;; it succeeded, which should not happen. Give it back and
@@ -330,17 +330,17 @@ qgl$avail_largest proc  near private uses bx cx es
                 xor     ax, ax
                 xor     dx, dx
                 ret
-qgl$avail_largest endp
+qgl$AvailLargest endp
 
 
 ;;::::::::::::::
-;; qgl$avail_total -- every free block in the chain, added up.
+;; qgl$AvailTotal -- every free block in the chain, added up.
 ;;
 ;; INTERNAL, no arguments, dx:ax back. Walks the MCB chain from our own
 ;; PSP forward. Bigger than largest exactly when free memory is
 ;; fragmented, which is the case worth seeing.
 ;;::::::::::::::
-qgl$avail_total proc    near private uses bx cx si di es
+qgl$AvailTotal proc    near private uses bx cx si di es
 
                 xor     cx, cx                  ;; running total, paragraphs
                 xor     di, di                  ;; high half
@@ -356,7 +356,7 @@ qgl$avail_total proc    near private uses bx cx si di es
                 cmp     al, MCB_SIG_MORE
                 jne     @@done                  ;; chain is broken; stop
 
-                call    qgl$mcb_paras
+                call    qgl$McbParas
                 add     cx, ax
                 adc     di, 0
                 mov     ax, es:[3]              ;; size in paragraphs
@@ -364,33 +364,33 @@ qgl$avail_total proc    near private uses bx cx si di es
                 inc     bx                      ;; past the header
                 jmp     @@walk
 
-@@last:         call    qgl$mcb_paras
+@@last:         call    qgl$McbParas
                 add     cx, ax
                 adc     di, 0
 
 @@done:         mov     ax, cx
                 mov     dx, di
-                call    qgl$paras_to_bytes
+                call    qgl$ParasToBytes
                 ret
-qgl$avail_total endp
+qgl$AvailTotal endp
 
 ;;:::::::::::::: a selector that is not one
-qgl$avail_none  proc    near private
+qgl$AvailNone  proc    near private
                 xor     ax, ax
                 xor     dx, dx
                 ret
-qgl$avail_none  endp
+qgl$AvailNone  endp
 
 
 ;;::::::::::::::
-;; qgl$mcb_paras -- this block's paragraphs, or 0 if it is owned.
+;; qgl$McbParas -- this block's paragraphs, or 0 if it is owned.
 ;;
 ;; INTERNAL: es -> the MCB, ax back, everything else untouched. It
 ;; RETURNS the count rather than adding into the caller's accumulator --
 ;; an internal that writes cx and di behind its caller's back is the
 ;; thing qgl.inc's contract forbids, and the caller can add.
 ;;::::::::::::::
-qgl$mcb_paras   proc    near private
+qgl$McbParas   proc    near private
                 mov     ax, es:[1]              ;; owner PSP
                 cmp     ax, MCB_OWNER_FREE
                 jne     @F
@@ -398,28 +398,28 @@ qgl$mcb_paras   proc    near private
                 ret
 @@:             xor     ax, ax
                 ret
-qgl$mcb_paras   endp
+qgl$McbParas   endp
 
 
 ;;::::::::::::::
-;; qgl$paras_to_bytes -- dx:ax paragraphs -> dx:ax bytes.
+;; qgl$ParasToBytes -- dx:ax paragraphs -> dx:ax bytes.
 ;;
 ;; INTERNAL. Both queries end here, which is the only reason it is a
 ;; routine rather than five inline instructions twice.
 ;;::::::::::::::
-qgl$paras_to_bytes proc near private uses cx
+qgl$ParasToBytes proc near private uses cx
                 mov     cx, 4
 @@:             shl     ax, 1
                 rcl     dx, 1
                 loop    @B
                 ret
-qgl$paras_to_bytes endp
+qgl$ParasToBytes endp
 
 
 .data
 ;; One entry per selector, indexed by MEM_LARGEST / MEM_TOTAL.
-qgl$memTB       MemOps  <O qgl$avail_largest>
-                MemOps  <O qgl$avail_none>      ;; not a selector
-                MemOps  <O qgl$avail_total>
+qgl$memTB       MemOps  <O qgl$AvailLargest>
+                MemOps  <O qgl$AvailNone>      ;; not a selector
+                MemOps  <O qgl$AvailTotal>
 
                 end

@@ -1,7 +1,7 @@
 ;; file.asm -- opening, sizing, reading and closing a file.
 ;;
-;; name: qgl_file_open / qgl_file_open_bas / qgl_file_size /
-;;       qgl_file_read / qgl_file_close
+;; name: qglFileOpen / qglFileOpenBas / qglFileSize /
+;;       qglFileRead / qglFileClose
 ;; desc: DOS handles, and nothing above them. Every other qgl module that
 ;;       needs bytes off disk asks here rather than reaching for INT 21h
 ;;       itself -- txt.asm had its own copy of exactly this and that is
@@ -15,9 +15,9 @@
 ;;       no terminator (mgl's lang.inc STRGET does the same walk). DOS
 ;;       wants ASCIIZ. Something has to bridge that, once, here.
 ;;
-;; obs.: - two entry points rather than one that guesses: qgl_file_open
+;; obs.: - two entry points rather than one that guesses: qglFileOpen
 ;;         takes a far pointer to ASCIIZ and exists in every build;
-;;         qgl_file_open_bas takes a BASIC string and exists only under
+;;         qglFileOpenBas takes a BASIC string and exists only under
 ;;         __BASIC__. Adding the second did not change the first, which
 ;;         is the point -- a C or asm caller is unaffected by BASIC's
 ;;         string representation, and the test suite links without it.
@@ -52,12 +52,12 @@ qgl$path        db      PATH_MAX dup (0)
 .code
 
 ;;::::::::::::::
-;; qgl$asciiz -- copy a NUL-terminated path into the module's buffer.
+;; qgl$Asciiz -- copy a NUL-terminated path into the module's buffer.
 ;;
 ;; INTERNAL: es:si -> the source. dx = the buffer's offset in DGROUP.
 ;; Everything else survives.
 ;;::::::::::::::
-qgl$asciiz      proc    near private uses ax cx si di ds es
+qgl$Asciiz      proc    near private uses ax cx si di ds es
 
                 push    es
                 pop     ds                      ;; ds:si = the source
@@ -77,36 +77,36 @@ qgl$asciiz      proc    near private uses ax cx si di ds es
 
                 mov     dx, offset qgl$path
                 ret
-qgl$asciiz      endp
+qgl$Asciiz      endp
 
 
 ;;::::::::::::::
-;; qgl_file_open ( path:far ptr to ASCIIZ ) -> ax = handle, 0 on failure
+;; qglFileOpen ( path:far ptr to ASCIIZ ) -> ax = handle, 0 on failure
 ;;::::::::::::::
-qgl_file_open   proc    public uses bx cx dx si di es,\
+qglFileOpen   proc    public uses bx cx dx si di es,\
                         path:dword
 
                 les     si, path
-                call    qgl$asciiz              ;; dx -> our copy
+                call    qgl$Asciiz              ;; dx -> our copy
 
                 mov     ax, 3D00h               ;; open, read only
                 int     21h
                 jnc     @F
                 xor     ax, ax
 @@:             ret
-qgl_file_open   endp
+qglFileOpen   endp
 
 
 IFDEF __BASIC__
 ;;::::::::::::::
-;; qgl_file_open_bas ( s:BASIC string ) -> ax = handle, 0 on failure
+;; qglFileOpenBas ( s:BASIC string ) -> ax = handle, 0 on failure
 ;;
 ;; The parameter is a near pointer to a descriptor in ss, not a pointer
 ;; to characters. See this module's header for the walk; the short of it
 ;; is that the data is length-prefixed and has no terminator, so it is
 ;; copied out and terminated here.
 ;;::::::::::::::
-qgl_file_open_bas proc  public uses bx cx dx si di ds es,\
+qglFileOpenBas proc  public uses bx cx dx si di ds es,\
                         s:word
 
                 mov     si, s                   ;; ss:si -> BasStr
@@ -141,14 +141,14 @@ qgl_file_open_bas proc  public uses bx cx dx si di ds es,\
                 jnc     @F
                 xor     ax, ax
 @@:             ret
-qgl_file_open_bas endp
+qglFileOpenBas endp
 ENDIF
 
 
 ;;::::::::::::::
-;; qgl_file_size ( h:word ) -> dx:ax = bytes, and the file is rewound
+;; qglFileSize ( h:word ) -> dx:ax = bytes, and the file is rewound
 ;;::::::::::::::
-qgl_file_size   proc    public uses bx cx,\
+qglFileSize   proc    public uses bx cx,\
                         h:word
 
                 mov     bx, h
@@ -172,16 +172,16 @@ qgl_file_size   proc    public uses bx cx,\
 @@fail:         xor     ax, ax
                 xor     dx, dx
                 ret
-qgl_file_size   endp
+qglFileSize   endp
 
 
 ;;::::::::::::::
-;; qgl_file_read ( h:word, dst:far ptr, nbytes:dword ) -> dx:ax = bytes read
+;; qglFileRead ( h:word, dst:far ptr, nbytes:dword ) -> dx:ax = bytes read
 ;;
 ;; Reads in runs of at most 32K so a length past 64K is the caller's
 ;; business rather than a trap, and advances the destination itself.
 ;;::::::::::::::
-qgl_file_read   proc    public uses bx cx si di ds es,\
+qglFileRead   proc    public uses bx cx si di ds es,\
                         h:word, dst:dword, nbytes:dword
 
                 local   total:dword
@@ -235,13 +235,13 @@ qgl_file_read   proc    public uses bx cx si di ds es,\
 @@done:         mov     ax, word ptr total
                 mov     dx, word ptr total+2
                 ret
-qgl_file_read   endp
+qglFileRead   endp
 
 
 ;;::::::::::::::
-;; qgl_file_close ( h:word )
+;; qglFileClose ( h:word )
 ;;::::::::::::::
-qgl_file_close  proc    public uses bx,\
+qglFileClose  proc    public uses bx,\
                         h:word
                 mov     bx, h
                 test    bx, bx
@@ -249,6 +249,6 @@ qgl_file_close  proc    public uses bx,\
                 mov     ah, 3Eh
                 int     21h
 @@:             ret
-qgl_file_close  endp
+qglFileClose  endp
 
                 end

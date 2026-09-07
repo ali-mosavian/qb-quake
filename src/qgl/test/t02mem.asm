@@ -14,10 +14,10 @@
                 include qgl.inc
                 include tfw.inc
 
-qgl_mem_alloc   proto   far :dword
-qgl_mem_free    proto   far :dword
-qgl_mem_copy    proto   far :dword, :dword, :dword
-qgl_mem_avail   proto   far :word
+qglMemAlloc   proto   far :dword
+qglMemFree    proto   far :dword
+qglMemCopy    proto   far :dword, :dword, :dword
+qglMemAvail   proto   far :word
 
 BLK             equ     4096
 
@@ -45,11 +45,11 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;
                 ;; The two numbers, reported rather than asserted.
                 ;;
-                invoke  qgl_mem_avail, MEM_LARGEST
+                invoke  qglMemAvail, MEM_LARGEST
                 SAVEP   avail
                 invoke  tshow, offset n_avail, avail
 
-                invoke  qgl_mem_avail, MEM_TOTAL
+                invoke  qglMemAvail, MEM_TOTAL
                 SAVEP   fsum
                 invoke  tshow, offset n_sum, fsum
 
@@ -71,7 +71,7 @@ tmain           proc    far public uses bx cx dx si di es
                 ;; Allocation. Paragraph granular, so the offset is 0 and
                 ;; a caller may do segment arithmetic on what it gets.
                 ;;
-                invoke  qgl_mem_alloc, BLK
+                invoke  qglMemAlloc, BLK
                 SAVEP   blk_a
                 mov     bx, dx
                 or      bx, ax
@@ -88,7 +88,7 @@ tmain           proc    far public uses bx cx dx si di es
                 ;; block reports a total that barely moves, while still
                 ;; satisfying sum >= largest -- which is how the weaker
                 ;; assertion above let a deliberately broken walk pass.
-                invoke  qgl_mem_avail, MEM_TOTAL
+                invoke  qglMemAvail, MEM_TOTAL
                 SAVEP   fsum2
                 mov     ax, W fsum
                 sub     ax, W fsum2
@@ -111,11 +111,11 @@ tmain           proc    far public uses bx cx dx si di es
                 ;; Copy, into a second block so a wrong length shows up
                 ;; as a mismatch rather than as a no-op.
                 ;;
-                invoke  qgl_mem_alloc, BLK
+                invoke  qglMemAlloc, BLK
                 SAVEP   blk_b
                 invoke  tfill, W blk_b+2, W blk_b, BLK, 99
 
-                invoke  qgl_mem_copy, blk_b, blk_a, BLK
+                invoke  qglMemCopy, blk_b, blk_a, BLK
                 invoke  tvrfy, W blk_b+2, W blk_b, BLK, 3
                 CHK     n_copy, ax, 0
 
@@ -123,16 +123,16 @@ tmain           proc    far public uses bx cx dx si di es
                 ;; run, the dword bulk and the tail all to be non-empty,
                 ;; which a 4096-at-0 copy never does.
                 invoke  tfill, W blk_b+2, W blk_b, BLK, 99
-                invoke  qgl_mem_copy, blk_b, blk_a, BLK-1
+                invoke  qglMemCopy, blk_b, blk_a, BLK-1
                 invoke  tvrfy, W blk_b+2, W blk_b, BLK-1, 3
                 CHK     n_odd, ax, 0
 
-                invoke  qgl_mem_free, blk_b
-                invoke  qgl_mem_free, blk_a
+                invoke  qglMemFree, blk_b
+                invoke  qglMemFree, blk_a
 
                 ;; freeing nothing must not fault -- callers unwind through
                 ;; this path when an earlier allocation already failed
-                invoke  qgl_mem_free, 0
+                invoke  qglMemFree, 0
                 CHK     n_free0, 1, 1
 
                 ret

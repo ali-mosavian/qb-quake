@@ -59,19 +59,19 @@ declare sub vid_init ( _
 declare sub scr_hud_colors ( )
 
 ''
-'' qgl, for the present path alone. qgl_vga_screen and NOT qgl_vga_init:
+'' qgl, for the present path alone. qglVgaScreen and NOT qglVgaInit:
 '' mgl already set the mode and installed the palette, and the init would
 '' re-set both.
 ''
-declare function qgl_vga_screen ( ) as long
-declare function qgl_sf_scratch ( _
+declare function qglVgaScreen ( ) as long
+declare function qglSfScratch ( _
     byval n as integer _
 ) as long
-declare function qgl_sf_adopt_dc ( _
+declare function qglSfAdoptDc ( _
     byval dc as long, _
     byval s as long _
 ) as integer
-declare sub qgl_dr_blit_scl ( _
+declare sub qglDrBlitScl ( _
     byval d as long, _
     byval x as integer, _
     byval y as integer, _
@@ -106,14 +106,14 @@ function vid_present ( _
 
     if ( vid_qgl_shape( g ) ) then
 
-        src = qgl_sf_scratch( VID_QGL_SURF )
+        src = qglSfScratch( VID_QGL_SURF )
 
         '' adopt_dc checks the DC's fields against each other and refuses
         '' one that does not agree, so a drifted layout falls back to mgl
         '' instead of blitting through a plausible wrong pointer
         if ( src <> 0 ) then
-            if ( qgl_sf_adopt_dc( g.env.h_back_bdc, src ) <> 0 ) then
-                qgl_dr_blit_scl qgl_vga_screen(), _
+            if ( qglSfAdoptDc( g.env.h_back_bdc, src ) <> 0 ) then
+                qglDrBlitScl qglVgaScreen(), _
                                 g.env.view_x, g.env.view_y, _
                                 g.env.view_w, g.env.view_h, src
                 vid_present = true
@@ -137,7 +137,7 @@ end function
 ''       for: a non-paged 8-bit backbuffer magnified by a whole two into
 ''       a 320x200 mode at the origin.
 ''
-''       qgl_vga_screen's Surface hardcodes that mode -- 320 wide, stride
+''       qglVgaScreen's Surface hardcodes that mode -- 320 wide, stride
 ''       320, A000 -- so the mode is checked here rather than assumed.
 ''::::::::::
 function vid_qgl_shape ( _

@@ -1,9 +1,9 @@
 ;; t01base -- the harness itself, plus the two things that need no setup:
 ;;            the screen surface's shape, and whether EMS answered.
 ;;
-;; Deliberately does NOT call qgl_vga_init: setting mode 13h in a headless
+;; Deliberately does NOT call qglVgaInit: setting mode 13h in a headless
 ;; DOSBox proves nothing and makes the output unreadable if it half works.
-;; qgl_vga_screen hands back the same static either way, which is the
+;; qglVgaScreen hands back the same static either way, which is the
 ;; point of it being a separate entry.
 
                 .model  medium, pascal
@@ -33,7 +33,7 @@ tmain           proc    far public uses bx es
                 ;; initialiser still agree -- which is exactly the thing a
                 ;; struct rename breaks silently.
                 ;;
-                invoke  qgl_vga_screen
+                invoke  qglVgaScreen
                 SAVEP   scr
 
                 mov     bx, dx
@@ -56,11 +56,11 @@ tmain           proc    far public uses bx es
                 ;; EMS. run1.sh sets ems=true, so a zero here is a real
                 ;; failure and not an absent driver.
                 ;;
-                invoke  qgl_gem_init
+                invoke  qglGemInit
                 NZ      ax
                 CHK     n_ems, ax, 1
 
-                invoke  qgl_gem_frame
+                invoke  qglGemFrame
                 NZ      ax
                 CHK     n_frame, ax, 1
 

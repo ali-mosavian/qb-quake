@@ -1,10 +1,10 @@
 ;; mgldc.asm -- a qgl Surface over one of mgl's MEM device contexts.
 ;;
-;; name: qgl_sf_adopt_dc
+;; name: qglSfAdoptDc
 ;; desc: TRANSITIONAL, and the whole file goes when the destination is a
 ;;       qgl Surface in its own right.
 ;;
-;;       qgl draws through qgl_sf_row; mgl draws into a DC. They are not
+;;       qgl draws through qglSfRow; mgl draws into a DC. They are not
 ;;       interchangeable, and everything left on the plan -- the font,
 ;;       the texture views, the surface builder -- needs qgl to write
 ;;       where mgl currently owns the pixels. Rather than teach each of
@@ -16,10 +16,9 @@
 ;;       is refused rather than half-supported.
 ;;
 ;; obs.: - the field offsets are mgl's struct, read out of ugl.inc: bps
-;;         at 10, and the pixel far pointer at 28, where the MEM/EMS/XMS
-;;         union sits. The union's widest arm is MEM_DC's own dword, so
-;;         the layout ahead of it is fixed and there is nothing version
-;;         dependent to get wrong.
+;;         at 10 and row zero at DC_addrTB, offset 32. MEM_DC.fptr at 28
+;;         is the raw allocation pointer retained for memFree; dctmem.asm
+;;         normalises it before filling the address table.
 ;;       - it still CHECKS rather than trusts. A DC whose fields do not
 ;;         agree with each other -- zero extents, a stride narrower than
 ;;         a row, a null pointer -- is refused, so a layout that drifts
@@ -37,7 +36,7 @@ DC_TYP          equ     2               ;; word: 0 = DC_MEM
 DC_XRES         equ     6               ;; word
 DC_YRES         equ     8               ;; word
 DC_BPS          equ     10              ;; word, bytes per scanline
-DC_FPTR         equ     28              ;; dword, MEM_DC.fptr
+DC_ADDR0        equ     32              ;; segment,offset (mgl's order)
 
 DC_MEM          equ     0
 
@@ -45,13 +44,13 @@ DC_MEM          equ     0
 .code
 
 ;;::::::::::::::
-;; qgl_sf_adopt_dc ( dc:dword, s:far ptr Surface ) -> ax nonzero on success
+;; qglSfAdoptDc ( dc:dword, s:far ptr Surface ) -> ax nonzero on success
 ;;
 ;; Fills a caller-owned Surface that points at the DC's own pixels. The
-;; caller keeps ownership of both: qgl_sf_free must NOT be called on the
+;; caller keeps ownership of both: qglSfFree must NOT be called on the
 ;; result, since the bytes belong to mgl.
 ;;::::::::::::::
-qgl_sf_adopt_dc proc    public uses bx cx dx si di es,\
+qglSfAdoptDc proc    public uses bx cx dx si di es,\
                         dc:dword, s:dword
 
                 les     bx, dc
@@ -76,8 +75,8 @@ qgl_sf_adopt_dc proc    public uses bx cx dx si di es,\
                 cmp     si, cx
                 jb      @@no                    ;; stride narrower than a row
 
-                mov     ax, word ptr es:[bx+DC_FPTR]
-                mov     di, word ptr es:[bx+DC_FPTR+2]
+                mov     di, word ptr es:[bx+DC_ADDR0]
+                mov     ax, word ptr es:[bx+DC_ADDR0+2]
                 test    di, di
                 jz      @@no                    ;; null segment is not pixels
 
@@ -101,6 +100,6 @@ qgl_sf_adopt_dc proc    public uses bx cx dx si di es,\
 
 @@no:           xor     ax, ax
                 ret
-qgl_sf_adopt_dc endp
+qglSfAdoptDc endp
 
                 end

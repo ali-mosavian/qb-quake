@@ -1,4 +1,4 @@
-;; t03surf -- write a known pattern through qgl_sf_row and read it back.
+;; t03surf -- write a known pattern through qglSfRow and read it back.
 ;;
 ;; The round-trip rule: reading the thing back through its own accessor
 ;; is what proved the texture atlas correct when the fault was elsewhere.
@@ -9,7 +9,7 @@
 ;; Four shapes, and each is here for a reason the others cannot cover:
 ;;
 ;;   cmem small   the base case
-;;   cmem >64K    the ONLY thing that exercises qgl$row_cmem's segment
+;;   cmem >64K    the ONLY thing that exercises qgl$RowCmem's segment
 ;;                arithmetic; every smaller surface fits one segment and
 ;;                the shift-and-add is dead code
 ;;   EMS          crosses 16K physical pages, so qgl$row_ems has to remap
@@ -26,7 +26,7 @@
                 include qgl.inc
                 include tfw.inc
 
-qgl_dr_fill     proto   far :dword, :word, :word, :word, :word, :word
+qglDrFill     proto   far :dword, :word, :word, :word, :word, :word
 
 SMALL_W         equ     64
 SMALL_H         equ     16
@@ -37,7 +37,7 @@ BIG_W           equ     320
 BIG_H           equ     220
 
 ;; 128 x 256 = 32,768 bytes across two 16K EMS pages. 128 divides 16384 so
-;; no row straddles, which qgl_sf_new enforces anyway.
+;; no row straddles, which qglSfNew enforces anyway.
 ;;
 ;; The WIDTH is load-bearing. At 64 wide a page holds exactly 256 rows,
 ;; and the pattern seed is the row number in a byte -- so every row that
@@ -70,7 +70,7 @@ mism            dw      0
 .code
 
 ;;::::::::::::::
-;; sf_fill -- walking pattern into every row, through qgl_sf_row.
+;; sf_fill -- walking pattern into every row, through qglSfRow.
 ;; sf_check -- read it back the same way; ax = mismatching rows.
 ;;
 ;; Row y starts at seed y so a row written to the wrong place shows up,
@@ -82,7 +82,7 @@ sf_fill         proc    near private uses bx cx dx si di es,\
                 xor     si, si
 @@row:          cmp     si, h
                 jae     @F
-                invoke  qgl_sf_row, s, si
+                invoke  qglSfRow, s, si
                 invoke  tfill, dx, ax, w, si
                 inc     si
                 jmp     @@row
@@ -97,7 +97,7 @@ sf_check        proc    near private uses bx cx dx si di es,\
                 xor     si, si
 @@row:          cmp     si, h
                 jae     @F
-                invoke  qgl_sf_row, s, si
+                invoke  qglSfRow, s, si
                 invoke  tvrfy, dx, ax, w, si
                 test    ax, ax
                 jz      @@next
@@ -117,7 +117,7 @@ sf_const        proc    near private uses bx cx dx si di es,\
                 xor     si, si
 @@row:          cmp     si, h
                 jae     @@out
-                invoke  qgl_sf_row, s, si
+                invoke  qglSfRow, s, si
                 mov     di, ax
                 mov     es, dx
                 mov     cx, w
@@ -136,12 +136,12 @@ sf_const        endp
 
 tmain           proc    far public uses bx cx dx si di es
 
-                invoke  qgl_sf_init
+                invoke  qglSfInit
 
                 ;;
                 ;; 1. conventional, small enough to be uninteresting
                 ;;
-                invoke  qgl_sf_new, SMALL_W, SMALL_H, SURF_CMEM, 0
+                invoke  qglSfNew, SMALL_W, SMALL_H, SURF_CMEM, 0
                 SAVEP   small
                 mov     bx, dx
                 or      bx, ax
@@ -155,7 +155,7 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;
                 ;; 2. conventional, past 64K
                 ;;
-                invoke  qgl_sf_new, BIG_W, BIG_H, SURF_CMEM, 0
+                invoke  qglSfNew, BIG_W, BIG_H, SURF_CMEM, 0
                 SAVEP   big
                 mov     bx, dx
                 or      bx, ax
@@ -168,14 +168,14 @@ tmain           proc    far public uses bx cx dx si di es
 
                 ;; and the last row specifically -- it is the one past the
                 ;; segment, so a wrong shift shows here and nowhere else
-                invoke  qgl_sf_pset, big, 7, BIG_H-1, 0ABh
-                invoke  qgl_sf_pget, big, 7, BIG_H-1
+                invoke  qglSfPset, big, 7, BIG_H-1, 0ABh
+                invoke  qglSfPget, big, 7, BIG_H-1
                 CHK     n_big_last, ax, 0ABh
 
                 ;;
                 ;; 3. EMS, two pages
                 ;;
-                invoke  qgl_sf_new, EMS_W, EMS_H, SURF_EMS, 2
+                invoke  qglSfNew, EMS_W, EMS_H, SURF_EMS, 2
                 SAVEP   ems
                 mov     bx, dx
                 or      bx, ax
@@ -188,11 +188,11 @@ tmain           proc    far public uses bx cx dx si di es
 
                 ;; a row in the first page and one in the second, read
                 ;; back after each other so the remap has to happen
-                invoke  qgl_sf_pset, ems, 3, 10, 055h
-                invoke  qgl_sf_pset, ems, 3, 200, 0AAh
-                invoke  qgl_sf_pget, ems, 3, 10
+                invoke  qglSfPset, ems, 3, 10, 055h
+                invoke  qglSfPset, ems, 3, 200, 0AAh
+                invoke  qglSfPget, ems, 3, 10
                 mov     bx, ax
-                invoke  qgl_sf_pget, ems, 3, 200
+                invoke  qglSfPget, ems, 3, 200
                 cmp     ax, 0AAh
                 jne     @F
                 cmp     bx, 055h
@@ -207,10 +207,10 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;
                 mov     word ptr vwp, offset vw
                 mov     word ptr vwp+2, ds
-                invoke  qgl_sf_view, vwp, big, BIG_W*100, BIG_W, 8, BIG_W
-                invoke  qgl_sf_pget, vwp, 5, 0
+                invoke  qglSfView, vwp, big, BIG_W*100, BIG_W, 8, BIG_W
+                invoke  qglSfPget, vwp, 5, 0
                 mov     bx, ax
-                invoke  qgl_sf_pget, big, 5, 100
+                invoke  qglSfPget, big, 5, 100
                 cmp     ax, bx
                 mov     ax, 0
                 jne     @F
@@ -222,7 +222,7 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;    the fill colour. Counting rows that merely CHANGED
                 ;;    would pass for a fill that wrote one byte a row.
                 ;;
-                invoke  qgl_dr_fill, small, 0, 0, SMALL_W-1, SMALL_H-1, 07Eh
+                invoke  qglDrFill, small, 0, 0, SMALL_W-1, SMALL_H-1, 07Eh
                 invoke  sf_const, small, SMALL_W, SMALL_H, 07Eh
                 CHK     n_clear, ax, 0
 
@@ -230,15 +230,15 @@ tmain           proc    far public uses bx cx dx si di es
                 ;; 6. an EMS surface whose rows would straddle a page is
                 ;;    refused rather than quietly padded
                 ;;
-                invoke  qgl_sf_new, 100, 4, SURF_EMS, 3
+                invoke  qglSfNew, 100, 4, SURF_EMS, 3
                 mov     bx, dx
                 or      bx, ax
                 NZ      bx
                 CHK     n_odd_stride, ax, 0
 
-                invoke  qgl_sf_free, ems
-                invoke  qgl_sf_free, big
-                invoke  qgl_sf_free, small
+                invoke  qglSfFree, ems
+                invoke  qglSfFree, big
+                invoke  qglSfFree, small
                 ret
 tmain           endp
                 end

@@ -26,6 +26,8 @@ B_ONEXIT        endp
 
 B$SETM          proc    far public,\
                         n:dword
+                xor     ax, ax                  ;; no BASIC far heap here
+                xor     dx, dx
                 ret
 B$SETM          endp
 

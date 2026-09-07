@@ -13,12 +13,12 @@
                 include qgl.inc
                 include tfw.inc
 
-qgl_txt_load    proto   far :dword
-qgl_txt_free    proto   far :dword
-qgl_txt_char    proto   far :dword, :word, :word, :dword, :word, :word
-qgl_txt_str     proto   far :dword, :word, :word, :dword, :dword, :word
-qgl_txt_width   proto   far :dword, :dword
-qgl_dr_fill     proto   far :dword, :word, :word, :word, :word, :word
+qglTxtLoad    proto   far :dword
+qglTxtFree    proto   far :dword
+qglTxtChar    proto   far :dword, :word, :word, :dword, :word, :word
+qglTxtStr     proto   far :dword, :word, :word, :dword, :dword, :word
+qglTxtWidth   proto   far :dword, :dword
+qglDrFill     proto   far :dword, :word, :word, :word, :word, :word
 
 SURF_W          equ     64
 SURF_H          equ     16
@@ -57,7 +57,7 @@ dbgw            dd      0
 .code
 tmain           proc    far public uses bx cx dx si di es
 
-                invoke  qgl_sf_init
+                invoke  qglSfInit
 
                 mov     word ptr fnp, offset fname
                 mov     word ptr fnp+2, ds
@@ -69,7 +69,7 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;
                 ;; load
                 ;;
-                invoke  qgl_txt_load, fnp
+                invoke  qglTxtLoad, fnp
                 SAVEP   fp
                 mov     bx, dx
                 or      bx, ax
@@ -91,17 +91,17 @@ tmain           proc    far public uses bx cx dx si di es
                 mov     al, es:[bx].Font.adv
                 CHK     n_adv, ax, 4
 
-                invoke  qgl_txt_width, fp, strp
+                invoke  qglTxtWidth, fp, strp
                 CHK     n_width, ax, 8
 
                 ;;
                 ;; draw one glyph onto a known background
                 ;;
-                invoke  qgl_sf_new, SURF_W, SURF_H, SURF_CMEM, 0
+                invoke  qglSfNew, SURF_W, SURF_H, SURF_CMEM, 0
                 SAVEP   sp_
-                invoke  qgl_dr_fill, sp_, 0, 0, SURF_W-1, SURF_H-1, BG
+                invoke  qglDrFill, sp_, 0, 0, SURF_W-1, SURF_H-1, BG
 
-                invoke  qgl_txt_char, sp_, 0, 0, fp, 'A', FG
+                invoke  qglTxtChar, sp_, 0, 0, fp, 'A', FG
 
                 ;;
                 ;; and compare every pixel of the 8x8 cell against the
@@ -124,15 +124,15 @@ tmain           proc    far public uses bx cx dx si di es
                 add     ax, es:[bx].Font.bits_ofs
                 mov     di, ax
                 mov     al, es:[bx+di]
-                mov     gbits, al               ;; NOT dl: qgl_sf_pget
-                                                ;; returns through qgl$row,
+                mov     gbits, al               ;; NOT dl: qglSfPget
+                                                ;; returns through qgl$Row,
                                                 ;; which writes dx
 
                 xor     di, di                  ;; column
 @@col:          cmp     di, 8
                 jae     @@cols_done
 
-                invoke  qgl_sf_pget, sp_, di, si
+                invoke  qglSfPget, sp_, di, si
                 mov     dh, al                  ;; what is on the surface
 
                 ;; was this bit set?
@@ -169,14 +169,14 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;
                 ;; a path that is not there fails rather than faulting
                 ;;
-                invoke  qgl_txt_load, bnp
+                invoke  qglTxtLoad, bnp
                 mov     bx, dx
                 or      bx, ax
                 NZ      bx
                 CHK     n_badfile, ax, 0
 
-                invoke  qgl_sf_free, sp_
-                invoke  qgl_txt_free, fp
+                invoke  qglSfFree, sp_
+                invoke  qglTxtFree, fp
                 ret
 tmain           endp
                 end

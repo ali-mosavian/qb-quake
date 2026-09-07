@@ -2,7 +2,7 @@
 ;; qgl.inc -- the surface, shared by every module that draws.
 ;;
 ;; A surface is pixels plus the two numbers needed to walk them, and it
-;; does not say where it lives: qgl_sf_row hands back a far pointer either
+;; does not say where it lives: qglSfRow hands back a far pointer either
 ;; way. Conventional memory answers with arithmetic; EMS answers with a
 ;; page map.
 ;;
@@ -54,7 +54,7 @@
 ;;
 ;; NEVER NAME A RETURN REGISTER IN `uses`. The epilogue pops what the
 ;; list holds, straight back over the answer, and the assembler says
-;; nothing. qgl_txt_load returned dx:ax while declaring `uses ... dx`,
+;; nothing. qglTxtLoad returned dx:ax while declaring `uses ... dx`,
 ;; so every caller got the segment it happened to be holding already:
 ;; a missing file came back non-null, and a real one came back pointing
 ;; at a random segment whose bytes read as a plausible, wrong header.
@@ -143,7 +143,7 @@ SURF_SLOT_MAX   equ     3
 QGL_Z_SLOT      equ     3
 
 ;;
-;; Which free figure qgl_mem_avail should report. LARGEST is what an
+;; Which free figure qglMemAvail should report. LARGEST is what an
 ;; allocation actually has to satisfy; TOTAL is every free block added
 ;; up, and the gap between them is the fragmentation. Same pre-scaled
 ;; table-offset trick as SURF_CMEM above.
@@ -180,10 +180,19 @@ QGL_SUBDIVS     equ     4
 QGL_SUBDIVP     equ     16
 QGL_SUBDIVF     textequ <16.0>          ;; the same 16, as a real4 initialiser
 
-;; Surfaces qgl_sf_scratch hands out. Four, because the slice that
+;; Surfaces qglSfScratch hands out. Four, because the slice that
 ;; needs them wants a destination, a texture and a depth buffer, and one
 ;; spare beats renumbering.
 QGL_SCRATCH     equ     4
+
+
+;; Paged array stores. 8, not mgl's UA_MAX of 4: leaves, faces, nodes
+;; and clip take all four today, and d_mdl.bas records the model
+;; vertices being refused a fifth and falling back to raw EMS.
+QGL_AR_MAX      equ     8
+QGL_AR_WIN      equ     16384           ;; one EMS page, and MEM's unit too
+QGL_AR_MEM      equ     0
+QGL_AR_EMS      equ     1
 
 QGL_M_WIRE      equ     0
 QGL_M_FLAT      equ     1

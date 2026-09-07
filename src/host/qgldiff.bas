@@ -46,20 +46,20 @@ type QVertB
     v as single
 end type
 
-declare function qgl_sf_init () as integer
-declare function qgl_sf_new ( byval wid as integer, byval hgt as integer, _
+declare function qglSfInit () as integer
+declare function qglSfNew ( byval wid as integer, byval hgt as integer, _
                               byval whr as integer, byval slot as integer ) as long
-declare function qgl_sf_pget ( byval s as long, byval x as integer, _
+declare function qglSfPget ( byval s as long, byval x as integer, _
                                byval y as integer ) as integer
-declare sub qgl_sf_pset ( byval s as long, byval x as integer, _
+declare sub qglSfPset ( byval s as long, byval x as integer, _
                           byval y as integer, byval c as integer )
-declare sub qgl_sf_free ( byval s as long )
-declare sub qgl_cl_rect ( byval x0 as integer, byval y0 as integer, _
+declare sub qglSfFree ( byval s as long )
+declare sub qglClRect ( byval x0 as integer, byval y0 as integer, _
                           byval x1 as integer, byval y1 as integer )
-declare sub qgl_rs_tex ( byval s as long )
-declare sub qgl_rs_mode ( byval m as integer )
-declare sub qgl_rs_poly ( byval d as long, seg v as any, byval cnt as integer )
-declare sub qgl_dr_fill ( byval d as long, byval x0 as integer, _
+declare sub qglRsTex ( byval s as long )
+declare sub qglRsMode ( byval m as integer )
+declare sub qglRsPoly ( byval d as long, seg v as any, byval cnt as integer )
+declare sub qglDrFill ( byval d as long, byval x0 as integer, _
                           byval y0 as integer, byval x1 as integer, _
                           byval y1 as integer, byval col as integer )
 
@@ -88,7 +88,7 @@ declare function qgl_diff_case ( byval mode as integer, byval mdst as long, _
                                  byval qtex as long, byval kind as integer, _
                                  byval shape as integer, nm as string, _
                                  byval fh as integer ) as integer
-declare function qgl_diff_all () as integer
+declare function qglDiffAll () as integer
 
 ''
 '' The texture, and it is an INSTRUMENT rather than a pattern.
@@ -125,7 +125,7 @@ sub qgl_diff_fill_tex ( byval mtex as long, byval qtex as long, _
         for x = 0 to DIFF_TW - 1
             c = qgl_diff_texel( x, y, kind )
             uglPSet mtex, x, y, c
-            qgl_sf_pset qtex, x, y, c
+            qglSfPset qtex, x, y, c
         next x
     next y
 end sub
@@ -155,7 +155,7 @@ function qgl_diff_delta ( byval dc as long, byval s as long, _
     for y = 0 to DIFF_H - 1
         for x = 0 to DIFF_W - 1
             m = uglPGet( dc, x, y )
-            q = qgl_sf_pget( s, x, y )
+            q = qglSfPget( s, x, y )
             if ( m <> 0 and q <> 0 ) then
                 e = m - q
                 if ( seen = 0 ) then
@@ -248,7 +248,7 @@ function qgl_diff_qgl_drew ( byval s as long ) as integer
 
     for y = 0 to DIFF_H - 1
         for x = 0 to DIFF_W - 1
-            if ( qgl_sf_pget( s, x, y ) <> 0 ) then n = n + 1
+            if ( qglSfPget( s, x, y ) <> 0 ) then n = n + 1
         next x
     next y
     qgl_diff_qgl_drew = n
@@ -261,7 +261,7 @@ function qgl_diff_pixels ( byval dc as long, byval s as long ) as integer
 
     for y = 0 to DIFF_H - 1
         for x = 0 to DIFF_W - 1
-            if ( uglPGet( dc, x, y ) <> qgl_sf_pget( s, x, y ) ) then n = n + 1
+            if ( uglPGet( dc, x, y ) <> qglSfPget( s, x, y ) ) then n = n + 1
         next x
     next y
     qgl_diff_pixels = n
@@ -332,9 +332,9 @@ function qgl_diff_dev ( byval dc as long, byval s as long, _
 
     for y = 0 to DIFF_H - 1
         for x = 0 to DIFF_W - 1
-            if ( uglPGet( dc, x, y ) <> 0 and qgl_sf_pget( s, x, y ) <> 0 ) then
+            if ( uglPGet( dc, x, y ) <> 0 and qglSfPget( s, x, y ) <> 0 ) then
                 if ( mine <> 0 ) then
-                    got = qgl_sf_pget( s, x, y )
+                    got = qglSfPget( s, x, y )
                 else
                     got = uglPGet( dc, x, y )
                 end if
@@ -367,12 +367,12 @@ sub qgl_diff_probe ( byval dc as long, byval s as long, _
     end if
     for x = 30 to 80 step 10
         print #fh, "        y="; y; " x="; x; " mgl"; uglPGet( dc, x, y ); _
-                   " qgl"; qgl_sf_pget( s, x, y )
+                   " qgl"; qglSfPget( s, x, y )
     next x
     y = y + 20
     for x = 30 to 80 step 10
         print #fh, "        y="; y; " x="; x; " mgl"; uglPGet( dc, x, y ); _
-                   " qgl"; qgl_sf_pget( s, x, y )
+                   " qgl"; qglSfPget( s, x, y )
     next x
 end sub
 
@@ -405,11 +405,11 @@ function qgl_diff_case ( byval mode as integer, byval mdst as long, _
         uglTriT mdst, t(0), 0, mtex
     end if
 
-    qgl_dr_fill qdst, 0, 0, DIFF_W - 1, DIFF_H - 1, 0
-    qgl_cl_rect 0, 0, DIFF_W - 1, DIFF_H - 1
-    qgl_rs_tex qtex
-    qgl_rs_mode mode
-    qgl_rs_poly qdst, v(0), 3
+    qglDrFill qdst, 0, 0, DIFF_W - 1, DIFF_H - 1, 0
+    qglClRect 0, 0, DIFF_W - 1, DIFF_H - 1
+    qglRsTex qtex
+    qglRsMode mode
+    qglRsPoly qdst, v(0), 3
 
     mn = qgl_diff_mgl_drew( mdst )
     qn = qgl_diff_qgl_drew( qdst )
@@ -468,7 +468,7 @@ end function
 '' so the flag's handler stays one line.
 
 ''
-function qgl_diff_all () as integer
+function qglDiffAll () as integer
     dim fh as integer
     dim bad as integer
     dim mdst as long
@@ -482,18 +482,18 @@ function qgl_diff_all () as integer
 
     mdst = uglNew( ugl.mem, ugl.8bit, DIFF_W, DIFF_H )
     mtex = uglNew( ugl.mem, ugl.8bit, DIFF_TW, DIFF_TW )
-    if ( qgl_sf_init() = 0 ) then
+    if ( qglSfInit() = 0 ) then
         print #fh, "   note EMS unavailable; the surfaces here are conventional"
     end if
-    qdst = qgl_sf_new( DIFF_W, DIFF_H, QGL_SURF_CMEM, 0 )
-    qtex = qgl_sf_new( DIFF_TW, DIFF_TW, QGL_SURF_CMEM, 0 )
+    qdst = qglSfNew( DIFF_W, DIFF_H, QGL_SURF_CMEM, 0 )
+    qtex = qglSfNew( DIFF_TW, DIFF_TW, QGL_SURF_CMEM, 0 )
 
     if ( mdst = 0 or mtex = 0 or qdst = 0 or qtex = 0 ) then
         print #fh, "   FAIL a store is missing: mdst"; mdst; " mtex"; mtex; _
                    " qdst"; qdst; " qtex"; qtex
         print #fh, "RESULT FAIL"
         close #fh
-        qgl_diff_all = 1
+        qglDiffAll = 1
         exit function
     end if
 
@@ -524,8 +524,8 @@ function qgl_diff_all () as integer
     bad = bad + qgl_diff_case( QGL_M_PTEX, mdst, mtex, qdst, qtex, 1, 2, _
                                "persp   v  ", fh )
 
-    qgl_sf_free qtex
-    qgl_sf_free qdst
+    qglSfFree qtex
+    qglSfFree qdst
 
     if ( bad = 0 ) then
         print #fh, "RESULT PASS"
@@ -533,5 +533,5 @@ function qgl_diff_all () as integer
         print #fh, "RESULT FAIL"
     end if
     close #fh
-    qgl_diff_all = bad
+    qglDiffAll = bad
 end function

@@ -68,17 +68,17 @@ defint a-z
 const QGLTEX_SLOT = 2           '' mgl reads through 0, writes 1, depth 3
 const QGLTEX_SURF = 3           '' a scratch Surface index, not a slot
 
-declare function qgl_sf_scratch ( byval n as integer ) as long
-declare function qgl_sf_pget ( byval s as long, byval x as integer, _
+declare function qglSfScratch ( byval n as integer ) as long
+declare function qglSfPget ( byval s as long, byval x as integer, _
                                byval y as integer ) as integer
-declare function qgl_sf_adopt_ems ( byval dc as long, byval slot as integer, _
+declare function qglSfAdoptEms ( byval dc as long, byval slot as integer, _
                                     byval s as long ) as integer
 
 declare function qgl_tex_peek ( byval p as long ) as integer
 declare function qgl_tex_one ( g as Game, byval k as integer, _
                                byval mip as integer, byval fh as integer ) as integer
 declare function qgl_tex_coh ( g as Game, byval fh as integer ) as integer
-declare function qgl_tex_all ( g as Game ) as integer
+declare function qglTexAll ( g as Game ) as integer
 
 '' one byte at a far pointer packed seg:ofs the way uglMapEx returns it
 function qgl_tex_peek ( byval p as long ) as integer
@@ -114,8 +114,8 @@ function qgl_tex_one ( g as Game, byval k as integer, _
         exit function
     end if
 
-    sf = qgl_sf_scratch( QGLTEX_SURF )
-    if ( qgl_sf_adopt_ems( dc, QGLTEX_SLOT, sf ) = 0 ) then
+    sf = qglSfScratch( QGLTEX_SURF )
+    if ( qglSfAdoptEms( dc, QGLTEX_SLOT, sf ) = 0 ) then
         print #fh, "   FAIL adoption refused: k"; k; " mip"; mip
         qgl_tex_one = 1
         exit function
@@ -126,7 +126,7 @@ function qgl_tex_one ( g as Game, byval k as integer, _
     for y = 0 to side - 1
         for x = 0 to side - 1
             want = uglPGet( dc, x, y )
-            got = qgl_sf_pget( sf, x, y )
+            got = qglSfPget( sf, x, y )
             if ( got <> want ) then
                 bad = bad + 1
                 if ( first < 0 ) then first = y * side + x
@@ -207,8 +207,8 @@ function qgl_tex_coh ( g as Game, byval fh as integer ) as integer
     end if
 
     '' 2. the bridge puts B in the same slot
-    sf = qgl_sf_scratch( QGLTEX_SURF )
-    if ( qgl_sf_adopt_ems( dcB, QGLTEX_SLOT, sf ) = 0 ) then
+    sf = qglSfScratch( QGLTEX_SURF )
+    if ( qglSfAdoptEms( dcB, QGLTEX_SLOT, sf ) = 0 ) then
         print #fh, "   FAIL coherence: adoption refused B"
         qgl_tex_coh = 1
         exit function
@@ -228,11 +228,11 @@ function qgl_tex_coh ( g as Game, byval fh as integer ) as integer
     end if
 
     '' and B is still reachable afterwards
-    if ( qgl_sf_adopt_ems( dcB, QGLTEX_SLOT, sf ) = 0 ) then
+    if ( qglSfAdoptEms( dcB, QGLTEX_SLOT, sf ) = 0 ) then
         print #fh, "   FAIL coherence: re-adoption refused B"
         bad = bad + 1
     else
-        gotB = qgl_sf_pget( sf, px, py )
+        gotB = qglSfPget( sf, px, py )
         if ( gotB = wantB ) then
             print #fh, "   ok   and the bridge gets B back after mgl did"
         else
@@ -244,7 +244,7 @@ function qgl_tex_coh ( g as Game, byval fh as integer ) as integer
     qgl_tex_coh = bad
 end function
 
-function qgl_tex_all ( g as Game ) as integer
+function qglTexAll ( g as Game ) as integer
     dim fh as integer
     dim bad as integer
     dim mip as integer
@@ -271,5 +271,5 @@ function qgl_tex_all ( g as Game ) as integer
         print #fh, "RESULT FAIL"
     end if
     close #fh
-    qgl_tex_all = bad
+    qglTexAll = bad
 end function
