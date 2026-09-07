@@ -6,8 +6,13 @@ option explicit
 '' screenshot writer. Quake keeps the same unit unprefixed: screen.c and
 '' sbar.c draw over the finished frame rather than being part of it.
 ''
-'' hFontChar carries a real bound and stays module-local, so it keeps its
-'' allocation -- only COMMON arrays lose theirs.
+'' The font is qgl's: one loaded Font block (g_font) instead of 256
+'' separate 8x8 DCs, which measured at 16,400 bytes of conventional
+'' memory for 2,048 bytes of pixels. draw_string and friends adopt
+'' whatever mgl DC they were handed for the length of one call, through
+'' qgl_sf_scratch -- the same scratch index vid_present uses for the
+'' final blit, safe because the two never run at the same instant in a
+'' frame.
 ''
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
@@ -47,10 +52,7 @@ declare sub hud_shade ( _
     rw as integer _
 )
 declare function draw_load_font ( _
-    g as Game, _
-    flname as string, _
-    colb as long, _
-    bit_array() as integer _
+    flname as string _
 ) as integer
 declare sub bevel ( _
     x0 as integer, _
@@ -178,10 +180,7 @@ declare sub scr_draw_hud ( _
     g as Game, _
     h_dst_dc as long _
 )
-declare sub draw_init_font ( _
-    g as Game, _
-    bit_array() as integer _
-)
+declare sub draw_init_font ( )
 declare sub scr_count_frame ( _
     g as Game _
 )
@@ -202,6 +201,56 @@ declare function mod_cm_ready ( _
 ) as integer
 
 ''
+'' qgl's font, for draw_string and the two callers that read glyph ink
+'' directly (draw_logo, hud_num). Declared here, not in a header: this
+'' module is the only caller.
+''
+''
+'' Not BYVAL: VBDOS passes a plain "as string" parameter as a near
+'' pointer to the descriptor, which is exactly what qgl_txt_load_bas's
+'' s:word wants -- see file.asm's own qgl_file_open_bas for the source
+'' of that convention.
+''
+declare function qgl_txt_load_bas ( _
+    flname as string _
+) as long
+declare sub qgl_txt_free ( _
+    byval f as long _
+)
+''
+'' The font mkfont.py builds is fixed-advance, so qgl_txt_char's return
+'' (how far it advanced) is never needed here -- every caller already
+'' steps by the font's own fixed 4 -- and it is declared a SUB rather
+'' than read and discarded.
+''
+declare sub qgl_txt_char ( _
+    byval dst as long, _
+    byval x as integer, _
+    byval y as integer, _
+    byval f as long, _
+    byval glyph as integer, _
+    byval col as integer _
+)
+declare function qgl_txt_row ( _
+    byval f as long, _
+    byval glyph as integer, _
+    byval row as integer _
+) as integer
+declare function qgl_sf_scratch ( _
+    byval n as integer _
+) as long
+declare function qgl_sf_adopt_dc ( _
+    byval dc as long, _
+    byval s as long _
+) as integer
+declare sub qgl_sf_pset ( _
+    byval s as long, _
+    byval x as integer, _
+    byval y as integer, _
+    byval col as integer _
+)
+
+''
 '' Loading screen geometry. Private to this module on purpose: the bar is
 '' drawn through drwLoadTick/drwMipTick below, so no caller needs to know
 '' where it sits. Sixteen call sites used to carry the arithmetic inline.
@@ -216,9 +265,10 @@ declare function mod_cm_ready ( _
 '' installed -- mgl says so in uglpal.asm -- which is why every colour below
 '' is an explicit index into a ramp we laid out ourselves.
 ''
-'' The font is baked at index 254 by draw_load_font, with 227 as its
-'' transparency key, so ALL text is one colour: 254 is set to the brightest
-'' neutral and the hierarchy comes from size and placement instead.
+'' draw_string always draws in LP_TEXT (254), a mask draw rather than a
+'' colour-keyed one, so ALL text is one colour: 254 is set to the
+'' brightest neutral and the hierarchy comes from size and placement
+'' instead.
 ''
 '' 256 entries and only a handful were being spent, so the ramps are as
 '' long as they can usefully be: 100 background steps over 200 rows is two
@@ -239,7 +289,15 @@ const LP_ACC0   = 81             '' 32-step ember, for the bars
 const LP_ACCN   = 32
 const LP_NEU0   = 113            '' 16-step warm neutral, for rules
 const LP_NEUN   = 16
-const LP_TEXT   = 254            '' where draw_load_font bakes the glyphs
+const LP_TEXT   = 254            '' the one colour draw_string draws in
+
+'' The scratch Surface every draw_string call briefly adopts its
+'' destination DC into. Index 0, the same one vid.bas's vid_present and
+'' d_faces.c's -qgl path use: all four of qgl_sf_scratch's slots are
+'' already spoken for, and reuse is safe because HUD text, the present,
+'' and a qgl-routed face draw never run at the same instant within a
+'' frame -- see vid.bas's own note on VID_QGL_SURF.
+const TXT_QGL_SURF = 0
 
 '' Bevels are what make a Quake plate look pressed out of metal: a light
 '' edge on the top and left, a dark one on the bottom and right, and the
@@ -321,7 +379,7 @@ const MIPBAR_H  = 4
 '' are allocated at load with no code to run, so non-main modules must
 '' declare their arrays here.
 '$static
-dim shared h_font_char(255) as long
+dim shared g_font as long        '' qgl_txt_load's block; 0 until loaded
 
 '' The loading stage line, redrawn in place rather than appended down the
 '' screen the way the old bare draw_string did it.
@@ -561,10 +619,10 @@ end sub
 ''       above), a hard drop shadow, and edges nibbled by the coordinate
 ''       hash so the outline reads as hand-cut rather than geometric.
 ''
-''       The glyphs are read back out of the font DCs with uglPGet -- set
-''       pixels carry LP_TEXT, clear ones the transparency key -- which is
-''       what frees the lettering from the one-colour rule everything else
-''       on screen lives under.
+''       The glyph bits come straight from qgl_txt_row rather than a
+''       drawn-then-read-back DC, one call per row rather than one per
+''       pixel -- which is what frees the lettering from the one-colour
+''       rule everything else on screen lives under.
 ''::::::::::
 sub draw_logo ( _
     text as string, _
@@ -575,6 +633,7 @@ sub draw_logo ( _
     dim i as integer, ch as integer, gx as integer, gy as integer
     dim px as integer, bx as integer, by as integer, col as integer
     dim pass as integer, h as integer
+    dim bits as integer
 
     '' shadow first, then body, so the body always sits on top
     for pass = 0 to 1
@@ -582,8 +641,10 @@ sub draw_logo ( _
         for i = 1 to len( text )
             ch = asc( mid$( text, i, 1 ) )
             for gy = 0 to 7
+                bits = qgl_txt_row( g_font, ch, gy )
+                if ( bits = 0 ) then goto dl_next_row
                 for gx = 0 to 7
-                    if ( uglPGet( h_font_char(ch), gx, gy ) = LP_TEXT ) then
+                    if ( (bits and (128 \ (2^gx))) <> 0 ) then
                         bx = px + gx*sc
                         by = y + gy*sc
                         if ( pass = 0 ) then
@@ -607,6 +668,7 @@ sub draw_logo ( _
                         end if
                     end if
                 next gx
+dl_next_row:
             next gy
             px = px + 4*sc + sc\2
         next i
@@ -720,9 +782,18 @@ end sub
 
 ''::::::::::
 '' name: draw_string_scl / draw_string_r
-'' desc: Scaled and right-aligned text. Every glyph is its own 8x8 DC, so
-''       scaling one is a masked blit; the advance is 4 because that is
-''       what draw_string uses, the font being 4x6 inside an 8x8 cell.
+'' desc: Scaled and right-aligned text.
+''
+''       Scaled is a masked draw, pixel by pixel: qgl has no scaled
+''       masked blit (qgl_dr_blit_scl is opaque, made for the present
+''       path's whole-frame magnify, where every destination pixel is
+''       meant to be overwritten), so this samples qgl_txt_row's bits
+''       directly at the destination's own resolution and only plots
+''       where a bit is set -- which is what uglBlitMskScl's colour key
+''       did, one call per glyph instead of one call per pixel.
+''
+''       The advance is 4 because that is what draw_string uses, the
+''       font being 4x6 inside an 8x8 cell.
 ''::::::::::
 sub draw_string_scl ( _
     dc as long, _
@@ -732,11 +803,34 @@ sub draw_string_scl ( _
     text as string _
 )
     dim i as integer, char as integer, posx as integer
+    dim qs as long
+    dim dw as integer
+    dim sx as integer, sy as integer, gx as integer, gy as integer
+    dim bits as integer
+
+    qs = qgl_sf_scratch( TXT_QGL_SURF )
+    if ( qgl_sf_adopt_dc( dc, qs ) = 0 ) then exit sub
+
+    dw = cint( 8 * scale )
+    if ( dw < 1 ) then exit sub
 
     posx = x
     for i = 0 to len( text )-1
         char = asc( mid$( text, i+1 ) )
-        uglBlitMskScl dc, posx, y, scale, scale, h_font_char(char), 0, 0, 8, 8
+
+        for sy = 0 to dw-1
+            gy = int( sy * 8 / dw )
+            bits = qgl_txt_row( g_font, char, gy )
+            if ( bits <> 0 ) then
+                for sx = 0 to dw-1
+                    gx = int( sx * 8 / dw )
+                    if ( (bits and (128 \ (2^gx))) <> 0 ) then
+                        qgl_sf_pset qs, posx+sx, y+sy, LP_TEXT
+                    end if
+                next sx
+            end if
+        next sy
+
         posx = posx + cint( 4 * scale )
     next i
 end sub
@@ -909,82 +1003,33 @@ end sub
 
 
 
-'':::::::::
+''::::::::::
+'' name: draw_load_font
+'' desc: flname is a loose DOS file -- mkfont.py's own converted format,
+''       not the UAR archive member the renderer's other assets come
+''       from -- because qgl_txt_load_bas reads it straight off disk with
+''       no archive layer between. See txt.asm's header for why.
+''::::::::::
 function draw_load_font ( _
-    g as Game, _
-    flname as string, _
-    colb as long, _
-    bit_array() as integer _
+    flname as string _
 ) as integer
-    dim col as long
-    dim trn as long
-    dim f_hndl as integer
-    dim char(3) as integer
-    
-    dim file as UAR
-    dim idstr as string * 4
-    dim i as integer, x as integer, y as integer, bit as integer
-    
-    trn = uglColor8( 7, 0, 3 )    
-    
-    if ( not uglNewMult( h_font_char(), 256, UGL.EMS, g.env.c_fmt, 8, 8 ) ) then
-        draw_load_font = 0
-        exit function
-    end if        
 
-    
-    if ( uarOpen( file, flname, F4READ ) = false ) then
-        draw_load_font = 0
-        exit function
-    end if
+    g_font = qgl_txt_load_bas( flname )
+    draw_load_font = ( g_font <> 0 )
 
-    
-    ''
-    '' Check id
-    ''
-    if ( uarReadEx( file, idstr, 4 ) <> 4 ) then
-        draw_load_font = 0
-        exit function
-    end if    
-    
-    
-    'if ( idstr <> "font" ) then
-    '    draw_load_font% = 0
-    '    exit function        
-    'end if
-    
-        
-    
-    for  i = 0 to 255
-        if ( uarReadEx( file, char(0), 4*2 ) <> 4*2 ) then
-            draw_load_font = 0
-            exit function
-        end if
-        
-        bit = 0
-        
-        for y = 0 to 7
-            for  x = 0 to 7
-                if ( char(bit\16) and bit_array(15-bit and 15) ) then
-                    col = colb
-                else
-                    col = trn                         
-                end if
-                
-                uglPset h_font_char(i), x, y, col
-                
-                bit = bit + 1
-            next x
-        next y
-    next i
-    
-    uarClose file
-    draw_load_font = -1
 end function
 
 
 
 '':::::::::
+''::::::::::
+'' name: draw_string
+'' desc: Adopts dc as a qgl Surface for the length of this one call --
+''       see TXT_QGL_SURF's own note on why that scratch index is safe
+''       to share. A DC that fails to adopt (drifted layout, or none of
+''       this frame's callers is the shape qgl_sf_adopt_dc checks for)
+''       draws nothing rather than faulting.
+''::::::::::
 sub draw_string ( _
     dc as long, _
     x as integer, _
@@ -993,20 +1038,24 @@ sub draw_string ( _
 )
     dim posx as integer
     dim i as integer, char as integer
-    
+    dim qs as long
+
+    qs = qgl_sf_scratch( TXT_QGL_SURF )
+    if ( qgl_sf_adopt_dc( dc, qs ) = 0 ) then exit sub
+
     posx = x
-    
+
     for  i = 0 to len( text )-1
-    
+
         char = asc( mid$( text, i+1 ) )
-        
+
         if ( (char >= 0) or (char <= 255) ) then
-            uglPutMsk dc, posx, y, h_font_char(char)        
+            qgl_txt_char qs, posx, y, g_font, char, LP_TEXT
         end if
-    
+
         posx = posx + 4
     next i
-    
+
 end sub
 
 
@@ -1132,10 +1181,10 @@ end sub
 
 ''::::::::::
 '' name: hud_num
-'' desc: A number painted in a CHOSEN colour, which the baked one-colour
-''       font cannot do: the glyph mask is read back out of the font DC
-''       (set pixels carry LP_TEXT) and re-plotted block by block, with a
-''       one-pixel shadow so it sits on the slab instead of floating.
+'' desc: A number painted in a CHOSEN colour, which draw_string's one
+''       fixed colour cannot do: qgl_txt_row's bits are re-plotted block
+''       by block, with a one-pixel shadow so it sits on the slab
+''       instead of floating.
 ''::::::::::
 sub hud_num ( _
     dc as long, _
@@ -1147,14 +1196,17 @@ sub hud_num ( _
 )
     dim i as integer, ch as integer, gx as integer, gy as integer
     dim px as integer, bx as integer, by as integer, pass as integer
+    dim bits as integer
 
     for pass = 0 to 1
         px = x
         for i = 1 to len( txt )
             ch = asc( mid$( txt, i, 1 ) )
             for gy = 0 to 7
+                bits = qgl_txt_row( g_font, ch, gy )
+                if ( bits = 0 ) then goto hn_next_row
                 for gx = 0 to 7
-                    if ( uglPGet( h_font_char(ch), gx, gy ) = LP_TEXT ) then
+                    if ( (bits and (128 \ (2^gx))) <> 0 ) then
                         bx = px + gx*sc
                         by = y + gy*sc
                         if ( pass = 0 ) then
@@ -1164,6 +1216,7 @@ sub hud_num ( _
                         end if
                     end if
                 next gx
+hn_next_row:
             next gy
             px = px + 4*sc + 1
         next i
@@ -1552,13 +1605,10 @@ sub scr_screenshot ( _
 end sub
 
 ''::::::::::
-sub draw_init_font ( _
-    g as Game, _
-    bit_array() as integer _
-)
-    if ( not draw_load_font( g, "base.dat::font/4x6.fnt", 254, bit_array() ) ) then
+sub draw_init_font ( )
+    if ( not draw_load_font( "font.fnt" ) ) then
         sys_error "0x0000, Could not load font..."
-    end if    
+    end if
 
 end sub
 

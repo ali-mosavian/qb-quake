@@ -116,6 +116,11 @@ $(BUILD)/stuff.ini: data/stuff.ini | $(BUILD)
 $(BUILD)/base.dat: data/base.dat | $(BUILD)
 	cp $< $@
 
+# qgl_txt_load wants a loose file beside the exe, not a PACK member --
+# see txt.asm's own note that this is mkfont.py's job, not INT 21h's.
+$(BUILD)/FONT.FNT: data/base.dat tools/mkfont.py | $(BUILD)
+	@python3 tools/mkfont.py data/base.dat font/4x6.fnt $@
+
 $(BUILD)/UGLV.LIB: $(NATIVE_UGL) | $(BUILD)
 	cp $< $@
 
@@ -126,7 +131,7 @@ $(BUILD)/.assets-stamp: $(ASSET_FILES) | $(BUILD)
 	cp -R data/assets/* $(BUILD)/
 	touch $@
 
-$(EXE): $(BAS_OBJS) $(C_OBJS) $(ASM_OBJS) $(BUILD)/stuff.ini $(BUILD)/base.dat $(BUILD)/UGLV.LIB $(BUILD)/.assets-stamp
+$(EXE): $(BAS_OBJS) $(C_OBJS) $(ASM_OBJS) $(BUILD)/stuff.ini $(BUILD)/base.dat $(BUILD)/FONT.FNT $(BUILD)/UGLV.LIB $(BUILD)/.assets-stamp
 	@python3 tools/qblint.py
 	$(LINKQR) $(BUILD) "$(BAS_MODS)" "$(C_MODS) $(ASM_MODS)"
 

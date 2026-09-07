@@ -32,6 +32,7 @@ mods=$(make BUILD="$OUT" NATIVE_UGL="$TMP/UGLV.LIB" -p -n 2>/dev/null |
 
 for m in $mods; do : > "$OUT/$m.obj"; done
 : > "$OUT/stuff.ini"; : > "$OUT/base.dat"; : > "$OUT/UGLV.LIB"
+: > "$OUT/FONT.FNT"
 : > "$OUT/.assets-stamp"; : > "$OUT/qrender.exe"
 
 uptodate () { make -q BUILD="$OUT" NATIVE_UGL="$TMP/UGLV.LIB" build 2>/dev/null; }

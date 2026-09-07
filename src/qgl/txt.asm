@@ -35,6 +35,10 @@ qgl_file_size   proto   far pascal :word
 qgl_file_read   proto   far pascal :word, :dword, :dword
 qgl_file_close  proto   far pascal :word
 
+IFDEF __BASIC__
+qgl_file_open_bas proto far pascal :word
+ENDIF
+
 FNT_HDR         equ     20              ;; mkfont.py's header IS the Font struct
 
 
@@ -50,24 +54,20 @@ FNT_HDR         equ     20              ;; mkfont.py's header IS the Font struct
                 externdef qgl$nib4:near
 
 ;;::::::::::::::
-;; qgl_txt_load ( path:far ptr ) -> far ptr to the font, or 0:0
+;; qgl$txt_load_fh -- given an already-open handle, the shared body of
+;; qgl_txt_load and qgl_txt_load_bas: size it, read it whole, check the
+;; magic, hand back the block or free it.
 ;;
-;; Reads the whole file into one block: header, the advance table if it
-;; has one, then the glyph bits.
+;; INTERNAL: fh:word, the open handle -> dx:ax = far ptr to the font, or
+;; 0:0. The handle is always closed before this returns, on every path.
 ;;::::::::::::::
 ;; NOT `uses dx`: this returns dx:ax, and the uses epilogue would pop the
 ;; segment straight back off over the answer. See qgl.inc's contract.
-qgl_txt_load    proc    public uses bx cx si di es,\
-                        path:dword
+qgl$txt_load_fh proc    near private uses bx cx si di es,\
+                        fh:word
 
-                local   fh:word
                 local   fsize:dword
                 local   blk:dword
-
-                invoke  qgl_file_open, path
-                test    ax, ax
-                jz      @@nofile
-                mov     fh, ax
 
                 invoke  qgl_file_size, fh
                 mov     word ptr fsize, ax
@@ -111,7 +111,50 @@ qgl_txt_load    proc    public uses bx cx si di es,\
 @@nofile:       xor     ax, ax
                 xor     dx, dx
                 ret
+qgl$txt_load_fh endp
+
+
+;;::::::::::::::
+;; qgl_txt_load ( path:far ptr to ASCIIZ ) -> far ptr to the font, or 0:0
+;;
+;; Reads the whole file into one block: header, the advance table if it
+;; has one, then the glyph bits.
+;;::::::::::::::
+qgl_txt_load    proc    public uses bx cx si di es,\
+                        path:dword
+
+                invoke  qgl_file_open, path
+                test    ax, ax
+                jz      @@nofile
+                invoke  qgl$txt_load_fh, ax
+                ret
+@@nofile:       xor     ax, ax
+                xor     dx, dx
+                ret
 qgl_txt_load    endp
+
+
+IFDEF __BASIC__
+;;::::::::::::::
+;; qgl_txt_load_bas ( s:BASIC string ) -> far ptr to the font, or 0:0
+;;
+;; The BASIC-callable entry point: same shared loader, opened through
+;; qgl_file_open_bas instead of an ASCIIZ far pointer -- see file.asm's
+;; header for why a BASIC string needs its own opener.
+;;::::::::::::::
+qgl_txt_load_bas proc   public uses bx cx si di es,\
+                        s:word
+
+                invoke  qgl_file_open_bas, s
+                test    ax, ax
+                jz      @@nofile
+                invoke  qgl$txt_load_fh, ax
+                ret
+@@nofile:       xor     ax, ax
+                xor     dx, dx
+                ret
+qgl_txt_load_bas endp
+ENDIF
 
 
 ;;::::::::::::::
@@ -174,6 +217,52 @@ qgl_txt_width   proc    public uses bx cx dx si di ds es,\
 @@:             mov     ax, di
                 ret
 qgl_txt_width   endp
+
+
+;;::::::::::::::
+;; qgl_txt_row ( f:far ptr, glyph:word, row:word ) -> ax = the row's bits,
+;;                                                    MSB leftmost, 0-cell_h-1
+;;
+;; For a caller that recolours per pixel -- draw_logo's ember gradient,
+;; hud_num's chosen colour -- and so cannot use qgl_txt_char's fixed
+;; colour. Out of range answers 0 rather than faulting, matching
+;; qgl_txt_char's own silent no-draw for a glyph outside the font.
+;;::::::::::::::
+qgl_txt_row     proc    public uses bx cx dx si es,\
+                        f:dword, glyph:word, row:word
+
+                les     bx, f
+                mov     ax, glyph
+                sub     ax, es:[bx].Font.first
+                cmp     ax, es:[bx].Font.count
+                jae     @@zero                  ;; not in this font
+
+                mov     cl, es:[bx].Font.cell_h
+                xor     ch, ch
+                cmp     row, cx
+                jae     @@zero                  ;; row past the cell
+
+                ;; ax already holds glyph - first from the range check
+                mov     cl, es:[bx].Font.rowbytes
+                mul     cx                      ;; (glyph-first) * rowbytes
+                mov     cl, es:[bx].Font.cell_h
+                mul     cx                      ;; ... * cell_h -> glyph base
+                add     ax, es:[bx].Font.bits_ofs
+                mov     si, ax
+
+                mov     ax, row
+                mov     cl, es:[bx].Font.rowbytes
+                xor     ch, ch
+                mul     cx                      ;; row * rowbytes
+                add     si, ax
+
+                mov     al, es:[bx+si]
+                xor     ah, ah
+                ret
+
+@@zero:         xor     ax, ax
+                ret
+qgl_txt_row     endp
 
 
 ;;::::::::::::::
