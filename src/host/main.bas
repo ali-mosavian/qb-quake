@@ -116,9 +116,14 @@ declare sub host_advance ( _
     host_ticks as long, _
     mdl_ent() as MdlEnt _
 )
-declare function qgl_check_all () as integer
-declare function qgl_diff_all () as integer
-declare function qgl_tex_all ( g as Game ) as integer
+declare function qglCheckAll () as integer
+declare function qglDiffAll () as integer
+declare function qglPresAll ( _
+    g as Game _
+) as integer
+declare function qglTexAll ( g as Game ) as integer
+declare function qglFaceAll () as integer
+declare function qglArrAll () as integer
 
 declare sub host_init ( _
     g as Game, _
@@ -178,10 +183,7 @@ declare function host_z_on ( ) as integer
 '' header would hand these to modules that never use them -- BC's symbol
 '' table is finite, and it ran out when they all got everything.
 ''
-declare sub draw_init_font ( _
-    g as Game, _
-    bit_array() as integer _
-)
+declare sub draw_init_font ( )
 declare sub in_screenshot_key ( _
     g as Game, _
     byval h_dst_dc as long _
@@ -646,7 +648,7 @@ sub host_init ( _
     '' set up. It is the only BASIC caller of qgl, and it exits.
     if ( g.qgl_check ) then
         dim qglbad as integer
-        qglbad = qgl_check_all()
+        qglbad = qglCheckAll()
         system
     end if
 
@@ -662,13 +664,25 @@ sub host_init ( _
     '' because nothing it draws comes from one.
     if ( g.qgl_diff ) then
         dim qgldbad as integer
-        qgldbad = qgl_diff_all()
+        qgldbad = qglDiffAll()
         uglRestore
         system
     end if
+    '' -qglarr: the paged-array store against a real .pag fixture.
+    '' BEFORE mod_open, because that is the last point at which all four
+    '' of uglArrNew's UA_MAX stores are still free -- afterwards leaves,
+    '' faces, nodes and clip have taken every one and a fifth cannot be
+    '' created to test with.
+    if ( g.qgl_arr ) then
+        dim qglabad as integer
+        qglabad = qglArrAll()
+        uglRestore
+        system
+    end if
+
     s_init g
     s_start_music g
-    draw_init_font g, bit_array()
+    draw_init_font
     sys_mem_mark "font"
 
     '' map file and the loading screen
@@ -699,7 +713,7 @@ sub host_init ( _
     '' onto it, which mod_load_textures has just built.
     if ( g.qgl_tex ) then
         dim qgltbad as integer
-        qgltbad = qgl_tex_all( g )
+        qgltbad = qglTexAll( g )
         uglRestore
         system
     end if
@@ -715,6 +729,17 @@ sub host_init ( _
     '' hand over to the real video mode
     vid_init g
     sys_mem_mark "backbuf"
+
+    '' -qglpres: the production present, differentially. AFTER vid_init,
+    '' because it drives the real mode, video dc and backbuffer rather
+    '' than a replica of them.
+    if ( g.qgl_pres ) then
+        dim qglpbad as integer
+        qglpbad = qglPresAll( g )
+        uglRestore
+        system
+    end if
+
     in_init g
     s_stop_music g
 
@@ -993,6 +1018,13 @@ sub host_main ( _
         '' can.
         ''
         frame_no = frame_no + 1
+        '' -qglface: one frame is enough to have captured a face
+        if ( g.qgl_face ) then
+            dim qglfbad as integer
+            qglfbad = qglFaceAll()
+            uglRestore
+            system
+        end if
         '' -campath ends when the route does, whatever -bench says
         if ( g.env.cam_path and g.cp.done ) then
             host_bench_report g, frame_no, h_dst_dc, brush(), plat(), host_ticks

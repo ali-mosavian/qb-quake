@@ -35,8 +35,12 @@ type Game
     '' what it did when this went into Env instead.
     qgl_check   as integer        '' -qglcheck: run the qgl ABI test and exit
     qgl_diff    as integer        '' -qgldiff: qgl against mgl, then exit
+    qgl_pres    as integer        '' -qglpres: the production present,
+                                  '' differentially, then exit
     qgl_slice   as integer        '' -qgl: the face loop draws through qgl
+    qgl_arr     as integer        '' -qglarr: the paged-array store
     qgl_tex     as integer        '' -qgltex: the EMS texture bridge, then exit
+    qgl_face    as integer        '' -qglface: one real face, replayed
 end type
 
 ''

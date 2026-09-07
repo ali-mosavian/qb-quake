@@ -184,11 +184,21 @@ sub sys_parse_args ( _
         if ( lcase$(argv(i)) = "-qgldiff" ) then
             g.qgl_diff = true
         end if
+        if ( lcase$(argv(i)) = "-qglpres" ) then
+            g.qgl_pres = true
+        end if
         if ( lcase$(argv(i)) = "-qgl" ) then
             g.qgl_slice = true
         end if
         if ( lcase$(argv(i)) = "-qgltex" ) then
             g.qgl_tex = true
+        end if
+        if ( lcase$(argv(i)) = "-qglarr" ) then
+            g.qgl_arr = true
+        end if
+        if ( lcase$(argv(i)) = "-qglface" ) then
+            g.qgl_face = true
+            g.qgl_slice = true
         end if
         if ( lcase$(argv(i)) = "-nodraw" ) then
             g.env.no_draw  = true

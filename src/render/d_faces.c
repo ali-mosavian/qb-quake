@@ -85,9 +85,9 @@ extern void  pascal far uglTriF  ( long dc,  UglTri far *vtx, long col );
 extern void  pascal far uglLine  ( long dc, short x1, short y1, short x2, short y2, long clr );
 extern short pascal far uglZMode ( short mode );
 
-/* qgl, behind -qgl. qgl_sf_scratch hands out the Surface so its layout
+/* qgl, behind -qgl. qglSfScratch hands out the Surface so its layout
    is never spelled here; the vertex is spelled here because
-   qgl_rs_poly takes an array of them and C cannot be handed one
+   qglRsPoly takes an array of them and C cannot be handed one
    otherwise. It is the first five fields of mgl's own UglVtx, carrying
    the same numbers.
    
@@ -101,19 +101,19 @@ extern short pascal far uglZMode ( short mode );
    writes through 1 and puts depth in 3, so 2 is the free one. The
    window is good only until something else claims the slot, which
    is why it is taken per face and used inside a single
-   qgl_rs_poly call that maps nothing itself. */
+   qglRsPoly call that maps nothing itself. */
 #define QGL_TEX_SLOT 2
 #define QGL_M_PTEX  3
 
 typedef struct { float x, y, z, u, v; } QglVtx;
 
-extern short pascal far qgl_sf_adopt_dc ( long dc, long s );
-extern short pascal far qgl_sf_adopt_ems( long dc, short slot, long s );
-extern long  pascal far qgl_sf_scratch ( short n );
-extern short pascal far qgl_rs_tex     ( long s );
-extern void  pascal far qgl_rs_mode    ( short m );
-extern void  pascal far qgl_cl_rect    ( short x0, short y0, short x1, short y1 );
-extern short pascal far qgl_rs_poly    ( long dst, void far *v, short cnt );
+extern short pascal far qglSfAdoptDc ( long dc, long s );
+extern short pascal far qglSfAdoptEms( long dc, short slot, long s );
+extern long  pascal far qglSfScratch ( short n );
+extern short pascal far qglRsTex     ( long s );
+extern void  pascal far qglRsMode    ( short m );
+extern void  pascal far qglClRect    ( short x0, short y0, short x1, short y1 );
+extern short pascal far qglRsPoly    ( long dst, void far *v, short cnt );
 
 /* BASIC-side, all byval scalars or g byref -- the shapes sb_build.c
    already proved callable from here. */
@@ -154,6 +154,22 @@ static float near px[MAXV], py[MAXV], pw[MAXV], pu[MAXV], pv[MAXV];
 static UglVtx near pvtx[16];
 static UglTri near tri1;
 static QglVtx near qvtx[16];
+
+/* TEMPORARY, -qglface. One real post-clip face, frozen so the same
+   record can be replayed into isolated buffers by both rasterisers and
+   an exact oracle. Removed once the divergence is localised. */
+static short fp_cnt = 0;
+static QglVtx near fp_v[16];
+static long  fp_tex = 0;
+
+short pascal far qglFaceCnt( void ) { return fp_cnt; }
+long  pascal far qglFaceTex( void ) { return fp_tex; }
+
+void pascal far qglFaceFetch( QglVtx far *dst )
+{
+    short i;
+    for ( i = 0; i < fp_cnt; i++ ) dst[i] = fp_v[i];
+}
 
 
 /* BASIC's int() is FLOOR, not truncation -- they differ by one for a
@@ -307,12 +323,12 @@ void pascal far d_draw_faces(
     if ( !dp->use_qgl )   dp->qgl_faces = -3;   /* the flag never arrived */
     else if ( z_avail )   dp->qgl_faces = -4;   /* depth stays mgl's for now */
     else {
-        q_dst = qgl_sf_scratch( 0 );
-        q_tex = qgl_sf_scratch( 1 );
+        q_dst = qglSfScratch( 0 );
+        q_tex = qglSfScratch( 1 );
         if ( !q_dst || !q_tex )                             dp->qgl_faces = -1;
-        else if ( !qgl_sf_adopt_dc( dp->h_dst_dc, q_dst ) ) dp->qgl_faces = -2;
+        else if ( !qglSfAdoptDc( dp->h_dst_dc, q_dst ) ) dp->qgl_faces = -2;
         else {
-            qgl_cl_rect( 0, 0, dp->x_res - 1, dp->y_res - 1 );
+            qglClRect( 0, 0, dp->x_res - 1, dp->y_res - 1 );
             q_ok = 1;
         }
         if ( !q_ok ) q_dst = 0;
@@ -683,19 +699,24 @@ void pascal far d_draw_faces(
                  * other mode hands it plain u and v and asks for the
                  * affine one. Nothing is converted here.
                  *
-                 * A texture qgl_rs_tex refuses -- a padded row, a
+                 * A texture qglRsTex refuses -- a padded row, a
                  * non-power-of-two side, more than one 16K page -- falls
                  * through to mgl for that face rather than dropping it.
                  */
                 q_gate++;
-                if ( q_dst && qgl_sf_adopt_ems( src_dc, QGL_TEX_SLOT, q_tex )
-                           && qgl_rs_tex( q_tex ) ) {
+                if ( q_dst && qglSfAdoptEms( src_dc, QGL_TEX_SLOT, q_tex )
+                           && qglRsTex( q_tex ) ) {
                     for ( j = 0; j < cnt; j++ ) {
                         qvtx[j].x = px[j]; qvtx[j].y = py[j]; qvtx[j].z = pw[j];
                         qvtx[j].u = pu[j]; qvtx[j].v = pv[j];
                     }
-                    qgl_rs_mode( dp->rend_mode == 0 ? QGL_M_PTEX : QGL_M_TEX );
-                    qgl_rs_poly( q_dst, (void far *)qvtx, cnt );
+                    if ( fp_cnt == 0 ) {
+                        for ( j = 0; j < cnt; j++ ) fp_v[j] = qvtx[j];
+                        fp_cnt = cnt;
+                        fp_tex = src_dc;
+                    }
+                    qglRsMode( dp->rend_mode == 0 ? QGL_M_PTEX : QGL_M_TEX );
+                    qglRsPoly( q_dst, (void far *)qvtx, cnt );
                     if ( dp->qgl_faces < 0 ) dp->qgl_faces = 0;
                     dp->qgl_faces++;
                     dp->tris += cnt - 2;
@@ -747,7 +768,7 @@ void pascal far d_draw_faces(
        -5: no face reached the one-call-per-polygon gate at all.
        -6: they reached it and the TEXTURE was refused every time --
            which is where this stands today. The atlas is an EMS DC
-           (mod_tex.bas: uglNewBMPEx UGL.EMS) and qgl_sf_adopt_dc takes
+           (mod_tex.bas: uglNewBMPEx UGL.EMS) and qglSfAdoptDc takes
            linear memory only. 111 of 111 faces, measured. */
     if ( dp->qgl_faces == 0 && q_ok ) dp->qgl_faces = q_gate ? -6 : -5;
 

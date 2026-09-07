@@ -5,11 +5,17 @@
  * arrive as a near pointer to a BASARRAY descriptor (see BASARRAY
  * below), whose own farptr field is the far pointer to the actual data;
  * g as Game arrives as a near pointer too. ls_value/ls_scale_byte/
- * ls_add_dlight/sb_seg/sb_pot/mod_lm_map/mod_cm_map/memCopy/uglBuildSurf
- * are all called back into unchanged -- every one of them takes only
- * byval scalars (or g byref, already proven), never a plain (non-SEG)
- * byref UDT or array, which is the specific thing that turned out not
- * to be reproducible from a foreign C function (see r_walk.c's header).
+ * ls_add_dlight/sb_seg/sb_pot/mod_lm_map/mod_cm_map/memCopy are all
+ * called back into unchanged -- every one of them takes only byval
+ * scalars (or g byref, already proven), never a plain (non-SEG) byref
+ * UDT or array, which is the specific thing that turned out not to be
+ * reproducible from a foreign C function (see r_walk.c's header).
+ *
+ * The texel loop itself is qglSbBuild (src/qgl/sb.asm), not mgl's
+ * uglBuildSurf: same SBPARM, same maths, but the destination is
+ * composited into a conventional-memory scratch buffer and copied into
+ * its EMS page once at the end, rather than holding a pointer to the
+ * EMS window across the whole loop -- see sb.asm's own header for why.
  *
  * ls_scratch and lm_flat were BASIC-side scratch private to sb_build
  * alone (nothing else in the codebase reads either -- grepped, not
@@ -44,7 +50,7 @@ extern long  pascal far mod_cm_map( void *g );
 extern short pascal far sb_seg( long p );
 extern short pascal far sb_pot( short v );
 extern void  pascal far memCopy( long dst, long src, long bytes );
-extern short pascal far uglBuildSurf( long dstDc, long texDc, long parm );
+extern short pascal far qglSbBuild( long dstDc, long texDc, long parm );
 extern void  pascal far sc_note_build( void );
 extern void  pascal far sc_note_dlit( void );
 
@@ -197,7 +203,7 @@ void pascal far sb_build(
     sbp.msk  = msk;
 
     o = (long) (void far *) &sbp;
-    if ( uglBuildSurf( dc, tex, o ) == 0 ) {
+    if ( qglSbBuild( dc, tex, o ) == 0 ) {
         /* only a luxel grid too big for the builder's stack buffer gets
            here; leave the surface as it is rather than half-composite it */
     }
