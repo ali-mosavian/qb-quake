@@ -40,6 +40,12 @@ declare sub vid_update ( _
     h_dst_dc as long, _
     page as integer _
 )
+declare function vid_present ( _
+    g as Game _
+) as integer
+declare function vid_qgl_shape ( _
+    g as Game _
+) as integer
 declare sub vid_init_ugl ( )
 declare sub vid_init ( _
     g as Game _
@@ -52,8 +58,106 @@ declare sub vid_init ( _
 ''
 declare sub scr_hud_colors ( )
 
+''
+'' qgl, for the present path alone. qgl_vga_screen and NOT qgl_vga_init:
+'' mgl already set the mode and installed the palette, and the init would
+'' re-set both.
+''
+declare function qgl_vga_screen ( ) as long
+declare function qgl_sf_scratch ( _
+    byval n as integer _
+) as long
+declare function qgl_sf_adopt_dc ( _
+    byval dc as long, _
+    byval s as long _
+) as integer
+declare sub qgl_dr_blit_scl ( _
+    byval d as long, _
+    byval x as integer, _
+    byval y as integer, _
+    byval w as integer, _
+    byval h as integer, _
+    byval s as long _
+)
+
+''
+'' The same scratch index d_faces.c adopts its destination into, and for
+'' the same DC -- so the two adoptions produce an identical Surface and
+'' neither can surprise the other. Not a free slot: all four are spoken
+'' for, and taking a different one would collide with a live user.
+''
+const VID_QGL_SURF = 0
+
 '$static
 
+
+
+
+''::::::::::
+'' name: vid_present
+'' desc: The non-paged present. Returns true only when qgl presented, so
+''       the route is observable without a struct field -- DrawParams is
+''       mirrored in qcshared.h and a new member there shifts the C side.
+''::::::::::
+function vid_present ( _
+    g as Game _
+) as integer
+    dim src as long
+
+    if ( vid_qgl_shape( g ) ) then
+
+        src = qgl_sf_scratch( VID_QGL_SURF )
+
+        '' adopt_dc checks the DC's fields against each other and refuses
+        '' one that does not agree, so a drifted layout falls back to mgl
+        '' instead of blitting through a plausible wrong pointer
+        if ( src <> 0 ) then
+            if ( qgl_sf_adopt_dc( g.env.h_back_bdc, src ) <> 0 ) then
+                qgl_dr_blit_scl qgl_vga_screen(), _
+                                g.env.view_x, g.env.view_y, _
+                                g.env.view_w, g.env.view_h, src
+                vid_present = true
+                exit function
+            end if
+        end if
+
+    end if
+
+    uglPutScl g.env.h_video_dc, g.env.view_x, g.env.view_y, _
+              g.env.view_scale, g.env.view_scale, g.env.h_back_bdc
+    vid_present = false
+
+end function
+
+
+
+''::::::::::
+'' name: vid_qgl_shape
+'' desc: True when the frame is the one shape qgl's present was written
+''       for: a non-paged 8-bit backbuffer magnified by a whole two into
+''       a 320x200 mode at the origin.
+''
+''       qgl_vga_screen's Surface hardcodes that mode -- 320 wide, stride
+''       320, A000 -- so the mode is checked here rather than assumed.
+''::::::::::
+function vid_qgl_shape ( _
+    g as Game _
+) as integer
+
+    vid_qgl_shape = false
+
+    if ( g.env.use_paging <> false ) then exit function
+    if ( g.env.c_fmt <> UGL.8BIT ) then exit function
+    if ( g.env.scr_x_res <> 320 or g.env.scr_y_res <> 200 ) then exit function
+    if ( g.env.view_x <> 0 or g.env.view_y <> 0 ) then exit function
+    if ( g.env.view_w <> 320 or g.env.view_h <> 200 ) then exit function
+    if ( g.env.view_scale <> 2 ) then exit function
+    if ( g.env.x_res * 2 <> g.env.view_w ) then exit function
+    if ( g.env.y_res * 2 <> g.env.view_h ) then exit function
+
+    vid_qgl_shape = true
+
+end function
 
 
 
@@ -146,9 +250,10 @@ sub vid_update ( _
     '' three of them nothing to do with video. Input polling in the present
     '' path is the odd one: pressing a key had to wait for a blit.
     ''
+    dim presented as integer
+
     if ( g.env.use_paging = false ) then
-        uglPutScl g.env.h_video_dc, g.env.view_x, g.env.view_y, _
-                  g.env.view_scale, g.env.view_scale, g.env.h_back_bdc
+        presented = vid_present( g )
     else
         uglSetVisPage page
         uglSetWrkPage (page+1) mod g.env.pages
