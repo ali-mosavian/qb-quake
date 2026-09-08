@@ -182,10 +182,11 @@ dim shared tex_info_tmp as DiskTexInfo       '' tex_inf_buff dropped flags and
 ''
 '' One row of 16,384, which is one EMS page, so a single uglMapEx reaches
 '' the whole table and the rows the builder indexes flat really are
-'' contiguous. CM_SLOT borrows the depth buffer's: a surface build is not
-'' a scanline, nothing writes depth during one, and the depth publish
-'' remaps its slot on every scanline anyway, so it repairs itself with no
-'' explicit restore.
+'' contiguous. CM_SLOT is its own window and shares with nothing: qgl owns
+'' slots 0 and 1 (QGL_TEX_SLOT reads, QGL_Z_SLOT and every other qgl write)
+'' and mgl owns 2 and 3, so the two ppgTB caches never claim one page. This
+'' used to say CM_SLOT borrowed the depth buffer's; that stopped being true
+'' when depth moved to EMS_WRITEPAGE.
 ''
 const CM_SLOT = 3
 
@@ -719,8 +720,9 @@ end sub
 ''::::::::::
 '' name: mod_cm_map( wld )
 '' desc: The colormap, mapped, as a far pointer. Mapped per call and never
-''       held: CM_SLOT is the depth buffer's, so anything that touched
-''       depth in between has already taken it back.
+''       held: CM_SLOT is mgl's alone (see the block comment above), but a
+''       pointer kept across anything that could remap is the bug class
+''       this codebase keeps hitting, so it is re-taken instead.
 ''::::::::::
 function mod_cm_map ( _
     g as Game _

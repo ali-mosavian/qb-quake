@@ -372,6 +372,9 @@ qglTxtChar    proc    public uses bx cx dx si di ds es,\
                 ;; and where they go. Re-derived every scanline: the
                 ;; destination may be an EMS surface whose window moved.
                 invoke  qglSfWrRow, dst, scan
+                mov     bx, ax                  ;; 0:0 -- a surface kind
+                or      bx, dx                  ;; qgl cannot address
+                jz      @@next
                 mov     es, dx
                 mov     di, ax
 

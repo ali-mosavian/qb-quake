@@ -95,16 +95,23 @@
 ;;         because it is exactly what mgl's legacy rdAccess used for
 ;;         this atlas, and every other mgl EMS object goes through
 ;;         uglMapEx with an explicit 2 or 3 -- checked in model.bas, not
-;;         assumed. The destination takes PAGE_SLOT, which is safe only
-;;         because it is touched in the copy loop at the END, by which
-;;         time the luxel window is dead: one row mapped, copied,
-;;         released, per iteration.
-;;       - it is qglGemMap doing the mapping now, not mgl's emsMapEx, but
-;;         nothing else in this codebase reaches these pages through
-;;         mgl's accessor at all (the handles are qgl's, not mgl's, so
-;;         mgl COULD NOT map them even if some other code tried), so
-;;         there is no ppgTB bookkeeping for a raw INT 67h remap here to
-;;         desync.
+;;         assumed. The destination goes through the PLAIN write
+;;         accessor, EMS_WRITEPAGE (1), which is qgl's own and shares
+;;         with nothing live here -- an earlier version of this note said
+;;         PAGE_SLOT and was describing code that no longer exists. So
+;;         the four windows are four distinct slots: atlas 0, destination
+;;         1, luxels 2, colormap 3.
+;;       - it is qglGemMap doing the mapping now, not mgl's emsMapEx.
+;;         There ARE two ppgTB caches over the same four physical pages
+;;         (qgl$emsCtx in dct/dctems.asm, em$emsCtx in mgl's), and one
+;;         object does cross the line: the model skin is an mgl DC
+;;         (d_mdl.bas, uglNewBMPEx UGL.EMS) read through qgl's accessor.
+;;         What keeps them from desyncing is that the SLOT SETS are
+;;         disjoint -- qgl only ever maps 0 and 1, mgl only ever 2
+;;         (PAGE_SLOT) and 3 (CM_SLOT) -- not that the handles are
+;;         unreachable, which is what this note used to claim. Nothing
+;;         enforces the split; adding a qgl map of slot 2 or 3, or an
+;;         mgl plain rd/wrAccess on any EMS DC at draw time, breaks it.
 ;;       - the scratch block is sized SC_PGBYTES (16384): the same bound
 ;;         SC_MAXSUM enforces on every surface sc_alloc will ever hand
 ;;         back. A surface that could not fit could not have been

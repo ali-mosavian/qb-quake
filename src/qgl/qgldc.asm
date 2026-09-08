@@ -178,6 +178,26 @@ qglSfGet        proc    public uses di si es ds,\
 qglSfGet        endp
 
 QGL_CODE
+
+;;::::::::::::::
+;; A KIND THAT IS NOT THERE MUST NOT ANSWER WITH THE CALLER'S OWN es.
+;;
+;; The accessors below take their answer out of the segment register
+;; the back-end wrote, so a back-end that never ran leaves the CALLER's
+;; register standing in for a row pointer. Dispatch slot 1 is mgl's banked
+;; back-end, which qgl has none of and qglSfInit marks dead -- and the
+;; loading screen's DC is exactly that kind. qglTxtChar holds the FONT's
+;; segment in es two instructions before it asks for a row, so every glyph
+;; row of the loading screen was written into the font block at
+;; scan*4 + x. The HUD then drew whatever the font had become: 'a', '8'
+;; and 'F' came out as solid 0xFE cells.
+;;
+;; The dead entry's stub does report the failure, in ax/dx and CF, and all
+;; three of those were then overwritten. CF cannot carry it back either --
+;; qgl_mem_WrAccess ends in `shr edi,16`, which sets CF from bit 15 of the
+;; segment. So the check happens BEFORE the call, on the table.
+;;::::::::::::::
+
 ;;::::::::::::::
 ;; qglSfAccessRd (sf:dword, y:word) :dword
 qglSfAccessRd   proc    public uses bx si gs ds,\
@@ -188,6 +208,7 @@ qglSfAccessRd   proc    public uses bx si gs ds,\
                 mov     si, y
 
                 mov     bx, gs:[Surface.typ]
+                CHECKKIND bx, @@dead
                 add     si, gs:[Surface.startSL]        ;; + page
 
                 shl     si, 2                           ;; * sizeof( addrTB )
@@ -196,6 +217,9 @@ qglSfAccessRd   proc    public uses bx si gs ds,\
                 mov     dx, ds                          ;; return sf->addrTB[y]
                 mov     ax, si                          ;; /
 
+                ret
+@@dead:         xor     ax, ax
+                xor     dx, dx
                 ret
 qglSfAccessRd   endp
 
@@ -209,6 +233,7 @@ qglSfAccessWr   proc    public uses bx di fs es,\
                 mov     di, y
 
                 mov     bx, fs:[Surface.typ]
+                CHECKKIND bx, @@dead
                 add     di, fs:[Surface.startSL]        ;; + page
 
                 shl     di, 2                           ;; * sizeof( addrTB )
@@ -217,6 +242,9 @@ qglSfAccessWr   proc    public uses bx di fs es,\
                 mov     dx, es                          ;; return sf->addrTB[y]
                 mov     ax, di                          ;; /
 
+                ret
+@@dead:         xor     ax, ax
+                xor     dx, dx
                 ret
 qglSfAccessWr   endp
 
@@ -231,6 +259,7 @@ qglSfAccessRdWr proc    public uses bx di fs es,\
                 mov     di, y
 
                 mov     bx, fs:[Surface.typ]
+                CHECKKIND bx, @@dead
                 add     di, fs:[Surface.startSL]        ;; + page
 
                 shl     di, 2                           ;; * sizeof( addrTB )
@@ -244,6 +273,12 @@ qglSfAccessRdWr proc    public uses bx di fs es,\
                 mov     dx, es                          ;; return sf->addrTB[y]
                 mov     ax, di                          ;; /
 
+                ret
+@@dead:         xor     ax, ax
+                xor     dx, dx
+                mov     bx, rdPtr
+                mov     [bx+0], ax
+                mov     [bx+2], ax
                 ret
 qglSfAccessRdWr endp
 
@@ -262,12 +297,16 @@ qglSfAccessRdEx proc    public uses bx cx si gs,\
                 mov     si, y
 
                 mov     bx, gs:[Surface.typ]
+                CHECKKIND bx, @@dead
                 add     si, gs:[Surface.startSL]        ;; + page
 
                 shl     si, 2                           ;; * sizeof( addrTB )
                 mov     cx, slot                        ;; cl= window slot
                 call    qgl$dctTB[bx].rdAccessEx
 
+                ret
+@@dead:         xor     ax, ax
+                xor     dx, dx
                 ret
 qglSfAccessRdEx endp
 
@@ -282,12 +321,16 @@ qglSfAccessWrEx proc    public uses bx cx di fs,\
                 mov     di, y
 
                 mov     bx, fs:[Surface.typ]
+                CHECKKIND bx, @@dead
                 add     di, fs:[Surface.startSL]        ;; + page
 
                 shl     di, 2                           ;; * sizeof( addrTB )
                 mov     cx, slot                        ;; cl= window slot
                 call    qgl$dctTB[bx].wrAccessEx
 
+                ret
+@@dead:         xor     ax, ax
+                xor     dx, dx
                 ret
 qglSfAccessWrEx endp
 QGL_ENDS
