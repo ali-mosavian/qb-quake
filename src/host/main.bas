@@ -119,13 +119,16 @@ declare sub host_advance ( _
 )
 declare function qglCheckAll () as integer
 declare function qglDiffAll () as integer
-declare function qglPresAll ( _
-    g as Game _
-) as integer
 declare function qglFaceAll () as integer
 declare function qglArrAll () as integer
 declare function qglSfInit () as integer
 declare function qglZNew ( byval dst as long, byval kind as integer ) as long
+declare sub qglDrFill ( byval d as long, _
+                        byval x0 as integer, _
+                        byval y0 as integer, _
+                        byval x1 as integer, _
+                        byval y1 as integer, _
+                        byval col as integer )
 '' `as single`, not `as long`: the fillers read this with `fmul D
 '' qgl$zscale`, so what crosses is the float's bit pattern, not its
 '' value. mgl's uglZScale took an integer and a `as long` here would
@@ -735,16 +738,6 @@ sub host_init ( _
     vid_init g
     sys_mem_mark "backbuf"
 
-    '' -qglpres: the production present, differentially. AFTER vid_init,
-    '' because it drives the real mode, video dc and backbuffer rather
-    '' than a replica of them.
-    if ( g.qgl_pres ) then
-        dim qglpbad as integer
-        qglpbad = qglPresAll( g )
-        uglRestore
-        system
-    end if
-
     in_init g
     s_stop_music g
 
@@ -972,7 +965,7 @@ sub host_main ( _
     	'' Clear DC
     	''
         if ( g.env.clear_screen = true ) then
-            uglClear h_dst_dc, 0
+            qglDrFill h_dst_dc, 0, 0, g.env.x_res - 1, g.env.y_res - 1, 0
         end if
 
         ''

@@ -31,6 +31,7 @@ option explicit
 '$include: 'q_snd.bi'
 '$include: 'q_mdl.bi'
 '$include: 'q_game.bi'
+'$include: 'qgl.bi'
 
 ''
 '' This module's own procedures.
@@ -59,11 +60,15 @@ declare sub vid_init ( _
 declare sub scr_hud_colors ( )
 
 ''
-'' qgl, for the present path alone. qglVgaScreen and NOT qglVgaInit:
-'' mgl already set the mode and installed the palette, and the init would
-'' re-set both.
+'' qgl. qglVgaScreen and NOT qglVgaInit: mgl already set the mode and
+'' installed the palette, and the init would re-set both.
 ''
 declare function qglVgaScreen ( ) as long
+declare function qglSfNew ( _
+    byval wid as integer, _
+    byval hgt as integer, _
+    byval whr as integer _
+) as long
 declare sub qglDrBlitScl ( _
     byval d as long, _
     byval x as integer, _
@@ -87,19 +92,18 @@ declare sub qglDrBlitScl ( _
 function vid_present ( _
     g as Game _
 ) as integer
-    if ( vid_qgl_shape( g ) ) then
-        '' The backbuffer DC IS a Surface -- one struct, one allocator --
-        '' so there is nothing to bridge and nothing to check.
-        qglDrBlitScl qglVgaScreen(), _
-                        g.env.view_x, g.env.view_y, _
-                        g.env.view_w, g.env.view_h, g.env.h_back_bdc
-        vid_present = true
-        exit function
+    '' No mgl fallback, and there cannot be one: the backbuffer is a qgl
+    '' Surface, and uglPutScl would read its scanline table at mgl's
+    '' offset. A shape qgl's present cannot serve is a configuration
+    '' error, caught at init.
+    if ( vid_qgl_shape( g ) = false ) then
+        sys_error "0x001A, no qgl present for this video shape"
     end if
 
-    uglPutScl g.env.h_video_dc, g.env.view_x, g.env.view_y, _
-              g.env.view_scale, g.env.view_scale, g.env.h_back_bdc
-    vid_present = false
+    qglDrBlitScl qglVgaScreen(), _
+                    g.env.view_x, g.env.view_y, _
+                    g.env.view_w, g.env.view_h, g.env.h_back_bdc
+    vid_present = true
 
 end function
 
@@ -107,12 +111,13 @@ end function
 
 ''::::::::::
 '' name: vid_qgl_shape
-'' desc: True when the frame is the one shape qgl's present was written
-''       for: a non-paged 8-bit backbuffer magnified by a whole two into
-''       a 320x200 mode at the origin.
+'' desc: True when qgl's present can serve this frame: a non-paged 8-bit
+''       backbuffer scaled into a 320x200 mode.
 ''
 ''       qglVgaScreen's Surface hardcodes that mode -- 320 wide, stride
 ''       320, A000 -- so the mode is checked here rather than assumed.
+''       The view rect and the scale factor are NOT checked: qglDrBlitScl
+''       takes both as arguments and magnifies whatever it is given.
 ''::::::::::
 function vid_qgl_shape ( _
     g as Game _
@@ -123,11 +128,6 @@ function vid_qgl_shape ( _
     if ( g.env.use_paging <> false ) then exit function
     if ( g.env.c_fmt <> UGL.8BIT ) then exit function
     if ( g.env.scr_x_res <> 320 or g.env.scr_y_res <> 200 ) then exit function
-    if ( g.env.view_x <> 0 or g.env.view_y <> 0 ) then exit function
-    if ( g.env.view_w <> 320 or g.env.view_h <> 200 ) then exit function
-    if ( g.env.view_scale <> 2 ) then exit function
-    if ( g.env.x_res * 2 <> g.env.view_w ) then exit function
-    if ( g.env.y_res * 2 <> g.env.view_h ) then exit function
 
     vid_qgl_shape = true
 
@@ -179,7 +179,11 @@ sub vid_init ( _
         '' scales with the view: 150x150 is 22,500 bytes where a full
         '' 320x200 is 64,000.
         ''
-        g.env.h_back_bdc = uglNew( ugl.mem, g.env.c_fmt, g.env.x_res, g.env.y_res )
+        '' A QGL SURFACE, not an mgl DC. Everything that draws into it
+        '' is qgl's now, and a Surface that no mgl entry point has to
+        '' recognise is one qgl is free to grow -- which is what lets a
+        '' depth buffer live in it rather than beside it.
+        g.env.h_back_bdc = qglSfNew&( g.env.x_res, g.env.y_res, QGL_SURF_CMEM )
         if ( g.env.h_back_bdc = FALSE ) then 
             sys_error "0x0002, Could not create a backbuffer..."
         end if

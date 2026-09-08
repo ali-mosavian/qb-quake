@@ -234,6 +234,29 @@ declare function qglTxtRow ( _
     byval glyph as integer, _
     byval row as integer _
 ) as integer
+declare sub qglDrFill ( _
+    byval d as long, _
+    byval x0 as integer, _
+    byval y0 as integer, _
+    byval x1 as integer, _
+    byval y1 as integer, _
+    byval col as integer _
+)
+declare sub qglDrRect ( _
+    byval d as long, _
+    byval x0 as integer, _
+    byval y0 as integer, _
+    byval x1 as integer, _
+    byval y1 as integer, _
+    byval col as integer _
+)
+declare sub qglDrHline ( _
+    byval d as long, _
+    byval x0 as integer, _
+    byval y as integer, _
+    byval x1 as integer, _
+    byval col as integer _
+)
 declare sub qglSfPset ( _
     byval s as long, _
     byval x as integer, _
@@ -1394,7 +1417,7 @@ sub scr_draw_hud ( _
         hud_pflush = scs.flushes
         if ( hud_flash > 0 ) then
             if ( (hud_flash and 2) <> 0 ) then
-                uglRect h_dst_dc, lx, 90, lx+cw, 90+78, hc_bad
+                qglDrRect h_dst_dc, lx, 90, lx+cw, 90+78, hc_bad
             end if
             hud_flash = hud_flash - 1
         end if
@@ -1446,8 +1469,8 @@ sub scr_draw_hud ( _
         ftr = ftr + "   F12 hide"
 
         yy = g.env.y_res - 9
-        uglRectF h_dst_dc, 0, yy-2, g.env.x_res, g.env.y_res, hc_bg
-        uglHLine h_dst_dc, 0, yy-2, g.env.x_res, hc_slabhi
+        qglDrFill h_dst_dc, 0, yy-2, g.env.x_res, g.env.y_res, hc_bg
+        qglDrHline h_dst_dc, 0, yy-2, g.env.x_res, hc_slabhi
         draw_string h_dst_dc, 4, yy, ftr
     else
         yy = g.env.y_res - 9
@@ -1501,7 +1524,7 @@ sub scr_draw_hud ( _
                     ltrim$(str$( cint( g.pl.pos.z ) )) + _
            " -yaw " + ltrim$(str$( cint( yawd ) ))
 
-    uglRectF h_dst_dc, 0, 0, g.env.x_res, 9, hc_bg
+    qglDrFill h_dst_dc, 0, 0, g.env.x_res, 9, hc_bg
     draw_string h_dst_dc, 4, 1, pstr
 end sub
 
