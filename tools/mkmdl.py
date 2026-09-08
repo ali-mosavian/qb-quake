@@ -15,7 +15,7 @@ Emits (DOS 8.3 names, since the loader opens them by name):
                  as fixed-point Integers, then one vertex array per
                  animation frame as raw BYTES -- the same trivertx_t
                  compression the .mdl file itself already uses.
-    <name>skn.bmp  the skin, 8-bit, in the game palette
+    <name>skn.raw  the skin: sw*sh palette indices, top-down, no header
 
 UVs are normalised 0..1 -- uGL's own convention, and the patched library
 scales by xRes rather than xRes-1 (see ugl-patch/README.md). The `onseam`
@@ -36,19 +36,36 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mdlview as mdl  # noqa: E402
 
 
-def write_bmp8(path: str, w: int, h: int, pixels: bytes, pal: np.ndarray) -> None:
-    stride = (w + 3) & ~3
-    rows = bytearray()
-    for y in range(h - 1, -1, -1):          # BMP is bottom-up
-        rows += pixels[y * w : (y + 1) * w] + bytes(stride - w)
-    palb = bytearray()
-    for i in range(256):
-        r, g, b = pal[i]
-        palb += bytes((b, g, r, 0))
-    off = 14 + 40 + 1024
-    hdr = struct.pack("<2sIHHI", b"BM", off + len(rows), 0, 0, off)
-    hdr += struct.pack("<IiiHHIIiiII", 40, w, h, 1, 8, 0, len(rows), 0, 0, 256, 256)
-    open(path, "wb").write(hdr + bytes(palb) + bytes(rows))
+def resample_skin(skin) -> tuple[int, int, np.ndarray]:
+    # POWER OF TWO, both axes. The textured fillers mask u and v with
+    # (size-1), so a 300x194 skin has no mask that works and every
+    # textured polygon rasterises nothing -- silently, with no error from
+    # the library. The world textures already obey this: mkassets.py
+    # resamples every one into 64/32/16/8 cells for exactly this reason.
+    #
+    # It must also fit one scanline (<= 8192) and stay <= 16,384 bytes
+    # (one EMS page), which is qglRsPoly's own limit on a texture: the
+    # texel base is a patched immediate and no filler remaps mid-polygon.
+    # Within that, pick the POT pair closest to the skin's own aspect
+    # ratio, largest area first among equally-close ones -- an even
+    # POT/POT search, not a guess, since which pair wins depends on the
+    # source image's shape.
+    MAX_BYTES = 16384
+    target_ratio = skin.width / skin.height
+    best = None
+    pots = [2**k for k in range(0, 14) if 2**k <= 8192]  # 1..8192
+    for w in pots:
+        for h in pots:
+            if w * h > MAX_BYTES or w > 8192:
+                continue
+            dist = abs((w / h) - target_ratio)
+            score = (dist, -(w * h))  # closest ratio, then largest area
+            if best is None or score < best[0]:
+                best = (score, w, h)
+    sw, sh = best[1], best[2]
+    yi = (np.arange(sh) * skin.height // sh).clip(0, skin.height - 1)
+    xi = (np.arange(sw) * skin.width // sw).clip(0, skin.width - 1)
+    return sw, sh, skin.pixels[yi][:, xi]  # nearest neighbour: stays in palette indices
 
 
 def main() -> int:
@@ -66,7 +83,6 @@ def main() -> int:
 
     blob, entries = mdl.read_pak(pak)
     m = mdl.parse_mdl(mdl.pak_read(blob, entries, f"progs/{name}.mdl"), name)
-    pal = mdl.read_palette(blob, entries)
     uv = mdl.build_uv(m)                     # [tri][corner][u, v], normalised
     skin = m.skins[0]
 
@@ -100,8 +116,14 @@ def main() -> int:
 
     UV_SCALE = 32767   # fixed-point Integer UV, 0..32767 = 0.0..1.0
 
+    sw, sh, res = resample_skin(skin)
+
+    # sw/sh, NOT skin.width/skin.height: the loader creates a Surface of
+    # exactly this size and the source image's own dimensions would be a
+    # fact it has no use for. They were written here before anything read
+    # them, which is how they stayed wrong for free.
     out = bytearray(struct.pack("<4sHHHHH", b"QMDL", len(m.tris), len(m.st),
-                                len(frames), skin.width, skin.height))
+                                len(frames), sw, sh))
     out += struct.pack("<6f", *vscale.tolist(), *vmin.tolist())
     for t, (_ff, a, b, c) in enumerate(m.tris):
         out += struct.pack("<3h", a, b, c)
@@ -127,44 +149,18 @@ def main() -> int:
     vtxpath = os.path.join(outdir, f"{name[:5]}vtx.bin")
     open(vtxpath, "wb").write(bytes(vtxbuf))
 
-    # POWER OF TWO, both axes. uGL's textured fillers mask u and v with
-    # (size-1), so a 300x194 skin has no mask that works and every
-    # textured polygon rasterises nothing -- silently, with no error from
-    # the library. The world textures already obey this: mkassets.py
-    # resamples every one into 64/32/16/8 cells for exactly this reason.
-    #
-    # It must also fit one scanline (<= 8192) and stay <= 16,384 bytes
-    # (one EMS page) or uglTriT silently drops triangles -- see
-    # mgl/docs/issues/ems-texture-and-zbuffer-dropouts.md. Within that,
-    # pick the POT pair closest to the skin's own aspect ratio, largest
-    # area first among equally-close ones: an even POT/POT search, not a
-    # guess, since which pair wins depends on the source image's shape.
-    MAX_BYTES = 16384
-    target_ratio = skin.width / skin.height
-    best = None
-    pots = [2 ** k for k in range(0, 14) if 2 ** k <= 8192]  # 1..8192
-    for w in pots:
-        for h in pots:
-            if w * h > MAX_BYTES or w > 8192:
-                continue
-            dist = abs((w / h) - target_ratio)
-            score = (dist, -(w * h))          # closest ratio, then largest area
-            if best is None or score < best[0]:
-                best = (score, w, h)
-    sw, sh = best[1], best[2]
-    src = skin.pixels
-    yi = (np.arange(sh) * skin.height // sh).clip(0, skin.height - 1)
-    xi = (np.arange(sw) * skin.width // sw).clip(0, skin.width - 1)
-    res = src[yi][:, xi]          # nearest neighbour: stays in palette indices
-
-    bmp = os.path.join(outdir, f"{name[:5]}skn.bmp")
-    write_bmp8(bmp, sw, sh, res.tobytes(), pal)
+    # Raw palette indices, top-down, no header: the .geo already carries
+    # sw and sh, and a second copy in a BMP header is a second place for
+    # them to be wrong. qgl has no BMP reader and does not want one --
+    # the world atlas ships as texr.raw/texs.raw for the same reason.
+    skn = os.path.join(outdir, f"{name[:5]}skn.raw")
+    open(skn, "wb").write(res.tobytes())
 
     print(f"{name}: {len(m.tris)} tris, {len(m.st)} verts, {len(frames)} frames")
     print(f"  {os.path.basename(geo):<14} {len(out):,} B  (header + tris {len(m.tris)*18:,})")
     print(f"  {os.path.basename(vtxpath):<14} {len(vtxbuf):,} B  "
           f"(flat, memAlloc'd conventional memory -- see mdl_load in d_mdl.bas)")
-    print(f"  {os.path.basename(bmp):<14} {skin.width}x{skin.height} -> {sw}x{sh} "
+    print(f"  {os.path.basename(skn):<14} {skin.width}x{skin.height} -> {sw}x{sh} "
           f"= {sw*sh:,} B (power of two, both axes)")
     for i, f in enumerate(frames[:4]):
         print(f"    frame {i}: {f.name}")

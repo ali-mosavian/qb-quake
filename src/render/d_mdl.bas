@@ -80,6 +80,20 @@ declare function qglRsPoly ( byval dst as long, _
                              byval zsf as long, _
                              byval zmode as integer ) as integer
 declare function host_z_dc ( ) as long
+declare function qglSfNew ( _
+    byval wid as integer, _
+    byval hgt as integer, _
+    byval whr as integer _
+) as long
+declare function qglSfWrRow ( byval s as long, byval y as integer ) as long
+declare sub qglSfFree ( byval s as long )
+declare function qglFileOpenBas ( flname as string ) as integer
+declare function qglFileRead ( _
+    byval h as integer, _
+    byval dst as long, _
+    byval nbytes as long _
+) as long
+declare sub qglFileClose ( byval h as integer )
 
 ''
 '' This module's own procedures.
@@ -105,10 +119,11 @@ dim shared mdl_okv( MDL_MAXV ) as integer
 
 ''::::::::::::::
 '' name: mdl_load
-'' desc: reads <name>.geo (mkmdl.py's own output) and <name[:5]>skn.bmp,
+'' desc: reads <name>.geo (mkmdl.py's own output) and <name[:5]>skn.raw,
 ''       both loose files beside the exe -- mkmdl.py does not pack them
-''       into base.dat/assets.zip, so this is plain OPEN/uglNewBMPEx, not
-''       the "archive::path" convention mod_load_textures uses.
+''       into base.dat/assets.zip, so this is a plain OPEN and a plain
+''       qglFileRead, not the "archive::path" convention
+''       mod_load_textures uses.
 ''::::::::::::::
 sub mdl_load ( _
     g as Game, _
@@ -121,11 +136,13 @@ sub mdl_load ( _
     dim u as UAR
     dim vtxbytes as long
     dim vtxseg as integer
+    dim skin_w as integer, skin_h as integer
+    dim skfh as integer, skrow as integer, skptr as long
 
     g.mdl.loaded = 0
     geopath = mdlname + ".geo"
     vtxpath = left$(mdlname, 5) + "vtx.bin"
-    skinpath = left$(mdlname, 5) + "skn.bmp"
+    skinpath = left$(mdlname, 5) + "skn.raw"
 
     fh = freefile
     open geopath for binary as #fh
@@ -133,6 +150,8 @@ sub mdl_load ( _
     g.mdl.ntri     = cvi( mid$( hdr, 5, 2 ) )
     g.mdl.nvert    = cvi( mid$( hdr, 7, 2 ) )
     g.mdl.nframe   = cvi( mid$( hdr, 9, 2 ) )
+    skin_w         = cvi( mid$( hdr, 11, 2 ) )
+    skin_h         = cvi( mid$( hdr, 13, 2 ) )
     g.mdl.scale.x  = cvs( mid$( hdr, 15, 4 ) )
     g.mdl.scale.y  = cvs( mid$( hdr, 19, 4 ) )
     g.mdl.scale.z  = cvs( mid$( hdr, 23, 4 ) )
@@ -189,12 +208,35 @@ sub mdl_load ( _
     sys_mem_mark "mdl_post_vert_load"
     if ( g.mdl.vtx_hnd = 0 ) then exit sub
 
-    '' UGL.EMS: the skin must be <= 16,384 bytes (one EMS page) or uglTriT
-    '' silently drops triangles -- see mgl/docs/issues/ems-texture-and-
-    '' zbuffer-dropouts.md. mkmdl.py's own skin resample keeps this true.
-    g.mdl.skin = uglNewBMPEx&( UGL.EMS%, UGL.8BIT%, skinpath, BMPOPT.NO332% )
-    sys_mem_mark "mdl_post_skin"
+    '' EMS, and <= 16,384 bytes: that is one page, and qglRsPoly refuses
+    '' a texture crossing two because the texel base is a patched
+    '' immediate no filler remaps mid-polygon. mkmdl.py's resample keeps
+    '' it true and writes the resulting size into the .geo header, so the
+    '' two sizes cannot drift.
+    ''
+    '' Read a row at a time. The pointer qglSfWrRow hands back maps an
+    '' EMS page, and the read that consumes it is the next statement --
+    '' nothing maps in between, so the window cannot move under it.
+    g.mdl.skin = qglSfNew&( skin_w, skin_h, QGL_SURF_EMS )
     if ( g.mdl.skin = 0 ) then exit sub
+
+    skfh = qglFileOpenBas%( skinpath )
+    if ( skfh = 0 ) then
+        qglSfFree g.mdl.skin
+        g.mdl.skin = 0
+        exit sub
+    end if
+    for skrow = 0 to skin_h - 1
+        skptr = qglSfWrRow&( g.mdl.skin, skrow )
+        if ( qglFileRead&( skfh, skptr, clng( skin_w ) ) <> skin_w ) then
+            qglFileClose skfh
+            qglSfFree g.mdl.skin
+            g.mdl.skin = 0
+            exit sub
+        end if
+    next skrow
+    qglFileClose skfh
+    sys_mem_mark "mdl_post_skin"
 
     g.mdl.loaded = -1
 end sub
