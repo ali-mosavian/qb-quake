@@ -35,8 +35,20 @@ if [[ -z "$DOSBOX_BIN" ]]; then
 fi
 [[ -n "$DOSBOX_BIN" ]] || { echo "no dosbox-x found; set DOSBOX_BIN" >&2; exit 1; }
 
+## SERIAL_LOG=1 reads back the call trace a `make SERIAL_LOG=1` build
+## writes to port E9h. TWO things are needed and both are easy to miss:
+## dosbox-x only installs the port when `bochs debug port e9` is set, and
+## -nolog discards every LOG_MSG before it reaches the file, so the flag
+## has to go as well. Either one missing gives an EMPTY log, which reads
+## exactly like a build whose LOG lines never fired.
 launch () {   # $1 = conf file, $2 = timeout
-    SDL_VIDEODRIVER=dummy timeout "$2" "$DOSBOX_BIN" -nolog -conf "$1" -exit >/dev/null 2>&1 || true
+    local logflag=-nolog
+    if [[ "${SERIAL_LOG:-}" = 1 ]]; then
+        logflag=
+        printf '\n[dosbox]\nbochs debug port e9 = true\n[log]\nlogfile=%s\n' \
+            "$(dirname "$1")/E9LOG.TXT" >> "$1"
+    fi
+    SDL_VIDEODRIVER=dummy timeout "$2" "$DOSBOX_BIN" $logflag -conf "$1" -exit >/dev/null 2>&1 || true
 }
 
 case "$cmd" in

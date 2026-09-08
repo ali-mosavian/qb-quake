@@ -37,7 +37,7 @@ LINKQR := $(CURDIR)/tools/link-qr.sh
 # host-side concern only and basenames must therefore stay unique across
 # the tree. vpath is what lets the pattern rules below keep matching on
 # the bare name.
-SRC_DIRS := src/host src/render src/game src/qgl src/qgl/b8
+SRC_DIRS := src/host src/render src/game src/qgl src/qgl/b8 src/qgl/dct
 vpath %.bas $(SRC_DIRS)
 vpath %.c   $(SRC_DIRS)
 vpath %.asm $(SRC_DIRS)
@@ -60,6 +60,16 @@ ASM_SRC  := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.asm))
 ASM_MODS := $(basename $(notdir $(ASM_SRC)))
 ASM_INC  := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.inc))
 JWASM    := $(TOOLCHAINS)/native/bin/jwasm
+
+# SERIAL_LOG=1 turns qgl's transcribed LOG lines into a call trace on
+# port E9h. Off by default: it is a debugging build, not a slow one to
+# leave lying around. _DEBUG_ is mgl's own gate for those macros and is
+# set here rather than in qgl.inc, so that header stays mgl's log.inc
+# verbatim. Reading the trace needs SERIAL_LOG=1 on the RUN as well --
+# see the note on launch() in tools/dosbox.sh.
+ifeq ($(SERIAL_LOG),1)
+QGL_DEFS := -D_DEBUG_=1
+endif
 
 BAS_OBJS := $(addprefix $(BUILD)/,$(addsuffix .obj,$(BAS_MODS)))
 C_OBJS   := $(addprefix $(BUILD)/,$(addsuffix .obj,$(C_MODS)))
@@ -108,7 +118,7 @@ $(BUILD)/%.obj: %.asm $(ASM_INC) | $(BUILD)
 	# __BASIC__: this build links BASIC's runtime, so qgl may call
 	# B$$SETM to reclaim far-heap memory. The qgl test suite does not
 	# define it and links free-standing.
-	$(JWASM) -c -Cp -Zg -omf -D__BASIC__=1 -I$(CURDIR)/src/qgl -Fo$@ $<
+	$(JWASM) -c -Cp -Zg -omf -D__BASIC__=1 $(QGL_DEFS) -I$(CURDIR)/src/qgl -Fo$@ $<
 
 $(BUILD)/stuff.ini: data/stuff.ini | $(BUILD)
 	cp $< $@

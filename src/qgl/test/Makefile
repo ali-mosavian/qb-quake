@@ -36,6 +36,7 @@ QGLCORE := $(QGL)/sf.asm $(QGL)/mem.asm $(QGL)/gem.asm \
 QGLSRC := $(QGL)/vga.asm $(QGLCORE) \
           $(QGL)/txt.asm $(QGL)/file.asm $(QGL)/dr.asm \
           $(QGL)/z.asm $(QGL)/clip.asm $(QGL)/rs.asm $(QGL)/sb.asm \
+          $(QGL)/log.asm \
           $(QGL)/b8/b8fill.asm $(QGL)/b8/b8span.asm
 # Objects are DERIVED from QGLSRC, never listed again. Hand-listing them
 # meant every new module had to be added in three places, and twice a
@@ -115,6 +116,15 @@ $(B)/%/pass: $(B)/%/t.exe $(B)/%/$(FONT) $(B)/%/fgeom.bin run1.sh
 # only exists under __BASIC__. It brings its own B$SETM; the objects are
 # per-test-directory, so nothing else sees the define.
 $(B)/t21mem/t.exe: JWASM += -D__BASIC__=1
+
+# t22log is the only test built with the logger on, so it is the only
+# place the transcribed LOG lines emit anything. _DEBUG_ is mgl's own
+# gate, set here rather than in qgl.inc so that header stays log.inc
+# verbatim. The define reaches every object in this test's directory,
+# which is deliberate: the interesting question is whether qglNew still
+# works with its own LOG lines live, not whether the macros expand in
+# isolation.
+$(B)/t22log/t.exe: JWASM += -D_DEBUG_=1
 
 $(B)/%/t.exe: %.asm tfw.asm tfw.inc $(QGLSRC) $(QGL)/qgl.inc
 	@mkdir -p $(@D)
