@@ -265,6 +265,27 @@ void pascal far d_draw_faces(
     MipTex     far *mipinf  = (MipTex     far *)a_mipinf->farptr;
     short      far *order   = (short      far *)a_order->farptr;
     short      far *pflag   = (short      far *)a_pflag->farptr;
+    /*
+     * These nine are BASIC far-heap arrays and the heap compacts under
+     * any BASIC call in this loop -- sc_alloc, sb_build, mod_tex_raw --
+     * so a pointer taken at entry names freed memory a few faces later.
+     * Measured: seven of the nine had moved by frame 7 of a spawn run,
+     * and the loop went on reading stamps, order and texinfo from the
+     * old addresses. gv below already re-takes its pointer per face for
+     * the same reason; this does it for the rest, per face and after
+     * each call that can enter BASIC. Nine far loads a face.
+     */
+#define D_ARRAYS_REFRESH() do { \
+        tri     = (Face       far *)a_tri->farptr;     \
+        texinf  = (TexInfo    far *)a_texinf->farptr;  \
+        facemdl = (short      far *)a_facemdl->farptr; \
+        brush   = (BrushModel far *)a_brush->farptr;   \
+        planes  = (Plane      far *)a_planes->farptr;  \
+        nodes   = (Node       far *)a_nodes->farptr;   \
+        mipinf  = (MipTex     far *)a_mipinf->farptr;  \
+        order   = (short      far *)a_order->farptr;   \
+        pflag   = (short      far *)a_pflag->farptr;   \
+    } while ( 0 )
     long       far *tex_ofs = (long       far *)dp->tex_ofs_ptr;
 
     short mi, m_node, ti, i, j, v0, gn, vcnt, cnt;
@@ -322,12 +343,14 @@ void pascal far d_draw_faces(
     }
 
     for ( mi = 0; mi < dp->ord_count; mi++ ) {
+        D_ARRAYS_REFRESH();
         m_node    = order[mi];
         leaf_indx = nodes[m_node].lface_id;
         leaf_end  = leaf_indx + nodes[m_node].lface_num - 1;
 
         for ( ti = leaf_indx; ti <= leaf_end; ti++ ) {
             i = ti;
+            D_ARRAYS_REFRESH();
 
             if ( pflag[i] != dp->frame_stamp ) continue;
 
@@ -446,6 +469,7 @@ void pascal far d_draw_faces(
             lm_stag = 0;
             lm_extw = lm_exth = 0;
             lm_tms = lm_tmt = 0;
+            D_ARRAYS_REFRESH();
             dp->k_v0 += vcnt;
             dp->k_lm += gv[GEOM_LMOFS];
 
@@ -468,6 +492,8 @@ void pascal far d_draw_faces(
                      * miss happen before sc_find ever runs, so a plain
                      * epoch match cannot paper over it.
                      */
+                    D_ARRAYS_REFRESH();
+                    pl = &planes[ tri[i].plane_id ];
                     dl_pdist = dp->dl_x * pl->norm.x
                              + dp->dl_y * pl->norm.y
                              + dp->dl_z * pl->norm.z - pl->dist;
@@ -667,8 +693,10 @@ void pascal far d_draw_faces(
                 }
             }
 
+            D_ARRAYS_REFRESH();
             if ( lm_on == 0 ) {
                 src_dc = mod_tex_shaded( g, tex_id, draw_mip );
+                D_ARRAYS_REFRESH();
                 /* ofs is [id*4 + level]. Getting this pair backwards aims
                    the view at another cell entirely -- coherent geometry
                    wearing noise. */

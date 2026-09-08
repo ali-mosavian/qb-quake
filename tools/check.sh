@@ -13,6 +13,9 @@
 #   tools/check.sh --churn      walks the campath -- ~180 evictions, so
 #                               blocks are reused and re-read. Compares two
 #                               runs of one binary, not a stored picture.
+#   tools/check.sh --depth      the spawn fall with and without the depth
+#                               buffer. The two frames may differ only where
+#                               depth legitimately changes the picture.
 #
 # -nostats is not optional. The overlay prints live fps and frame time, so
 # two runs of the SAME build differ by ~28 pixels in the digits, and a
@@ -34,6 +37,55 @@ BENCH="${BENCH:--lm -nostats -bench 30}"
 # wrong for reasons unknown.
 make -C "$ROOT" test || { echo "NATIVE GATES FAILED"; exit 1; }
 
+# tools/dosbox.sh build predates the src/<subsystem>/ layout and cannot
+# build this tree; make can, into VBD_OUT so two sessions never share one.
+build_exe() {
+    make -C "$ROOT" build BUILD="$VBD_OUT" > /tmp/check-build.log 2>&1 || {
+        echo "BUILD FAILED"; tail -20 /tmp/check-build.log; exit 1; }
+    [[ "$(grep -c L2029 "$VBD_OUT/LINK.OUT" 2>/dev/null)" == 0 ]] || {
+        echo "LINK FAILED"; grep L2029 "$VBD_OUT/LINK.OUT" | head -5; exit 1; }
+}
+
+# One headless run into VBD_OUT, retried: a run in four dies before
+# writing anything -- empty run.out, no error.log -- and that is its own
+# open bug, not a verdict on the picture.
+run_frame() {   # $1 = flags, $2 = where to keep BENCH.BMP
+    local try
+    for try in 1 2 3; do
+        rm -f "$VBD_OUT/BENCH.BMP" "$VBD_OUT/bench.txt"
+        QFLAGS="$1" TIMEOUT=900 "$ROOT/tools/dosbox.sh" run > /dev/null 2>&1
+        [[ -f "$VBD_OUT/BENCH.BMP" ]] && break
+        echo "  attempt $try produced nothing; retrying"
+    done
+    [[ -f "$VBD_OUT/BENCH.BMP" ]] || { echo "RUN PRODUCED NOTHING"; exit 1; }
+    cp "$VBD_OUT/BENCH.BMP" "$2"
+    echo "  $(tr -d '\r' < "$VBD_OUT/bench.txt" |
+        awk '/^(frames|ticks|polys|sc_evict) /{printf "%s=%s ",$1,$2}')"
+}
+
+# --depth is a symptom test for stale far-heap pointers in d_faces.c: the
+# BASIC arrays it walks compact under the calls it makes, and a pointer
+# taken at entry then names freed memory. Any change to what those calls
+# allocate -- the depth buffer was one -- moves where the compaction
+# lands, and the frame comes out as slanted stripes of texture from
+# faces that were never in view. 87% of pixels differed before the fix,
+# ~2.5% after; the 5% allows the edges a working depth test really moves.
+if [[ "${1:-}" == "--depth" ]]; then
+    build_exe
+    BENCH="-lm -nostats -yaw 182 -bench 40 -ticks 60"
+    run_frame "$BENCH"      "$VBD_OUT/depth-z.bmp"
+    run_frame "$BENCH -noz" "$VBD_OUT/depth-noz.bmp"
+    out=$(python3 "$ROOT/tools/imgdiff.py" "$VBD_OUT/depth-z.bmp" "$VBD_OUT/depth-noz.bmp" | tail -1)
+    pct=$(sed -n 's/.*(\([0-9.]*\)%).*/\1/p' <<< "$out")
+    echo "  $out"
+    if [[ "$out" == IDENTICAL* ]] || awk -v p="$pct" 'BEGIN{exit !(p+0 <= 5.0)}'; then
+        echo "PASS  depth changes only what depth may change"
+        exit 0
+    fi
+    echo "FAIL  the depth buffer changed the picture, not the ordering"
+    exit 1
+fi
+
 # --churn is a DETERMINISM check, not a reference-image one: it runs the
 # same binary twice and compares the two frames to each other.
 #
@@ -52,22 +104,9 @@ make -C "$ROOT" test || { echo "NATIVE GATES FAILED"; exit 1; }
 # says the fault is in reuse and not in the builder.
 if [[ "${1:-}" == "--churn" ]]; then
     BENCH="-lm -nostats -campath -ticks 900"
-    "$ROOT/tools/dosbox.sh" build > /tmp/check-build.log 2>&1 || {
-        echo "BUILD FAILED"; tail -20 /tmp/check-build.log; exit 1; }
+    build_exe
     for i in 1 2; do
-        # A run in four here dies before writing anything -- empty run.out,
-        # no error.log. That is its own open bug; retry rather than let it
-        # masquerade as a determinism failure.
-        for try in 1 2 3; do
-            rm -f "$VBD_OUT/BENCH.BMP" "$VBD_OUT/bench.txt"
-            QFLAGS="$BENCH" TIMEOUT=900 "$ROOT/tools/dosbox.sh" run > /dev/null 2>&1
-            [[ -f "$VBD_OUT/BENCH.BMP" ]] && break
-            echo "  run $i attempt $try produced nothing; retrying"
-        done
-        [[ -f "$VBD_OUT/BENCH.BMP" ]] || { echo "RUN $i PRODUCED NOTHING"; exit 1; }
-        cp "$VBD_OUT/BENCH.BMP" "$VBD_OUT/churn$i.bmp"
-        echo "  run $i: $(tr -d '\r' < "$VBD_OUT/bench.txt" |
-            awk '/^(frames|ticks|sc_evict) /{printf "%s=%s ",$1,$2}')"
+        run_frame "$BENCH" "$VBD_OUT/churn$i.bmp"
     done
     if cmp -s "$VBD_OUT/churn1.bmp" "$VBD_OUT/churn2.bmp"; then
         echo "PASS  two runs identical under eviction"
