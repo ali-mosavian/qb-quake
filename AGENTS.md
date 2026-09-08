@@ -1557,7 +1557,16 @@ not what a still frame shows.
 
 ## The surface cache draws a different picture every run
 
-`tools/check.sh --churn` reproduces it: one binary, `-ticks 900` so the
+**Closed by 8e57e79, as far as `--churn` can see.** The picture varied
+because `d_faces.c` walked BASIC's far-heap arrays through pointers taken
+once at entry, and the heap compacts under the calls inside the loop; two
+runs then compacted at different faces. With every pointer re-taken per
+face, `--churn` gives two byte-identical frames over 266 frames. Note it
+now reports `sc_evict 0` -- the campath does not evict on qgl's 4MB store
+-- so reuse after eviction is untested, and the bisection below is kept
+for whoever next sees a varying picture.
+
+`tools/check.sh --churn` reproduced it: one binary, `-ticks 900` so the
 camera stops in the same place, two runs, ~68% of pixels different. A wall
 that is tan brick in one run is dark with red and green streaks in the
 next.

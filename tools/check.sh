@@ -98,10 +98,10 @@ fi
 # -ticks pins the simulation, so the camera stops in the same place whatever
 # speed the host ran at and the two runs are comparing one viewpoint.
 #
-# THIS CURRENTLY FAILS. See AGENTS.md: a cached surface's bytes are
-# overwritten between the build and the reuse, and the picture varies run to
-# run. Forcing every face to rebuild makes it byte-identical, which is what
-# says the fault is in reuse and not in the builder.
+# Passes since 8e57e79 (d_faces.c re-taking its array pointers): two runs,
+# 266 frames, byte-identical. With sc_evict 0, though -- the campath no
+# longer evicts on qgl's 4MB store, so reuse after eviction is not what
+# this exercises any more. See AGENTS.md.
 if [[ "${1:-}" == "--churn" ]]; then
     BENCH="-lm -nostats -campath -ticks 900"
     build_exe
