@@ -40,9 +40,9 @@
                 include tfw.inc
 
 qglMemAvail   proto   far :word
-qglSfNewEx   proto   far :word, :word, :word, :word, :word
+qglSfNewEx   proto   far :word, :word, :word, :word
 qglSfAdoptDc proto   far :dword, :dword
-qglZNew       proto   far :dword, :word, :word
+qglZNew       proto   far :dword, :word
 qglZFree      proto   far :dword
 uglInit         proto   far
 uglEnd          proto   far
@@ -149,7 +149,7 @@ rq2             db      RC_SIZE dup (0) ;; qgl, mgl-first
 
 parent          dd      0               ;; the retained mgl MEM DC
 padopt          dd      0
-psurf           Surface <>              ;; 16 bytes, caller-side static
+                SF_DECL psurf, 256              ;; 16 bytes, caller-side static
 pgood           dw      0               ;; the depth fixture is usable
 okflag          dw      0               ;; survives CHK, which clobbers ax
 okflag2         dw      0
@@ -178,7 +178,7 @@ alloc_arm       proc    near private uses bx cx dx si di,\
                 jne     @@surf
                 cmp     arm, ARM_QGL
                 jne     @@mz
-                invoke  qglZNew, padopt, SURF_EMS, 0
+                invoke  qglZNew, padopt, SURF_EMS
                 jmp     @@save
 @@mz:           invoke  uglNewZ, parent, DC_EMS
                 jmp     @@save
@@ -187,9 +187,9 @@ alloc_arm       proc    near private uses bx cx dx si di,\
                 jne     @@mgl
                 cmp     kind, K_EMS
                 jne     @@qcm
-                invoke  qglSfNewEx, w, h, strd, SURF_EMS, 0
+                invoke  qglSfNewEx, w, h, strd, SURF_EMS
                 jmp     @@save
-@@qcm:          invoke  qglSfNewEx, w, h, w, SURF_CMEM, 0
+@@qcm:          invoke  qglSfNewEx, w, h, w, SURF_CMEM
                 jmp     @@save
 
 @@mgl:          cmp     kind, K_EMS
@@ -294,7 +294,7 @@ run_case        proc    near private uses ax bx cx dx si di es,\
                 les     bx, p
                 cmp     arm, ARM_QGL
                 jne     @@mstr
-                mov     ax, es:[bx].Surface.stride
+                mov     ax, es:[bx].Surface.bps
                 jmp     @@gotstr
 @@mstr:         mov     ax, es:[bx+DC_BPS]
 @@gotstr:       mov     di, rec
@@ -881,7 +881,7 @@ tmain           proc    far public uses ax bx cx dx si di es
                 mov     pgood, 0
 @@:
                 mov     bx, offset psurf
-                mov     ax, [bx].Surface.x_res
+                mov     ax, [bx].Surface.xRes
                 mov     okflag, 1
                 cmp     ax, 160
                 je      @F
@@ -892,7 +892,7 @@ tmain           proc    far public uses ax bx cx dx si di es
                 mov     pgood, 0
 @@:
                 mov     bx, offset psurf
-                mov     ax, [bx].Surface.y_res
+                mov     ax, [bx].Surface.yRes
                 mov     okflag, 1
                 cmp     ax, 100
                 je      @F
@@ -903,11 +903,11 @@ tmain           proc    far public uses ax bx cx dx si di es
                 mov     pgood, 0
 @@:
                 mov     bx, offset psurf
-                mov     ax, [bx].Surface.stride
+                mov     ax, [bx].Surface.bps
                 mov     cx, 1
                 test    ax, ax
                 jz      @F
-                cmp     ax, [bx].Surface.x_res
+                cmp     ax, [bx].Surface.xRes
                 jae     @@pok
 @@:             xor     cx, cx
 @@pok:          mov     okflag, cx

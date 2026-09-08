@@ -64,13 +64,6 @@ declare sub scr_hud_colors ( )
 '' re-set both.
 ''
 declare function qglVgaScreen ( ) as long
-declare function qglSfScratch ( _
-    byval n as integer _
-) as long
-declare function qglSfAdoptDc ( _
-    byval dc as long, _
-    byval s as long _
-) as integer
 declare sub qglDrBlitScl ( _
     byval d as long, _
     byval x as integer, _
@@ -79,14 +72,6 @@ declare sub qglDrBlitScl ( _
     byval h as integer, _
     byval s as long _
 )
-
-''
-'' The same scratch index d_faces.c adopts its destination into, and for
-'' the same DC -- so the two adoptions produce an identical Surface and
-'' neither can surprise the other. Not a free slot: all four are spoken
-'' for, and taking a different one would collide with a live user.
-''
-const VID_QGL_SURF = 0
 
 '$static
 
@@ -102,25 +87,14 @@ const VID_QGL_SURF = 0
 function vid_present ( _
     g as Game _
 ) as integer
-    dim src as long
-
     if ( vid_qgl_shape( g ) ) then
-
-        src = qglSfScratch( VID_QGL_SURF )
-
-        '' adopt_dc checks the DC's fields against each other and refuses
-        '' one that does not agree, so a drifted layout falls back to mgl
-        '' instead of blitting through a plausible wrong pointer
-        if ( src <> 0 ) then
-            if ( qglSfAdoptDc( g.env.h_back_bdc, src ) <> 0 ) then
-                qglDrBlitScl qglVgaScreen(), _
-                                g.env.view_x, g.env.view_y, _
-                                g.env.view_w, g.env.view_h, src
-                vid_present = true
-                exit function
-            end if
-        end if
-
+        '' The backbuffer DC IS a Surface -- one struct, one allocator --
+        '' so there is nothing to bridge and nothing to check.
+        qglDrBlitScl qglVgaScreen(), _
+                        g.env.view_x, g.env.view_y, _
+                        g.env.view_w, g.env.view_h, g.env.h_back_bdc
+        vid_present = true
+        exit function
     end if
 
     uglPutScl g.env.h_video_dc, g.env.view_x, g.env.view_y, _

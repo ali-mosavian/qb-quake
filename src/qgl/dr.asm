@@ -133,10 +133,10 @@ qglDrHline    proc    public uses bx cx dx si di es,\
 
                 les     bx, d
                 mov     ax, y
-                cmp     ax, es:[bx].Surface.y_res
+                cmp     ax, es:[bx].Surface.yRes
                 jae     @@out                   ;; unsigned: catches y < 0
 
-                mov     cx, es:[bx].Surface.x_res
+                mov     cx, es:[bx].Surface.xRes
                 mov     ax, x0
                 mov     bx, x1
                 call    qgl$ClipRun
@@ -171,7 +171,7 @@ qglDrFill     proc    public uses bx cx dx si di es,\
                 local   ylast:word
 
                 les     bx, d
-                mov     cx, es:[bx].Surface.x_res
+                mov     cx, es:[bx].Surface.xRes
                 mov     ax, x0
                 mov     bx, x1
                 call    qgl$ClipRun
@@ -180,7 +180,7 @@ qglDrFill     proc    public uses bx cx dx si di es,\
                 mov     runlen, cx
 
                 les     bx, d
-                mov     cx, es:[bx].Surface.y_res
+                mov     cx, es:[bx].Surface.yRes
                 mov     ax, y0
                 mov     bx, y1
                 call    qgl$ClipRun            ;; the same clamp, on rows
@@ -220,10 +220,10 @@ qglDrVline    proc    public uses bx cx dx si di es,\
 
                 les     bx, d
                 mov     ax, x
-                cmp     ax, es:[bx].Surface.x_res
+                cmp     ax, es:[bx].Surface.xRes
                 jae     @@out
 
-                mov     cx, es:[bx].Surface.y_res
+                mov     cx, es:[bx].Surface.yRes
                 mov     ax, y0
                 mov     bx, y1
                 call    qgl$ClipRun
@@ -318,10 +318,10 @@ qglDrLine     proc    public uses bx cx dx si di es,\
 @@step:         ;; plot, clipped
                 les     bx, d
                 mov     ax, cx_
-                cmp     ax, es:[bx].Surface.x_res
+                cmp     ax, es:[bx].Surface.xRes
                 jae     @@skip
                 mov     ax, cy
-                cmp     ax, es:[bx].Surface.y_res
+                cmp     ax, es:[bx].Surface.yRes
                 jae     @@skip
 
                 invoke  qglSfWrRow, d, cy
@@ -380,7 +380,7 @@ qglDrShade    proc    public uses bx cx dx si di ds es,\
                 local   lutofs:word
 
                 les     bx, d
-                mov     cx, es:[bx].Surface.x_res
+                mov     cx, es:[bx].Surface.xRes
                 mov     ax, x0
                 mov     bx, x1
                 call    qgl$ClipRun
@@ -389,7 +389,7 @@ qglDrShade    proc    public uses bx cx dx si di ds es,\
                 mov     runlen, cx
 
                 les     bx, d
-                mov     cx, es:[bx].Surface.y_res
+                mov     cx, es:[bx].Surface.yRes
                 mov     ax, y0
                 mov     bx, y1
                 call    qgl$ClipRun
@@ -473,15 +473,15 @@ qglDrBlit     proc    public uses bx cx dx si di ds es,\
                 local   ssegs:word, sofss:word
 
                 les     bx, s
-                mov     ax, es:[bx].Surface.y_res
+                mov     ax, es:[bx].Surface.yRes
                 mov     srows, ax
-                mov     ax, es:[bx].Surface.x_res
+                mov     ax, es:[bx].Surface.xRes
                 mov     swide, ax
 
                 ;; the columns, once: x and the source width do not
                 ;; change down the rows, so neither does the clip
                 les     bx, d
-                mov     cx, es:[bx].Surface.x_res
+                mov     cx, es:[bx].Surface.xRes
                 mov     ax, x
                 mov     bx, x
                 add     bx, swide
@@ -499,7 +499,7 @@ qglDrBlit     proc    public uses bx cx dx si di ds es,\
                 ;; it are skipped rather than drawn wrapped.
                 ;;
                 les     bx, d
-                mov     cx, es:[bx].Surface.y_res
+                mov     cx, es:[bx].Surface.yRes
 
                 ;;
                 ;; THE ROWS, once, split on the sign of y. Kept as two
@@ -540,59 +540,52 @@ qglDrBlit     proc    public uses bx cx dx si di ds es,\
 
 @@rowsok:
 
-                ;; both cmem? then the cursor. Decided ONCE.
+                ;; both cmem? then walk the address tables. Decided ONCE.
                 les     bx, d
-                cmp     es:[bx].Surface.kind, SURF_CMEM
+                cmp     es:[bx].Surface.typ, SF_MEM
                 jne     @@generic
                 les     bx, s
-                cmp     es:[bx].Surface.kind, SURF_CMEM
+                cmp     es:[bx].Surface.typ, SF_MEM
                 jne     @@generic
 
                 ;;
-                ;; the two first addresses, and the two per-row steps
+                ;; The cursor that used to be resolved once and stepped by
+                ;; the stride is now a table read per row -- the address
+                ;; table IS the cursor, and it is the one qgl_mem_New laid
+                ;; down, so a surface crossing 64K needs no arithmetic here
+                ;; to get right. sofss and dofss carry the byte index into
+                ;; each table.
                 ;;
-                les     bx, s
-                mov     ax, es:[bx].Surface.stride
-                mov     cx, ax
-                and     cx, 15
-                mov     sofss, cx               ;; stride and 15
-                shr     ax, 4
-                mov     ssegs, ax               ;; stride shr 4
+                mov     ax, sy
+                shl     ax, 2
+                mov     sofss, ax
 
-                movzx   eax, sy
-                movzx   ecx, es:[bx].Surface.stride
-                mul     ecx
-                add     eax, es:[bx].Surface.base_ofs
-                movzx   ecx, sskip
-                add     eax, ecx
-                call    qgl$Norm                ;; -> dx:ax seg:ofs
-                add     ax, es:[bx].Surface.handle
+                mov     ax, y                   ;; first destination row
+                add     ax, sy
+                shl     ax, 2
+                mov     dofss, ax
+
+                mov     cx, nrows
+@@crow:         push    cx
+
+                les     bx, s
+                mov     si, sofss
+                add     bx, si
+                mov     ax, W es:[bx+SF_addrTB+0]
+                mov     dx, W es:[bx+SF_addrTB+2]
+                add     dx, sskip
                 mov     ssegc, ax
                 mov     sofsc, dx
 
                 les     bx, d
-                mov     ax, es:[bx].Surface.stride
-                mov     cx, ax
-                and     cx, 15
-                mov     dofss, cx
-                shr     ax, 4
-                mov     dsegs, ax
-
-                mov     ax, y                   ;; first destination row
-                add     ax, sy
-                movzx   eax, ax
-                movzx   ecx, es:[bx].Surface.stride
-                mul     ecx
-                add     eax, es:[bx].Surface.base_ofs
-                movzx   ecx, dcol
-                add     eax, ecx
-                call    qgl$Norm
-                add     ax, es:[bx].Surface.handle
+                mov     di, dofss
+                add     bx, di
+                mov     ax, W es:[bx+SF_addrTB+0]
+                mov     dx, W es:[bx+SF_addrTB+2]
+                add     dx, dcol
                 mov     dsegc, ax
                 mov     dofsc, dx
 
-                mov     cx, nrows
-@@crow:         push    cx
                 mov     ds, ssegc
                 mov     si, sofsc
                 mov     es, dsegc
@@ -603,29 +596,8 @@ qglDrBlit     proc    public uses bx cx dx si di ds es,\
                 mov     ds, ax
                 pop     cx
 
-                ;; advance both cursors: offset first, carry the sixteens
-                ;; into the segment, then the whole-paragraph step
-                mov     ax, sofsc
-                add     ax, sofss
-                mov     dx, ssegc
-                cmp     ax, 16
-                jb      @F
-                sub     ax, 16
-                inc     dx
-@@:             add     dx, ssegs
-                mov     sofsc, ax
-                mov     ssegc, dx
-
-                mov     ax, dofsc
-                add     ax, dofss
-                mov     dx, dsegc
-                cmp     ax, 16
-                jb      @F
-                sub     ax, 16
-                inc     dx
-@@:             add     dx, dsegs
-                mov     dofsc, ax
-                mov     dsegc, dx
+                add     sofss, T dword
+                add     dofss, T dword
 
                 dec     cx
                 jnz     @@crow
@@ -642,7 +614,7 @@ qglDrBlit     proc    public uses bx cx dx si di ds es,\
                 mov     ax, y
                 add     ax, sy
                 les     bx, d
-                cmp     ax, es:[bx].Surface.y_res
+                cmp     ax, es:[bx].Surface.yRes
                 jae     @@next
 
                 invoke  qglSfWrRow, d, ax
@@ -706,7 +678,7 @@ qglDrBlitScl proc    public uses bx cx dx si di ds es,\
                 ;; source wider than 255 truncates -- this is the present
                 ;; path, where it is 160.
                 les     bx, s
-                mov     ax, es:[bx].Surface.x_res
+                mov     ax, es:[bx].Surface.xRes
                 mov     swide, ax
                 xor     dx, dx
                 shl     eax, 8
@@ -714,7 +686,7 @@ qglDrBlitScl proc    public uses bx cx dx si di ds es,\
                 mov     ustep, ax
 
                 les     bx, s
-                mov     ax, es:[bx].Surface.y_res
+                mov     ax, es:[bx].Surface.yRes
                 xor     dx, dx
                 shl     eax, 8
                 div     h
@@ -725,7 +697,7 @@ qglDrBlitScl proc    public uses bx cx dx si di ds es,\
                 ;; product stays inside a word for the same reason the
                 ;; divide above does.
                 les     bx, d
-                mov     cx, es:[bx].Surface.x_res
+                mov     cx, es:[bx].Surface.xRes
                 mov     ax, x
                 mov     bx, x
                 add     bx, w
@@ -760,20 +732,20 @@ qglDrBlitScl proc    public uses bx cx dx si di ds es,\
                 or      ax, y
                 jnz     @@generic               ;; the whole surface only
                 les     bx, d
-                cmp     es:[bx].Surface.kind, SURF_CMEM
+                cmp     es:[bx].Surface.typ, SF_MEM
                 jne     @@generic
                 mov     ax, w
-                cmp     ax, es:[bx].Surface.x_res
+                cmp     ax, es:[bx].Surface.xRes
                 jne     @@generic
                 mov     ax, h
-                cmp     ax, es:[bx].Surface.y_res
+                cmp     ax, es:[bx].Surface.yRes
                 jne     @@generic
-                mov     dx, es:[bx].Surface.handle
+                mov     dx, W es:[bx].Surface.fptr+2
 
                 les     bx, s
-                cmp     es:[bx].Surface.kind, SURF_CMEM
+                cmp     es:[bx].Surface.typ, SF_MEM
                 jne     @@generic
-                cmp     dx, es:[bx].Surface.handle
+                cmp     dx, W es:[bx].Surface.fptr+2
                 je      @@generic               ;; one store, so they overlap
                 ;; HALVE THE DESTINATION, do not double the source: a
                 ;; source extent over 32767 doubles into a wrap, and a
@@ -783,48 +755,47 @@ qglDrBlitScl proc    public uses bx cx dx si di ds es,\
                 jnz     @@generic               ;; odd cannot be twice
                 mov     ax, w
                 shr     ax, 1
-                cmp     ax, es:[bx].Surface.x_res
+                cmp     ax, es:[bx].Surface.xRes
                 jne     @@generic               ;; not exactly doubled
                 test    h, 1
                 jnz     @@generic
                 mov     ax, h
                 shr     ax, 1
-                cmp     ax, es:[bx].Surface.y_res
+                cmp     ax, es:[bx].Surface.yRes
                 jne     @@generic
-                mov     ax, es:[bx].Surface.y_res
+                mov     ax, es:[bx].Surface.yRes
                 mov     srows2, ax
 
-                ;; the two cursors, resolved once
-                mov     ax, es:[bx].Surface.stride
-                mov     cx, ax
-                and     cx, 15
-                mov     sofss, cx
-                shr     ax, 4
-                mov     ssegs, ax
-                mov     eax, es:[bx].Surface.base_ofs
-                call    qgl$Norm
-                add     ax, es:[bx].Surface.handle
-                mov     ssegc, ax
-                mov     sofsc, dx
-
-                les     bx, d
-                mov     ax, es:[bx].Surface.stride
-                mov     cx, ax
-                and     cx, 15
-                mov     dofss, cx
-                shr     ax, 4
-                mov     dsegs, ax
-                mov     eax, es:[bx].Surface.base_ofs
-                call    qgl$Norm
-                add     ax, es:[bx].Surface.handle
-                mov     dsegc, ax
-                mov     dofsc, dx
+                ;; the two table cursors: a byte index into each address
+                ;; table, stepped by one entry a row. The stride cursor
+                ;; this replaced had to carry sixteens by hand and rebuild
+                ;; the previous row forward to avoid a borrow; a table
+                ;; entry is the whole address and has neither problem.
+                xor     ax, ax
+                mov     sofss, ax
+                mov     dofss, ax
 
                 mov     cx, srows2
 @@r2:           push    cx
 
+                les     bx, s
+                mov     si, sofss
+                add     bx, si
+                mov     ax, W es:[bx+SF_addrTB+0]
+                mov     dx, W es:[bx+SF_addrTB+2]
+                mov     ssegc, ax
+                mov     sofsc, dx
+
+                les     bx, d
+                mov     di, dofss
+                add     bx, di
+                mov     ax, W es:[bx+SF_addrTB+0]
+                mov     dx, W es:[bx+SF_addrTB+2]
+                mov     dsegc, ax
+                mov     dofsc, dx
+
                 ;; expand into the first row of the pair, keeping its
-                ;; cursor in bx:si for the copy
+                ;; address for the copy
                 push    ds
                 mov     ds, ssegc
                 mov     si, sofsc
@@ -834,55 +805,32 @@ qglDrBlitScl proc    public uses bx cx dx si di ds es,\
                 call    qgl$Dup2
                 pop     ds
 
-                mov     bx, dsegc               ;; the row just written
-                mov     si, dofsc
-
-                ;; FORWARD to the second row, never backward: a previous
-                ;; cursor rebuilt by subtraction needs a borrow when the
-                ;; stride's low nibble exceeds the offset, and that borrow
-                ;; is the bug this avoids having.
+                mov     ax, dsegc               ;; the row just written
+                mov     sseg, ax
                 mov     ax, dofsc
-                add     ax, dofss
-                mov     dx, dsegc
-                cmp     ax, 16
-                jb      @F
-                sub     ax, 16
-                inc     dx
-@@:             add     dx, dsegs
-                mov     dofsc, ax
-                mov     dsegc, dx
+                mov     sofs, ax
+
+                add     dofss, T dword          ;; the second row of the pair
+                les     bx, d
+                mov     di, dofss
+                add     bx, di
+                mov     ax, W es:[bx+SF_addrTB+0]
+                mov     dx, W es:[bx+SF_addrTB+2]
+                mov     dsegc, ax
+                mov     dofsc, dx
 
                 ;; the second row is the same bytes; copy, do not expand
                 push    ds
-                mov     ds, bx
+                mov     ds, sseg
+                mov     si, sofs
                 mov     es, dsegc
                 mov     di, dofsc
                 mov     cx, dlen
                 call    qgl$RunCopy
                 pop     ds
 
-                ;; destination forward again, source once
-                mov     ax, dofsc
-                add     ax, dofss
-                mov     dx, dsegc
-                cmp     ax, 16
-                jb      @F
-                sub     ax, 16
-                inc     dx
-@@:             add     dx, dsegs
-                mov     dofsc, ax
-                mov     dsegc, dx
-
-                mov     ax, sofsc
-                add     ax, sofss
-                mov     dx, ssegc
-                cmp     ax, 16
-                jb      @F
-                sub     ax, 16
-                inc     dx
-@@:             add     dx, ssegs
-                mov     sofsc, ax
-                mov     ssegc, dx
+                add     dofss, T dword          ;; on to the next pair
+                add     sofss, T dword
 
                 pop     cx
                 dec     cx
@@ -907,7 +855,7 @@ qglDrBlitScl proc    public uses bx cx dx si di ds es,\
                 mov     ax, y
                 add     ax, dy
                 les     bx, d
-                cmp     ax, es:[bx].Surface.y_res
+                cmp     ax, es:[bx].Surface.yRes
                 jae     @@next
 
                 invoke  qglSfWrRow, d, ax

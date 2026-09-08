@@ -62,32 +62,40 @@ type LightStore
 end type
 
 ''
-'' Every texture, in two atlas dcs instead of one dc per texture per mip.
+'' Every texture, in two atlas SURFACES instead of one dc per texture per
+'' mip. qgl's, not mgl's: mod_tex.bas loads them with qglSfFromFileBas
+'' off the flat TEXR.RAW/TEXS.RAW beside the exe, because the builder and
+'' the fillers that read them are qgl and a qgl module cannot call into
+'' mgl's near dispatch table at all -- see sb.asm's header for what
+'' happened when one tried.
 ''
 '' A dc costs conventional memory for its struct and scanline table
 '' whatever its pixels cost -- measured at 264 bytes, and dm3ish made 160
 '' of them. e1m1 would make 648, which is the ~171K that stops it loading.
+'' A Surface has no scanline table at all, so the four views below cost a
+'' header each and nothing per row.
 ''
-'' Four VIEWS per atlas instead, one per mip size, re-aimed per face with
-'' uglSetView -- no allocation, no copy. The same trick the surface cache
-'' uses to avoid a dc per surface.
+'' Four VIEWS per atlas, one per mip size, re-aimed per face with
+'' qglSfViewAim -- no allocation, no copy. The same trick the surface
+'' cache uses to avoid a surface per cached face.
 ''
-'' The atlas scanline. A view reads its rows through the parent's scanline
-'' table, so a cell must sit entirely inside one -- 4096/1024/256/64 all
-'' divide 8192, so none ever crosses. Same width the luxel atlas uses, and
-'' uglbmp.asm's BMP_MAX_BPS.
+'' The atlas scanline. A cell must sit entirely inside one EMS page --
+'' 4096/1024/256/64 all divide 8192, and 8192 divides 16384, so none ever
+'' crosses. Same width the luxel atlas uses.
 const TEX_ATLAS_W = 8192
 
 type TexStore
-    shaded      as long         '' one atlas dc: row 0 applied
-    raw         as long         '' one atlas dc: raw indices
+    shaded      as long         '' one atlas surface: row 0 applied
+    raw         as long         '' one atlas surface: raw indices
     v_shaded(3) as long         '' a view per mip size, re-aimed per face
     v_raw(3)    as long
     cell(3)     as integer      '' texels per side at that mip
     aim_raw(3)  as integer      '' cell each view is already aimed at, -1
-    aim_shd(3)  as integer      '' none -- re-aiming rewrites a scanline
-                                '' table, and consecutive faces usually
-                                '' share a texture
+    aim_shd(3)  as integer      '' none. Re-aiming is now just a base_ofs
+                                '' store rather than a scanline table
+                                '' rewrite, so this saves little -- kept
+                                '' because consecutive faces usually share
+                                '' a texture and an integer compare is free
     ofs(1023)   as long         '' [id*4 + level] -> byte offset in the atlas
 end type
 

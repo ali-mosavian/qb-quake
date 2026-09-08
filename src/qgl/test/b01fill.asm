@@ -387,9 +387,9 @@ median          endp
 tmain           proc    far public uses bx cx dx si di es
 
                 invoke  qglSfInit
-                invoke  qglSfNew, DSTW, DSTH, SURF_CMEM, 0
+                invoke  qglSfNew, DSTW, DSTH, SURF_CMEM
                 SAVEP   dst
-                invoke  qglSfNew, TEXW, TEXH, SURF_CMEM, 0
+                invoke  qglSfNew, TEXW, TEXH, SURF_CMEM
                 SAVEP   tex
 
                 ;; 4096 texels over 256 values must repeat, so this cannot

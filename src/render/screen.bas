@@ -8,11 +8,9 @@ option explicit
 ''
 '' The font is qgl's: one loaded Font block (g_font) instead of 256
 '' separate 8x8 DCs, which measured at 16,400 bytes of conventional
-'' memory for 2,048 bytes of pixels. draw_string and friends adopt
-'' whatever mgl DC they were handed for the length of one call, through
-'' qglSfScratch -- the same scratch index vid_present uses for the
-'' final blit, safe because the two never run at the same instant in a
-'' frame.
+'' memory for 2,048 bytes of pixels. The mgl DC these routines are handed
+'' is passed straight through as the destination Surface -- one struct,
+'' one allocator, nothing to bridge.
 ''
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
@@ -236,13 +234,6 @@ declare function qglTxtRow ( _
     byval glyph as integer, _
     byval row as integer _
 ) as integer
-declare function qglSfScratch ( _
-    byval n as integer _
-) as long
-declare function qglSfAdoptDc ( _
-    byval dc as long, _
-    byval s as long _
-) as integer
 declare sub qglSfPset ( _
     byval s as long, _
     byval x as integer, _
@@ -290,14 +281,6 @@ const LP_ACCN   = 32
 const LP_NEU0   = 113            '' 16-step warm neutral, for rules
 const LP_NEUN   = 16
 const LP_TEXT   = 254            '' the one colour draw_string draws in
-
-'' The scratch Surface every draw_string call briefly adopts its
-'' destination DC into. Index 0, the same one vid.bas's vid_present and
-'' d_faces.c's -qgl path use: all four of qglSfScratch's slots are
-'' already spoken for, and reuse is safe because HUD text, the present,
-'' and a qgl-routed face draw never run at the same instant within a
-'' frame -- see vid.bas's own note on VID_QGL_SURF.
-const TXT_QGL_SURF = 0
 
 '' Bevels are what make a Quake plate look pressed out of metal: a light
 '' edge on the top and left, a dark one on the bottom and right, and the
@@ -803,13 +786,9 @@ sub draw_string_scl ( _
     text as string _
 )
     dim i as integer, char as integer, posx as integer
-    dim qs as long
     dim dw as integer
     dim sx as integer, sy as integer, gx as integer, gy as integer
     dim bits as integer
-
-    qs = qglSfScratch( TXT_QGL_SURF )
-    if ( qglSfAdoptDc( dc, qs ) = 0 ) then exit sub
 
     dw = cint( 8 * scale )
     if ( dw < 1 ) then exit sub
@@ -825,7 +804,7 @@ sub draw_string_scl ( _
                 for sx = 0 to dw-1
                     gx = int( sx * 8 / dw )
                     if ( (bits and (128 \ (2^gx))) <> 0 ) then
-                        qglSfPset qs, posx+sx, y+sy, LP_TEXT
+                        qglSfPset dc, posx+sx, y+sy, LP_TEXT
                     end if
                 next sx
             end if
@@ -1024,11 +1003,8 @@ end function
 '':::::::::
 ''::::::::::
 '' name: draw_string
-'' desc: Adopts dc as a qgl Surface for the length of this one call --
-''       see TXT_QGL_SURF's own note on why that scratch index is safe
-''       to share. A DC that fails to adopt (drifted layout, or none of
-''       this frame's callers is the shape qglSfAdoptDc checks for)
-''       draws nothing rather than faulting.
+'' desc: Draws into dc, which is a Surface -- an mgl DC and a qgl Surface
+''       are one struct.
 ''::::::::::
 sub draw_string ( _
     dc as long, _
@@ -1038,10 +1014,6 @@ sub draw_string ( _
 )
     dim posx as integer
     dim i as integer, char as integer
-    dim qs as long
-
-    qs = qglSfScratch( TXT_QGL_SURF )
-    if ( qglSfAdoptDc( dc, qs ) = 0 ) then exit sub
 
     posx = x
 
@@ -1050,7 +1022,7 @@ sub draw_string ( _
         char = asc( mid$( text, i+1 ) )
 
         if ( (char >= 0) or (char <= 255) ) then
-            qglTxtChar qs, posx, y, g_font, char, LP_TEXT
+            qglTxtChar dc, posx, y, g_font, char, LP_TEXT
         end if
 
         posx = posx + 4

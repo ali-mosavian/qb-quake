@@ -48,7 +48,7 @@ end type
 
 declare function qglSfInit () as integer
 declare function qglSfNew ( byval wid as integer, byval hgt as integer, _
-                              byval whr as integer, byval slot as integer ) as long
+                              byval whr as integer ) as long
 declare function qglSfPget ( byval s as long, byval x as integer, _
                                byval y as integer ) as integer
 declare sub qglSfPset ( byval s as long, byval x as integer, _
@@ -485,8 +485,8 @@ function qglDiffAll () as integer
     if ( qglSfInit() = 0 ) then
         print #fh, "   note EMS unavailable; the surfaces here are conventional"
     end if
-    qdst = qglSfNew( DIFF_W, DIFF_H, QGL_SURF_CMEM, 0 )
-    qtex = qglSfNew( DIFF_TW, DIFF_TW, QGL_SURF_CMEM, 0 )
+    qdst = qglSfNew( DIFF_W, DIFF_H, QGL_SURF_CMEM )
+    qtex = qglSfNew( DIFF_TW, DIFF_TW, QGL_SURF_CMEM )
 
     if ( mdst = 0 or mtex = 0 or qdst = 0 or qtex = 0 ) then
         print #fh, "   FAIL a store is missing: mdst"; mdst; " mtex"; mtex; _

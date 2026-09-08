@@ -30,7 +30,7 @@ qglSfInit     proto   far
 qglSfAdoptDc proto   far :dword, :dword
 qglSfPget     proto   far :dword, :word, :word
 qglSfPset     proto   far :dword, :word, :word, :word
-qglSfNewEx   proto   far :word, :word, :word, :word, :word
+qglSfNewEx   proto   far :word, :word, :word, :word
 qglSfFree     proto   far :dword
 qglDrFill     proto   far :dword, :word, :word, :word, :word, :word
 qglDrBlitScl proto   far :dword, :word, :word, :word, :word, :dword
@@ -126,12 +126,12 @@ dc              dd      0
 sdc             dd      0
 qptr            dd      0
 qsptr           dd      0
-qsurf           Surface <>
-qsrc            Surface <>
-qgsurf          Surface <>
-qasurf          Surface <>
-qbsurf          Surface <>
-qbsrc           Surface <>
+                SF_DECL qsurf, 256
+                SF_DECL qsrc, 256
+                SF_DECL qgsurf, 256
+                SF_DECL qasurf, 256
+                SF_DECL qbsurf, 256
+                SF_DECL qbsrc, 256
 bad             dw      0
 t0              dd      0
 shown           dd      0
@@ -143,7 +143,7 @@ psrc            dd      0
 pdst            dd      0
 ppar            dd      0
 pview           dd      0
-qvsurf          Surface <>
+                SF_DECL qvsurf, 256
 esrc            dd      0
 ustep           dw      0
 vstep           dw      0
@@ -359,7 +359,7 @@ tmain           proc    far public uses ax bx cx dx si di es
                 NZ      ax
                 CHK     n_adopt, ax, 1
                 mov     bx, offset qgsurf
-                mov     [bx].Surface.y_res, DHGT
+                mov     [bx].Surface.yRes, DHGT
                 invoke  qglDrFill, aliasp, 0, 0, DWID-1, GHGT-1, GCANARY
                 invoke  qglDrBlitScl, guardp, 0, GPROBE, DWID, DHGT, qsptr
                 invoke  qglSfPget, aliasp, 61, GPROBE
@@ -416,7 +416,7 @@ tmain           proc    far public uses ax bx cx dx si di es
                 ;; Assuming 400 with remainder 0 is what made this case's
                 ;; behaviour under a carry mutation look impossible.
                 mov     bx, offset qbsurf
-                mov     ax, [bx].Surface.stride
+                mov     ax, [bx].Surface.bps
                 xor     dx, dx
                 SAVEP   shown
                 invoke  tshow, offset n_b64s, shown
@@ -527,7 +527,7 @@ tmain           proc    far public uses ax bx cx dx si di es
                 ;; actually presents -- while 1024 bytes a row puts its
                 ;; own rows across 64K at row 64. Changing the dimensions
                 ;; instead would have changed the scale being tested.
-                invoke  qglSfNewEx, SWID, SHGT, PSTRIDE, SURF_CMEM, 0
+                invoke  qglSfNewEx, SWID, SHGT, PSTRIDE, SURF_CMEM
                 SAVEP   psrc
                 mov     ax, W psrc
                 or      ax, W psrc+2
@@ -562,7 +562,7 @@ tmain           proc    far public uses ax bx cx dx si di es
 
                 ;; ---- a destination whose stride is NOT a multiple of
                 ;;      16, so the cursor's paragraph carry has to run ----
-                invoke  qglSfNewEx, DWID, DHGT, CSTRIDE, SURF_CMEM, 0
+                invoke  qglSfNewEx, DWID, DHGT, CSTRIDE, SURF_CMEM
                 SAVEP   pdst
                 mov     ax, W pdst
                 or      ax, W pdst+2
@@ -594,7 +594,7 @@ tmain           proc    far public uses ax bx cx dx si di es
                 ;; The nibble is ASSERTED, not assumed. An allocator that
                 ;; stopped handing back paragraph-aligned blocks would turn
                 ;; this silently back into a second copy of the case above.
-                invoke  qglSfNewEx, DWID, DHGT+1, CSTRIDE, SURF_CMEM, 0
+                invoke  qglSfNewEx, DWID, DHGT+1, CSTRIDE, SURF_CMEM
                 SAVEP   ppar
                 mov     ax, W ppar
                 or      ax, W ppar+2
@@ -626,7 +626,7 @@ tmain           proc    far public uses ax bx cx dx si di es
                 ;; CMEM-only fast path exists this is the case that fails
                 ;; if its predicate lets an EMS surface through. The
                 ;; stride is a power of two because an EMS row wants one.
-                invoke  qglSfNewEx, SWID, SHGT, ESTRIDE, SURF_EMS, 2
+                invoke  qglSfNewEx, SWID, SHGT, ESTRIDE, SURF_EMS
                 SAVEP   esrc
                 mov     ax, W esrc
                 or      ax, W esrc+2

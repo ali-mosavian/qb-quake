@@ -39,7 +39,6 @@ type Game
                                   '' differentially, then exit
     qgl_slice   as integer        '' -qgl: the face loop draws through qgl
     qgl_arr     as integer        '' -qglarr: the paged-array store
-    qgl_tex     as integer        '' -qgltex: the EMS texture bridge, then exit
     qgl_face    as integer        '' -qglface: one real face, replayed
 end type
 

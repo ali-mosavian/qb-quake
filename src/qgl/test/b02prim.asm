@@ -126,8 +126,8 @@ dc              dd      0
 sdc             dd      0
 qptr            dd      0
 qsptr           dd      0
-qsurf           Surface <>
-qsrc            Surface <>
+                SF_DECL qsurf, 256
+                SF_DECL qsrc, 256
 snap            db      BYTES dup (0)
 expect          db      BYTES dup (0)           ;; the oracle image
 n_pitch         db      'dst pitch (adopted)   $'
@@ -567,7 +567,7 @@ seed_src        proc    near private uses ax bx cx dx si di es
                 jmp     @@col
 @@rnext:        pop     di
                 mov     bx, offset qsrc
-                add     di, [bx].Surface.stride
+                add     di, [bx].Surface.bps
                 inc     si
                 jmp     @@row
 @@out:          ret
@@ -690,7 +690,7 @@ tmain           proc    far public uses ax bx cx dx si di es
                 ;; than assumed: mgl pads scanlines, and b07 measured a
                 ;; 400-wide DC at stride 440
                 mov     bx, offset qsurf
-                mov     ax, [bx].Surface.stride
+                mov     ax, [bx].Surface.bps
                 xor     dx, dx
                 SAVEP   shown
                 invoke  tshow, offset n_pitch, shown

@@ -190,9 +190,6 @@ sub sys_parse_args ( _
         if ( lcase$(argv(i)) = "-qgl" ) then
             g.qgl_slice = true
         end if
-        if ( lcase$(argv(i)) = "-qgltex" ) then
-            g.qgl_tex = true
-        end if
         if ( lcase$(argv(i)) = "-qglarr" ) then
             g.qgl_arr = true
         end if

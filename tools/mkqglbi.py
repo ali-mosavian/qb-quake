@@ -28,6 +28,8 @@ EXPORT = [
         "QGL_MEM_LARGEST", "QGL_MEM_TOTAL"]),
     ("Where a surface's pixels live.", [
         "QGL_SURF_CMEM", "QGL_SURF_EMS"]),
+    ("Physical EMS page a surface is mapped through.", [
+        "QGL_TEX_SLOT", "QGL_Z_SLOT"]),
     ("Depth mode, for qglZMode.", [
         "QGL_Z_OFF", "QGL_Z_SET", "QGL_Z_TEST"]),
     ("Drawing mode, for qglRsMode.", [
@@ -66,10 +68,13 @@ def constants(inc: str) -> tuple[dict[str, int], set[str]]:
     sz = sizeofs(inc)
     for m in re.finditer(r"^(\w+)\s+equ\s+([^;\r\n]+)", inc, re.M):
         name, expr = m.group(1), m.group(2).strip()
-        if re.search(r"\bSIZEOF\b", expr):
+        # `T X` is qgl.inc's own shorthand for `type X`, and it means the
+        # same thing SIZEOF does here. Matching only SIZEOF let SF_MEM /
+        # SF_EMS -- written `0 * T SurfaceOps` -- past the guard below.
+        if re.search(r"\bSIZEOF\b|\bT\s+\w", expr):
             derived.add(name)
         for s, v in sz.items():
-            expr = re.sub(r"\bSIZEOF\s+" + s + r"\b", str(v), expr)
+            expr = re.sub(r"\b(?:SIZEOF|T)\s+" + s + r"\b", str(v), expr)
         expr = re.sub(r"\b(" + "|".join(out) + r")\b", lambda k: str(out[k.group(1)]), expr) if out else expr
         if not re.fullmatch(r"[0-9A-Fa-fh\s+*()-]+", expr):
             continue

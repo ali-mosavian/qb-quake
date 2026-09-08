@@ -56,7 +56,7 @@ tmain           proc    far public uses bx cx dx si di es
                 NZ      ax
                 CHK     n_font, ax, 1
 
-                invoke  qglSfNew, 8, 8, SURF_CMEM, 0
+                invoke  qglSfNew, 8, 8, SURF_CMEM
                 SAVEP   sf
 
                 invoke  qglDrFill, sf, 0, 0, 7, 7, BG

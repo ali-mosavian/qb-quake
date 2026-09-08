@@ -107,7 +107,7 @@ textp           dd      0
 fontp           dd      0
 dc              dd      0
 qptr            dd      0
-qsurf           Surface <>
+                SF_DECL qsurf, 256
 
 ;; Only farptr is consumed by uglNewMult/uglDelMult. The remaining words
 ;; make this a real VBDOS BASARRAY descriptor instead of relying on stack
@@ -248,7 +248,7 @@ live_row        proc    near private uses bx cx di,\
                 mov     off_, ax
 
                 mov     ax, y
-                mul     [bx].Surface.stride
+                mul     [bx].Surface.bps
                 add     ax, off_
                 mov     dx, seg_
                 ret
@@ -656,7 +656,7 @@ tmain           proc    far public uses ax bx cx dx si di es
 
                 ;; the adopted pitch, reported not assumed
                 mov     bx, offset qsurf
-                mov     ax, [bx].Surface.stride
+                mov     ax, [bx].Surface.bps
                 xor     dx, dx
                 SAVEP   shown
                 invoke  tshow, offset n_pitch, shown

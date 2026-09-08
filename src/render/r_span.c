@@ -308,11 +308,21 @@ static void near emit_span( short row, short x0, short x1, short poly )
 }
 
 /* The drawing pass: one polygon at a time, so its texture, window and
-   gradients are established once and every span of it reuses them. */
+   gradients are established once and every span of it reuses them.
+
+   DEAD SINCE THE ATLAS BECAME A qgl Surface. pg_tex holds atlas view
+   handles, and uglSetView/uglSpanBegin read an mgl DC's scanline table
+   at fixed offsets -- against a 16-byte Surface that is a write into
+   the far heap, not a mis-drawn pixel. The emit and bucket passes are
+   the ones that carry the measurement this prototype exists for and
+   they touch no texture, so they still run; -spandraw draws nothing
+   until qgl has a span entry point of its own. */
 static void near draw_spans( void )
 {
     short p, sp, x0, row;
     float fx, fy, zs;
+
+    return;
 
     for ( p = 0; p < poly_count; p++ ) {
         sp = pg_spans[p];

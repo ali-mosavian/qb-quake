@@ -1,6 +1,7 @@
 option explicit
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
+'$include: 'qgl.bi'
 '$include: 'pal.bi'
 '$include: 'kbd.bi'
 '$include: 'tmr.bi'
@@ -24,6 +25,22 @@ option explicit
 '$include: 'q_snd.bi'
 '$include: 'q_mdl.bi'
 '$include: 'q_game.bi'
+
+''
+'' qgl's, not this module's -- the surface-cache store's own owner, since
+'' sc_store_open is its only caller. qgl.bi carries the constants only
+'' (generated); the functions are declared by hand, per the "narrowest
+'' place that can see it" rule.
+''
+declare function qglSfInit ( ) as integer
+declare function qglSfNew ( byval wid as integer, byval hgt as integer, _
+                              byval whr as integer ) as long
+declare sub qglSfFree ( byval s as long )
+declare function qglSfViewNew ( byval parent as long, byval wid as integer, _
+                                  byval hgt as integer, byval bps as integer ) as long
+declare function qglSfViewAim ( byval v as long, byval ofs as long ) as integer
+declare function qglSfPget ( byval s as long, byval x as integer, _
+                               byval y as integer ) as integer
 
 ''
 '' This module's own procedures.
@@ -931,12 +948,34 @@ function sc_store_open ( ) as integer
         exit function
     end if
     ''
-    '' Shaped so its own scanline table stays tiny. bps is capped at one EMS
-    '' page, so a 16384-wide DC is exactly one page per scanline: 1.5 MB of
-    '' store costs 96 entries, 384 bytes. Shape it 128 wide instead and the
-    '' parent's own table would be 49K, which is the very cost being dodged.
+    '' qgl-owned, not mgl's: a raw qglGemAlloc handle, directly usable
+    '' through qglGemMap, unlike mgl's own EMS sub-allocator (emsAlloc's
+    '' own header: "handle returned _can't_ be used to invoke the EMS
+    '' manager"). This is what let qglSbBuild stop reaching into
+    '' ul$dctTB for the destination -- see sb.asm's own header.
     ''
-    sc_hnd = uglNew&( UGL.EMS, UGL.8BIT, SC_PGBYTES, SC_PAGES )
+    '' Shaped 16384 wide, 256 tall for no reason a Surface cares about --
+    '' unlike an mgl DC, a Surface has no per-row scanline table to keep
+    '' small, so the shape is free. Kept anyway, matching the store's old
+    '' mgl shape, because sc_grab/sc_bgrn's granule arithmetic already
+    '' assumes SC_PGBYTES*SC_PAGES bytes and there is no reason to pick a
+    '' new pair of numbers that means the same thing.
+    ''
+    '' qglSfInit first: qgl's own EMS layer probes INT 67h itself
+    '' (qglGemInit) rather than trusting mgl's uglInit to have done it,
+    '' and nothing in the real renderer's startup had ever called it --
+    '' only -qglcheck/-qgldiff did, which is why the very first qgl EMS
+    '' allocation anywhere in a normal run failed outright (qglGemAlloc
+    '' refuses before qgl$emsok is set). Idempotent and cheap, so calling
+    '' it again here rather than hunting down a single earlier place is
+    '' the right amount of caution for a function guarded to run once.
+    ''
+    if ( qglSfInit() = 0 ) then
+        sc_cap = 0
+        sc_store_open = 0
+        exit function
+    end if
+    sc_hnd = qglSfNew&( SC_PGBYTES, SC_PAGES, QGL_SURF_EMS )
     if ( sc_hnd = 0 ) then
         sc_cap = 0
         sc_store_open = 0
@@ -1028,7 +1067,7 @@ function sc_find ( _
     dc = sc_desc( vcls )
     if ( dc <> 0 ) then
         sc_aim_ofs = clng( sc_bgrn( sc_slot(face).blk ) ) * SC_GRAN
-        if ( uglSetView%( dc, sc_aim_ofs ) = 0 ) then dc = 0
+        if ( qglSfViewAim%( dc, sc_aim_ofs ) = 0 ) then dc = 0
     end if
     if ( dc <> 0 ) then
         sc_hits = sc_hits + 1
@@ -1085,7 +1124,7 @@ function sc_alloc ( _
     '' against one per cached surface before.
     ''
     if ( sc_desc(cidx) = 0 ) then
-        dc = uglNewView&( sc_hnd, 0, 2 ^ a, 2 ^ b )
+        dc = qglSfViewNew&( sc_hnd, 2 ^ a, 2 ^ b, 2 ^ a )
         if ( dc = 0 ) then
             sc_alloc = 0
             exit function
@@ -1214,7 +1253,7 @@ function sc_alloc ( _
 
     '' aim it at the bytes just claimed, ready for the builder to write
     sc_aim_ofs = ofs
-    if ( uglSetView%( dc, ofs ) = 0 ) then
+    if ( qglSfViewAim%( dc, ofs ) = 0 ) then
         sc_alloc = 0
         exit function
     end if
@@ -1253,12 +1292,16 @@ end sub
 sub sc_shutdown
     dim i as integer
 
-    '' views first: they borrow the store's pixels, so the store outlives them
+    '' qglSfViewNew's own views have no matching free -- qglSfFree would
+    '' free the SHARED store handle out from under whichever view called
+    '' it first (see qglSfViewNew's header in sf.asm), so their small
+    '' headers just leak, once, at process exit. sc_desc(i) is still
+    '' cleared so nothing downstream mistakes a stale pointer for a live
+    '' view after shutdown.
     for i = 0 to SC_NCLS-1
-        if ( sc_desc(i) <> 0 ) then uglDelView sc_desc(i)
         sc_desc(i) = 0
     next i
-    if ( sc_hnd <> 0 ) then uglDel sc_hnd
+    if ( sc_hnd <> 0 ) then qglSfFree sc_hnd
     sc_hnd = 0
     sc_cap = 0
     sc_next = 0
@@ -1615,7 +1658,10 @@ sub sb_dump ( _
     for y = 0 to ph - 1
         row = space$( pw )
         for x = 0 to pw - 1
-            mid$( row, x + 1, 1 ) = chr$( uglPGet&( dc, x, y ) and 255& )
+            '' qglSfPget, not uglPGet: sc_alloc hands back a qgl view
+            '' now, and mgl would read a DC's layout off a 16-byte
+            '' Surface header. That silently dumped garbage.
+            mid$( row, x + 1, 1 ) = chr$( qglSfPget%( dc, x, y ) and 255 )
         next x
         put #fh, , row
     next y

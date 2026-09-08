@@ -64,8 +64,16 @@ ENDIF
                 test    bx, bx
                 jz      @@fail
 
+                ;; BX IS THE REQUEST GOING IN AND DOS'S ANSWER COMING OUT.
+                ;; A failing 48h reports the largest block it COULD have
+                ;; given, in bx, over the count we asked for -- so the
+                ;; retry below allocated that instead, and a caller writing
+                ;; the size it asked for ran off the end of a short block.
+                ;; mgl's bas_malloc brackets the call for this reason.
+                push    bx
                 mov     ah, 48h
                 int     21h
+                pop     bx
                 jnc     @@got
 
 IFDEF __BASIC__
@@ -133,12 +141,12 @@ ENDIF
                 ;; 640K line. A surface built there runs into VGA at
                 ;; A000h and every pixel reads back FFh.
                 ;;
-                ;; An address bound was tried first and did not fire: DOS
-                ;; does not preserve BX across a successful 48h, so the
-                ;; paragraph count to compare against was already gone. So
+                ;; An address bound was tried first and did not fire. So
                 ;; this writes a sentinel to the first and last byte and
                 ;; reads it back, which tests the thing that actually
-                ;; matters and does not care why the block was wrong.
+                ;; matters and does not care why the block was wrong --
+                ;; note it does NOT test the block's SIZE, which is why a
+                ;; short block got past it. t21mem covers that.
                 ;;
                 ;; This is the arena AGENTS.md records mgl's bas_malloc
                 ;; corrupting. The comment above claiming this path was

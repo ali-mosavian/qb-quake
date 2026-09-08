@@ -36,6 +36,7 @@ option explicit
 ''
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
+'$include: 'qgl.bi'
 '$include: 'pal.bi'
 '$include: 'kbd.bi'
 '$include: 'tmr.bi'
@@ -121,9 +122,16 @@ declare function qglDiffAll () as integer
 declare function qglPresAll ( _
     g as Game _
 ) as integer
-declare function qglTexAll ( g as Game ) as integer
 declare function qglFaceAll () as integer
 declare function qglArrAll () as integer
+declare function qglSfInit () as integer
+declare function qglZNew ( byval dst as long, byval kind as integer ) as long
+declare function qglZSet ( byval s as long ) as integer
+'' `as single`, not `as long`: the fillers read this with `fmul D
+'' qgl$zscale`, so what crosses is the float's bit pattern, not its
+'' value. mgl's uglZScale took an integer and a `as long` here would
+'' silently convert instead of reinterpreting.
+declare function qglZScale ( byval f as single ) as long
 
 declare sub host_init ( _
     g as Game, _
@@ -656,6 +664,13 @@ sub host_init ( _
     sys_mem_mark "start"
     d_init_turb
     vid_init_ugl
+
+    '' qgl probes INT 67h itself rather than trusting uglInit, and
+    '' qglGemAlloc refuses until it has. Here, not at the first qgl
+    '' allocation: mod_load_textures loads the atlas long before the
+    '' surface cache opens, and sc_store_open's own call was too late
+    '' -- the atlas load failed with 0x0016 and nothing said why.
+    if ( qglSfInit() = 0 ) then sys_error "0x0017, qgl has no EMS"
     sys_mem_mark "ugl"
 
     '' -qgldiff: qgl's rasteriser against mgl's. AFTER vid_init_ugl,
@@ -708,15 +723,6 @@ sub host_init ( _
     mod_load_textures g, mip_buff_inf()
     sys_mem_mark "textures"
 
-    '' -qgltex: the EMS texture bridge against mgl's own reads. Here
-    '' and not earlier because it needs the real atlas and the views
-    '' onto it, which mod_load_textures has just built.
-    if ( g.qgl_tex ) then
-        dim qgltbad as integer
-        qgltbad = qglTexAll( g )
-        uglRestore
-        system
-    end if
     mod_close g
     sys_mem_mark "mapclose"
 
@@ -917,11 +923,17 @@ sub host_main ( _
     '' range; anything closer would saturate, and nothing is, because the
     '' clipper drops it first.
     ''
+    '' qgl's, not mgl's: nothing draws through mgl any more, so nothing
+    '' would read an mgl depth buffer. qglZNew sizes itself from the
+    '' destination Surface, and an mgl DC is one.
     z_dc = 0
-    if ( g.env.no_z = 0 ) then z_dc = uglNewZ&( h_dst_dc, UGL.EMS% )
+    if ( g.env.no_z = 0 ) then
+        z_dc = qglZNew&( h_dst_dc, QGL_SURF_EMS )
+        if ( z_dc = 0 ) then sys_error "0x0019, no qgl depth buffer"
+    end if
     if ( z_dc <> 0 ) then
-        uglSetZ z_dc
-        zz = uglZScale&( 65535.0 * g.env.z_near )
+        zz = qglZSet%( z_dc )
+        zz = qglZScale&( 65535.0 * g.env.z_near )
     end if
     
     g.rdr.use_mips = -1
@@ -1018,8 +1030,12 @@ sub host_main ( _
         '' can.
         ''
         frame_no = frame_no + 1
-        '' -qglface: one frame is enough to have captured a face
-        if ( g.qgl_face ) then
+        '' -qglface: the LAST frame of the run, not the first. One frame
+        '' froze the same face whatever -at and -yaw said -- two yaws 34
+        '' degrees apart returned byte-identical vertices -- so the oracle
+        '' could never be pointed at a face that looked wrong on screen.
+        '' -bench N picks the frame; without it this is still frame 1.
+        if ( g.qgl_face and frame_no >= g.env.bench_frames ) then
             dim qglfbad as integer
             qglfbad = qglFaceAll()
             uglRestore

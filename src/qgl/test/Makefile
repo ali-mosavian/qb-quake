@@ -23,9 +23,19 @@ TESTS  := $(filter-out tfw,$(basename $(wildcard t*.asm)))
 # The layer under test. Every test links all of it -- these are small and
 # a per-test object list would drift from reality the first time a module
 # grew a dependency.
-QGLSRC := $(QGL)/vga.asm $(QGL)/gem.asm $(QGL)/sf.asm $(QGL)/mem.asm \
-          $(QGL)/txt.asm $(QGL)/file.asm $(QGL)/mgldc.asm $(QGL)/dr.asm \
-          $(QGL)/z.asm $(QGL)/clip.asm $(QGL)/rs.asm \
+#
+# QGLCORE is the surface layer proper: the boundary plus mgl's DC layer
+# transcribed. sf.asm dispatches into every one of them, so they travel
+# together -- naming a subset is a link that emits an EXE anyway and then
+# executes an int 3 at the first row lookup.
+QGLCORE := $(QGL)/sf.asm $(QGL)/mem.asm $(QGL)/gem.asm \
+           $(QGL)/qglnew.asm $(QGL)/qglview.asm $(QGL)/qgldc.asm \
+           $(QGL)/qglrow.asm \
+           $(QGL)/dct/dctmem.asm $(QGL)/dct/dctems.asm
+
+QGLSRC := $(QGL)/vga.asm $(QGLCORE) \
+          $(QGL)/txt.asm $(QGL)/file.asm $(QGL)/dr.asm \
+          $(QGL)/z.asm $(QGL)/clip.asm $(QGL)/rs.asm $(QGL)/sb.asm \
           $(QGL)/b8/b8fill.asm $(QGL)/b8/b8span.asm
 # Objects are DERIVED from QGLSRC, never listed again. Hand-listing them
 # meant every new module had to be added in three places, and twice a
@@ -45,30 +55,29 @@ UGLLIB ?= $(ROOT)/build/native-mgl/UGLV.LIB
 # Link only the qgl modules each benchmark reaches. MGL is an archive and
 # already gets demand-loaded; linking every qgl object beside it made EXE/map
 # footprint comparisons structurally biased against qgl.
-$(B)/b02prim/b.exe: QGLSRC := $(QGL)/gem.asm $(QGL)/sf.asm $(QGL)/mem.asm \
+$(B)/b02prim/b.exe: QGLSRC := $(QGLCORE) \
                               $(QGL)/file.asm \
-                              $(QGL)/mgldc.asm $(QGL)/dr.asm \
+                              $(QGL)/dr.asm \
                               $(QGL)/b8/b8fill.asm
-$(B)/b03font/b.exe: QGLSRC := $(QGL)/gem.asm $(QGL)/sf.asm $(QGL)/mem.asm \
+$(B)/b03font/b.exe: QGLSRC := $(QGLCORE) \
                               $(QGL)/txt.asm $(QGL)/file.asm \
-                              $(QGL)/mgldc.asm $(QGL)/dr.asm \
+                              $(QGL)/dr.asm \
                               $(QGL)/b8/b8fill.asm
-# z.asm for the depth pair, mgldc.asm for the adopt bridge the depth
-# case needs: qgl_z_new shapes from a Surface, uglNewZ from a DC, so one
-# retained MEM DC is adopted to give both arms the same parent.
-$(B)/b04mem/b.exe: QGLSRC := $(QGL)/gem.asm $(QGL)/sf.asm $(QGL)/mem.asm \
-                             $(QGL)/file.asm $(QGL)/z.asm $(QGL)/mgldc.asm
-$(B)/b07scale/b.exe: QGLSRC := $(QGL)/gem.asm $(QGL)/sf.asm $(QGL)/mem.asm \
+# z.asm for the depth pair: qgl_z_new shapes from a Surface and uglNewZ
+# from a DC, which are now the same struct, so one MEM DC serves both arms.
+$(B)/b04mem/b.exe: QGLSRC := $(QGLCORE) \
+                             $(QGL)/file.asm $(QGL)/z.asm
+$(B)/b07scale/b.exe: QGLSRC := $(QGLCORE) \
                                $(QGL)/file.asm \
-                               $(QGL)/mgldc.asm $(QGL)/dr.asm \
+                               $(QGL)/dr.asm \
                                $(QGL)/b8/b8fill.asm
-$(B)/b06movq/b.exe: QGLSRC := $(QGL)/gem.asm $(QGL)/sf.asm $(QGL)/mem.asm \
+$(B)/b06movq/b.exe: QGLSRC := $(QGLCORE) \
                               $(QGL)/file.asm \
-                              $(QGL)/mgldc.asm $(QGL)/dr.asm \
+                              $(QGL)/dr.asm \
                               $(QGL)/b8/b8fill.asm
-$(B)/b05blit/b.exe: QGLSRC := $(QGL)/gem.asm $(QGL)/sf.asm $(QGL)/mem.asm \
+$(B)/b05blit/b.exe: QGLSRC := $(QGLCORE) \
                               $(QGL)/file.asm \
-                              $(QGL)/mgldc.asm $(QGL)/dr.asm \
+                              $(QGL)/dr.asm \
                               $(QGL)/b8/b8fill.asm
 
 all: hangcheck $(TESTS:%=$(B)/%/pass)
@@ -101,6 +110,11 @@ $(B)/%/fgeom.bin: $(ROOT)/data/assets/assets.zip
 
 $(B)/%/pass: $(B)/%/t.exe $(B)/%/$(FONT) $(B)/%/fgeom.bin run1.sh
 	@sh run1.sh $(DOSBOX) $(@D)
+
+# t21mem is the one test that needs the BASIC fallback in mem.asm, which
+# only exists under __BASIC__. It brings its own B$SETM; the objects are
+# per-test-directory, so nothing else sees the define.
+$(B)/t21mem/t.exe: JWASM += -D__BASIC__=1
 
 $(B)/%/t.exe: %.asm tfw.asm tfw.inc $(QGLSRC) $(QGL)/qgl.inc
 	@mkdir -p $(@D)

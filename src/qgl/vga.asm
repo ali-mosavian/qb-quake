@@ -27,17 +27,24 @@
 
                 include qgl.inc
 
+qglSfInit       proto   far pascal
+qglMemAlloc     proto   far pascal :dword
+
 VGA_SEG         equ     0A000h
 DAC_WRITE       equ     03C8h
 DAC_DATA        equ     03C9h
 
 
+VGA_W           equ     320
+VGA_H           equ     200
+
 .data
-;; The screen, as a surface. Static rather than allocated: there is
-;; exactly one, it is always 320x200, and its pixels are always at
-;; A000:0000. Nothing about it is discovered at run time.
+;; The screen, as a surface. ALLOCATED, not declared: a Surface lives at
+;; offset 0 of its own segment -- every accessor reads it with no base
+;; register, as mgl's do -- and a DGROUP static does not. So this is the
+;; far pointer qgl$VgaShape fills on first ask, and 0:0 until then.
 ;; Internal: callers reach it through qglVgaScreen, not by name.
-qgl$screen      Surface <320, 200, 320, SURF_CMEM, 0, 0, 0, VGA_SEG, 0>
+qgl$screen      dd      0
 qgl$prevmode    db      3               ;; whatever was current at init
 
 
@@ -57,11 +64,67 @@ qglVgaInit    proc    public
                 mov     ax, 0013h
                 int     10h
 
-                ;; medium model: DS is DGROUP, and the surface is in it
-                mov     dx, ds
-                mov     ax, offset qgl$screen
+                call    qgl$VgaShape
+                mov     ax, W [qgl$screen+0]
+                mov     dx, W [qgl$screen+2]
                 ret
 qglVgaInit    endp
+
+;;::::::::::::::
+;; qgl$VgaShape -- the screen surface's fields and its address table.
+;;
+;; A SUB rather than an initialiser, and called from qglVgaScreen as well
+;; as from qglVgaInit: a caller that only wants the descriptor -- t01base
+;; does, and so does anything that asks before the mode is set -- must
+;; still get a filled one. It allocates once and then does nothing.
+;;::::::::::::::
+qgl$VgaShape    proc    near private uses ax bx cx dx es
+                invoke  qglSfInit               ;; see qglSfNewEx's note
+
+                cmp     W [qgl$screen+2], 0
+                jne     @@done
+
+                invoke  qglMemAlloc, T Surface + VGA_H * 4
+                mov     W [qgl$screen+0], ax
+                mov     W [qgl$screen+2], dx
+                or      ax, dx
+                jz      @@done
+
+                mov     es, dx
+                mov     es:[Surface.fmt], FMT_8BIT
+                mov     es:[Surface.typ], SF_MEM
+                mov     ax, FMT_8BIT_BPP
+                mov     es:[Surface.bpp], al
+                mov     ax, FMT_8BIT_P2B
+                mov     es:[Surface.p2b], al
+                mov     es:[Surface.xRes], VGA_W
+                mov     es:[Surface.yRes], VGA_H
+                mov     es:[Surface.bps], VGA_W
+                mov     es:[Surface.pages], 1
+                mov     es:[Surface.startSL], 0
+                mov     es:[Surface.xMin], 0
+                mov     es:[Surface.yMin], 0
+                mov     es:[Surface.xMax], VGA_W-1
+                mov     es:[Surface.yMax], VGA_H-1
+                mov     W es:[Surface.fptr+0], 0
+                mov     W es:[Surface.fptr+2], VGA_SEG
+                mov     W es:[Surface._size+0], (VGA_W * VGA_H) and 0FFFFh
+                mov     W es:[Surface._size+2], (VGA_W * VGA_H) shr 16
+
+                ;; the address table: 320*200 is 64000, so every row is in
+                ;; the one segment and the offset is all that moves
+                xor     ax, ax
+                mov     bx, SF_addrTB
+                mov     cx, VGA_H
+@@row:          mov     W es:[bx+0], VGA_SEG
+                mov     W es:[bx+2], ax
+                add     ax, VGA_W
+                add     bx, T dword
+                dec     cx
+                jnz     @@row
+
+@@done:         ret
+qgl$VgaShape    endp
 
 
 ;;::::::::::::::
@@ -82,8 +145,9 @@ qglVgaShutdown endp
 ;; init themselves.
 ;;::::::::::::::
 qglVgaScreen  proc    public
-                mov     dx, ds
-                mov     ax, offset qgl$screen
+                call    qgl$VgaShape
+                mov     ax, W [qgl$screen+0]
+                mov     dx, W [qgl$screen+2]
                 ret
 qglVgaScreen  endp
 

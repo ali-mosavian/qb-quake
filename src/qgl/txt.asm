@@ -323,9 +323,9 @@ qglTxtChar    proc    public uses bx cx dx si di ds es,\
                 ;; guard page never catches.
                 ;;
                 les     bx, dst
-                mov     ax, es:[bx].Surface.x_res
+                mov     ax, es:[bx].Surface.xRes
                 mov     xres, ax
-                mov     ax, es:[bx].Surface.y_res
+                mov     ax, es:[bx].Surface.yRes
                 mov     yres, ax
 
                 mov     ax, x                   ;; the glyph spans x..x+7

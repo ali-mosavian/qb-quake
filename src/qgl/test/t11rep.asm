@@ -98,11 +98,11 @@ cntne           endp
 tmain           proc    far public uses bx cx dx si di es
 
                 invoke  qglSfInit
-                invoke  qglSfNew, SFW, SFH, SURF_CMEM, 0
+                invoke  qglSfNew, SFW, SFH, SURF_CMEM
                 SAVEP   sf
-                invoke  qglSfNew, SFW, SFH, SURF_CMEM, 0
+                invoke  qglSfNew, SFW, SFH, SURF_CMEM
                 SAVEP   sf2
-                invoke  qglSfNew, 8, 8, SURF_CMEM, 0
+                invoke  qglSfNew, 8, 8, SURF_CMEM
                 SAVEP   tx
 
                 mov     word ptr pp, offset poly

@@ -6,22 +6,17 @@
 ;; way. Conventional memory answers with arithmetic; EMS answers with a
 ;; page map.
 ;;
-;; THE SLOT IS THE CALLER'S, not the surface's. mgl's emsMapEx already
-;; takes an explicit physical page (0..3) for exactly this reason -- its
-;; own header says the plain accessor "evicts whatever the renderer had
-;; there", which is why the Ex form exists -- and q_map.bi's PAGE_SLOT
-;; has been using it that way all along. An earlier draft of this file
-;; claimed mgl pooled its four pages and evicted least-recently-used,
-;; and gave that as the reason for handing each surface a private slot.
-;; That was wrong on both counts: emsSlotAcquire/emsSlotLock appear
-;; nowhere in mgl, only in AGENTS.md's account of an experiment that was
-;; REVERTED, and four private slots cannot cover the nine or more EMS
-;; objects this renderer has live at once.
+;; THE SLOT IS NOT THE SURFACE'S, and never was mgl's either. The plain
+;; read and write accessors hardwire physical pages 0 and 1 -- mgl's
+;; EMS_READPAGE/EMS_WRITEPAGE -- and a caller wanting some other window
+;; says so at the point of access, through the Ex form. That is what
+;; emsMapEx has always been: its own header says the plain accessor
+;; "evicts whatever the renderer had there", and q_map.bi's PAGE_SLOT
+;; has been using it that way all along.
 ;;
-;; So: the caller names the slot, and shares it deliberately where it
-;; must, under the discipline q_map.bi already documents -- map
-;; immediately before use, never hold the window across a call that
-;; could remap it.
+;; A Surface carrying its own rd/wr slot was a qgl invention and is gone:
+;; it made the struct two bytes wider than a DC, which is the one thing
+;; a transcription of mgl cannot afford.
 ;;
 ;; WHAT ACTUALLY BUYS HEADROOM is placement, not slot policy. sb_build
 ;; today holds four windows live at once -- destination, atlas, luxels,
@@ -73,28 +68,244 @@
 ;;          layer, which is why UGL_CODE exists -- and not a far internal.
 ;;
 
+O               equ     offset
+S               equ     seg
+T               equ     type
+D               equ     dword ptr
+W               equ     word ptr
+B               equ     byte ptr
+
+;; mgl's equ.inc, the three names the transcribed modules spell out.
+FALSE           equ     0
+TRUE            equ     -1
+NULL            equ     0
+
+;; mgl's log.inc, transcribed verbatim, gate included: the macro bodies
+;; still test _DEBUG_, which nothing here defines, so a diff against the
+;; original is clean and every macro assembles to nothing.
+log_proc        textequ <>
+
+LOGOPEN         macro   msg:req
+                local   ??msg, ??ret
+        ifdef   _DEBUG_
+                push    cs
+                push    offset ??msg
+                push    word ptr @SizeStr(<msg>) + 2+2
+                push    cs
+                push    offset ??ret
+                externdef log_open:far
+                jmp     log_open
+??msg           byte    "&msg {", 13, 10
+??ret:
+        endif
+endm
+
+LOGCLOSE        macro
+                local   ??msg, ??ret
+        ifdef   _DEBUG_
+                push    cs
+                push    offset ??msg
+                push    word ptr 1 + 2
+                push    cs
+                push    offset ??ret
+                externdef log_close:far
+                jmp     log_close
+
+??msg           byte    "}", 13, 10
+??ret:
+        endif
+endm
+
+LOGBEGIN        macro   procname:req
+                local   ??msg, ??ret
+        ifdef   _DEBUG_
+                log_proc catstr <'>, <procname>, <'>
+
+                push    cs
+                push    offset ??msg
+%               push    word ptr @SizeStr(<%log_proc>)-2 +2+2
+                push    cs
+                push    offset ??ret
+                externdef log_begin:far
+                jmp     log_begin
+
+??msg           byte    log_proc
+                byte    ' {', 13, 10
+??ret:
+        endif
+endm
+
+LOGEND          macro
+                local   ??msg, ??ret
+        ifdef   _DEBUG_
+                externdef log_end:far
+                push    cs
+                push    offset ??msg
+%               push    word ptr 1+2
+                push    cs
+                push    offset ??ret
+                jmp     log_end
+
+??msg           byte    '}', 13, 10
+??ret:
+        endif
+endm
+
+LOGMSG          macro   msg:req
+                local   ??msg, ??ret
+        ifdef   _DEBUG_
+                push    cs
+                push    offset ??msg
+%               push    word ptr @SizeStr(<msg>) +2
+                push    cs
+                push    offset ??ret
+                externdef log_msg:far
+                jmp     log_msg
+
+??msg           byte    "&msg", 13, 10
+??ret:
+        endif
+endm
+
+LOGERROR        macro   msg
+                local   ??msg, ??ret
+        ifdef   _DEBUG_
+                push    cs
+                push    offset ??msg
+        ifnb    <msg>
+%               push    word ptr @SizeStr(<msg>) +7+2
+        else
+                push    word ptr 8+2
+        endif
+                push    cs
+                push    offset ??ret
+                externdef log_msg:far
+                jmp     log_msg
+
+        ifnb    <msg>
+??msg           byte    "ERROR: &msg", 13, 10
+        else
+??msg           byte    "ERROR!!!", 13, 10
+        endif
+
+??ret:
+        endif
+endm
+
+;; mgl's ems.inc, the constants the EMS back-end spells out. The MAP
+;; macros are dctems.asm's own -- qgl maps through gem.asm, not INT 67h
+;; inline.
+EMS_PGSIZE      equ     16384
+EMS_PGSHIFT     equ     14
+EMS_INVALID     equ     -1
+EMS_READPAGE    equ     0
+EMS_WRITEPAGE   equ     1
+
+;; EMSCTX is dctems.asm's, not this file's. It carries `rdCurrent equ
+;; ppgTB[...]`, and a struct EQU is a GLOBAL text substitution -- with it
+;; here, dctmem.asm's own MEMCTX.rdCurrent field stops being a name and
+;; becomes an index expression. mgl's ems.inc records the same trap for
+;; xms.inc and vbe.inc.
+
 ;;
 ;; DISPATCH, not a compare. One entry per kind of surface, holding the
 ;; routines that kind needs -- mgl's ul$dctTB, narrowed to the two kinds
-;; we have. The type constant IS the byte offset into the table, the
-;; same trick as DC_MEM equ 0 * T DCT, so a call site indexes with no
-;; multiply and no branch:
+;; we have. Surface.typ IS the byte offset into the table, so a call site
+;; indexes with no multiply and no branch:
 ;;
-;;      mov     cl, es:[bx].SF.sfWhere
-;;      xor     ch, ch
-;;      call    qgl$typeTB[cx].sftRow
+;;      mov     bx, es:[bx].Surface.typ
+;;      call    qgl$dctTB[bx].rdAccess
 ;;
-;; One field today. It is a struct rather than a bare word so that
-;; adding the next per-kind routine does not move SF_CMEM and SF_EMS
-;; out from under every surface already built with them.
-;;
+;; mgl's DCT (inc/dct.inc), field for field and padded to the same 64
+;; bytes. Transcribed, not designed: the dispatch the copied code performs
+;; is `call qgl$dctTB[bx].rdAccess`, so the record it indexes has to be
+;; the record mgl's code indexed.
 SurfaceOps      struc
-rd_row          dw      ?               ;; near: map row for READING
-wr_row          dw      ?               ;; near: map row for WRITING
-rd_row_ex       dw      ?               ;; near: as rd_row, cl = the slot
-wr_row_ex       dw      ?               ;; near: as wr_row, cl = the slot
-windows         dw      ?               ;; slots this kind holds at once
+                _init           dw      ?       ;; near!
+                _end            dd      ?
+
+                state           dw      FALSE
+                winSize         dd      ?
+
+                new             dd      NULL
+                newMult         dd      NULL
+                del             dd      NULL
+
+                save            dd      NULL
+                restore         dd      NULL
+
+                rdBegin         dw      NULL    ;; near!
+                wrBegin         dw      NULL    ;; /
+                rdwrBegin       dw      NULL    ;; /
+                rdSwitch        dw      NULL    ;; /
+                wrSwitch        dw      NULL    ;; /
+                rdwrSwitch      dw      NULL    ;; /
+                rdAccess        dw      NULL    ;; /
+                wrAccess        dw      NULL    ;; /
+                rdwrAccess      dw      NULL    ;; /
+                fullAccess      dw      NULL    ;; /
+
+                ;;
+                ;; The Ex accessors: as rdAccess/wrAccess, but the caller
+                ;; picks WHICH window (physical page slot) to map into, and
+                ;; gets the pointer back as a VALUE in dx:ax rather than
+                ;; having ds/es clobbered on its behalf. That is what lets
+                ;; one routine hold several surfaces mapped at once, each in
+                ;; whatever segment register it likes.
+                ;;
+                ;; They sit in what used to be this struct's tail padding,
+                ;; so sizeof(SurfaceOps) is still 64 and every field above
+                ;; keeps the offset it already had.
+                ;;
+                ;; windows: how many independent slots this kind can hold
+                ;; mapped at once. 0 = Ex not supported (the three pointers
+                ;; stay NULL). Ask, do not assume.
+                ;;
+                rdAccessEx      dw      NULL    ;; near!
+                wrAccessEx      dw      NULL    ;; /
+                rdwrAccessEx    dw      NULL    ;; /
+                windows         dw      0
+
+        if      ($ gt 64)
+                .err    <sizeof(SurfaceOps) !> 64 bytes>
+        else
+        if      ($ ne 64)
+                                db      64-$ dup (?)
+        endif
+        endif
 SurfaceOps      ends
+
+;;::::::::::::::
+;; ds:bx-> qgl$dctTB[SF_???]
+SET_DCT         macro   field:req, function:req, nearFlag
+        ifb     <nearFlag>
+                externdef function:far
+                mov     W [bx].SurfaceOps.&field+0, O function
+                mov     W [bx].SurfaceOps.&field+2, S function
+        else
+                externdef function:near
+                mov     [bx].SurfaceOps.&field, O function
+        endif
+endm
+
+                ;; the back-ends' init/end procs. qgl_ prefixed where mgl
+                ;; says mem_/ems_ for one reason only: qrender links
+                ;; UGLV.LIB, whose own dctmem/dctems already define
+                ;; mem_Init, ems_New and a dozen more, and LINK folds case.
+                externdef       qgl_mem_Init:near, qgl_mem_End:far
+                externdef       qgl_ems_Init:near, qgl_ems_End:far
+
+                ;; the dispatch table itself. mgl keeps ul$dctTB in
+                ;; uglmain.asm; qgl has no main module, so it lives in
+                ;; sf.asm, which is already the layer's entry point.
+                externdef       qgl$dctTB:SurfaceOps
+
+;; THE TABLE IS INDEXED BY BYTE OFFSET, which is what makes the dispatch a
+;; `mov bx, [Surface.typ]` and no multiply -- mgl's DC_MEM equ 0 * T DCT.
+;; Surface.typ holds one of these, NOT the SURF_ enum below.
+SF_MEM          equ     0 * T SurfaceOps
+SF_EMS          equ     2 * T SurfaceOps
+SF_TYPES        equ     3               ;; entries, kind 1 being nobody's
 
 ;; READ AND WRITE ARE SEPARATE ENTRIES, which is dct.inc's arrangement
 ;; and not ceremony. For conventional memory all four are the same
@@ -124,23 +335,34 @@ SurfaceOps      ends
 ;; said 2, and a BASIC caller asking for an EMS surface would have
 ;; indexed the middle of the conventional entry.
 ;;
-;; An exported enum must never be a SIZEOF. If the dispatch wants a
-;; layout number it gets its own name, below.
+;; An exported enum must never be a SIZEOF. SF_MEM/SF_EMS above are the
+;; layout numbers, and sf.asm converts between the two at the boundary --
+;; the one place either name is spelled outside its own half.
 SURF_CMEM       equ     0
 SURF_EMS        equ     2
 
 ;; The dispatch table is indexed BY KIND, so it has a slot per kind value
-;; and one of them is unused. Ten bytes to keep the exported enum and the
-;; table layout from ever being the same number again.
+;; and one of them is unused. One SurfaceOps to keep the exported enum and
+;; the table layout from ever being the same number again.
 SURF_KINDS      equ     3
 
 SURF_SLOT_MAX   equ     3
 
-;; The depth buffer's own page, mgl's Z_SLOT. It is the LAST one so it
-;; cannot collide with a texture or a destination that took theirs in
-;; order, which is the disjointness sb_build has been relying on by
-;; accident rather than by statement.
-QGL_Z_SLOT      equ     3
+;; The depth buffer's page, for the ONE caller that names a window: the
+;; span filler writes depth through qglSfWrRowEx while its destination
+;; row is already in hand, so it cannot use the plain write accessor.
+;;
+;; It is EMS_WRITEPAGE, deliberately. Every other qgl write lands there
+;; too (mgl's wrAccess hardwires it), so naming it here shares one window
+;; rather than claiming a second -- and slots 2 and 3 are mgl's, held by
+;; PAGE_SLOT (luxels, geometry, nodes) and CM_SLOT (the colormap) across
+;; a surface build.
+QGL_Z_SLOT      equ     EMS_WRITEPAGE
+
+;; The texture atlas's page, which is EMS_READPAGE: qgl reads the atlas
+;; through the plain read accessor, so this is what that accessor uses.
+;; Named because t20zems and qgl.bi still want to say it out loud.
+QGL_TEX_SLOT    equ     EMS_READPAGE
 
 ;;
 ;; Which free figure qglMemAvail should report. LARGEST is what an
@@ -179,12 +401,6 @@ QGL_Z_KINDS     equ     3               ;; depth modes per drawing mode
 QGL_SUBDIVS     equ     4
 QGL_SUBDIVP     equ     16
 QGL_SUBDIVF     textequ <16.0>          ;; the same 16, as a real4 initialiser
-
-;; Surfaces qglSfScratch hands out. Four, because the slice that
-;; needs them wants a destination, a texture and a depth buffer, and one
-;; spare beats renumbering.
-QGL_SCRATCH     equ     4
-
 
 ;; Paged array stores. 8, not mgl's UA_MAX of 4: leaves, faces, nodes
 ;; and clip take all four today, and d_mdl.bas records the model
@@ -269,11 +485,6 @@ FXFLOOR         macro   a:req
                 shr     a, 16
 endm
 
-O               equ     offset
-T               equ     type
-D               equ     dword ptr
-W               equ     word ptr
-B               equ     byte ptr
 
 PS              macro   args:vararg
                 local   a
@@ -374,22 +585,99 @@ adv_ofs         dw      ?               ;; 0 when there is no table
 fpad2           dw      ?
 Font            ends
 
-;; Fields are unprefixed: they are scoped to the struct at every use
-;; (.Surface.stride), and two structs may share a field name -- measured,
-;; not assumed. The one real constraint is MASM's reserved words, which
-;; is why this is x_res and not width: WIDTH is an operator, ORG is a
-;; directive, and both fail at the STRUC rather than the use.
+;; qgl has ONE colour format, so mgl's CFMT layer is not transcribed and
+;; this is the whole of it. bpp and p2b are what ul$cfmtTB[FMT_8BIT] would
+;; have answered; the transcribed modules use these constants where mgl
+;; indexes that table.
+FMT_8BIT        equ     0
+FMT_8BIT_BPP    equ     8
+FMT_8BIT_P2B    equ     0
+
+CLIPRECT        struc                           ;; clipping rectangle
+                xMin            dw      ?
+                yMin            dw      ?
+                xMax            dw      ?
+                yMax            dw      ?
+CLIPRECT        ends
+
+;; mgl's DC, field for field, and for the stated reason: qgl is a
+;; transcription of mgl and not a second design, so the struct the copied
+;; code indexes has to be the struct mgl's code indexed. The row-address
+;; table is back -- a Surface and a DC are equivalent now, and nothing is
+;; computed where mgl looks something up.
 ;;
-;; stride, not bps: it is the row-to-row distance in bytes, and the old
-;; name needed a comment to say so.
+;; Names are mgl's (xRes, bps) rather than the x_res/stride this carried
+;; while it was its own thing. MASM's reserved words still bite -- WIDTH
+;; is an operator and ORG a directive -- but mgl's own names avoid them
+;; already, which is why it could use them too.
+        ifdef   _DEBUG_
+                QGL_SIGN        equ     'QGLD'
+        endif
+
+MEM_SF          struc
+fptr            dd      ?               ;; far pointer
+MEM_SF          ends
+
+EMS_SF          struc
+hnd             dw      ?               ;; EMS handle
+EMS_SF          ends
+
 Surface         struc
-x_res           dw      ?               ;; pixels
-y_res           dw      ?
-stride          dw      ?               ;; row to row, in bytes
-kind            db      ?               ;; SURF_CMEM or SURF_EMS
-wr_slot         db      ?               ;; page this surface writes through
-rd_slot         db      ?               ;; and the one it reads through
-spad            db      ?
-handle          dw      ?               ;; EMS handle, or the segment if cmem
-base_ofs        dd      ?               ;; byte offset of row 0 in the store
+fmt             dw      ?               ;; FMT_8BIT; qgl has the one
+typ             dw      ?               ;; SURF_CMEM or SURF_EMS
+
+bpp             db      ?               ;; bits per pixel
+p2b             db      ?               ;; shift converting pixels to bytes
+xRes            dw      ?
+yRes            dw      ?
+bps             dw      ?               ;; bytes per scanline
+pages           dw      ?
+startSL         dw      ?               ;; first scanline
+_size           dd      ?               ;; bps * yRes * pages
+
+xMin            dw      ?               ;; the clip rect is PER SURFACE, as
+yMin            dw      ?               ;; mgl's is; qgl kept one global
+xMax            dw      ?               ;; rect for the whole module, which
+yMax            dw      ?               ;; is a divergence in its own right
+
+                union
+                                MEM_SF  <>
+                                EMS_SF  <>
+                ends
+
+        ifdef   _DEBUG_
+sign            dd      QGL_SIGN
+        endif
+
+SF_addrTB       equ     $               ;; scanlines' address table
 Surface         ends
+
+;;::::::::::::::
+;; A SURFACE IS ITS TABLE. SF_addrTB is the offset of the scanline address
+;; table, and the table is part of the object -- qglNew allocates
+;; SIZEOF Surface + yRes*4 in one block, exactly as mgl's uglNew does.
+;;
+;; AND IT LIVES AT OFFSET 0 OF ITS OWN SEGMENT, which is mgl's rule and
+;; not an accident of the allocator: every accessor reads gs:[Surface.f]
+;; and gs:[SF_addrTB][si] with no base register, exactly as mgl's do.
+;; Anything handing a Surface pointer around must therefore have got it
+;; from qglNew/qglNewEx/qglNewView -- or be an mgl DC, which is the same
+;; struct from the same allocator.
+
+;;::::::::::::::
+;; mgl's CHECKDC. A no-op unless _DEBUG_, which nothing here defines --
+;; kept so the transcribed modules read as their originals do.
+CHECKSF         macro   sf:req, exitlabel:req, msg
+ifdef   _DEBUG_
+        ifnb    <msg>
+                cmp     D sf:[Surface.sign], QGL_SIGN
+                je      @F
+                LOGMSG  <msg>
+                jmp     exitlabel
+@@:
+        else
+                cmp     D sf:[Surface.sign], QGL_SIGN
+                jne     exitlabel
+        endif
+endif
+endm

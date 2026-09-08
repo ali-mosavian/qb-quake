@@ -22,10 +22,7 @@
 ;;         different physical pages and the distinction is the whole
 ;;         point.
 ;;       - u and v are 16.16 in TEXELS, scaled by the texture's width so
-;;         one repeat spans it. mgl's uglplxtp.asm still scales by
-;;         xRes-1; ugl-patch/README.md is about that off-by-one and its
-;;         copies are the corrected ones. Do not take the gradient from
-;;         mgl/src.
+;;         one repeat spans it.
 ;;       - 1/z is a float. It is compared, never sampled, so it has no
 ;;         business in the same fixed point as a texture coordinate.
 ;;
@@ -37,9 +34,17 @@
                 include qgl.inc
 
 qglSfRdRow   proto   far pascal :dword, :word
-qglClPoly     proto   far pascal :dword, :word, :dword, :dword
+qglClPolyEx   proto   far pascal :dword, :word, :dword, :dword, :word, :word
 qglSfWrRow   proto   far pascal :dword, :word
 qglSfWrRowEx proto  far pascal :dword, :word, :word
+
+;; sf.asm's own numbers, restated here rather than shared: gem.asm defines
+;; the same pair independently too, on purpose (its own header: "removes a
+;; dependency"), and this module already reaches qgl.inc for everything
+;; else, so a third independent copy is the established pattern, not a new
+;; one.
+EMS_PAGE_SIZE   equ     4000h
+EMS_PAGE_MASK   equ     3FFFh
 
                 externdef qgl$zsf:dword
                 externdef qgl$zmode:word
@@ -80,27 +85,68 @@ FXDIV           macro   a:req, b:req
                 idiv    b
 endm
 
+;; mgl's fjmp.inc, verbatim. The FPU has no flags of its own that a jcc
+;; can read, so every comparison here is a status word and a test.
+FJG             macro   lbl:req
+                fnstsw  ax
+                test    ah, 01000001b
+                jz      lbl                     ;; src > dst?
+endm
+FJGE            macro   lbl:req
+                fnstsw  ax
+                sahf
+                jae     lbl                     ;; src >= dst?
+endm
+FJLE            macro   lbl:req
+                fnstsw  ax
+                test    ah, 01000001b
+                jnz     lbl                     ;; src <= dst?
+endm
+FJE             macro   lbl:req
+                fnstsw  ax
+                test    ah, 01000000b
+                jnz     lbl                     ;; src = dst?
+endm
+
 ;; nom(f) = (a.f - b.f)*(b.y - c.y) - (b.f - c.f)*(a.y - b.y), left on the
-;; FPU. si-> a, di-> b, bx-> c, all QVert in ds.
+;; FPU. mgl's polyx.inc CALC_NOM, register for register: es:bx-> a,
+;; es:si-> b, es:di-> c, the caller's own vertices and not a copy.
 CALC_NOM        macro   f:req
-                fld     [si].QVert.&f&
-                fsub    [di].QVert.&f&
-                fld     [di].QVert.vy
-                fsub    [bx].QVert.vy
+                fld     es:[bx].QVert.&f&
+                fsub    es:[si].QVert.&f&
+                fld     es:[si].QVert.vy
+                fsub    es:[di].QVert.vy
                 fmul
-                fld     [di].QVert.&f&
-                fsub    [bx].QVert.&f&
-                fld     [si].QVert.vy
-                fsub    [di].QVert.vy
+                fld     es:[si].QVert.&f&
+                fsub    es:[di].QVert.&f&
+                fld     es:[bx].QVert.vy
+                fsub    es:[si].QVert.vy
                 fmul
                 fsub
+endm
+
+;; mgl's under/overflow gate on a gradient, `_2gb` in uglplxt.asm. A
+;; triple that survived the denominator can still hand back a number no
+;; fistp can store; without this the store writes 80000000h and the
+;; polygon samples one texel for its whole width.
+CHK2GB          macro   lbl:req
+                fld     st(0)
+                fabs
+                fcomp   qgl$2gb
+                FJGE    lbl
 endm
 
 
 .data
 qgl$65536       real4   65536.0
 qgl$half        real4   0.5
-qgl$eps         real4   0.00001
+
+;; mgl's _2gb and _l1sqr (uglplxtp.asm), real8 as they are there. The
+;; second is an AREA test: denom is twice the triangle's signed area, so
+;; 2.0 refuses anything under one square pixel -- and its SIGN is the
+;; polygon's winding.
+qgl$2gb         real8   2147483647.0
+qgl$l1sqr       real8   2.0
 
 ;; The gradients come off the FPU already multiplied by 65536 and the
 ;; perspective filler wants them unscaled -- per pixel to carry the span
@@ -145,6 +191,7 @@ qgl$fdzdx       real4   0.0                     ;; per PIXEL, for the start
 .data?
 qgl$fx          QVertFx QGL_CLIPV dup (<>)
 qgl$src         QVert   QGL_CLIPV dup (<>)
+
 qgl$ztmp        dq      ?
 
 
@@ -154,15 +201,16 @@ qgl$ztmp        dq      ?
                 externdef b8_span:near
 
 ;;::::::::::::::
-;; qgl$F2fx -- one vertex into the walk's form.
+;; qgl$F2fxA -- one vertex into the walk's form, AFFINE.
 ;;
 ;;  in: si-> QVert, di-> QVertFx, both in ds
 ;;
-;; Half a pixel goes onto x and y so a coordinate names a pixel CENTRE,
-;; which is what makes the sub-scanline correction symmetric. u and v are
-;; scaled to texels here so nothing downstream has to remember to.
+;; mgl's F2FX_t2d (misc/mscshta.asm). Half a pixel goes onto x and y so a
+;; coordinate names a pixel CENTRE, which is what makes the sub-scanline
+;; correction symmetric. u and v are scaled to texels here so nothing
+;; downstream has to remember to.
 ;;::::::::::::::
-qgl$F2fx        proc    near uses ax
+qgl$F2fxA       proc    near uses ax
 
                 fld     [si].QVert.vx
                 fadd    qgl$half
@@ -187,31 +235,77 @@ qgl$F2fx        proc    near uses ax
                 fmul    qgl$65536
                 fistp   D [di].QVertFx.kv
                 ret
-qgl$F2fx        endp
+qgl$F2fxA       endp
+
+
+;;::::::::::::::
+;; qgl$F2fxP -- the same, PERSPECTIVE.
+;;
+;; mgl's F2FX_tp2d, and the difference from F2FX_t2d beside it is the
+;; whole point of there being two: NO HALF PIXEL ON x AND y. The affine
+;; path adds it because its filler truncates and the half turns that into
+;; a round-to-nearest; the perspective filler rounds with its own fistp
+;; after the divide, so the same addition here is not a rounding rule but
+;; a displacement -- the polygon lands half a pixel down and right, and
+;; every span is then sampled at u - 0.5*dudx. Measured against an
+;; independent oracle as a peak at du = -1, dv = 0: one texel low in u
+;; with v untouched, which is exactly half a pixel of x with no y.
+;;::::::::::::::
+qgl$F2fxP       proc    near uses ax
+
+                fld     [si].QVert.vx
+                fmul    qgl$65536
+                fistp   D [di].QVertFx.kx
+
+                fld     [si].QVert.vy
+                fmul    qgl$65536
+                fistp   D [di].QVertFx.ky
+
+                mov     eax, D [si].QVert.vz
+                mov     D [di].QVertFx.kz, eax
+
+                fild    D qgl$twhole
+                fmul    [si].QVert.vu
+                fmul    qgl$65536
+                fistp   D [di].QVertFx.ku
+
+                fild    D qgl$thwhole
+                fmul    [si].QVert.vv
+                fmul    qgl$65536
+                fistp   D [di].QVertFx.kv
+                ret
+qgl$F2fxP       endp
 
 
 ;;::::::::::::::
 ;; qgl$Grad -- d(u)/dx, d(v)/dx and d(1/z)/dx for the whole polygon.
 ;;
-;;  in: si-> a, di-> b, bx-> c, three QVert in ds
-;; out: CF set if the triple is too near degenerate to divide by
+;;  in: es:bx-> a, es:si-> b, es:di-> c, three of the CALLER's QVert
+;; out: CF set if the triple is degenerate or a gradient will not store;
+;;      st(0)= denom on success, and the FPU empty on failure
+;;
+;; mgl's calc_gradients (ugl/uglplxt.asm, ugl/uglplxtp.asm) with qgl's
+;; scaling. THE TRIPLE IS THE UNCLIPPED POLYGON'S, which is mgl's order --
+;; sort, denom, gradients, cull, THEN clip. Taking it from the clipped
+;; ring instead puts vertices that the screen edge just created into the
+;; denominator, and two of those are collinear with the edge by
+;; construction.
 ;;
 ;; ONE GRADIENT SERVES THE WHOLE N-GON, exactly rather than approximately:
 ;; u, v and 1/z are linear in screen space here, so three points on the
 ;; plane fix them everywhere on it. What is not safe is three nearly
 ;; collinear points -- that error multiplies across every scanline of the
 ;; polygon, not just the triangle they span -- so the caller picks a
-;; spread triple and this refuses what is left.
+;; spread triple, this refuses an exactly zero denominator, and the
+;; magnitude gate below refuses what got through it.
 ;;::::::::::::::
-qgl$Grad        proc    near uses ax bx cx dx si di
+qgl$Grad        proc    near uses ax cx dx
 
                 CALC_NOM vx                     ;; denom
-                fld     st(0)
-                fabs
-                fcomp   qgl$eps
-                fstsw   ax
-                sahf
-                jb      @@degenerate
+                ftst
+                FJE     @@error                 ;; denom= 0?
+
+                fld     st(0)                   ;; save denom
 
                 fld     qgl$65536               ;; rdenom = 65536/denom
                 fdivr
@@ -227,6 +321,7 @@ qgl$Grad        proc    near uses ax bx cx dx si di
                 fmul    qgl$subdivf             ;; across, per sub-span to
                 fstp    qgl$fdzdxn              ;; walk it
                 fmul    D qgl$zscale
+                CHK2GB  @@err3
                 fistp   D qgl$zdzdx
 
                 ;; fiSTp, like the z store above it. rdenom carries the
@@ -247,6 +342,7 @@ qgl$Grad        proc    near uses ax bx cx dx si di
                 fmul    qgl$r65536
                 fmul    qgl$subdivf
                 fstp    qgl$fdudxn
+                CHK2GB  @@err3
                 fistp   D qgl$dudx
 
                 CALC_NOM vv
@@ -256,12 +352,18 @@ qgl$Grad        proc    near uses ax bx cx dx si di
                 fmul    qgl$r65536
                 fmul    qgl$subdivf
                 fstp    qgl$fdvdxn
+                CHK2GB  @@err2
                 fistp   D qgl$dvdx
 
                 clc
                 ret
 
-@@degenerate:   fstp    st(0)
+                ;; fall through: three to pop for a gradient that still had
+                ;; rdenom under it, two for the last one, one for denom
+                ;; alone. mgl's @@error_du/@@error_dv/@@error ladder.
+@@err3:         fstp    st(0)
+@@err2:         fstp    st(0)
+@@error:        fstp    st(0)
                 stc
                 ret
 qgl$Grad        endp
@@ -274,6 +376,16 @@ qgl$Grad        endp
 ;; wraps with an AND, and anything past one 16K page, because the texel
 ;; base is a patched immediate that is never remapped mid-polygon.
 ;; Exceeding that page cost mgl a measured 15.5% triangle dropout.
+;;
+;; For an EMS surface this also refuses a texture that is UNDER 16K but
+;; whose START isn't page-aligned, so its bytes cross into a second
+;; physical page anyway -- row 0 maps one page and every later row is
+;; read through that same fixed pointer, so a straddling texture reads
+;; wrong bytes past the boundary with nothing to say so otherwise. No
+;; caller hits this today (qglSfAdoptEms checks the same thing on mgl's
+;; side, and sc_alloc's own blocks happen to be self-aligned -- see
+;; sb.asm's header), which is exactly why it needs its own check here:
+;; the guarantee lives in callers this proc cannot see.
 ;;::::::::::::::
 qglRsTex      proc    public uses bx cx dx si di es,\
                         t:dword
@@ -283,9 +395,9 @@ qglRsTex      proc    public uses bx cx dx si di es,\
                 or      ax, bx
                 jz      @@no
 
-                mov     cx, es:[bx].Surface.x_res
-                mov     dx, es:[bx].Surface.y_res
-                mov     ax, es:[bx].Surface.stride
+                mov     cx, es:[bx].Surface.xRes
+                mov     dx, es:[bx].Surface.yRes
+                mov     ax, es:[bx].Surface.bps
                 cmp     ax, cx
                 jne     @@no                    ;; a padded row does not wrap
 
@@ -308,7 +420,20 @@ qglRsTex      proc    public uses bx cx dx si di es,\
                 jnz     @@no
                 cmp     ax, 4000h
                 ja      @@no
-                mov     dx, es:[bx].Surface.y_res
+
+                cmp     es:[bx].Surface.typ, SF_EMS
+                jne     @@onepage
+                mov     si, ax                  ;; total bytes, saved: the
+                                                ;; page check needs ax free
+                ;; row 0's table entry: the high word IS the offset within
+                ;; the logical page, so there is nothing to mask off. That
+                ;; is the number qgl$fillView derived the page split from,
+                ;; not a second derivation of it.
+                mov     ax, W es:[bx+SF_addrTB+2]
+                add     ax, si
+                cmp     ax, EMS_PAGE_SIZE
+                ja      @@no
+@@onepage:      mov     dx, es:[bx].Surface.yRes
 
                 xor     ax, ax                  ;; shift = log2(width)
                 mov     si, cx
@@ -328,9 +453,9 @@ qglRsTex      proc    public uses bx cx dx si di es,\
                 shl     si, cl
                 mov     qgl$tvmsk, si
 
-                movzx   eax, es:[bx].Surface.x_res
+                movzx   eax, es:[bx].Surface.xRes
                 mov     qgl$twhole, eax
-                movzx   eax, es:[bx].Surface.y_res
+                movzx   eax, es:[bx].Surface.yRes
                 mov     qgl$thwhole, eax
 
                 ;; row 0's pointer IS the base: the whole texture is one
@@ -417,8 +542,11 @@ qgl$Top         endp
 ;; qglRsPoly ( d:far ptr Surface, v:far ptr QVert, n:word ) -> ax
 ;;
 ;; Draws one convex polygon and returns the scanlines it covered. The
-;; vertices arrive clipped -- qglClPoly's output -- in ring order and
-;; clockwise; vtx[0] need not be the topmost.
+;; vertices arrive in ring order, in EITHER winding, and vtx[0] need not
+;; be the topmost -- mgl's uglPolyTP contract, and this is a transcription
+;; of it: search the widest triple, take the gradients off the UNCLIPPED
+;; polygon, cull on the denominator's magnitude, take the winding off its
+;; sign, and only then clip.
 ;;::::::::::::::
 qglRsPoly     proc    public uses bx cx dx si di ds es,\
                         d:dword, v:dword, n:word
@@ -438,87 +566,217 @@ qglRsPoly     proc    public uses bx cx dx si di ds es,\
                 local   lf_v:dword, lf_dvdy:dword
                 local   rg_x:dword, rg_dxdy:dword
                 local   lf_z:real4, lf_dzdy:real4
-                local   srcp:dword
+                local   srcp:dword, ringp:dword
+                local   bestv:real4, curv:real4
+                local   vstep:word, vbase:word
 
                 mov     ax, @data
                 mov     fs, ax                  ;; DGROUP, for every filler
 
                 mov     lines, 0
                 les     bx, d
-                mov     ax, es:[bx].Surface.y_res
+                mov     ax, es:[bx].Surface.yRes
                 mov     dsth, ax                ;; scanlines that exist
-                mov     ax, es:[bx].Surface.x_res
+                mov     ax, es:[bx].Surface.xRes
                 mov     dstw, ax                ;; pixels that exist
                 mov     ax, n
                 mov     cnt, ax
                 cmp     ax, 3
                 jb      @@done
-                cmp     ax, QGL_CLIPV
+                cmp     ax, QGL_MAXV
                 ja      @@done
 
-                ;;
-                ;; CLIP FIRST, and against the destination itself. The
-                ;; fillers do not test a bound -- their whole job is to
-                ;; fill as fast as the loop allows -- so nothing may reach
-                ;; them that does not fit. Sutherland-Hodgman against the
-                ;; four edges is mgl's arrangement too: SH_CLIP runs
-                ;; before drawPoly ever sees a vertex.
-                ;;
-                ;; This also replaces the copy that used to be here: the
-                ;; clipper reads the caller's far pointer and writes
-                ;; qgl$src, so the vertices are moved once instead of
-                ;; twice.
-                ;;
-                mov     ax, O qgl$src
-                mov     W srcp, ax
-                mov     ax, ds
-                mov     W srcp+2, ax
-                invoke  qglClPoly, v, cnt, srcp, d
-                test    ax, ax
-                jz      @@done                  ;; nothing of it survived
-                mov     cnt, ax
-
-                ;; gradients, from a spread triple: 0, n/3 and 2n/3 are as
-                ;; far apart as three indices get on a convex ring, and on
-                ;; a triangle they are just 0, 1, 2
-                mov     ax, cnt
-                xor     dx, dx
-                mov     cx, 3
-                div     cx
-                mov     si, O qgl$src
-                mov     di, ax
-                imul    di, T QVert
-                add     di, si
-                mov     bx, ax
-                shl     bx, 1
-                imul    bx, T QVert
-                add     bx, si
-                call    qgl$Grad
-                jc      @@done
-
-                call    qgl$Fixup               ;; ONCE per polygon
-
-                ;; and into the walk's form
-                mov     si, O qgl$src
-                mov     di, O qgl$fx
-                mov     cx, cnt
-@@conv:         call    qgl$F2fx
-                add     si, T QVert
-                add     di, T QVertFx
-                loop    @@conv
-
-                ;; the filler, ONCE per polygon
-                call    b8_span                 ;; ONCE per polygon
-                mov     fillp, ax
-
-                ;; and whether it is the one that wants the FPU triple,
-                ;; decided here rather than tested per scanline. The mode
-                ;; cannot change inside a polygon.
+                ;; whether this is the filler that wants the FPU triple,
+                ;; decided once rather than tested per scanline. The mode
+                ;; cannot change inside a polygon, and the converter
+                ;; below is picked off the same answer.
                 xor     ax, ax
                 cmp     qgl$mode, QGL_M_PTEX
                 jne     @F
                 inc     ax
 @@:             mov     persp, ax
+
+                ;;
+                ;; THE GRADIENT TRIPLE, mgl's search (uglPolyTP). Gradients
+                ;; come off three vertices of this face, and any
+                ;; non-degenerate triple of a planar polygon gives the same
+                ;; answer -- but not with the same conditioning. Picking a
+                ;; fixed 0, n/3, 2n/3 looks spread out and is not: n/3 is an
+                ;; integer divide, so a quad and a pentagon both collapse to
+                ;; 0,1,2 -- consecutive vertices, which on a bsp face are
+                ;; regularly collinear (t-junctions, merged edges). The
+                ;; denominator then reads as degenerate and the whole face is
+                ;; dropped; measured on dm3ish, 16 of 200 faces went that way.
+                ;;
+                ;; So search instead, in two O(n) passes: the vertex furthest
+                ;; from vtx[0] (L1, no sqrt needed to rank), then the vertex
+                ;; furthest off that baseline. That is the widest triangle the
+                ;; face has to offer, give or take. The three are then sorted
+                ;; by ring index, because the denominator's sign is what
+                ;; decides the winding below and only increasing indices
+                ;; carry it.
+                ;;
+                les     bx, v                   ;; es:bx-> vtx[0], vertex A
+                mov     vbase, bx
+
+                mov     si, bx
+                add     si, T QVert             ;; si-> B, default vtx[1]
+                mov     di, si
+                mov     cx, cnt
+                dec     cx
+                mov     D bestv, 0              ;; 0.0
+
+@@far_loop:     fld     es:[di].QVert.vx
+                fsub    es:[bx].QVert.vx
+                fabs
+                fld     es:[di].QVert.vy
+                fsub    es:[bx].QVert.vy
+                fabs
+                faddp   st(1), st(0)            ;; |dx| + |dy|
+                fstp    curv
+                fld     curv
+                fcomp   bestv
+                FJLE    @F
+                mov     eax, curv
+                mov     bestv, eax
+                mov     si, di
+@@:             add     di, T QVert
+                loop    @@far_loop
+
+                mov     dx, bx
+                add     dx, T QVert*2           ;; dx-> C, default vtx[2]
+                mov     di, bx
+                add     di, T QVert
+                mov     cx, cnt
+                dec     cx
+                mov     D bestv, 0
+
+@@wide_loop:    cmp     di, si                  ;; C must not be B
+                je      @@wide_next
+                fld     es:[bx].QVert.vx
+                fsub    es:[si].QVert.vx
+                fld     es:[si].QVert.vy
+                fsub    es:[di].QVert.vy
+                fmulp   st(1), st(0)
+                fld     es:[si].QVert.vx
+                fsub    es:[di].QVert.vx
+                fld     es:[bx].QVert.vy
+                fsub    es:[si].QVert.vy
+                fmulp   st(1), st(0)
+                fsubp   st(1), st(0)            ;; cross( A, B, C )
+                fabs
+                fstp    curv
+                fld     curv
+                fcomp   bestv
+                FJLE    @@wide_next
+                mov     eax, curv
+                mov     bestv, eax
+                mov     dx, di
+@@wide_next:    add     di, T QVert
+                loop    @@wide_loop
+
+                ;; sort B and C by ring index so the denominator's sign
+                ;; still reports the ring's winding
+                mov     ax, dx
+                cmp     si, ax
+                jbe     @F
+                xchg    si, ax
+@@:             mov     di, ax
+
+                call    qgl$Grad                ;; st(0)= denom, kept
+                jc      @@done
+
+                ;;
+                ;; winding + degeneracy, mgl's POLY_CULL: |denom| < 2 is
+                ;; too small to matter (denom is twice the signed area),
+                ;; denom > 0 is CW. A CCW ring is corrected by walking it
+                ;; backwards rather than by swapping vertices, which an
+                ;; N-gon cannot do -- and it has to be corrected, because
+                ;; the scan below splits a LEFT chain and a RIGHT chain at
+                ;; the topmost vertex and a CCW ring puts them the wrong
+                ;; way round.
+                ;;
+                fld     st(0)
+                fabs
+                fcomp   qgl$l1sqr
+                FJGE    @F
+                fstp    st(0)                   ;; pop denom
+                jmp     @@done
+
+@@:             mov     vstep, T QVert          ;; assume CW
+                ftst
+                FJG     @F
+                mov     vstep, -T QVert         ;; CCW, walk the other way
+@@:             fstp    st(0)                   ;; pop denom
+
+                ;;
+                ;; the topmost vertex starts the ring walk -- the chains
+                ;; below split there.
+                ;;
+                les     bx, v
+                mov     si, bx                  ;; si= best so far
+                mov     di, bx
+                add     di, T QVert
+                mov     cx, cnt
+                dec     cx
+
+@@top_loop:     fld     es:[di].QVert.vy
+                fcomp   es:[si].QVert.vy
+                FJGE    @F                      ;; vtx[i].y >= best? keep
+                mov     si, di
+@@:             add     di, T QVert
+                loop    @@top_loop
+
+                ;;
+                ;; CLIP, walking the ring from the topmost vertex in the
+                ;; winding direction the denominator reported -- mgl's
+                ;; SH_INIT_poly arguments, and no copy of the polygon
+                ;; anywhere to hold the reordering.
+                ;;
+                ;; It clips against the destination itself. The fillers do
+                ;; not test a bound -- their whole job is to fill as fast
+                ;; as the loop allows -- so nothing may reach them that
+                ;; does not fit. Its place in the order is mgl's: AFTER
+                ;; the gradients, which are the unclipped polygon's.
+                ;;
+                mov     ax, O qgl$src
+                mov     W srcp, ax
+                mov     ax, ds
+                mov     W srcp+2, ax
+                mov     ax, si                  ;; the topmost vertex
+                mov     W ringp, ax
+                mov     ax, es
+                mov     W ringp+2, ax
+                invoke  qglClPolyEx, ringp, cnt, srcp, d, vbase, vstep
+                test    ax, ax
+                jz      @@done                  ;; nothing of it survived
+                mov     cnt, ax
+
+                call    qgl$Fixup               ;; ONCE per polygon
+
+                ;; and into the walk's form, through the converter this
+                ;; mode wants -- mgl has two, and the difference is a half
+                ;; pixel on x and y
+                mov     si, O qgl$src
+                mov     di, O qgl$fx
+                mov     cx, cnt
+                cmp     persp, 0
+                jne     @@convp
+
+@@conv:         call    qgl$F2fxA
+                add     si, T QVert
+                add     di, T QVertFx
+                loop    @@conv
+                jmp     short @@convd
+
+@@convp:        call    qgl$F2fxP
+                add     si, T QVert
+                add     di, T QVertFx
+                loop    @@convp
+
+@@convd:        ;; the filler, ONCE per polygon
+                call    b8_span
+                mov     fillp, ax
 
                 ;; both chains start at the topmost vertex; the left walks
                 ;; backwards around the ring and the right forwards. n
@@ -625,14 +883,21 @@ qglRsPoly     proc    public uses bx cx dx si di ds es,\
                 FXMUL14 eax, ecx
                 mov     lf_dvdy, eax
 
-@@lf_dz:        ;; lf_hgt, NOT height. height is MIN(lf_hgt, rg_hgt) and
-                ;; is not computed until below; here it still holds the
-                ;; previous edge's -- zero on the first -- and 0/0 makes a
-                ;; NaN that lf_z carries for the rest of the polygon.
+@@lf_dz:        ;; THE FRACTIONAL HEIGHT, not the row count. mgl divides
+                ;; every one of x, u, v and z by 65536/(y_end - y_start)
+                ;; taken in 16.16; dividing z alone by FLOOR(y_end) -
+                ;; FLOOR(y_start) makes its step disagree with theirs by
+                ;; up to a whole row on a short edge, and 1/z is what the
+                ;; perspective divide and the depth compare both read.
+                ;; lf_hgt > 0 here, so the difference is at least 1 and
+                ;; there is no zero to divide by.
                 fld     [si].QVertFx.kz
-                fsub    [bx].QVertFx.kz
-                fild    lf_hgt
-                fdiv
+                fsub    [bx].QVertFx.kz         ;; dz
+                fld     qgl$65536
+                fild    D [si].QVertFx.ky
+                fisub   D [bx].QVertFx.ky
+                fdivp   st(1), st(0)            ;; 1/hgt  dz
+                fmul                            ;; dz/hgt
                 fstp    lf_dzdy
 
                 ;; how far into this scanline the vertex actually sits
@@ -651,11 +916,19 @@ qglRsPoly     proc    public uses bx cx dx si di ds es,\
                 add     eax, [bx].QVertFx.kv
                 mov     lf_v, eax
 
-                ;; z gets no sub-scanline correction. Depth is compared,
-                ;; never sampled: a fraction of a line's worth of 1/z
-                ;; cannot change which surface is in front.
-                mov     eax, D [bx].QVertFx.kz
-                mov     D lf_z, eax
+                ;; and z with it. mgl corrects it too (drawPoly_tp2d,
+                ;; `lf_z = vtx[ls].z + diff*lf_dzdy`) and it is not only
+                ;; depth that reads it: 1/z is what the perspective
+                ;; filler DIVIDES BY, so a fraction of a scanline left
+                ;; out here is a texture error as well as a depth one.
+                ;; ecx still holds the 16.16 fraction -- FXMUL takes it
+                ;; as the multiplier and does not write it.
+                mov     D pfrac, ecx
+                fild    D pfrac
+                fmul    qgl$r65536
+                fmul    lf_dzdy
+                fadd    [bx].QVertFx.kz
+                fstp    lf_z
 
 @@lf_next:      mov     ax, lf_e
                 mov     lf_s, ax
@@ -831,10 +1104,25 @@ qglRsPoly     proc    public uses bx cx dx si di ds es,\
                 fmul    qgl$r65536
                 fmul    qgl$fdzdx
                 fadd    lf_z                    ;; z'
+                ;; HALF A TEXEL, on the far side of the divide and paid
+                ;; for here: mgl adds 0.5*z to u and v at the span start
+                ;; (drawPoly_tp2d, `fld _0_5 / fmul st(0), st(3)`), so
+                ;; that once the filler divides by z it is half a texel
+                ;; at the span's own depth and follows z across the span.
+                ;; Adding a flat 32768 to each sub-span's endpoints
+                ;; instead -- which is what the filler used to do -- is
+                ;; half a texel everywhere, which is not the same picture.
+                fld     qgl$half
+                fmul    lf_z                    ;; h  z'
                 fild    D pv
-                fmul    qgl$r65536              ;; v'
+                fmul    qgl$r65536
+                fadd    st(0), st(1)            ;; v' h  z'
                 fild    D pu
-                fmul    qgl$r65536              ;; u'
+                fmul    qgl$r65536
+                fadd    st(0), st(2)            ;; u' v' h  z'
+                fxch    st(2)                   ;; h  v' u' z'
+                fstp    st(0)                   ;; v' u' z'
+                fxch    st(1)                   ;; u' v' z'
 @@affine:
                 mov     bx, fillp
                 mov     di, rowo

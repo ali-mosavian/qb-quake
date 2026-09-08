@@ -94,6 +94,24 @@ ZDISP           macro   ?d1, ?d2
                 mov     D cs:[?d2&_e-4], ebx
         endif
                 PP      ebx, eax
+
+                ;; A BLOCK BOUNDARY between the stores above and the
+                ;; instructions they patch, which sit ~40 bytes below with
+                ;; no branch between. DOSBox-X's dynamic core only
+                ;; rechecks the page a block STARTS in, so when the
+                ;; patched fields fall in the next 4K page the write is
+                ;; not seen and the block runs once on the stale
+                ;; displacement -- which, on a polygon's first TexT
+                ;; scanline, is still the 0DEADBEEFh placeholder. The cmp
+                ;; then reads a wild address, jae fires, and the pixel
+                ;; gets neither depth nor colour.
+                ;;
+                ;; Costs one taken short jump per depth-enabled span, not
+                ;; per pixel. `nop`/`nop` in this slot -- the same 2-byte
+                ;; shift without the block split -- still failed 13 of 13
+                ;; positions, so it is the branch and not the alignment.
+                jmp     short $+2
+
                 movsx   ebp, bp
 endm
 
@@ -560,14 +578,12 @@ PDIV            macro   ?u, ?v
                 fistp   D fs:?u                 ;; vf u' v' z'
                 fistp   D fs:?v                 ;; u' v' z'
 
-                ;; half a texel, on THIS side of the divide. The affine
-                ;; path adds it to u before the filler truncates, which
-                ;; makes the truncation a round-to-nearest; the same
-                ;; addition before a divide would land as half a texel
-                ;; times z. Added to both boundaries, so the step between
-                ;; them is untouched.
-                add     D fs:?u, 32768
-                add     D fs:?v, 32768
+                ;; NO HALF TEXEL HERE. mgl adds it to u and v at the span
+                ;; start as 0.5*z, before the divide, so it comes out half
+                ;; a texel at that span's depth and moves with z; the
+                ;; scanner does that now (rs.asm, @@nodepth). Adding a
+                ;; flat 32768 to every sub-span endpoint here was half a
+                ;; texel at every depth, which is a different picture.
 endm
 
 ;;:::::::::::::: the triple, one sub-span on

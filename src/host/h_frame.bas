@@ -17,6 +17,7 @@ option explicit
 ''
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
+'$include: 'qgl.bi'
 '$include: 'pal.bi'
 '$include: 'kbd.bi'
 '$include: 'tmr.bi'
@@ -43,6 +44,7 @@ option explicit
 dim shared lm_want_dbg as integer
 dim shared lm_fall_dbg as integer
 dim shared qgl_faces_dbg as integer
+dim shared qgl_drop_dbg as integer
 dim shared k_mip_dbg as long, k_sw_dbg as long
 dim shared k_sh_dbg as long, k_stag_dbg as long
 dim shared k_n_dbg as long
@@ -134,9 +136,15 @@ declare function d_turb_ptr ( ) as long
 '' shifts the offsets sb_build.c and r_walk.c hard-code.
 declare function dbg_lm_want ( ) as integer
 declare function dbg_qgl_faces ( ) as integer
+declare function dbg_qgl_drop ( ) as integer
 declare function dbg_lm_fall ( ) as integer
 declare function dbg_keys ( byval which as integer ) as long
 '' The whole face loop, in C, once per frame -- see d_faces.c.
+declare function qglZMode ( byval m as integer ) as integer
+'' `z`, not `val`: VAL is a BASIC intrinsic and BC rejects it as a
+'' formal parameter name.
+declare sub qglZClear ( byval z as integer )
+
 declare sub d_draw_faces ( _
     g as Game, _
     dp as DrawParams, _
@@ -391,7 +399,7 @@ sub host_render ( _
     '' nearer, so zero is infinitely distant and the first surface to
     '' cover a pixel always wins.
     ''
-    if ( z_dc <> 0 ) then uglClearZ z_dc, 0
+    if ( z_dc <> 0 ) then qglZClear 0
 
     '' -nodraw stops HERE: the walk above has run and filled order_list,
     '' so everything the node paging touches has happened. What is skipped
@@ -441,6 +449,7 @@ sub host_render ( _
     lm_want_dbg = dparm.lm_want
     lm_fall_dbg = dparm.lm_fallback
     qgl_faces_dbg = dparm.qgl_faces
+    qgl_drop_dbg = dparm.qgl_drop
     k_mip_dbg = k_mip_dbg + dparm.k_mip
     k_sw_dbg = k_sw_dbg + dparm.k_sw
     k_sh_dbg = k_sh_dbg + dparm.k_sh
@@ -481,7 +490,7 @@ sub host_render ( _
 
     '' leave depth off for the overlay, which is 2D and would otherwise
     '' test itself against the scene it is drawn on top of
-    if ( z_dc <> 0 ) then zz = uglZMode%( UGL.Z.OFF% )
+    if ( z_dc <> 0 ) then zz = qglZMode%( QGL_Z_OFF )
 
     pt0 = sys_now()
     scr_draw_hud g, h_dst_dc
@@ -509,6 +518,10 @@ end function
 ''
 function dbg_qgl_faces ( ) as integer
     dbg_qgl_faces = qgl_faces_dbg
+end function
+
+function dbg_qgl_drop ( ) as integer
+    dbg_qgl_drop = qgl_drop_dbg
 end function
 
 function dbg_keys ( byval which as integer ) as long

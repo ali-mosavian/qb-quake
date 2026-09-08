@@ -31,7 +31,7 @@
                 include qgl.inc
                 include tfw.inc
 
-qglZNew       proto   far :dword, :word, :word
+qglZNew       proto   far :dword, :word
 qglZSet       proto   far :dword
 qglZFree      proto   far :dword
 qglZClear     proto   far :word
@@ -91,13 +91,13 @@ tmain           proc    far public uses bx cx dx si di es
 
                 invoke  qglSfInit
 
-                invoke  qglSfNew, DST_W, DST_H, SURF_CMEM, 0
+                invoke  qglSfNew, DST_W, DST_H, SURF_CMEM
                 SAVEP   dst
 
                 ;;
                 ;; 1. shape
                 ;;
-                invoke  qglZNew, dst, SURF_CMEM, 0
+                invoke  qglZNew, dst, SURF_CMEM
                 SAVEP   zb
                 mov     bx, ax
                 or      bx, dx
@@ -105,9 +105,9 @@ tmain           proc    far public uses bx cx dx si di es
                 CHK     n_new, ax, 1
 
                 les     bx, zb
-                CHK     n_wide,   es:[bx].Surface.x_res,  DST_W
-                CHK     n_stride, es:[bx].Surface.stride, DST_W*2
-                CHK     n_high,   es:[bx].Surface.y_res,  DST_H
+                CHK     n_wide,   es:[bx].Surface.xRes,  DST_W
+                CHK     n_stride, es:[bx].Surface.bps, DST_W*2
+                CHK     n_high,   es:[bx].Surface.yRes,  DST_H
 
                 ;;
                 ;; 2. install, and the mode it starts in
@@ -153,13 +153,13 @@ tmain           proc    far public uses bx cx dx si di es
                 ;; 6. EMS: 320 bytes a row is not a power of two, so the
                 ;;    stride has to be padded or nothing is allocated
                 ;;
-                invoke  qglZNew, dst, SURF_EMS, 3
+                invoke  qglZNew, dst, SURF_EMS
                 SAVEP   ems
                 mov     bx, ax
                 or      bx, dx
                 jz      @F
                 les     bx, ems
-                mov     ax, es:[bx].Surface.stride
+                mov     ax, es:[bx].Surface.bps
                 jmp     @@chk
 @@:             xor     ax, ax
 @@chk:          CHK     n_emspad, ax, 512

@@ -113,17 +113,17 @@ tdc             dd      0
 tsrc            dd      0
 qtptr           dd      0
 qtsptr          dd      0
-qtall           Surface <>
-qtsrc           Surface <>
+                SF_DECL qtall, 256
+                SF_DECL qtsrc, 256
 gdc             dd      0
 qgptr           dd      0
 qaptr           dd      0
-qguard          Surface <>
-qalias          Surface <>
+                SF_DECL qguard, 256
+                SF_DECL qalias, 256
 qptr            dd      0
 qsptr           dd      0
-qsurf           Surface <>
-qsrc            Surface <>
+                SF_DECL qsurf, 256
+                SF_DECL qsrc, 256
 snap            db      BYTES dup (0)
 bad             dw      0
 t0              dd      0
@@ -324,7 +324,7 @@ tmain           proc    far public uses ax bx cx dx si di es
                 invoke  qglSfAdoptDc, gdc, qgptr
                 invoke  qglSfAdoptDc, gdc, qaptr
                 mov     bx, offset qguard
-                mov     [bx].Surface.y_res, HGT     ;; the lie under test
+                mov     [bx].Surface.yRes, HGT     ;; the lie under test
 
                 ;; canary over the whole store, through the honest view
                 invoke  qglDrFill, qaptr, 0, 0, WID-1, GHGT-1, GCANARY

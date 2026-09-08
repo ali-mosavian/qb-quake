@@ -27,6 +27,8 @@
                 include tfw.inc
 
 qglDrFill     proto   far :dword, :word, :word, :word, :word, :word
+qglSfViewNew  proto   far :dword, :word, :word, :word
+qglSfViewAim  proto   far :dword, :dword
 
 SMALL_W         equ     64
 SMALL_H         equ     16
@@ -47,6 +49,11 @@ BIG_H           equ     220
 EMS_W           equ     128
 EMS_H           equ     256
 
+;; sc_alloc's own shape: a view smaller than the store it is aimed
+;; into, re-aimed to different offsets over the store's lifetime.
+VW_W            equ     64
+VW_H            equ     64
+
 .data
 n_small_new     db      'cmem surface made      $'
 n_small_rt      db      'cmem round trip        $'
@@ -59,12 +66,20 @@ n_ems_cross     db      'ems across a page      $'
 n_view_rt       db      'view sees parent rows  $'
 n_clear         db      'fill lands on every px $'
 n_odd_stride    db      'ems odd stride refused $'
+n_view_new      db      'sf view new made       $'
+n_aim1          db      'sf view aim 1 ok       $'
+n_aim1_fill     db      'sf view aim 1 fill     $'
+n_aim2          db      'sf view aim 2 ok       $'
+n_aim2_fill     db      'sf view aim 2 fill     $'
+n_aim1_kept     db      'aim 1 bytes untouched  $'
 
 small           dd      0
 big             dd      0
 ems             dd      0
-vw              Surface <>
 vwp             dd      0
+svw             dd      0
+big_bps         dw      0
+big_ofs         dd      0
 mism            dw      0
 
 .code
@@ -141,7 +156,7 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;
                 ;; 1. conventional, small enough to be uninteresting
                 ;;
-                invoke  qglSfNew, SMALL_W, SMALL_H, SURF_CMEM, 0
+                invoke  qglSfNew, SMALL_W, SMALL_H, SURF_CMEM
                 SAVEP   small
                 mov     bx, dx
                 or      bx, ax
@@ -155,7 +170,7 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;
                 ;; 2. conventional, past 64K
                 ;;
-                invoke  qglSfNew, BIG_W, BIG_H, SURF_CMEM, 0
+                invoke  qglSfNew, BIG_W, BIG_H, SURF_CMEM
                 SAVEP   big
                 mov     bx, dx
                 or      bx, ax
@@ -175,7 +190,7 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;
                 ;; 3. EMS, two pages
                 ;;
-                invoke  qglSfNew, EMS_W, EMS_H, SURF_EMS, 2
+                invoke  qglSfNew, EMS_W, EMS_H, SURF_EMS
                 SAVEP   ems
                 mov     bx, dx
                 or      bx, ax
@@ -205,9 +220,22 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;
                 ;; 4. a view onto the big surface, aimed at row 100
                 ;;
-                mov     word ptr vwp, offset vw
-                mov     word ptr vwp+2, ds
-                invoke  qglSfView, vwp, big, BIG_W*100, BIG_W, 8, BIG_W
+                ;; ASK the parent for its stride; do not assume BIG_W. A
+                ;; surface past 64K is widened by calcBPS so that no row
+                ;; straddles the segment seam -- 320 becomes 400 here --
+                ;; and a view aimed with the width instead lands mid-row.
+                les     bx, big
+                mov     cx, es:[bx].Surface.bps
+                mov     big_bps, cx
+                mov     ax, cx
+                mov     dx, 100
+                mul     dx
+                mov     word ptr big_ofs+0, ax
+                mov     word ptr big_ofs+2, dx
+
+                invoke  qglSfViewNew, big, BIG_W, 8, big_bps
+                SAVEP   vwp
+                invoke  qglSfViewAim, vwp, big_ofs
                 invoke  qglSfPget, vwp, 5, 0
                 mov     bx, ax
                 invoke  qglSfPget, big, 5, 100
@@ -230,12 +258,51 @@ tmain           proc    far public uses bx cx dx si di es
                 ;; 6. an EMS surface whose rows would straddle a page is
                 ;;    refused rather than quietly padded
                 ;;
-                invoke  qglSfNew, 100, 4, SURF_EMS, 3
+                invoke  qglSfNew, 100, 4, SURF_EMS
                 mov     bx, dx
                 or      bx, ax
                 NZ      bx
                 CHK     n_odd_stride, ax, 0
 
+                ;;
+                ;; 7. qglSfViewNew / qglSfViewAim: sc_alloc's own pair, a
+                ;;    fresh view onto the same EMS store re-aimed twice,
+                ;;    once per physical page, and neither aim may see the
+                ;;    other's bytes
+                ;;
+                invoke  qglSfViewNew, ems, VW_W, VW_H, VW_W
+                SAVEP   svw
+                mov     bx, dx
+                or      bx, ax
+                NZ      bx
+                CHK     n_view_new, ax, 1
+
+                invoke  qglSfViewAim, svw, 0
+                CHK     n_aim1, ax, 1
+                invoke  qglDrFill, svw, 0, 0, VW_W-1, VW_H-1, 011h
+                invoke  sf_const, svw, VW_W, VW_H, 011h
+                CHK     n_aim1_fill, ax, 0
+
+                invoke  qglSfViewAim, svw, EMS_W*EMS_H/2
+                CHK     n_aim2, ax, 1
+                invoke  qglDrFill, svw, 0, 0, VW_W-1, VW_H-1, 022h
+                invoke  sf_const, svw, VW_W, VW_H, 022h
+                CHK     n_aim2_fill, ax, 0
+
+                ;; the first aim's bytes must still read 011h -- the
+                ;; second fill did not reach back and overwrite them
+                invoke  qglSfViewAim, svw, 0
+                invoke  sf_const, svw, VW_W, VW_H, 011h
+                CHK     n_aim1_kept, ax, 0
+
+                ;; NOT qglSfFree(svw): a view shares its parent's EMS
+                ;; handle rather than owning it, and qglSfFree cannot
+                ;; tell the two apart -- freeing a view would free the
+                ;; parent's handle out from under it. sc_alloc's own
+                ;; per-class views have exactly this lifetime already:
+                ;; made once, aimed many times, never individually freed,
+                ;; only the store itself is (see sc_close/uglDel sc_hnd).
+                ;; Just the view's own header leaks here, same as there.
                 invoke  qglSfFree, ems
                 invoke  qglSfFree, big
                 invoke  qglSfFree, small

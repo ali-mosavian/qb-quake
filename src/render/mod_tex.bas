@@ -37,6 +37,33 @@ option explicit
 '$include: 'q_snd.bi'
 '$include: 'q_mdl.bi'
 '$include: 'q_game.bi'
+'$include: 'qgl.bi'
+
+''
+'' qgl's own, for the atlas: it is a qgl surface now, not an mgl dc. The
+'' narrowest place that can see them is here -- this is the only module
+'' that makes or aims one.
+''
+declare function qglSfFromFileBas& ( _
+    path as string, _
+    byval wide as integer, _
+    byval kind as integer _
+)
+declare function qglSfViewNew& ( _
+    byval parent as long, _
+    byval wide as integer, _
+    byval high as integer, _
+    byval bps as integer _
+)
+declare function qglSfViewAim% ( _
+    byval v as long, _
+    byval ofs as long _
+)
+declare function qglSfPget% ( _
+    byval s as long, _
+    byval x as integer, _
+    byval y as integer _
+)
 
 ''
 '' This module's own procedures.
@@ -180,11 +207,25 @@ sub mod_load_textures ( _
     '' and is free to pack in whatever order is tightest. Deriving it twice
     '' is the bug the luxel atlas avoids by shipping its own table.
     ''
-    '' BMPOPT.NO332 matters: without it uGL remaps the image to its own
-    '' 3-3-2 palette and the indices, already correct, would be destroyed.
+    '' THE ATLAS IS QGL'S, NOT MGL'S. It used to be two uglNewBMPEx dcs out
+    '' of assets.zip, read through mgl's own dispatch table -- which is a
+    '' NEAR call, and mgl's table holds near offsets into ugl_text, so
+    '' calling it from qgl_text (sb.asm) jumped into whatever qgl routine
+    '' sat at that offset. That is why the surface builder hung.
     ''
-    g.wld.tex.raw    = uglNewBMPEx( UGL.EMS, UGL.8BIT, "assets.zip::texr.bmp", BMPOPT.NO332 )
-    g.wld.tex.shaded = uglNewBMPEx( UGL.EMS, UGL.8BIT, "assets.zip::texs.bmp", BMPOPT.NO332 )
+    '' The pixels are the same bytes either way: mkassets.py writes them
+    '' flat beside the exe as well, because file.asm is plain INT 21h and
+    '' cannot see inside the zip -- the delivery FONT.FNT already uses.
+    '' No BMP container, so no BMPOPT.NO332 to get wrong and no bottom-up
+    '' row order to undo; the indices are already exactly what the filler
+    '' wants.
+    ''
+    '' The HEIGHT is the file's, not a number here: qglSfFromFileBas sizes
+    '' the surface from the length. This module must not re-derive the
+    '' packer's layout -- same rule as the offset table below.
+    ''
+    g.wld.tex.raw    = qglSfFromFileBas&( "TEXR.RAW", TEX_ATLAS_W, QGL_SURF_EMS )
+    g.wld.tex.shaded = qglSfFromFileBas&( "TEXS.RAW", TEX_ATLAS_W, QGL_SURF_EMS )
     if ( g.wld.tex.raw = 0 or g.wld.tex.shaded = 0 ) then
         sys_error "0x0016, texture atlas would not load"
     end if
@@ -197,10 +238,15 @@ sub mod_load_textures ( _
         g.wld.tex.aim_raw(j) = -1
         g.wld.tex.aim_shd(j) = -1
 
-        g.wld.tex.v_raw(j)    = uglNewView&( g.wld.tex.raw, 0, _
-                                             g.wld.tex.cell(j), g.wld.tex.cell(j) )
-        g.wld.tex.v_shaded(j) = uglNewView&( g.wld.tex.shaded, 0, _
-                                             g.wld.tex.cell(j), g.wld.tex.cell(j) )
+        '' bps IS the cell width: a cell is a flat run of cell*cell bytes,
+        '' not a window on the 8192-wide image, so the view walks it by its
+        '' own width and not the parent's.
+        g.wld.tex.v_raw(j)    = qglSfViewNew&( g.wld.tex.raw, _
+                                               g.wld.tex.cell(j), g.wld.tex.cell(j), _
+                                               g.wld.tex.cell(j) )
+        g.wld.tex.v_shaded(j) = qglSfViewNew&( g.wld.tex.shaded, _
+                                               g.wld.tex.cell(j), g.wld.tex.cell(j), _
+                                               g.wld.tex.cell(j) )
         if ( g.wld.tex.v_raw(j) = 0 or g.wld.tex.v_shaded(j) = 0 ) then
             sys_error "0x0017, no room for a texture view"
         end if
@@ -272,8 +318,8 @@ function mod_tex_raw ( _
     byval mip as integer _
 ) as long
     if ( g.wld.tex.aim_raw(mip) <> k ) then
-        if ( uglSetView%( g.wld.tex.v_raw(mip), _
-                          g.wld.tex.ofs( k*4 + mip ) ) = 0 ) then exit function
+        if ( qglSfViewAim%( g.wld.tex.v_raw(mip), _
+                            g.wld.tex.ofs( k*4 + mip ) ) = 0 ) then exit function
         g.wld.tex.aim_raw(mip) = k
     end if
     mod_tex_raw = g.wld.tex.v_raw(mip)
@@ -285,8 +331,8 @@ function mod_tex_shaded ( _
     byval mip as integer _
 ) as long
     if ( g.wld.tex.aim_shd(mip) <> k ) then
-        if ( uglSetView%( g.wld.tex.v_shaded(mip), _
-                          g.wld.tex.ofs( k*4 + mip ) ) = 0 ) then exit function
+        if ( qglSfViewAim%( g.wld.tex.v_shaded(mip), _
+                            g.wld.tex.ofs( k*4 + mip ) ) = 0 ) then exit function
         g.wld.tex.aim_shd(mip) = k
     end if
     mod_tex_shaded = g.wld.tex.v_shaded(mip)
@@ -357,7 +403,7 @@ sub mod_tex_dump ( g as Game )
             dc = mod_tex_raw( g, k, mip )
             if ( dc <> 0 ) then
                 for  cx = 0 to cell-1
-                    mid$( row, k*64 + cx + 1, 1 ) = chr$( uglPGet( dc, cx, ty ) and 255 )
+                    mid$( row, k*64 + cx + 1, 1 ) = chr$( qglSfPget( dc, cx, ty ) and 255 )
                 next cx
             end if
         next k

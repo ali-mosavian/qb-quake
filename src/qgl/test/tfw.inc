@@ -17,12 +17,13 @@ qglGemAlloc   proto   far :dword
 qglGemFree    proto   far :word
 qglGemMap     proto   far :word, :word, :word
 qglSfInit     proto   far
-qglSfNew      proto   far :word, :word, :word, :word
+qglSfNew      proto   far :word, :word, :word
 qglSfFree     proto   far :dword
 qglSfRow      proto   far :dword, :word
 qglSfRdRow   proto   far :dword, :word
 qglSfWrRow   proto   far :dword, :word
-qglSfView     proto   far :dword, :dword, :dword, :word, :word, :word
+qglSfViewNew  proto   far :dword, :word, :word, :word
+qglSfViewAim  proto   far :dword, :dword
 qglSfPget     proto   far :dword, :word, :word
 qglSfPset     proto   far :dword, :word, :word, :word
 

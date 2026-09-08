@@ -775,6 +775,20 @@ def main():
         write_bmp8(os.path.join(outdir, name), LM_ATLAS_W, rows, bytes(at), pal)
         print(f"  {name}: {LM_ATLAS_W}x{rows} = {len(at):,} bytes")
 
+    # The same bytes again, flat and beside the exe rather than in the zip,
+    # because qgl reads them: qglSfLoad is a raw blob straight into an EMS
+    # surface's store and file.asm is plain INT 21h, which cannot see inside
+    # assets.zip. Same delivery FONT.FNT and SOLDIER.GEO already use -- the
+    # zip is for what mgl loads.
+    #
+    # Truncated to exactly rows*LM_ATLAS_W: qglSfLoad reads y_res rows of
+    # x_res and fails the load if any row runs short, so the file has to be
+    # the surface's own size and not a byte more.
+    for name, at in (("texr.raw", raw_at), ("texs.raw", shd_at)):
+        payload = bytes(at)[: rows * LM_ATLAS_W]
+        open(os.path.join(outdir, name), "wb").write(payload)
+        print(f"  {name}: {LM_ATLAS_W}x{rows} = {len(payload):,} bytes (flat, unzipped)")
+
     tbl = bytearray()
     for k in range(ntex):
         for lvl in range(MIPS):

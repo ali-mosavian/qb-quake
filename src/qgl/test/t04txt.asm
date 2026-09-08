@@ -97,7 +97,7 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;
                 ;; draw one glyph onto a known background
                 ;;
-                invoke  qglSfNew, SURF_W, SURF_H, SURF_CMEM, 0
+                invoke  qglSfNew, SURF_W, SURF_H, SURF_CMEM
                 SAVEP   sp_
                 invoke  qglDrFill, sp_, 0, 0, SURF_W-1, SURF_H-1, BG
 

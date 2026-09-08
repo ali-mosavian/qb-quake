@@ -18,6 +18,10 @@ const QGL_MEM_TOTAL   = 2
 const QGL_SURF_CMEM = 0
 const QGL_SURF_EMS  = 2
 
+'' Physical EMS page a surface is mapped through.
+const QGL_TEX_SLOT = 0
+const QGL_Z_SLOT   = 1
+
 '' Depth mode, for qglZMode.
 const QGL_Z_OFF  = 0
 const QGL_Z_SET  = 1

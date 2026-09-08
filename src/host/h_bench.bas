@@ -39,6 +39,7 @@ declare function rb_dbg_camleaf ( ) as integer
 declare function dbg_lm_want ( ) as integer
 declare function dbg_lm_fall ( ) as integer
 declare function dbg_qgl_faces ( ) as integer
+declare function dbg_qgl_drop ( ) as integer
 declare function dbg_keys ( byval which as integer ) as long
 
 '' scr_screenshot comes from q_game.bi above; everything below is
@@ -249,6 +250,7 @@ sub host_bench_report ( _
     print #benchf, "polys " + ltrim$(str$( g.rdr.polys ))
     print #benchf, "tris " + ltrim$(str$( g.rdr.tris ))
     print #benchf, "qgl_faces " + ltrim$(str$( dbg_qgl_faces() ))
+    print #benchf, "qgl_drop " + ltrim$(str$( dbg_qgl_drop() ))
     print #benchf, "cam_leaf " + ltrim$(str$( rb_dbg_camleaf ))
     print #benchf, "lm_want " + ltrim$(str$( dbg_lm_want ))
     print #benchf, "lm_fallback " + ltrim$(str$( dbg_lm_fall ))

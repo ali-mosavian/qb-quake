@@ -27,7 +27,7 @@ defint a-z
 
 declare function qglSfInit () as integer
 declare function qglSfNew ( byval wid as integer, byval hgt as integer, _
-                              byval whr as integer, byval slot as integer ) as long
+                              byval whr as integer ) as long
 declare function qglSfRdRow ( byval s as long, byval y as integer ) as long
 declare function qglSfWrRow ( byval s as long, byval y as integer ) as long
 declare function qglSfPget ( byval s as long, byval x as integer, _
@@ -38,7 +38,7 @@ declare sub qglSfFree ( byval s as long )
 declare function qglMemAvail ( byval what as integer ) as long
 declare function qglGemFrame () as integer
 
-declare function qgl_chk_kind ( byval kind as integer, byval slot as integer, _
+declare function qgl_chk_kind ( byval kind as integer, _
                                 nm as string, byval fh as integer ) as integer
 declare function qglCheckAll () as integer
 
@@ -51,7 +51,7 @@ declare function qglCheckAll () as integer
 '' point, which is enough to catch a row accessor that returns a constant
 '' or the wrong row.
 ''
-function qgl_chk_kind ( byval kind as integer, byval slot as integer, _
+function qgl_chk_kind ( byval kind as integer, _
                         nm as string, byval fh as integer ) as integer
     dim s as long
     dim bad as integer
@@ -61,7 +61,7 @@ function qgl_chk_kind ( byval kind as integer, byval slot as integer, _
     dim frame as long
 
     bad = 0
-    s = qglSfNew( 64, 8, kind, slot )
+    s = qglSfNew( 64, 8, kind )
     if ( s = 0 ) then
         '' No store of this kind is a fact about the machine, not about
         '' the ABI -- at this point in startup BASIC owns every byte of
@@ -153,8 +153,8 @@ function qglCheckAll () as integer
     '' the value that drifted, and reaching the EMS accessors at all means
     '' the assembly read that 2 as a kind and scaled it. Revert the scaling
     '' in qgl$Row and this stops round-tripping.
-    bad = bad + qgl_chk_kind( QGL_SURF_CMEM, 0, "cmem surface round trip", fh )
-    bad = bad + qgl_chk_kind( QGL_SURF_EMS,  0, "ems  surface round trip", fh )
+    bad = bad + qgl_chk_kind( QGL_SURF_CMEM, "cmem surface round trip", fh )
+    bad = bad + qgl_chk_kind( QGL_SURF_EMS, "ems  surface round trip", fh )
 
     if ( bad = 0 ) then
         print #fh, "RESULT PASS"

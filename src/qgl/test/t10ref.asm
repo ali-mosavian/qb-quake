@@ -33,7 +33,7 @@ qglRsFlat     proto   far :word
 qglRsMode     proto   far :word
 qglRsRef      proto   far :word
 qglRsPoly     proto   far :dword, :dword, :word
-qglZNew       proto   far :dword, :word, :word
+qglZNew       proto   far :dword, :word
 qglZSet       proto   far :dword
 qglZClear     proto   far :word
 qglZMode      proto   far :word
@@ -148,11 +148,11 @@ tmain           proc    far public uses bx cx dx si di es
 
                 invoke  qglSfInit
 
-                invoke  qglSfNew, SFW, SFH, SURF_CMEM, 0
+                invoke  qglSfNew, SFW, SFH, SURF_CMEM
                 SAVEP   sa
-                invoke  qglSfNew, SFW, SFH, SURF_CMEM, 0
+                invoke  qglSfNew, SFW, SFH, SURF_CMEM
                 SAVEP   sb
-                invoke  qglSfNew, 8, 8, SURF_CMEM, 0
+                invoke  qglSfNew, 8, 8, SURF_CMEM
                 SAVEP   tx
 
                 mov     word ptr pp, offset poly
@@ -188,9 +188,9 @@ tmain           proc    far public uses bx cx dx si di es
 
                 ;; a depth buffer each, so the two runs cannot see each
                 ;; other's writes
-                invoke  qglZNew, sa, SURF_CMEM, 0
+                invoke  qglZNew, sa, SURF_CMEM
                 SAVEP   za
-                invoke  qglZNew, sa, SURF_CMEM, 0
+                invoke  qglZNew, sa, SURF_CMEM
                 SAVEP   zbb
                 invoke  qglZSet, za
                 invoke  qglZScale, dword ptr zs

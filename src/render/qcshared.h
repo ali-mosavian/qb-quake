@@ -200,6 +200,9 @@ typedef struct {
     long  k_ext;            /* ...and whose extents are non-zero       */
     long  k_n;              /* sc_find CALLS -- without this the sums */
                             /* are not comparable between arms        */
+    short qgl_drop;         /* out: faces qglRsTex refused. Non-zero  */
+                            /* is a fault, not a fallback: there is   */
+                            /* no mgl path left behind it.            */
 } DrawParams;
 
 /* q_draw.bi's FaceSetup -- the parameter block d_draw_faces fills once

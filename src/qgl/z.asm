@@ -30,7 +30,7 @@
 
                 include qgl.inc
 
-qglSfNewEx   proto   far pascal :word, :word, :word, :word, :word
+qglSfNewEx   proto   far pascal :word, :word, :word, :word
 qglSfFree     proto   far pascal :dword
 qglSfWrRow   proto   far pascal :dword, :word
 
@@ -77,13 +77,13 @@ qgl$Pow2        endp
 
 
 ;;::::::::::::::
-;; qglZNew ( dst:far ptr Surface, kind:word, slot:word ) -> dx:ax
+;; qglZNew ( dst:far ptr Surface, kind:word ) -> dx:ax
 ;;
 ;; A depth buffer shaped to a destination. Does NOT install it: that is
 ;; qglZSet, so a caller may hold more than one and switch.
 ;;::::::::::::::
 qglZNew       proc    public uses bx cx si di es,\
-                        dst:dword, kind:word, slot:word
+                        dst:dword, kind:word
 
                 local   bytes:word
                 local   rows:word
@@ -94,14 +94,14 @@ qglZNew       proc    public uses bx cx si di es,\
                 or      ax, bx
                 jz      @@fail
 
-                mov     ax, es:[bx].Surface.x_res
+                mov     ax, es:[bx].Surface.xRes
                 test    ax, ax
                 jz      @@fail
                 mov     wide, ax
                 shl     ax, 1                   ;; two bytes a pixel
                 jc      @@fail                  ;; a row past 64K is not ours
                 mov     bytes, ax
-                mov     ax, es:[bx].Surface.y_res
+                mov     ax, es:[bx].Surface.yRes
                 test    ax, ax
                 jz      @@fail
                 mov     rows, ax
@@ -119,7 +119,7 @@ qglZNew       proc    public uses bx cx si di es,\
                 test    ax, ax
                 jz      @@fail
                 mov     bytes, ax
-@@:             invoke  qglSfNewEx, wide, rows, bytes, kind, slot
+@@:             invoke  qglSfNewEx, wide, rows, bytes, kind
                 ret
 
 @@fail:         xor     ax, ax
@@ -159,9 +159,9 @@ qglZSet       proc    public uses bx es,\
                 or      ax, bx
                 jz      @@none
 
-                mov     ax, es:[bx].Surface.x_res
+                mov     ax, es:[bx].Surface.xRes
                 mov     qgl$zw, ax
-                mov     ax, es:[bx].Surface.y_res
+                mov     ax, es:[bx].Surface.yRes
                 mov     qgl$zh, ax
                 mov     ax, 1
                 ret

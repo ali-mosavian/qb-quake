@@ -31,6 +31,8 @@
 
                 include qgl.inc
 
+qglClPolyEx   proto   far pascal :dword, :word, :dword, :dword, :word, :word
+
 ;; one clip boundary: which coordinate, which bound, which way is in
 ClipEdge        struc
 cofs            dw      ?               ;; offset of the coordinate in QVert
@@ -328,12 +330,12 @@ qgl$Bounds      proc    near private uses ax cx dx
                 or      dx, bx
                 jz      @@hi
 
-                mov     dx, es:[bx].Surface.x_res
+                mov     dx, es:[bx].Surface.xRes
                 dec     dx
                 cmp     ax, dx
                 jle     @F
                 mov     ax, dx
-@@:             mov     dx, es:[bx].Surface.y_res
+@@:             mov     dx, es:[bx].Surface.yRes
                 dec     dx
                 cmp     cx, dx
                 jle     @@hi
@@ -352,15 +354,39 @@ qgl$Bounds      endp
 
 
 ;;::::::::::::::
-;; qglClPoly ( src:far ptr QVert, n:word, dst:far ptr QVert ) -> ax
+;; qglClPoly ( src:far ptr QVert, n:word, dst:far ptr QVert, sf ) -> ax
+;;
+;; The ring in the order it was given. qglClPolyEx below is the same
+;; thing with the walk spelled out.
+;;::::::::::::::
+qglClPoly     proc    public uses bx,\
+                        src:dword, n:word, dst:dword, sf:dword
+
+                mov     bx, W src
+                invoke  qglClPolyEx, src, n, dst, sf, bx, SIZEOF QVert
+                ret
+qglClPoly     endp
+
+
+;;::::::::::::::
+;; qglClPolyEx ( src:far ptr QVert, n:word, dst:far ptr QVert, sf,
+;;               base:word, step:word ) -> ax
 ;;
 ;; ax is the surviving vertex count, 0 if nothing does. dst must hold
 ;; QGL_CLIPV vertices; n past QGL_MAXV is refused rather than truncated,
 ;; because a truncated polygon is a wrong picture and a refused one is a
 ;; missing face.
+;;
+;; src names the vertex the ring is read FROM, base names vtx[0] in the
+;; same segment, and step is +SIZEOF QVert or -SIZEOF QVert. That is
+;; mgl's SH_INIT_poly signature (mscshpc.inc) and it exists for its
+;; reason: the scanner needs vtx[0] topmost and the ring clockwise, and
+;; a walk with a start and a signed step gives it both without a second
+;; copy of the polygon anywhere.
 ;;::::::::::::::
-qglClPoly     proc    public uses bx cx dx si di ds es,\
-                        src:dword, n:word, dst:dword, sf:dword
+qglClPolyEx   proc    public uses bx cx dx si di ds es,\
+                        src:dword, n:word, dst:dword, sf:dword,\
+                        base:word, step:word
 
                 local   cnt:word
                 local   pass:word
@@ -376,8 +402,9 @@ qglClPoly     proc    public uses bx cx dx si di ds es,\
                 ja      @@none
 
                 ;;
-                ;; pass 0 reads the caller's vertices; every later pass
-                ;; reads what the one before it wrote
+                ;; pass 0 reads the caller's vertices, walking the ring
+                ;; from src by step with wrap; every later pass reads what
+                ;; the one before it wrote
                 ;;
                 push    ds
                 pop     es
@@ -385,7 +412,24 @@ qglClPoly     proc    public uses bx cx dx si di ds es,\
                 lds     si, src
                 mov     cx, cnt
                 mov     ax, cx
-@@in:           call    qgl$Copyv
+@@in:           call    qgl$Copyv               ;; advances si and di
+                sub     si, SIZEOF QVert        ;; copyv consumed it
+                add     si, step
+                push    ax
+                push    dx
+                mov     ax, cnt
+                imul    ax, SIZEOF QVert
+                cmp     si, base
+                jae     @@nound
+                add     si, ax                  ;; stepped below vtx[0]
+                jmp     short @@advd
+@@nound:        mov     dx, base
+                add     dx, ax                  ;; one past vtx[cnt-1]
+                cmp     si, dx
+                jb      @@advd
+                sub     si, ax
+@@advd:         pop     dx
+                pop     ax
                 dec     ax
                 jnz     @@in
                 push    es
@@ -427,6 +471,6 @@ qglClPoly     proc    public uses bx cx dx si di ds es,\
 
 @@none:         xor     ax, ax
                 ret
-qglClPoly     endp
+qglClPolyEx   endp
 
                 end

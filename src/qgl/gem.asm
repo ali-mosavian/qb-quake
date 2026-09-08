@@ -42,7 +42,14 @@ qgl$emsok       dw      0
 ;; is populated on machines with no EMM at all, and the documented probe
 ;; is the device name sitting at offset 10 of the handler's segment.
 ;;::::::::::::::
-qglGemInit    proc    public uses bx si di es
+;; uses CX, and it is load-bearing: `repe cmpsb` below eats it, and
+;; qglSfInit walks the dispatch table with its loop counter in cx across
+;; this very call. Without it the counter came back as whatever the string
+;; compare left, qglSfInit ran off the end of the table and called through
+;; garbage -- a hang with every test's output already printed, which reads
+;; as a fault in whatever ran last. mgl's own emsCheck says
+;; `uses bx cx di si es` for the same reason.
+qglGemInit    proc    public uses bx cx si di es
 
                 mov     [qgl$emsok], 0
                 mov     [qgl$pgframe], 0

@@ -63,57 +63,45 @@
 #define TURB_FREQ    326.0
 #define TURB_RATE    40.74
 
-/* ugl.bi's UGL.Z.* */
-#define UGL_Z_OFF    0
-#define UGL_Z_WRITE  1
-#define UGL_Z_TEST   2
+/* qgl.inc's QGL_Z_*, which are mgl's UGL.Z.* renumbered by nothing --
+   OFF/SET/TEST against OFF/WRITE/TEST, same three values. */
+#define QGL_Z_OFF    0
+#define QGL_Z_SET    1
+#define QGL_Z_TEST   2
 
 /* The clipper adds at most one vertex per plane, so input + 2 suffices;
    the slack is headroom, not a limit worth policing. */
 #define MAXV (GEOM_MAXVTX + 8)
 
-/* ugl.bi's vector3f: x y z u v r g b. uglPolyTP and TriType are built
-   out of it, so the stride matters and the unused three still occupy
-   space. */
-typedef struct { float x, y, z, u, v, r, g, b; } UglVtx;
+/* The wireframe fan's own triangle, in floats. No mgl call reads it any
+   more, so the three unused colour fields mgl's vector3f carried are
+   gone with them. */
+typedef struct { float x, y, z, u, v; } UglVtx;
 typedef struct { UglVtx v1, v2, v3; } UglTri;
 
-extern void  pascal far uglPolyTP( long dst, UglVtx far *vtx, short cnt, short mask, long src );
-extern void  pascal far uglTriTP ( long dst, UglTri far *vtx, short mask, long src );
-extern void  pascal far uglTriT  ( long dst, UglTri far *vtx, short mask, long src );
-extern void  pascal far uglTriF  ( long dc,  UglTri far *vtx, long col );
-extern void  pascal far uglLine  ( long dc, short x1, short y1, short x2, short y2, long clr );
-extern short pascal far uglZMode ( short mode );
+/* qgl. A Surface is never spelled here -- the destination arrives as an
+   mgl DC, which is the same struct; the vertex is spelled here because
+   qglRsPoly takes an array of them and C cannot be handed one otherwise.
 
-/* qgl, behind -qgl. qglSfScratch hands out the Surface so its layout
-   is never spelled here; the vertex is spelled here because
-   qglRsPoly takes an array of them and C cannot be handed one
-   otherwise. It is the first five fields of mgl's own UglVtx, carrying
-   the same numbers.
-   
-   THE TWO MODE CONSTANTS ARE A SECOND COPY of src/qgl/qgl.inc's, and
-   the only one with no generator watching it -- qgl.bi is generated for
+   THE MODE CONSTANTS ARE A SECOND COPY of src/qgl/qgl.inc's, and the
+   only one with no generator watching it -- qgl.bi is generated for
    BASIC and there is no C equivalent yet. That is exactly the drift
    that made QGL_SURF_EMS mean 10 on one side and 2 on the other, so it
    is written down here rather than left as a bare 2 and 3. */
+#define QGL_M_FLAT  1
 #define QGL_M_TEX   2
-/* The physical page the texture window takes. mgl reads through 0,
-   writes through 1 and puts depth in 3, so 2 is the free one. The
-   window is good only until something else claims the slot, which
-   is why it is taken per face and used inside a single
-   qglRsPoly call that maps nothing itself. */
-#define QGL_TEX_SLOT 2
 #define QGL_M_PTEX  3
 
 typedef struct { float x, y, z, u, v; } QglVtx;
 
-extern short pascal far qglSfAdoptDc ( long dc, long s );
-extern short pascal far qglSfAdoptEms( long dc, short slot, long s );
-extern long  pascal far qglSfScratch ( short n );
 extern short pascal far qglRsTex     ( long s );
 extern void  pascal far qglRsMode    ( short m );
+extern void  pascal far qglRsFlat    ( short col );
 extern void  pascal far qglClRect    ( short x0, short y0, short x1, short y1 );
 extern short pascal far qglRsPoly    ( long dst, void far *v, short cnt );
+extern void  pascal far qglDrLine    ( long d, short x0, short y0,
+                                       short x1, short y1, short col );
+extern short pascal far qglZMode     ( short mode );
 
 /* BASIC-side, all byval scalars or g byref -- the shapes sb_build.c
    already proved callable from here. */
@@ -151,19 +139,28 @@ static float near vt_u[MAXV], vt_v[MAXV];
 static float near cl_x[MAXV], cl_y[MAXV], cl_z[MAXV], cl_w[MAXV];
 static float near cl_u[MAXV], cl_v[MAXV];
 static float near px[MAXV], py[MAXV], pw[MAXV], pu[MAXV], pv[MAXV];
-static UglVtx near pvtx[16];
+/* MAXV, not 16: the old bound matched the qgl fast path's retired
+   cnt <= 12 gate with a little slack, but a lit face's qgl draw is now
+   mandatory (see the polygon-draw dispatch below) and must never
+   truncate a real, larger convex face. */
 static UglTri near tri1;
-static QglVtx near qvtx[16];
+static QglVtx near qvtx[MAXV];
 
 /* TEMPORARY, -qglface. One real post-clip face, frozen so the same
    record can be replayed into isolated buffers by both rasterisers and
    an exact oracle. Removed once the divergence is localised. */
 static short fp_cnt = 0;
-static QglVtx near fp_v[16];
+static float near fp_area = 0.0f;
+static QglVtx near fp_v[MAXV];
 static long  fp_tex = 0;
+/* The view's aim, not just the view. fp_tex points at a view that every
+   later face re-aims, so replaying the freeze reads whichever cell ran
+   last. Captured here and restored before the replay. */
+static long  fp_ofs = 0;
 
 short pascal far qglFaceCnt( void ) { return fp_cnt; }
 long  pascal far qglFaceTex( void ) { return fp_tex; }
+long  pascal far qglFaceOfs( void ) { return fp_ofs; }
 
 void pascal far qglFaceFetch( QglVtx far *dst )
 {
@@ -270,7 +267,7 @@ void pascal far d_draw_faces(
     short mi, m_node, ti, i, j, v0, gn, vcnt, cnt;
     short tex, tex_id, draw_mip, mip_level, liquid;
     short z_want, z_have = -1, z_avail, lm_use, lm_on;
-    long  q_dst, q_tex;         /* the adopted Surfaces, under -qgl */
+    long  q_dst;                /* the destination Surface */
     short q_ok = 0;             /* and whether the setup stood up */
     short q_gate = 0;
     short lm_tms, lm_tmt, lm_extw, lm_exth, lm_stag;
@@ -291,6 +288,11 @@ void pascal far d_draw_faces(
     dp->lm_want = 0;
     dp->lm_fallback = 0;
     dp->qgl_faces = 0;
+    dp->qgl_drop  = 0;
+    /* Per frame. Held across frames, the first frame's biggest face won
+       for the whole run: two yaws 34 degrees apart, and frame 1 against
+       frame 40, all froze the same face. */
+    fp_area = 0.0f;
     dp->k_mip = 0; dp->k_sw = 0; dp->k_sh = 0; dp->k_stag = 0; dp->k_n = 0; dp->k_hdr = 0; dp->k_ext = 0; dp->k_v0 = 0; dp->k_lm = 0;
     dp->build_us = 0;
 
@@ -304,34 +306,14 @@ void pascal far d_draw_faces(
     lm_use = ( dp->use_lm && dp->lightmap && sc_ready() != 0 );
 
     /*
-     * -qgl: adopt the destination ONCE. The DC's pixels do not move
-     * inside a frame and adoption validates mgl's struct every time, so
-     * per face it would be a check repeated a few hundred times to
-     * learn the same answer.
-     *
-     * Depth is left to mgl for now. qgl has the three depth modes and
-     * the fillers for them, but wiring the buffer in is a second
-     * conversion and this slice is meant to be the smallest one that
-     * draws real geometry.
-     *
-     * Adoption refusing is not a reason to draw nothing: the flag is
-     * dropped and the frame goes through mgl, which is what makes -qgl
-     * safe to leave in a build.
+     * The destination DC IS the destination Surface -- one struct, one
+     * allocator -- so there is nothing to adopt and nothing to check.
      */
-    q_dst = 0;
-    q_tex = 0;
-    if ( !dp->use_qgl )   dp->qgl_faces = -3;   /* the flag never arrived */
-    else if ( z_avail )   dp->qgl_faces = -4;   /* depth stays mgl's for now */
+    q_dst = dp->h_dst_dc;
+    if ( !q_dst ) dp->qgl_faces = -1;
     else {
-        q_dst = qglSfScratch( 0 );
-        q_tex = qglSfScratch( 1 );
-        if ( !q_dst || !q_tex )                             dp->qgl_faces = -1;
-        else if ( !qglSfAdoptDc( dp->h_dst_dc, q_dst ) ) dp->qgl_faces = -2;
-        else {
-            qglClRect( 0, 0, dp->x_res - 1, dp->y_res - 1 );
-            q_ok = 1;
-        }
-        if ( !q_ok ) q_dst = 0;
+        qglClRect( 0, 0, dp->x_res - 1, dp->y_res - 1 );
+        q_ok = 1;
     }
 
     for ( mi = 0; mi < dp->ord_count; mi++ ) {
@@ -435,8 +417,8 @@ void pascal far d_draw_faces(
              * runs from one model.
              */
             if ( z_avail != 0 ) {
-                z_want = ( facemdl[i] == 0 ) ? UGL_Z_WRITE : UGL_Z_TEST;
-                if ( z_want != z_have ) z_have = uglZMode( z_want );
+                z_want = ( facemdl[i] == 0 ) ? QGL_Z_SET : QGL_Z_TEST;
+                if ( z_want != z_have ) z_have = qglZMode( z_want );
             }
 
             tw = mipinf[tex_id].wdth;
@@ -687,33 +669,66 @@ void pascal far d_draw_faces(
             }
 
             /*
+             * ONE PATH. Every texture this loop can name is a qgl
+             * Surface -- the atlas (mod_tex.bas) and the surface cache
+             * (d_surf.bas) both -- and mgl reads a DC's layout at fixed
+             * offsets, so uglPolyTP/uglTriTP/uglTriT handed one of them
+             * spin on whatever those offsets happen to hold. There is no
+             * mgl fallback left to fall back to, and none is wanted:
+             * this is the slice that finishes the textured path.
+             *
              * One convex polygon, one call -- no fan pivot, so no
-             * internal edges for the rasteriser to seam along. Wireframe
-             * still fans; it wants the triangles.
+             * internal edges to seam along, and no 12-vertex ceiling:
+             * that was mgl's clipper (SH_MAXV, inc/mscshpc.inc), and
+             * qgl's is QGL_MAXV, 41, which is exactly MAXV here.
+             *
+             * pu and pv are already u/z and pw is 1/z when rend_mode is
+             * 0, which is the convention the perspective filler wants;
+             * the other mode hands it plain u and v and asks for the
+             * affine one. Nothing is converted here.
+             *
+             * Wireframe alone still fans below: it wants the triangles
+             * and never reads src_dc.
              */
-            if ( dp->poly_tp && cnt <= 12 && dp->rend_mode != 2 ) {
-                /*
-                 * The same vertices, through qgl instead. pu and pv are
-                 * already u/z and pw is 1/z when rend_mode is 0, which
-                 * is the convention the perspective filler wants; the
-                 * other mode hands it plain u and v and asks for the
-                 * affine one. Nothing is converted here.
-                 *
-                 * A texture qglRsTex refuses -- a padded row, a
-                 * non-power-of-two side, more than one 16K page -- falls
-                 * through to mgl for that face rather than dropping it.
-                 */
+            if ( dp->rend_mode != 2 ) {
                 q_gate++;
-                if ( q_dst && qglSfAdoptEms( src_dc, QGL_TEX_SLOT, q_tex )
-                           && qglRsTex( q_tex ) ) {
+                if ( q_dst && cnt <= MAXV && qglRsTex( src_dc ) ) {
                     for ( j = 0; j < cnt; j++ ) {
                         qvtx[j].x = px[j]; qvtx[j].y = py[j]; qvtx[j].z = pw[j];
                         qvtx[j].u = pu[j]; qvtx[j].v = pv[j];
                     }
-                    if ( fp_cnt == 0 ) {
-                        for ( j = 0; j < cnt; j++ ) fp_v[j] = qvtx[j];
-                        fp_cnt = cnt;
-                        fp_tex = src_dc;
+                    /* The BIGGEST face on screen, not the first. An
+                       exact texel test needs a face that is magnified;
+                       the first one drawn is typically 6 texels to a
+                       pixel, where a sub-pixel gradient difference
+                       lands anywhere and the comparison decides
+                       nothing. Screen area over texel count is the
+                       ratio that matters, and area is the half of it
+                       that varies. */
+                    {
+                        float ar = 0.0f;
+                        short on = 1;
+                        for ( j = 0; j < cnt; j++ ) {
+                            short k = (short)((j + 1) % cnt);
+                            ar += px[j]*py[k] - px[k]*py[j];
+                            /* WHOLLY on screen, or the area is the
+                               area of a face that mostly is not: the
+                               first pick this way was a 22682-pixel
+                               polygon of which nothing landed in the
+                               replay buffer, and the test passed on
+                               zero covered pixels. */
+                            if ( px[j] < 0.0f || px[j] > (float)dp->x_res ||
+                                 py[j] < 0.0f || py[j] > (float)dp->y_res )
+                                on = 0;
+                        }
+                        if ( ar < 0.0f ) ar = -ar;
+                        if ( on && ar > fp_area ) {
+                            for ( j = 0; j < cnt; j++ ) fp_v[j] = qvtx[j];
+                            fp_cnt  = cnt;
+                            fp_tex  = src_dc;
+                            fp_ofs  = texofs;
+                            fp_area = ar;
+                        }
                     }
                     qglRsMode( dp->rend_mode == 0 ? QGL_M_PTEX : QGL_M_TEX );
                     qglRsPoly( q_dst, (void far *)qvtx, cnt );
@@ -722,15 +737,18 @@ void pascal far d_draw_faces(
                     dp->tris += cnt - 2;
                     continue;
                 }
-                for ( j = 0; j < cnt; j++ ) {
-                    pvtx[j].x = px[j]; pvtx[j].y = py[j]; pvtx[j].z = pw[j];
-                    pvtx[j].u = pu[j]; pvtx[j].v = pv[j];
-                }
-                uglPolyTP( dp->h_dst_dc, (UglVtx far *)pvtx, cnt, 0, src_dc );
-                dp->tris += cnt - 2;
+                /* Counted, not silent: a drop here is a qglRsTex
+                   refusal (padded row, non-power-of-two side, over one
+                   16K page) and there is nothing else left to try. */
+                dp->qgl_drop++;
                 continue;
             }
 
+            /*
+             * Wireframe: a flat fill and three edges, fanned because the
+             * triangles are the point. No texture, so nothing here cares
+             * which layer owns the atlas.
+             */
             for ( j = 0; j <= cnt - 3; j++ ) {
                 p2 = j + 1;
                 p3 = j + 2;
@@ -740,24 +758,19 @@ void pascal far d_draw_faces(
                 tri1.v2.x = px[p2]; tri1.v2.y = py[p2];
                 tri1.v3.x = px[p3]; tri1.v3.y = py[p3];
 
-                if ( dp->rend_mode == 2 ) {
-                    uglTriF( dp->h_dst_dc, (UglTri far *)&tri1, 200 );
-                    uglLine( dp->h_dst_dc, (short)tri1.v1.x, (short)tri1.v1.y,
-                                           (short)tri1.v2.x, (short)tri1.v2.y, 0 );
-                    uglLine( dp->h_dst_dc, (short)tri1.v2.x, (short)tri1.v2.y,
-                                           (short)tri1.v3.x, (short)tri1.v3.y, 0 );
-                    uglLine( dp->h_dst_dc, (short)tri1.v3.x, (short)tri1.v3.y,
-                                           (short)tri1.v1.x, (short)tri1.v1.y, 0 );
-                } else {
-                    tri1.v1.u = pu[0];  tri1.v1.v = pv[0];
-                    tri1.v2.u = pu[p2]; tri1.v2.v = pv[p2];
-                    tri1.v3.u = pu[p3]; tri1.v3.v = pv[p3];
-
-                    if ( dp->rend_mode == 0 )
-                        uglTriTP( dp->h_dst_dc, (UglTri far *)&tri1, 0, src_dc );
-                    else
-                        uglTriT ( dp->h_dst_dc, (UglTri far *)&tri1, 0, src_dc );
-                }
+                if ( !q_dst ) { dp->qgl_drop++; continue; }
+                qvtx[0].x = tri1.v1.x; qvtx[0].y = tri1.v1.y; qvtx[0].z = tri1.v1.z;
+                qvtx[1].x = tri1.v2.x; qvtx[1].y = tri1.v2.y; qvtx[1].z = tri1.v2.z;
+                qvtx[2].x = tri1.v3.x; qvtx[2].y = tri1.v3.y; qvtx[2].z = tri1.v3.z;
+                qglRsFlat( 200 );
+                qglRsMode( QGL_M_FLAT );
+                qglRsPoly( q_dst, (void far *)qvtx, 3 );
+                qglDrLine( q_dst, (short)tri1.v1.x, (short)tri1.v1.y,
+                                  (short)tri1.v2.x, (short)tri1.v2.y, 0 );
+                qglDrLine( q_dst, (short)tri1.v2.x, (short)tri1.v2.y,
+                                  (short)tri1.v3.x, (short)tri1.v3.y, 0 );
+                qglDrLine( q_dst, (short)tri1.v3.x, (short)tri1.v3.y,
+                                  (short)tri1.v1.x, (short)tri1.v1.y, 0 );
                 dp->tris++;
             }
 
@@ -766,10 +779,12 @@ void pascal far d_draw_faces(
 
     /* Why nothing went through qgl, when the setup itself stood up.
        -5: no face reached the one-call-per-polygon gate at all.
-       -6: they reached it and the TEXTURE was refused every time --
-           which is where this stands today. The atlas is an EMS DC
-           (mod_tex.bas: uglNewBMPEx UGL.EMS) and qglSfAdoptDc takes
-           linear memory only. 111 of 111 faces, measured. */
+       -6: they reached it and the TEXTURE was refused every time.
+           That used to be structural -- the atlas was an mgl EMS DC
+           and the bridge took linear memory only, 111 of 111 faces
+           measured. The atlas is a qgl Surface now, so a -6 here means
+           an actual qglRsTex refusal (padded row, non-power-of-two
+           side, over one 16K page) and is worth reading as a fault. */
     if ( dp->qgl_faces == 0 && q_ok ) dp->qgl_faces = q_gate ? -6 : -5;
 
     if ( dp->span_draw ) {
