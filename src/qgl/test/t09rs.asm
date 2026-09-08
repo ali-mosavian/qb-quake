@@ -58,6 +58,41 @@ n_pbox          db      'ptex adds no half pixel$'
 n_ccw           db      'ccw winding still draws$'
 n_coll          db      'collinear 0,1,2 draws  $'
 n_dzdy          db      'z steps by fx height   $'
+;; Every case above sits wholly inside the surface, so until this one the
+;; suite never drew a polygon the clipper had touched -- and the scanner's
+;; edge chains are set up from the CLIPPED ring.
+n_cliplin       db      'clipped covers 32 lines$'
+n_clipcnt       db      'and 40x32 pixels       $'
+n_clipbox       db      'bounded x 0..39 y 8..39$'
+;; Every textured case above draws through a texture filled with ONE value,
+;; which cannot tell a correct u step from a stuck one -- and the
+;; perspective arm carries u and v as real4 where the affine arm carries
+;; 16.16, so the two walks are different code.
+;;
+;; EIGHT changes of value, not seven. One repeat is eight texels across 32
+;; pixels, but the span is sampled half a texel in, so u runs about 0.5 to
+;; 8.5 and crosses every integer boundary from 1 to 8. Seven is what the
+;; range 0..8 would give and it is the wrong derivation, not a wrong
+;; renderer -- the half texel is mgl's 0.5*z, added on the far side of the
+;; perspective divide. A stuck u reads 0 here and a doubled one about 16.
+n_pruns         db      'ptex u walks once across$'
+n_pvruns        db      'and v once down        $'
+n_wide          db      'huge u gradient draws  $'
+n_widecnt       db      'and covers 32 pixels   $'
+;; A one-pixel-wide column with a few thousand repeats of u across it.
+;; vu is normalised, so that is legal data, and the gradient it gives is
+;; 40000 texels per pixel -- fine as the float qgl$drawP reads, 2.62e9 in
+;; 16.16 and past what a signed dword holds. mgl's perspective
+;; calc_gradients never converts (uglplxtp.asm) and gates the float; qgl
+;; gated the 16.16 in both modes, so this face was DROPPED ENTIRELY --
+;; 32 scanlines became 0. u is centred on zero so the filler's own
+;; 65536*u still fits, and the texture is one value so what it samples
+;; cannot hide whether it drew.
+narrow          QVert   <20.0,  8.0, 1.0, -2500.0, 0.0>
+                QVert   <21.0,  8.0, 1.0,  2500.0, 0.0>
+                QVert   <21.0, 40.0, 1.0,  2500.0, 1.0>
+                QVert   <20.0, 40.0, 1.0, -2500.0, 1.0>
+narrowp         dd      0
 
 ;; a square, clockwise, top-left first. z is 1/z and constant, so the
 ;; whole polygon sits at one depth and the test is about the compare and
@@ -121,6 +156,20 @@ dzq             QVert   <8.0,  8.0,  1.0, 0.0, 0.0>
                 QVert   <8.0,  40.5, 0.0, 0.0, 1.0>
 dzqp            dd      0
 dzs             real4   1310720000.0            ;; 65536 * 20000
+
+;; a square hanging 8 pixels off the LEFT edge. The clipper replaces both
+;; left vertices with x = 0 and the scanner then walks a ring it did not
+;; receive, split at whichever vertex ends up topmost -- the one path the
+;; cases above leave untested. 0.5 from the affine converter floors to 0
+;; and 40.5 to 40, so it is x 0..39 by y 8..39.
+clp             QVert   <-8.0,  8.0,  1.0, 0.0, 0.0>
+                QVert   <40.0,  8.0,  1.0, 1.0, 0.0>
+                QVert   <40.0, 40.0,  1.0, 1.0, 1.0>
+                QVert   <-8.0, 40.0,  1.0, 0.0, 1.0>
+clpp            dd      0
+
+tfx             dw      0
+tfy             dw      0
 
 zs              real4   6553600.0
 
@@ -189,6 +238,51 @@ scan            proc    near private uses bx cx dx si di es,\
 @@out:          mov     ax, hits
                 ret
 scan            endp
+
+
+;;::::::::::::::
+;; runs -- how many times the byte value CHANGES along the middle row of
+;; the drawn square, and again down its middle column. Phase-independent,
+;; which is what lets it be derived rather than read off a run.
+;;::::::::::::::
+rowruns         proc    near uses bx cx si di es
+                invoke  qglSfRow, dst, 24
+                mov     di, ax
+                mov     es, dx
+                add     di, 8
+                mov     cx, 31                  ;; 32 pixels, 31 gaps
+                xor     bx, bx
+@@lp:           mov     al, es:[di]
+                cmp     al, es:[di+1]
+                je      @F
+                inc     bx
+@@:             inc     di
+                dec     cx
+                jnz     @@lp
+                mov     ax, bx
+                ret
+rowruns         endp
+
+colruns         proc    near uses bx cx si di es
+                mov     si, 8
+                xor     bx, bx
+                mov     cl, 0
+@@lp:           invoke  qglSfRow, dst, si
+                mov     di, ax
+                mov     es, dx
+                mov     al, es:[di+24]
+                cmp     si, 8
+                je      @F
+                cmp     al, cl
+                je      @F
+                inc     bx
+@@:             mov     cl, al
+                inc     si
+                cmp     si, 40
+                jb      @@lp
+                mov     ax, bx
+                ret
+colruns         endp
 
 
 tmain           proc    far public uses bx cx dx si di es
@@ -347,6 +441,70 @@ tmain           proc    far public uses bx cx dx si di es
                 mov     es, dx
                 mov     ax, es:[di+48]          ;; x = 24
                 CHK     n_dzdy, ax, 19692
+
+                ;;
+                ;; 9. a polygon the clipper actually rewrote
+                ;;
+                mov     word ptr clpp, offset clp
+                mov     word ptr clpp+2, ds
+                invoke  qglZMode, QGL_Z_OFF
+                invoke  qglRsMode, QGL_M_FLAT
+                invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
+                invoke  qglRsPoly, dst, clpp, 4
+                CHK     n_cliplin, ax, 32
+
+                invoke  scan, COL
+                CHK     n_clipcnt, ax, 40*32
+
+                mov     ax, xmin
+                add     ax, ymin
+                mov     bx, xmax
+                add     ax, bx
+                mov     bx, ymax
+                add     ax, bx                  ;; 0+8+39+39
+                CHK     n_clipbox, ax, 86
+
+                ;;
+                ;; 10. the perspective arm's u and v actually walk
+                ;;
+                mov     tfy, 0
+@@tfyl:         mov     tfx, 0
+@@tfxl:         mov     ax, tfy
+                imul    ax, 8
+                add     ax, tfx
+                inc     ax                      ;; 1..64, every texel apart
+                invoke  qglSfPset, tx, tfx, tfy, ax
+                inc     tfx
+                cmp     tfx, 8
+                jb      @@tfxl
+                inc     tfy
+                cmp     tfy, 8
+                jb      @@tfyl
+
+                invoke  qglRsTex, tx
+                invoke  qglRsMode, QGL_M_PTEX
+                invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
+                invoke  qglRsPoly, dst, sqp, 4
+
+                invoke  rowruns
+                CHK     n_pruns, ax, 8
+                invoke  colruns
+                CHK     n_pvruns, ax, 8
+
+                ;;
+                ;; 11. a gradient no 16.16 can hold, in the mode that
+                ;;     never reads the 16.16
+                ;;
+                mov     word ptr narrowp, offset narrow
+                mov     word ptr narrowp+2, ds
+                invoke  qglDrFill, tx, 0, 0, 7, 7, 99
+                invoke  qglRsTex, tx
+                invoke  qglRsMode, QGL_M_PTEX
+                invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
+                invoke  qglRsPoly, dst, narrowp, 4
+                CHK     n_wide, ax, 32
+                invoke  scan, 99
+                CHK     n_widecnt, ax, 32
 
                 ret
 tmain           endp
