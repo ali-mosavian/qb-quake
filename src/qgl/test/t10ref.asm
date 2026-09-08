@@ -28,15 +28,10 @@
 
 qglDrFill     proto   far :dword, :word, :word, :word, :word, :word
 qglClRect     proto   far :word, :word, :word, :word
-qglRsTex      proto   far :dword
-qglRsFlat     proto   far :word
-qglRsMode     proto   far :word
 qglRsRef      proto   far :word
-qglRsPoly     proto   far :dword, :dword, :word
+qglRsPoly     proto   far :dword, :dword, :word, :word, :dword, :dword, :word
 qglZNew       proto   far :dword, :word
-qglZSet       proto   far :dword
-qglZClear     proto   far :word
-qglZMode      proto   far :word
+qglZClear     proto   far :dword, :word
 qglZScale     proto   far :dword
 
 SFW             equ     64
@@ -65,7 +60,7 @@ poly            QVert   <12.0, 6.0,  1.00, 0.0, 0.0>
                 QVert   <44.0, 55.0, 0.55, 1.0, 1.0>
                 QVert   <9.0,  41.0, 0.90, 0.0, 1.0>
 
-zs              real4   6553600.0
+zs              real4   100.0
 
 sa              dd      0
 sb              dd      0
@@ -121,21 +116,18 @@ cmpsf           endp
 
 
 ;; draw once each way and diff. ?nm names the assertion.
-BOTH            macro   ?nm, ?md, ?zm
-                invoke  qglRsMode, ?md
-                invoke  qglZMode, ?zm
-
+;; ?sr is the src slot: the texture in a textured mode, the flat colour
+;; otherwise. One argument, read as whichever the mode says.
+BOTH            macro   ?nm, ?md, ?zm, ?sr
                 invoke  qglRsRef, 0                   ;; the patched fillers
                 invoke  qglDrFill, sa, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglZSet, za
-                invoke  qglZClear, 50
-                invoke  qglRsPoly, sa, pp, 4
+                invoke  qglZClear, za, 50
+                invoke  qglRsPoly, sa, pp, 4, ?md, ?sr, za, ?zm
 
                 invoke  qglRsRef, 1                   ;; the reference
                 invoke  qglDrFill, sb, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglZSet, zbb
-                invoke  qglZClear, 50
-                invoke  qglRsPoly, sb, pp, 4
+                invoke  qglZClear, zbb, 50
+                invoke  qglRsPoly, sb, pp, 4, ?md, ?sr, zbb, ?zm
 
 
                 invoke  cmpsf, sa, sb, SFW, SFH
@@ -182,8 +174,6 @@ tmain           proc    far public uses bx cx dx si di es
                 sub     ax, bx
                 CHK     n_notflat, ax, 1
 
-                invoke  qglRsTex, tx
-                invoke  qglRsFlat, 37
                 invoke  qglClRect, 0, 0, SFW-1, SFH-1
 
                 ;; a depth buffer each, so the two runs cannot see each
@@ -192,7 +182,6 @@ tmain           proc    far public uses bx cx dx si di es
                 SAVEP   za
                 invoke  qglZNew, sa, SURF_CMEM
                 SAVEP   zbb
-                invoke  qglZSet, za
                 invoke  qglZScale, dword ptr zs
 
 
@@ -200,15 +189,15 @@ tmain           proc    far public uses bx cx dx si di es
                 ;; others leave sa and sb alone?
 
 
-                BOTH    n_wo, QGL_M_WIRE, QGL_Z_OFF
-                BOTH    n_ww, QGL_M_WIRE, QGL_Z_SET
-                BOTH    n_wt, QGL_M_WIRE, QGL_Z_TEST
-                BOTH    n_fo, QGL_M_FLAT, QGL_Z_OFF
-                BOTH    n_fw, QGL_M_FLAT, QGL_Z_SET
-                BOTH    n_ft, QGL_M_FLAT, QGL_Z_TEST
-                BOTH    n_to, QGL_M_TEX,  QGL_Z_OFF
-                BOTH    n_tw, QGL_M_TEX,  QGL_Z_SET
-                BOTH    n_tt, QGL_M_TEX,  QGL_Z_TEST
+                BOTH    n_wo, QGL_M_WIRE, QGL_Z_OFF,  37
+                BOTH    n_ww, QGL_M_WIRE, QGL_Z_SET,  37
+                BOTH    n_wt, QGL_M_WIRE, QGL_Z_TEST, 37
+                BOTH    n_fo, QGL_M_FLAT, QGL_Z_OFF,  37
+                BOTH    n_fw, QGL_M_FLAT, QGL_Z_SET,  37
+                BOTH    n_ft, QGL_M_FLAT, QGL_Z_TEST, 37
+                BOTH    n_to, QGL_M_TEX,  QGL_Z_OFF,  tx
+                BOTH    n_tw, QGL_M_TEX,  QGL_Z_SET,  tx
+                BOTH    n_tt, QGL_M_TEX,  QGL_Z_TEST, tx
 
                 ;; the last pair also has to agree on what they WROTE to
                 ;; depth, not only on the picture that came out

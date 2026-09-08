@@ -14,11 +14,8 @@
 
 qglDrFill     proto   far :dword, :word, :word, :word, :word, :word
 qglClRect     proto   far :word, :word, :word, :word
-qglRsTex      proto   far :dword
-qglRsFlat     proto   far :word
-qglRsMode     proto   far :word
 qglRsRef      proto   far :word
-qglRsPoly     proto   far :dword, :dword, :word
+qglRsPoly     proto   far :dword, :dword, :word, :word, :dword, :dword, :word
 
 SFW             equ     64
 SFH             equ     64
@@ -109,11 +106,8 @@ tmain           proc    far public uses bx cx dx si di es
                 mov     word ptr pp+2, ds
 
                 invoke  qglDrFill, tx, 0, 0, 7, 7, 99
-                invoke  qglRsTex, tx
-                invoke  qglRsFlat, 37
                 invoke  qglClRect, 0, 0, SFW-1, SFH-1
                 invoke  qglRsRef, 0
-                invoke  qglRsMode, QGL_M_TEX
 
 
                 invoke  cntne, tx, 8, 8, 99
@@ -121,14 +115,14 @@ tmain           proc    far public uses bx cx dx si di es
 
                 ;; the SECOND-allocated surface, drawn FIRST
                 invoke  qglDrFill, sf2, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, sf2, pp, 4
+                invoke  qglRsPoly, sf2, pp, 4, QGL_M_TEX, tx, 0, QGL_Z_OFF
                 mov     lines1, ax
                 invoke  chksum, sf2, SFW, SFH
                 mov     sum1, ax
 
                 ;; again, same surface
                 invoke  qglDrFill, sf2, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, sf2, pp, 4
+                invoke  qglRsPoly, sf2, pp, 4, QGL_M_TEX, tx, 0, QGL_Z_OFF
                 mov     bx, lines1
                 CHK     n_l2, ax, bx
                 invoke  chksum, sf2, SFW, SFH
@@ -137,7 +131,7 @@ tmain           proc    far public uses bx cx dx si di es
 
                 ;; the FIRST-allocated surface, drawn LAST
                 invoke  qglDrFill, sf, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, sf, pp, 4
+                invoke  qglRsPoly, sf, pp, 4, QGL_M_TEX, tx, 0, QGL_Z_OFF
                 mov     bx, lines1
                 CHK     n_l3, ax, bx
                 invoke  chksum, sf, SFW, SFH

@@ -16,7 +16,7 @@
 ;;
 ;; Numbers are t09rs's and derived the same way: a square from (8,8) to
 ;; (40,40) covers rows 8..39, 32 by 32 pixels, at a constant 1/z of 1.0
-;; which the 6553600.0 scale puts at 100. 200 in the buffer is nearer
+;; which the 100.0 scale puts at 100. 200 in the buffer is nearer
 ;; and must block everything; 50 is farther and must block nothing.
 
                 .model  medium, pascal
@@ -27,14 +27,9 @@
 
 qglDrFill     proto   far :dword, :word, :word, :word, :word, :word
 qglClRect     proto   far :word, :word, :word, :word
-qglRsTex      proto   far :dword
-qglRsFlat     proto   far :word
-qglRsMode     proto   far :word
-qglRsPoly     proto   far :dword, :dword, :word
+qglRsPoly     proto   far :dword, :dword, :word, :word, :dword, :dword, :word
 qglZNew       proto   far :dword, :word
-qglZSet       proto   far :dword
-qglZClear     proto   far :word
-qglZMode      proto   far :word
+qglZClear     proto   far :dword, :word
 qglZScale     proto   far :dword
 
 SFW             equ     64
@@ -56,7 +51,7 @@ sq              QVert   <8.0,  8.0,  1.0, 0.0, 0.0>
                 QVert   <40.0, 40.0, 1.0, 1.0, 1.0>
                 QVert   <8.0,  40.0, 1.0, 0.0, 1.0>
 
-zs              real4   6553600.0
+zs              real4   100.0
 
 dst             dd      0
 zb              dd      0
@@ -118,19 +113,14 @@ tmain           proc    far public uses bx cx dx si di es
                 NZ      ax
                 CHK     n_zb, ax, 1
 
-                invoke  qglZSet, zb
                 invoke  qglZScale, dword ptr zs
 
                 ;;
                 ;; 1. flat over EMS depth: the write, then both compares
                 ;;
-                invoke  qglRsMode, QGL_M_FLAT
-                invoke  qglRsFlat, COL
-
-                invoke  qglZClear, 0
-                invoke  qglZMode, QGL_Z_SET
+                invoke  qglZClear, zb, 0
                 invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, dst, sqp, 4
+                invoke  qglRsPoly, dst, sqp, 4, QGL_M_FLAT, COL, zb, QGL_Z_SET
 
                 invoke  qglSfRow, zb, 24
                 mov     di, ax
@@ -138,16 +128,15 @@ tmain           proc    far public uses bx cx dx si di es
                 mov     ax, es:[di+48]          ;; x = 24, two bytes a pixel
                 CHK     n_zset, ax, 100
 
-                invoke  qglZClear, 200
-                invoke  qglZMode, QGL_Z_TEST
+                invoke  qglZClear, zb, 200
                 invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, dst, sqp, 4
+                invoke  qglRsPoly, dst, sqp, 4, QGL_M_FLAT, COL, zb, QGL_Z_TEST
                 invoke  scan, COL
                 CHK     n_znear, ax, 0
 
-                invoke  qglZClear, 50
+                invoke  qglZClear, zb, 50
                 invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, dst, sqp, 4
+                invoke  qglRsPoly, dst, sqp, 4, QGL_M_FLAT, COL, zb, QGL_Z_TEST
                 invoke  scan, COL
                 CHK     n_zfar, ax, 32*32
 
@@ -158,16 +147,16 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;    the texture's segment -- which is the exact thing
                 ;;    a conventional-memory depth buffer cannot exercise.
                 ;;
-                invoke  qglZMode, QGL_Z_OFF
                 invoke  qglDrFill, tx, 0, 0, 7, 7, TEXCOL
-                invoke  qglRsTex, tx
-                CHK     n_tex, ax, 1
 
-                invoke  qglRsMode, QGL_M_TEX
-                invoke  qglZClear, 50
-                invoke  qglZMode, QGL_Z_SET
+                invoke  qglZClear, zb, 50
                 invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, dst, sqp, 4
+                invoke  qglRsPoly, dst, sqp, 4, QGL_M_TEX, tx, zb, QGL_Z_SET
+                ;; an accepted EMS texture answers with scanlines, never
+                ;; the -1 a refusal returns
+                NNEG    ax
+                CHK     n_tex, ax, 1
+                invoke  qglRsPoly, dst, sqp, 4, QGL_M_TEX, tx, zb, QGL_Z_SET
                 invoke  scan, TEXCOL
                 CHK     n_both, ax, 32*32
 

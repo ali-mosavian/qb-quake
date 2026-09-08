@@ -140,10 +140,9 @@ declare function dbg_qgl_drop ( ) as integer
 declare function dbg_lm_fall ( ) as integer
 declare function dbg_keys ( byval which as integer ) as long
 '' The whole face loop, in C, once per frame -- see d_faces.c.
-declare function qglZMode ( byval m as integer ) as integer
 '' `z`, not `val`: VAL is a BASIC intrinsic and BC rejects it as a
 '' formal parameter name.
-declare sub qglZClear ( byval z as integer )
+declare sub qglZClear ( byval s as long, byval z as integer )
 
 declare sub d_draw_faces ( _
     g as Game, _
@@ -334,8 +333,6 @@ sub host_render ( _
 )
     dim mtx_mdl as u3dMtrx
     dim mdl_i as integer
-    dim zz as long                  '' soaks up uglZMode's return;
-                                    '' the call is the point
     dim mtx_fin as u3dMtrx
     dim cam_pos_b as u3dVector3f
     dim bm as integer
@@ -399,7 +396,7 @@ sub host_render ( _
     '' nearer, so zero is infinitely distant and the first surface to
     '' cover a pixel always wins.
     ''
-    if ( z_dc <> 0 ) then qglZClear 0
+    if ( z_dc <> 0 ) then qglZClear z_dc, 0
 
     '' -nodraw stops HERE: the walk above has run and filled order_list,
     '' so everything the node paging touches has happened. What is skipped
@@ -488,9 +485,9 @@ sub host_render ( _
         next mdl_i
     end if
 
-    '' leave depth off for the overlay, which is 2D and would otherwise
-    '' test itself against the scene it is drawn on top of
-    if ( z_dc <> 0 ) then zz = qglZMode%( QGL_Z_OFF )
+    '' Nothing turns depth off for the overlay: the overlay draws
+    '' through the 2D calls, which never touch depth, and every 3D draw
+    '' names its own depth mode. There is no installed mode to restore.
 
     pt0 = sys_now()
     scr_draw_hud g, h_dst_dc

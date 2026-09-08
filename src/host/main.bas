@@ -126,7 +126,6 @@ declare function qglFaceAll () as integer
 declare function qglArrAll () as integer
 declare function qglSfInit () as integer
 declare function qglZNew ( byval dst as long, byval kind as integer ) as long
-declare function qglZSet ( byval s as long ) as integer
 '' `as single`, not `as long`: the fillers read this with `fmul D
 '' qgl$zscale`, so what crosses is the float's bit pattern, not its
 '' value. mgl's uglZScale took an integer and a `as long` here would
@@ -184,7 +183,7 @@ declare sub host_main ( _
 '' This module's own procedures.
 ''
 declare sub host_shutdown ( )
-declare function host_z_on ( ) as integer
+declare function host_z_dc ( ) as long
 
 ''
 '' Declared here, not in a header: this module is the only caller, and a
@@ -932,7 +931,6 @@ sub host_main ( _
         if ( z_dc = 0 ) then sys_error "0x0019, no qgl depth buffer"
     end if
     if ( z_dc <> 0 ) then
-        zz = qglZSet%( z_dc )
         zz = qglZScale&( 65535.0 * g.env.z_near )
     end if
     
@@ -1285,11 +1283,12 @@ end sub
 
 
 ''::::::::::
-'' name: host_z_on
-'' desc: Whether a depth buffer exists. main.bas creates it, so it answers
-''       for it; d_poly hoists this once a frame rather than testing a
-''       shared handle per face.
+'' name: host_z_dc
+'' desc: The depth buffer, or 0 if there is none. main.bas creates it, so
+''       it answers for it; every draw hands it to qglRsPoly, which has no
+''       installed buffer of its own to fall back on. d_poly hoists this
+''       once a frame rather than calling per face.
 ''::::::::::
-function host_z_on ( ) as integer
-    host_z_on = ( z_dc <> 0 )
+function host_z_dc ( ) as long
+    host_z_dc = z_dc
 end function

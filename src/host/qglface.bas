@@ -15,7 +15,7 @@ option explicit
 '' cannot be both 0 and 255.
 ''
 '' The oracle fetches the expected byte from the real texture, through
-'' the same view qglRsTex samples, and scales u,v by that VIEW's size --
+'' the same view qglRsPoly samples, and scales u,v by that VIEW's size --
 '' which is what the rasteriser scales by too. Getting that from the
 '' parent atlas instead is a 128x error waiting to look like a
 '' rasteriser bug.
@@ -43,7 +43,6 @@ end type
 declare function qglFaceCnt () as integer
 declare function qglFaceTex () as long
 declare function qglFaceOfs () as long
-declare function qglZMode ( byval mode as integer ) as integer
 declare function qglSfViewAim ( _
     byval s as long, _
     byval ofs as long _
@@ -60,9 +59,13 @@ declare sub qglDrFill ( byval d as long, byval x0 as integer, _
                           byval y1 as integer, byval col as integer )
 declare sub qglClRect ( byval x0 as integer, byval y0 as integer, _
                           byval x1 as integer, byval y1 as integer )
-declare function qglRsTex ( byval s as long ) as integer
-declare sub qglRsMode ( byval m as integer )
-declare sub qglRsPoly ( byval d as long, seg v as any, byval cnt as integer )
+declare function qglRsPoly ( byval d as long, _
+                             seg v as any, _
+                             byval cnt as integer, _
+                             byval mode as integer, _
+                             byval src as long, _
+                             byval zsf as long, _
+                             byval zmode as integer ) as integer
 declare function qglSfSize ( byval s as long, byval sel as integer ) as integer
 
 declare function qf_plane ( byval f0 as single, byval f1 as single, _
@@ -269,7 +272,7 @@ function qglFaceAll () as integer
 
     qglFaceFetch v(0)
 
-    '' The VIEW's size, which is what qglRsTex scales u and v by -- not
+    '' The VIEW's size, which is what qglRsPoly scales u and v by -- not
     '' the parent atlas's. The wrap below is an AND, so refuse anything
     '' that is not a power of two.
     tw = qglSfSize( dc, 0 )
@@ -302,25 +305,21 @@ function qglFaceAll () as integer
         qglFaceAll = 1
         exit function
     end if
-    if ( qglRsTex( dc ) = 0 ) then
-        print #lg, "   FAIL qglRsTex refused"
-        print #lg, "RESULT FAIL"
-        close #lg
-        qglFaceAll = 1
-        exit function
-    end if
     qglClRect 0, 0, FW - 1, FH - 1
-    '' Depth OFF, explicitly. d_faces leaves the mode wherever its last
-    '' face set it, and a Z_TEST against the frame's own filled depth
-    '' buffer rejects every pixel of the replay: capturing on frame 40
-    '' drew 0 pixels where the oracle covered 892.
-    zm = qglZMode%( QGL_Z_OFF )
-    qglRsMode QGL_M_PTEX
 
     for i = 0 to 1
         if ( i = 0 ) then a = 0 else a = 255
         qglDrFill d0, 0, 0, FW - 1, FH - 1, a
-        qglRsPoly d0, v(0), n
+        '' Depth OFF, and a refusal is a failure: the texture is
+        '' validated inside the draw now, so a bad one shows up here.
+        zm = qglRsPoly%( d0, v(0), n, QGL_M_PTEX, dc, 0, QGL_Z_OFF )
+        if ( zm < 0 ) then
+            print #lg, "   FAIL qglRsPoly refused the texture"
+            print #lg, "RESULT FAIL"
+            close #lg
+            qglFaceAll = 1
+            exit function
+        end if
         for y = 0 to FH - 1
             for x = 0 to FW - 1
                 w = qglSfPget( d0, x, y )

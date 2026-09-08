@@ -1,7 +1,6 @@
 ;; z.asm -- the depth buffer, and the state the fillers read.
 ;;
-;; name: qglZNew / qglZSet / qglZFree / qglZClear / qglZMode /
-;;       qglZScale
+;; name: qglZNew / qglZFree / qglZClear / qglZScale
 ;; desc: Depth is 1/z in 16.16 and only the integer half is stored, so
 ;;       LARGER IS NEARER and a cleared buffer is 0 = infinitely far.
 ;;       That is mgl's convention and the renderer's scale factor already
@@ -24,6 +23,10 @@
 ;;       - the per-scanline and per-polygon slots (zline, zacc, zdzdx)
 ;;         live here rather than in rs.asm because the FILLERS read them
 ;;         and the fillers are patched from two places. One owner.
+;;       - which buffer and which mode are NOT here: they are arguments
+;;         to qglRsPoly and scratch in rs.asm, so a draw cannot inherit
+;;         a depth setting some earlier call left behind. There is no
+;;         installed buffer, so nothing here has an install side effect.
 
                 .model  medium, pascal
                 .386
@@ -36,14 +39,10 @@ qglSfWrRow   proto   far pascal :dword, :word
 
 
 .data
-                ;; the installed buffer, and what the fillers need of it
-                public  qgl$zsf, qgl$zmode, qgl$zscale
-                public  qgl$zline, qgl$zacc, qgl$zdzdx, qgl$zseg, qgl$zw
+                ;; what the fillers need, and the projection's scale
+                public  qgl$zscale
+                public  qgl$zline, qgl$zacc, qgl$zdzdx, qgl$zseg
 
-qgl$zsf         dd      0               ;; far ptr Surface, 0 = no depth
-qgl$zw          dw      0               ;; pixels; the row is twice this
-qgl$zh          dw      0
-qgl$zmode       dw      QGL_Z_OFF
 qgl$zscale      dd      0               ;; 1/z -> 16.16, set by the caller
 
                 ;; per scanline, written by the scanner
@@ -79,8 +78,8 @@ qgl$Pow2        endp
 ;;::::::::::::::
 ;; qglZNew ( dst:far ptr Surface, kind:word ) -> dx:ax
 ;;
-;; A depth buffer shaped to a destination. Does NOT install it: that is
-;; qglZSet, so a caller may hold more than one and switch.
+;; A depth buffer shaped to a destination. Nothing installs it: a caller
+;; may hold as many as it likes and hands the one it wants to qglRsPoly.
 ;;::::::::::::::
 qglZNew       proc    public uses bx cx si di es,\
                         dst:dword, kind:word
@@ -129,9 +128,17 @@ qglZNew       endp
 
 
 ;;::::::::::::::
-;; qglZSet ( s:far ptr Surface ) -> ax nonzero if it took
-;;
-;; Installs, or uninstalls when handed 0:0.
+;; qglZFree ( s:far ptr Surface )
+;;::::::::::::::
+qglZFree      proc    public uses ax,\
+                        s:dword
+                invoke  qglSfFree, s
+                ret
+qglZFree      endp
+
+
+;;::::::::::::::
+;; How the scratch above is reached, and why not the obvious way.
 ;;
 ;; THE FILLERS REACH THIS STATE THROUGH fs, NOT ss, and that is a
 ;; deliberate divergence from mgl. mgl reads ss:ul$zacc because ds is the
@@ -146,57 +153,10 @@ qglZNew       endp
 ;; with DGROUP once per polygon and the prefix costs the same one byte
 ;; ss: would have. No assumption, no check, no per-pixel cost.
 ;;::::::::::::::
-qglZSet       proc    public uses bx es,\
-                        s:dword
-
-                mov     ax, word ptr s
-                mov     word ptr qgl$zsf, ax
-                mov     ax, word ptr s+2
-                mov     word ptr qgl$zsf+2, ax
-
-                les     bx, s
-                mov     ax, es
-                or      ax, bx
-                jz      @@none
-
-                mov     ax, es:[bx].Surface.xRes
-                mov     qgl$zw, ax
-                mov     ax, es:[bx].Surface.yRes
-                mov     qgl$zh, ax
-                mov     ax, 1
-                ret
-
-@@none:         mov     qgl$zw, 0
-                mov     qgl$zh, 0
-                mov     qgl$zmode, QGL_Z_OFF    ;; no buffer, no mode
-                mov     ax, 1                   ;; uninstalling always works
-                ret
-qglZSet       endp
 
 
 ;;::::::::::::::
-;; qglZFree ( s:far ptr Surface )
-;;
-;; Uninstalls it first if it is the installed one, so a freed buffer can
-;; never be the one the next polygon writes through.
-;;::::::::::::::
-qglZFree      proc    public uses ax,\
-                        s:dword
-
-                mov     ax, word ptr s
-                cmp     ax, word ptr qgl$zsf
-                jne     @F
-                mov     ax, word ptr s+2
-                cmp     ax, word ptr qgl$zsf+2
-                jne     @F
-                invoke  qglZSet, 0
-@@:             invoke  qglSfFree, s
-                ret
-qglZFree      endp
-
-
-;;::::::::::::::
-;; qglZClear ( val:word )
+;; qglZClear ( s:far ptr Surface, val:word )
 ;;
 ;; A WORD fill: a byte fill would be right only for 0, and the one value
 ;; that matters after 0 is 0FFFFh -- clear to "nearest" and the next
@@ -204,20 +164,27 @@ qglZFree      endp
 ;; testing rather than passing everything.
 ;;::::::::::::::
 qglZClear     proc    public uses ax bx cx dx si di es,\
-                        val:word
+                        s:dword, val:word
 
-                mov     ax, word ptr qgl$zsf
-                or      ax, word ptr qgl$zsf+2
+                local   wide:word, rows:word
+
+                les     bx, s
+                mov     ax, es
+                or      ax, bx
                 jz      @@out
+                mov     ax, es:[bx].Surface.xRes
+                mov     wide, ax
+                mov     ax, es:[bx].Surface.yRes
+                mov     rows, ax
 
                 cld
                 xor     si, si                  ;; row
-@@row:          cmp     si, qgl$zh
+@@row:          cmp     si, rows
                 jae     @@out
-                invoke  qglSfWrRow, qgl$zsf, si
+                invoke  qglSfWrRow, s, si
                 mov     di, ax
                 mov     es, dx
-                mov     cx, qgl$zw
+                mov     cx, wide
                 mov     ax, val
                 rep     stosw
                 inc     si
@@ -225,33 +192,6 @@ qglZClear     proc    public uses ax bx cx dx si di es,\
 
 @@out:          ret
 qglZClear     endp
-
-
-;;::::::::::::::
-;; qglZMode ( m:word ) -> ax = the mode that was in force
-;;
-;; Returns the previous one so a caller can restore it, which is what
-;; d_faces.c's z_want/z_have pair already does with uglZMode. Asking for
-;; a mode with no buffer installed gets QGL_Z_OFF, not a fault.
-;;::::::::::::::
-qglZMode      proc    public uses bx,\
-                        m:word
-
-                mov     ax, qgl$zmode           ;; the answer, whatever happens
-
-                mov     bx, word ptr qgl$zsf
-                or      bx, word ptr qgl$zsf+2
-                jz      @@off
-
-                mov     bx, m
-                cmp     bx, QGL_Z_TEST
-                ja      @@out                   ;; nonsense leaves it alone
-                mov     qgl$zmode, bx
-                ret
-
-@@off:          mov     qgl$zmode, QGL_Z_OFF
-@@out:          ret
-qglZMode      endp
 
 
 ;;::::::::::::::

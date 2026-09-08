@@ -22,12 +22,12 @@ const QGL_SURF_EMS  = 2
 const QGL_TEX_SLOT = 0
 const QGL_Z_SLOT   = 1
 
-'' Depth mode, for qglZMode.
+'' Depth mode, for qglRsPoly.
 const QGL_Z_OFF  = 0
 const QGL_Z_SET  = 1
 const QGL_Z_TEST = 2
 
-'' Drawing mode, for qglRsMode.
+'' Drawing mode, for qglRsPoly.
 const QGL_M_WIRE = 0
 const QGL_M_FLAT = 1
 const QGL_M_TEX  = 2

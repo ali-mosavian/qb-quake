@@ -56,9 +56,13 @@ declare sub qglSfPset ( byval s as long, byval x as integer, _
 declare sub qglSfFree ( byval s as long )
 declare sub qglClRect ( byval x0 as integer, byval y0 as integer, _
                           byval x1 as integer, byval y1 as integer )
-declare sub qglRsTex ( byval s as long )
-declare sub qglRsMode ( byval m as integer )
-declare sub qglRsPoly ( byval d as long, seg v as any, byval cnt as integer )
+declare sub qglRsPoly ( byval d as long, _
+                        seg v as any, _
+                        byval cnt as integer, _
+                        byval mode as integer, _
+                        byval src as long, _
+                        byval zsf as long, _
+                        byval zmode as integer )
 declare sub qglDrFill ( byval d as long, byval x0 as integer, _
                           byval y0 as integer, byval x1 as integer, _
                           byval y1 as integer, byval col as integer )
@@ -407,9 +411,7 @@ function qgl_diff_case ( byval mode as integer, byval mdst as long, _
 
     qglDrFill qdst, 0, 0, DIFF_W - 1, DIFF_H - 1, 0
     qglClRect 0, 0, DIFF_W - 1, DIFF_H - 1
-    qglRsTex qtex
-    qglRsMode mode
-    qglRsPoly qdst, v(0), 3
+    qglRsPoly qdst, v(0), 3, mode, qtex, 0, QGL_Z_OFF
 
     mn = qgl_diff_mgl_drew( mdst )
     qn = qgl_diff_qgl_drew( qdst )

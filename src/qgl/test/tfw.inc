@@ -41,3 +41,9 @@ NZ              macro   r                       ;; ax = (r != 0)
                 mov     ax, 0
                 setne   al
                 endm
+
+NNEG            macro   r                       ;; ax = (r >= 0), signed
+                cmp     r, 0
+                mov     ax, 0
+                setge   al
+                endm

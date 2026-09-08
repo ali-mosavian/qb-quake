@@ -31,9 +31,8 @@
                 include tfw.inc
 
 qglDrFill     proto   far :dword, :word, :word, :word, :word, :word
-qglRsTex      proto   far :dword
-qglRsMode     proto   far :word
 qglSfWrRow   proto   far :dword, :word
+qglSfRdRow   proto   far :dword, :word
 
                 externdef qgl$dudx:dword
                 externdef qgl$dvdx:dword
@@ -418,8 +417,18 @@ tmain           proc    far public uses bx cx dx si di es
 @@:             inc     si
                 jmp     @@ty
 @@tdone:
-                invoke  qglRsTex, tex
-                invoke  qglRsMode, QGL_M_TEX
+                ;; The filler's per-texture state, set here rather than
+                ;; through a draw call: this test calls the FILLERS, not
+                ;; qglRsPoly, so it has to say what qglRsPoly would have
+                ;; derived. 64 wide is a shift of 6 and a mask of 63; the
+                ;; v mask is (height-1) shifted by the same 6.
+                mov     qgl$mode, QGL_M_TEX
+                mov     qgl$tshift, 6
+                mov     qgl$tumsk, TEXW-1
+                mov     qgl$tvmsk, (TEXH-1) shl 6
+                invoke  qglSfRdRow, tex, 0
+                mov     qgl$tofs, ax
+                mov     qgl$tseg, dx
                 mov     qgl$zmode, QGL_Z_OFF
                 mov     D qgl$dudx, DUDX
                 mov     D qgl$dvdx, DVDX

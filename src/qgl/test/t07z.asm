@@ -32,10 +32,8 @@
                 include tfw.inc
 
 qglZNew       proto   far :dword, :word
-qglZSet       proto   far :dword
 qglZFree      proto   far :dword
-qglZClear     proto   far :word
-qglZMode      proto   far :word
+qglZClear     proto   far :dword, :word
 qglZScale     proto   far :dword
 
 DST_W           equ     160
@@ -46,11 +44,6 @@ n_new           db      'depth buffer made      $'
 n_wide          db      'x_res is pixels        $'
 n_stride        db      'stride is twice that   $'
 n_high          db      'as tall as its target  $'
-n_set           db      'installs               $'
-n_mode0         db      'mode starts off        $'
-n_mode1         db      'mode reads back        $'
-n_odd           db      'refuses a mode it has n$'
-n_nobuf         db      'no buffer forces off   $'
 n_clear         db      'clear fills WORDS      $'
 n_scale         db      'scale returns the old  $'
 n_emspad        db      'ems stride padded to 2^$'
@@ -110,47 +103,25 @@ tmain           proc    far public uses bx cx dx si di es
                 CHK     n_high,   es:[bx].Surface.yRes,  DST_H
 
                 ;;
-                ;; 2. install, and the mode it starts in
+                ;; 2. the clear writes words, not bytes
                 ;;
-                invoke  qglZSet, zb
-                CHK     n_set, ax, 1
-
-                invoke  qglZMode, QGL_Z_TEST  ;; returns the PREVIOUS
-                CHK     n_mode0, ax, QGL_Z_OFF
-
-                invoke  qglZMode, QGL_Z_SET
-                CHK     n_mode1, ax, QGL_Z_TEST
-
-                ;; a value past the last mode must be ignored, and the
-                ;; mode in force must survive it
-                invoke  qglZMode, QGL_Z_TEST+1
-                invoke  qglZMode, QGL_Z_OFF
-                CHK     n_odd, ax, QGL_Z_SET
-
-                ;;
-                ;; 3. the clear writes words, not bytes
-                ;;
-                invoke  qglZClear, 0BEEFh
+                invoke  qglZClear, zb, 0BEEFh
                 invoke  z_const, zb, DST_W, DST_H, 0BEEFh
                 CHK     n_clear, ax, 0
 
                 ;;
-                ;; 4. the scale hands back what it replaced
+                ;; 3. the scale hands back what it replaced
                 ;;
                 invoke  qglZScale, 12345678h
                 invoke  qglZScale, 0
                 CHK     n_scale, ax, 5678h
 
+                ;; A null buffer and an out-of-range mode are qglRsPoly's
+                ;; to refuse now, not this module's -- there is nothing
+                ;; installed to refuse them against. Both are tested where
+                ;; they are decided, in t09rs.
                 ;;
-                ;; 5. with nothing installed, no mode can be set
-                ;;
-                invoke  qglZSet, 0
-                invoke  qglZMode, QGL_Z_TEST
-                invoke  qglZMode, QGL_Z_TEST
-                CHK     n_nobuf, ax, QGL_Z_OFF
-
-                ;;
-                ;; 6. EMS: 320 bytes a row is not a power of two, so the
+                ;; 4. EMS: 320 bytes a row is not a power of two, so the
                 ;;    stride has to be padded or nothing is allocated
                 ;;
                 invoke  qglZNew, dst, SURF_EMS

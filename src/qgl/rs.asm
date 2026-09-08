@@ -1,12 +1,19 @@
 ;;
 ;; rs.asm -- the convex scanner. The pixels are b8/'s.
 ;;
-;; name: qglRsTex / qglRsFlat / qglRsMode / qglRsPoly
+;; name: qglRsPoly
 ;; desc: two edge chains walk down from the topmost vertex and hand one
 ;;       span per scanline to a filler. qglRsPoly is the front half --
 ;;       gradients, winding, clip, convert -- and it ends in one of TWO
 ;;       scanners, which is mgl's own split: uglPolyT ends in
 ;;       drawPoly_t2d and uglPolyTP in drawPoly_tp2d.
+;;
+;;       ONE ENTRY, AND IT TAKES EVERYTHING. There is no texture, mode,
+;;       colour or depth to install first. The texture in particular is
+;;       an EMS page that has to be mapped, and a mapping installed by
+;;       one call and read by another is a mapping some third call is
+;;       free to evict -- which is what qglRsTex did, and what the
+;;       renderer's wandering black streaks were.
 ;;
 ;;       This module knows about polygons and nothing about pixel
 ;;       formats; b8/ knows about one byte a pixel and nothing about
@@ -53,8 +60,6 @@ qgl$drawP       proto   near pascal :dword, :word, :word
 EMS_PAGE_SIZE   equ     4000h
 EMS_PAGE_MASK   equ     3FFFh
 
-                externdef qgl$zsf:dword
-                externdef qgl$zmode:word
                 externdef qgl$zscale:dword
                 externdef qgl$zline:word
                 externdef qgl$zacc:dword
@@ -193,6 +198,18 @@ qgl$l1sqr       real8   2.0
 qgl$r65536      real4   0.0000152587890625
 qgl$subdivf     real4   QGL_SUBDIVF
 
+;; Everything below is DERIVED, once per qglRsPoly, from that call's own
+;; arguments. No caller can set it or read it, and nothing carries from
+;; one call to the next -- a REFUSED call has still overwritten it, which
+;; is fine precisely because no later call reads what it left. It is here
+;; rather than on the stack because the fillers address it off fs and the
+;; scanner patches immediates out of it.
+;;
+;; qgl$tofs/qgl$tseg in particular is a MAPPED EMS pointer. Deriving it
+;; inside the call that reads it is the invariant this layer keeps: a
+;; mapping is live for one qgl call and never across one, so nothing a
+;; caller does between draws can pull the page out from under it.
+
 ;; per texture
 qgl$tshift      dw      0                       ;; log2 of the width
 qgl$tumsk       dw      0                       ;; width-1
@@ -207,6 +224,8 @@ qgl$dudx        dd      0                       ;; 16.16 texels per pixel
 qgl$dvdx        dd      0
 qgl$fcol        dw      0
 qgl$mode        dw      QGL_M_TEX
+qgl$zsf         dd      0                       ;; far ptr Surface, 0 = none
+qgl$zmode       dw      QGL_Z_OFF
 
 ;; The same three gradients the perspective filler needs, and they are
 ;; not the same numbers. It steps u/z, v/z and 1/z -- all three linear in
@@ -224,7 +243,7 @@ qgl$fdzdx       real4   0.0                     ;; only qgl$drawP reads them
                 public  qgl$dudx, qgl$dvdx, qgl$fcol, qgl$mode
                 public  qgl$fdudxn, qgl$fdvdxn, qgl$fdzdxn
                 public  qgl$tshift, qgl$tumsk, qgl$tvmsk, qgl$tofs
-                public  qgl$tseg
+                public  qgl$tseg, qgl$zmode
 
 
 
@@ -418,7 +437,11 @@ qgl$Grad        endp
 
 
 ;;::::::::::::::
-;; qglRsTex ( t:far ptr Surface ) -> ax nonzero if it took
+;; qgl$SetTex ( t:far ptr Surface ) -> ax nonzero if it took
+;;
+;; INTERNAL, and called from inside qglRsPoly rather than by the caller.
+;; It ends by MAPPING row 0, and that pointer is what the fillers read;
+;; running it here is what keeps the mapping inside one qgl call.
 ;;
 ;; Refuses anything whose sides are not powers of two, because the filler
 ;; wraps with an AND, and anything past one 16K page, because the texel
@@ -435,7 +458,7 @@ qgl$Grad        endp
 ;; sb.asm's header), which is exactly why it needs its own check here:
 ;; the guarantee lives in callers this proc cannot see.
 ;;::::::::::::::
-qglRsTex      proc    public uses bx cx dx si di es,\
+qgl$SetTex      proc    near private uses bx cx dx si di es,\
                         t:dword
 
                 les     bx, t
@@ -507,7 +530,9 @@ qglRsTex      proc    public uses bx cx dx si di es,\
                 mov     qgl$thwhole, eax
 
                 ;; row 0's pointer IS the base: the whole texture is one
-                ;; page, so an EMS one maps here and stays mapped
+                ;; page, so an EMS one maps here and the polygon this call
+                ;; belongs to reads through it before anything else can
+                ;; take the slot back
                 invoke  qglSfRdRow, t, 0
                 mov     qgl$tofs, ax
                 mov     qgl$tseg, dx
@@ -517,29 +542,7 @@ qglRsTex      proc    public uses bx cx dx si di es,\
 
 @@no:           xor     ax, ax
                 ret
-qglRsTex      endp
-
-
-;;:::::::::::::: qglRsFlat ( col:word )
-qglRsFlat     proc    public uses ax,\
-                        col:word
-                mov     ax, col
-                mov     qgl$fcol, ax
-                ret
-qglRsFlat     endp
-
-
-;;:::::::::::::: qglRsMode ( m:word ) -> ax= the mode that was in force
-qglRsMode     proc    public uses bx,\
-                        m:word
-
-                mov     ax, qgl$mode
-                mov     bx, m
-                cmp     bx, QGL_M_PTEX
-                ja      @F
-                mov     qgl$mode, bx
-@@:             ret
-qglRsMode     endp
+qgl$SetTex      endp
 
 
 
@@ -580,17 +583,41 @@ qgl$Rev         endp
 
 
 ;;::::::::::::::
-;; qglRsPoly ( d:far ptr Surface, v:far ptr QVert, n:word ) -> ax
+;; qglRsPoly ( d:far ptr Surface, v:far ptr QVert, n:word,
+;;             mode:word, src:dword, zsf:far ptr Surface, zmode:word ) -> ax
 ;;
-;; Draws one convex polygon and returns the scanlines it covered. The
-;; vertices arrive in ring order, in EITHER winding, and vtx[0] need not
-;; be the topmost -- mgl's uglPolyTP contract, and this is a transcription
-;; of it: search the widest triple, take the gradients off the UNCLIPPED
-;; polygon, cull on the denominator's magnitude, take the winding off its
-;; sign, and only then clip.
+;; Draws one convex polygon and returns the scanlines it covered, 0 if it
+;; covered none, and -1 if the call was refused. The vertices arrive in
+;; ring order, in EITHER winding, and vtx[0] need not be the topmost --
+;; mgl's uglPolyTP contract, and this is a transcription of it: search the
+;; widest triple, take the gradients off the UNCLIPPED polygon, cull on
+;; the denominator's magnitude, take the winding off its sign, and only
+;; then clip.
+;;
+;; EVERY DRAW PARAMETER ARRIVES HERE. There is no qglRsTex, qglRsMode,
+;; qglRsFlat or qglZMode to call first, deliberately: a texture is an EMS
+;; page that has to be mapped, and a mapping installed by one call and
+;; read by another is a mapping some third call is free to evict. So the
+;; texture is validated and mapped inside this proc, used, and never
+;; spoken of again -- and mode and depth come with it rather than being
+;; left as two more things a caller has to have got right earlier.
+;;
+;; src is one slot read two ways -- a Surface pointer when the mode is
+;; textured, a colour when it is flat -- and that is qgl's, NOT mgl's.
+;; mgl ships uglPolyF (col, arg 4 of 4, integer vertices) and uglPolyTP
+;; (srcDC, arg 5 of 5, float vertices) as separate entries with different
+;; arities, and never overloads a slot. One entry is the point here, so
+;; the slot is overloaded instead -- with the cost that a Surface pointer
+;; handed in with QGL_M_FLAT paints with its offset as a colour index and
+;; nothing says so.
+;;
+;; -1 rather than 0 for a refusal because 0 is a legal answer -- a face
+;; clipped entirely away covers no scanlines and is not a fault. The
+;; renderer counts the two separately (d_faces.c's qgl_drop).
 ;;::::::::::::::
 qglRsPoly     proc    public uses bx cx dx si di ds es,\
-                        d:dword, v:dword, n:word
+                        d:dword, v:dword, n:word,\
+                        mode:word, src:dword, zsf:dword, zmode:word
 
                 local   cnt:word, fillp:word, persp:word
                 local   srcp:dword, ringp:dword
@@ -603,9 +630,58 @@ qglRsPoly     proc    public uses bx cx dx si di ds es,\
                 mov     ax, n
                 mov     cnt, ax
                 cmp     ax, 3
-                jb      @@done
+                jb      @@bad
                 cmp     ax, QGL_MAXV
-                ja      @@done
+                ja      @@bad
+
+                mov     ax, mode
+                cmp     ax, QGL_M_PTEX
+                ja      @@bad
+                mov     qgl$mode, ax
+
+                ;; depth: a mode without a buffer is no depth at all, and
+                ;; saying so here saves the fillers a null test per pixel
+                mov     ax, word ptr zsf
+                mov     word ptr qgl$zsf, ax
+                mov     dx, word ptr zsf+2
+                mov     word ptr qgl$zsf+2, dx
+                or      ax, dx
+                mov     ax, QGL_Z_OFF
+                jz      @F
+                mov     ax, zmode
+                cmp     ax, QGL_Z_TEST
+                jbe     @F
+                mov     ax, QGL_Z_OFF
+@@:             mov     qgl$zmode, ax
+
+                ;; the texture, or the flat colour: one argument slot, read
+                ;; as whichever the mode says. The map lands here and is
+                ;; read by the fillers below, inside this same call.
+                cmp     qgl$mode, QGL_M_TEX
+                jb      @@flatcol
+                invoke  qgl$SetTex, src
+                test    ax, ax
+                jz      @@bad
+                jmp     @@havesrc
+                ;; A FLAT POLYGON STILL HAS GRADIENTS. qgl$Grad scales u
+                ;; and v by the texture size whatever the mode is, and
+                ;; without these two the scale would be the LAST TEXTURED
+                ;; CALL'S -- cross-call state of exactly the kind this
+                ;; entry exists to remove, and one that can refuse the
+                ;; polygon outright: GRADCHK measures the scaled number
+                ;; against qgl$2gb and qgl$Grad answers CF, which reads as
+                ;; a face that covered no scanlines. 1 leaves u and v
+                ;; alone, which is what a mode that never samples wants.
+                ;;
+                ;; qgl$tseg is deliberately NOT set here. Every mode runs
+                ;; `mov ds, qgl$tseg` before calling the filler, and the
+                ;; flat and wire fillers read fs:qgl$fcol and never
+                ;; dereference ds. Do not give a flat filler a ds read.
+@@flatcol:      mov     ax, word ptr src
+                mov     qgl$fcol, ax
+                mov     D qgl$twhole, 1
+                mov     D qgl$thwhole, 1
+@@havesrc:
 
                 ;; whether this is the filler that wants the FPU triple,
                 ;; decided once rather than tested per scanline. The mode
@@ -860,6 +936,8 @@ qglRsPoly     proc    public uses bx cx dx si di ds es,\
 
 @@done:         xor     ax, ax
                 ret
+@@bad:          mov     ax, -1
+                ret
 qglRsPoly     endp
 
 ;;::::::::::::::
@@ -1106,8 +1184,21 @@ qgl$drawA       proc    near private,\
                 ;; a qword landing pad: depth runs to 65535 and the
                 ;; accumulator is 16.16, so the product passes what a
                 ;; SIGNED dword fistp can hold
+                ;;
+                ;; AND THE 65536 IS WHAT MAKES IT 16.16. qgl$zdzdx already
+                ;; carries one -- qgl$Grad's rdenom is 65536/denom -- so
+                ;; without it here the span STARTS 65536 times too small
+                ;; and steps at the right rate from there: every depth the
+                ;; filler stored was the integer half of a value that never
+                ;; reached one, i.e. 0, and QGL_Z_TEST compared 0 against 0
+                ;; on every pixel of the frame. Nothing was ever hidden and
+                ;; nothing was ever shown; which faces that spoiled moved
+                ;; with the draw order, so it read as wandering dark
+                ;; streaks. qgl$zscale stays what its callers document it
+                ;; to be: the depth at 1/z = 1.
                 fld     lf_z
                 fmul    D qgl$zscale
+                fmul    qgl$65536
                 fistp   qgl$ztmp
                 mov     eax, D qgl$ztmp
                 mov     qgl$zacc, eax
@@ -1418,8 +1509,21 @@ qgl$drawP       proc    near private,\
                 ;; a qword landing pad: depth runs to 65535 and the
                 ;; accumulator is 16.16, so the product passes what a
                 ;; SIGNED dword fistp can hold
+                ;;
+                ;; AND THE 65536 IS WHAT MAKES IT 16.16. qgl$zdzdx already
+                ;; carries one -- qgl$Grad's rdenom is 65536/denom -- so
+                ;; without it here the span STARTS 65536 times too small
+                ;; and steps at the right rate from there: every depth the
+                ;; filler stored was the integer half of a value that never
+                ;; reached one, i.e. 0, and QGL_Z_TEST compared 0 against 0
+                ;; on every pixel of the frame. Nothing was ever hidden and
+                ;; nothing was ever shown; which faces that spoiled moved
+                ;; with the draw order, so it read as wandering dark
+                ;; streaks. qgl$zscale stays what its callers document it
+                ;; to be: the depth at 1/z = 1.
                 fld     lf_z
                 fmul    D qgl$zscale
+                fmul    qgl$65536
                 fistp   qgl$ztmp
                 mov     eax, D qgl$ztmp
                 mov     qgl$zacc, eax

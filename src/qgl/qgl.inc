@@ -394,6 +394,7 @@ QGL_Z_SET       equ     1
 QGL_Z_TEST      equ     2
 QGL_Z_KINDS     equ     3               ;; depth modes per drawing mode
 
+
 ;; How many pixels one perspective divide serves. mgl's SUBDIVP, and the
 ;; same 16: a divide is the expensive instruction here, and sixteen
 ;; pixels of affine drift stays under a texel for anything the renderer
@@ -680,4 +681,19 @@ ifdef   _DEBUG_
                 jne     exitlabel
         endif
 endif
+endm
+
+;;::::::::::::::
+;; CHECKKIND -- branch away if Surface.typ names a dispatch entry that is
+;; not there. kindreg must be bx, si or di: it indexes the table.
+;;
+;; Unlike CHECKSF this is NOT behind _DEBUG_. A dead entry's accessor does
+;; not write the segment register its caller reads the answer out of --
+;; see the note over qglSfAccessRd.
+;;::::::::::::::
+CHECKKIND       macro   kindreg:req, exitlabel:req
+                cmp     kindreg, SF_TYPES * (T SurfaceOps)
+                jae     exitlabel
+                cmp     qgl$dctTB[kindreg].state, TRUE
+                jne     exitlabel
 endm

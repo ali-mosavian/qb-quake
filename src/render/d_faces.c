@@ -94,21 +94,24 @@ typedef struct { UglVtx v1, v2, v3; } UglTri;
 
 typedef struct { float x, y, z, u, v; } QglVtx;
 
-extern short pascal far qglRsTex     ( long s );
-extern void  pascal far qglRsMode    ( short m );
-extern void  pascal far qglRsFlat    ( short col );
 extern void  pascal far qglClRect    ( short x0, short y0, short x1, short y1 );
-extern short pascal far qglRsPoly    ( long dst, void far *v, short cnt );
+/* Every draw parameter, every call: no texture, mode or depth is
+   installed beforehand. src is the texture Surface when mode is
+   QGL_M_TEX/PTEX and the colour when it is QGL_M_FLAT -- mgl's own
+   overload of uglPolyTP's srcDC against uglPolyF's col. Returns the
+   scanlines covered, 0 for a face clipped away, -1 for a refusal. */
+extern short pascal far qglRsPoly    ( long dst, void far *v, short cnt,
+                                       short mode, long src,
+                                       long zsf, short zmode );
 extern void  pascal far qglDrLine    ( long d, short x0, short y0,
                                        short x1, short y1, short col );
-extern short pascal far qglZMode     ( short mode );
 
 /* BASIC-side, all byval scalars or g byref -- the shapes sb_build.c
    already proved callable from here. */
 extern long  pascal far mod_geom_map   ( void *g, short row );
 extern long  pascal far mod_tex_raw    ( void *g, short k, short mip );
 extern long  pascal far mod_tex_shaded ( void *g, short k, short mip );
-extern short pascal far host_z_on      ( void );
+extern long  pascal far host_z_dc      ( void );
 extern short pascal far sc_ready       ( void );
 extern short pascal far sc_mipfloor    ( short extw, short exth );
 extern short pascal far sc_held        ( short face );
@@ -266,7 +269,8 @@ void pascal far d_draw_faces(
 
     short mi, m_node, ti, i, j, v0, gn, vcnt, cnt;
     short tex, tex_id, draw_mip, mip_level, liquid;
-    short z_want, z_have = -1, z_avail, lm_use, lm_on;
+    short z_mode, lm_use, lm_on;
+    long  z_sf;                 /* the depth Surface, 0 if there is none */
     long  q_dst;                /* the destination Surface */
     short q_ok = 0;             /* and whether the setup stood up */
     short q_gate = 0;
@@ -296,9 +300,10 @@ void pascal far d_draw_faces(
     dp->k_mip = 0; dp->k_sw = 0; dp->k_sh = 0; dp->k_stag = 0; dp->k_n = 0; dp->k_hdr = 0; dp->k_ext = 0; dp->k_v0 = 0; dp->k_lm = 0;
     dp->build_us = 0;
 
-    /* Asked once: whether a depth buffer exists cannot change inside a
-       frame. */
-    z_avail = host_z_on();
+    /* Asked once: which depth buffer, if any, cannot change inside a
+       frame. It is handed to every draw -- qgl installs nothing. */
+    z_sf    = host_z_dc();
+    z_mode  = QGL_Z_OFF;
     turbph  = dp->anim_time * (float)TURB_RATE;
 
     /* The flag says the data was loaded; the toggle says whether to use
@@ -413,13 +418,20 @@ void pascal far d_draw_faces(
              * reject what the order already settled, and rejecting costs
              * a compare per pixel for nothing. Brush entities test,
              * because a door swinging through a doorway has no such
-             * guarantee. Switched only on change: faces arrive in long
-             * runs from one model.
+             * guarantee.
+             *
+             * Recomputed per face rather than switched on change: the
+             * mode travels with the draw now, so there is no installed
+             * one to keep a cache in step with. That cache is what the
+             * dark moving streaks were -- it took qglZMode's return,
+             * which answers with the mode that WAS in force, so after a
+             * run of entity faces it said SET while TEST was live and
+             * the next world face was tested against a buffer it was
+             * meant to write. A bug the shape of the API, not of the
+             * code, and it cannot be written again this way.
              */
-            if ( z_avail != 0 ) {
-                z_want = ( facemdl[i] == 0 ) ? QGL_Z_SET : QGL_Z_TEST;
-                if ( z_want != z_have ) z_have = qglZMode( z_want );
-            }
+            z_mode = ( z_sf == 0 ) ? QGL_Z_OFF
+                   : ( facemdl[i] == 0 ) ? QGL_Z_SET : QGL_Z_TEST;
 
             tw = mipinf[tex_id].wdth;
             th = mipinf[tex_id].hght;
@@ -692,20 +704,27 @@ void pascal far d_draw_faces(
              */
             if ( dp->rend_mode != 2 ) {
                 q_gate++;
-                if ( q_dst && cnt <= MAXV && qglRsTex( src_dc ) ) {
+                if ( q_dst && cnt <= MAXV ) {
                     for ( j = 0; j < cnt; j++ ) {
                         qvtx[j].x = px[j]; qvtx[j].y = py[j]; qvtx[j].z = pw[j];
                         qvtx[j].u = pu[j]; qvtx[j].v = pv[j];
                     }
-                    /* The BIGGEST face on screen, not the first. An
-                       exact texel test needs a face that is magnified;
-                       the first one drawn is typically 6 texels to a
-                       pixel, where a sub-pixel gradient difference
-                       lands anywhere and the comparison decides
-                       nothing. Screen area over texel count is the
-                       ratio that matters, and area is the half of it
-                       that varies. */
-                    {
+                    /* Drawn BEFORE the replay capture below, because
+                       only the return says whether the texture was
+                       accepted, and a refused face must not be latched
+                       as the frame's exemplar. */
+                    if ( qglRsPoly( q_dst, (void far *)qvtx, cnt,
+                                    dp->rend_mode == 0 ? QGL_M_PTEX
+                                                       : QGL_M_TEX,
+                                    src_dc, z_sf, z_mode ) >= 0 ) {
+                        /* The BIGGEST face on screen, not the first. An
+                           exact texel test needs a face that is
+                           magnified; the first one drawn is typically 6
+                           texels to a pixel, where a sub-pixel gradient
+                           difference lands anywhere and the comparison
+                           decides nothing. Screen area over texel count
+                           is the ratio that matters, and area is the
+                           half of it that varies. */
                         float ar = 0.0f;
                         short on = 1;
                         for ( j = 0; j < cnt; j++ ) {
@@ -729,17 +748,17 @@ void pascal far d_draw_faces(
                             fp_ofs  = texofs;
                             fp_area = ar;
                         }
+                        if ( dp->qgl_faces < 0 ) dp->qgl_faces = 0;
+                        dp->qgl_faces++;
+                        dp->tris += cnt - 2;
+                        continue;
                     }
-                    qglRsMode( dp->rend_mode == 0 ? QGL_M_PTEX : QGL_M_TEX );
-                    qglRsPoly( q_dst, (void far *)qvtx, cnt );
-                    if ( dp->qgl_faces < 0 ) dp->qgl_faces = 0;
-                    dp->qgl_faces++;
-                    dp->tris += cnt - 2;
-                    continue;
                 }
-                /* Counted, not silent: a drop here is a qglRsTex
+                /* Counted, not silent: a drop here is a texture
                    refusal (padded row, non-power-of-two side, over one
-                   16K page) and there is nothing else left to try. */
+                   16K page) and there is nothing else left to try.
+                   A face clipped entirely away answers 0, not -1, and
+                   is not counted here -- it drew nothing on purpose. */
                 dp->qgl_drop++;
                 continue;
             }
@@ -759,12 +778,18 @@ void pascal far d_draw_faces(
                 tri1.v3.x = px[p3]; tri1.v3.y = py[p3];
 
                 if ( !q_dst ) { dp->qgl_drop++; continue; }
+                /* u and v zeroed, not left: a flat fill samples no
+                   texture but its gradients are still computed, and the
+                   overflow gate can refuse a polygon on a number that
+                   came from whichever textured face last wrote here. */
                 qvtx[0].x = tri1.v1.x; qvtx[0].y = tri1.v1.y; qvtx[0].z = tri1.v1.z;
                 qvtx[1].x = tri1.v2.x; qvtx[1].y = tri1.v2.y; qvtx[1].z = tri1.v2.z;
                 qvtx[2].x = tri1.v3.x; qvtx[2].y = tri1.v3.y; qvtx[2].z = tri1.v3.z;
-                qglRsFlat( 200 );
-                qglRsMode( QGL_M_FLAT );
-                qglRsPoly( q_dst, (void far *)qvtx, 3 );
+                qvtx[0].u = 0.0f; qvtx[0].v = 0.0f;
+                qvtx[1].u = 0.0f; qvtx[1].v = 0.0f;
+                qvtx[2].u = 0.0f; qvtx[2].v = 0.0f;
+                qglRsPoly( q_dst, (void far *)qvtx, 3,
+                           QGL_M_FLAT, 200L, z_sf, z_mode );
                 qglDrLine( q_dst, (short)tri1.v1.x, (short)tri1.v1.y,
                                   (short)tri1.v2.x, (short)tri1.v2.y, 0 );
                 qglDrLine( q_dst, (short)tri1.v2.x, (short)tri1.v2.y,
@@ -783,8 +808,9 @@ void pascal far d_draw_faces(
            That used to be structural -- the atlas was an mgl EMS DC
            and the bridge took linear memory only, 111 of 111 faces
            measured. The atlas is a qgl Surface now, so a -6 here means
-           an actual qglRsTex refusal (padded row, non-power-of-two
-           side, over one 16K page) and is worth reading as a fault. */
+           an actual texture refusal by qglRsPoly (padded row,
+           non-power-of-two side, over one 16K page) and is worth
+           reading as a fault. */
     if ( dp->qgl_faces == 0 && q_ok ) dp->qgl_faces = q_gate ? -6 : -5;
 
     if ( dp->span_draw ) {

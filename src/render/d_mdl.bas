@@ -72,11 +72,14 @@ end type
 ''
 '' qgl's, declared in the narrowest place that can see them.
 ''
-declare function qglRsTex ( byval s as long ) as integer
-declare sub qglRsMode ( byval m as integer )
-declare function qglRsPoly ( byval dst as long, seg v as any, _
-                               byval cnt as integer ) as integer
-declare function qglZMode ( byval m as integer ) as integer
+declare function qglRsPoly ( byval dst as long, _
+                             seg v as any, _
+                             byval cnt as integer, _
+                             byval mode as integer, _
+                             byval src as long, _
+                             byval zsf as long, _
+                             byval zmode as integer ) as integer
+declare function host_z_dc ( ) as long
 
 ''
 '' This module's own procedures.
@@ -276,6 +279,7 @@ sub mdl_draw ( _
     dim frame as integer
     dim qdst as long
     dim qskin as long
+    dim qzsf as long
     dim qz as integer
     dim qv(2) as QglVtx
 
@@ -320,13 +324,13 @@ sub mdl_draw ( _
 
     '' qgl from here: the destination and the skin are both mgl DCs, and
     '' an mgl DC is a qgl Surface, so both go straight through. The skin
-    '' is EMS; qglRsTex maps it into the read window and holds it for the
-    '' whole triangle loop, which maps nothing else.
+    '' is EMS and is handed to every triangle, so its page is mapped
+    '' inside the draw that reads it and never held across one.
     qdst  = dst
     qskin = g.mdl.skin
-    if ( qglRsTex%( qskin ) = 0 ) then exit sub
-    qglRsMode QGL_M_PTEX
-    zm = qglZMode%( QGL_Z_TEST )
+    qzsf  = host_z_dc&
+    zm    = QGL_Z_TEST
+    if ( qzsf = 0 ) then zm = QGL_Z_OFF
 
     for j = 0 to g.mdl.ntri - 1
         a = tri( j ).a : b = tri( j ).b : c = tri( j ).c
@@ -346,7 +350,8 @@ sub mdl_draw ( _
                 qv(1).u = t.v2.u : qv(1).v = t.v2.v
                 qv(2).x = t.v3.x : qv(2).y = t.v3.y : qv(2).z = t.v3.z
                 qv(2).u = t.v3.u : qv(2).v = t.v3.v
-                qz = qglRsPoly%( qdst, qv(0), 3 )
+                qz = qglRsPoly%( qdst, qv(0), 3, QGL_M_PTEX, _
+                                 qskin, qzsf, zm )
             end if
         end if
     next j

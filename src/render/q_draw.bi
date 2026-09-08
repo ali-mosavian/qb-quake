@@ -78,7 +78,7 @@ type DrawParams
     k_hdr       as long      '' faces whose record has a lightmap
     k_ext       as long      '' ...and non-zero extents
     k_n         as long      '' sc_find calls
-    qgl_drop    as integer   '' out: faces qglRsTex refused -- a fault,
+    qgl_drop    as integer   '' out: faces qglRsPoly refused -- a fault,
                              '' not a fallback; nothing stands behind it
 end type
 
