@@ -21,7 +21,6 @@ type Game
     cp          as CamPath        '' the scripted walkthrough
     ft          as FrameTimes     '' frame-time accumulators
     pt          as PhaseTimes     '' where inside the frame it went
-    pal         as long           '' the palette dc
     mymod       as UGMMOD         '' the music module
     tele_count  as integer        '' entities: filled by ent_load_teleports
     plat_count  as integer

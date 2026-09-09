@@ -327,7 +327,6 @@ type Env
     z_near      as single    
     
     h_font      as long
-    h_video_dc  as long
     h_back_bdc  as long
     
     mouse       as MOUSEINF
@@ -358,8 +357,6 @@ type Env
                                 '' stored as a whole number so the truncation
                                 '' happens once, not once a frame
     c_fmt       as integer
-    pages       as integer
-    use_paging      as integer
     clear_screen    as integer
     
     sound       as integer

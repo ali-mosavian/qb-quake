@@ -187,7 +187,7 @@ declare sub scr_count_frame ( _
     g as Game _
 )
 declare sub scr_mip_tick ( percent as single )
-declare sub scr_hud_colors ( )
+declare sub scr_pal_install ( )
 declare sub scr_begin_loading ( _
     g as Game _
 )
@@ -301,8 +301,9 @@ declare sub qglDrShade ( _
     byval lut as long, _
     byval row as integer _
 )
-'' mode 13h and the screen as a Surface. vid_init sets the real mode
-'' through mgl afterwards, and mgl restores text mode at exit.
+'' mode 13h and the screen as a Surface. vid_init calls the init a second
+'' time for the run proper; only the first call records the mode that
+'' qglVgaShutdown goes back to.
 declare function qglVgaInit ( ) as long
 declare sub qglVgaPalette ( seg pal as PalRgb )
 declare sub scr_pal_load ( )
@@ -388,9 +389,9 @@ const SPIN_R    = 20
 '' through white, which is all the furniture needs.
 ''
 ''
-'' The overlay's colours are LOOKED UP, not hardcoded: scr_hud_colors runs
-'' once after videoOpen installs Quake's palette and best-fits each of
-'' these against it. That is what lets the HUD share the game's material
+'' The overlay's colours are LOOKED UP, not hardcoded: scr_pal_install
+'' puts Quake's palette in the DAC and best-fits each of these against
+'' it, once. That is what lets the HUD share the game's material
 '' language -- brown slabs, ember accents, fire-ramp warnings -- without
 '' assuming anything about where Quake's ramps sit.
 ''
@@ -1120,9 +1121,11 @@ end sub
 ''       compare digits that line up.
 ''::::::::::
 ''::::::::::
-'' name: scr_hud_colors
-'' desc: Best-fits the overlay's colours against whatever palette videoOpen
-''       just installed. Called once, after the Quake palette is live.
+'' name: scr_pal_install
+'' desc: The game palette into the DAC, then the overlay's colours out of
+''       it. One routine because the second cannot run before the first:
+''       every HUD colour is a best fit against the palette that is live.
+''       Called once, from vid_init.
 ''::::::::::
 ''::::::::::
 '' name: scr_pal_load
@@ -1180,8 +1183,10 @@ function scr_pal_fit ( _
     scr_pal_fit = best
 end function
 
-sub scr_hud_colors
+sub scr_pal_install
     scr_pal_load
+    qglVgaPalette scr_pal(0)
+
     hc_bg     = scr_pal_fit( scr_pal(),  12,  10,   8 )
     hc_slab   = scr_pal_fit( scr_pal(),  52,  40,  28 )
     hc_slabhi = scr_pal_fit( scr_pal(), 104,  84,  60 )

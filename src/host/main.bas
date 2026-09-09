@@ -121,6 +121,11 @@ declare function qglDiffAll () as integer
 declare function qglFaceAll () as integer
 declare function qglArrAll () as integer
 declare function qglSfInit () as integer
+'' The mode. qglVgaShutdown goes back to what was current before the
+'' loading screen's own qglVgaInit -- mgl no longer sets a mode, so
+'' uglRestore has nothing left to restore.
+declare sub qglVgaShutdown ()
+declare function qglVgaScreen () as long
 declare function qglSfZNew ( byval surf as long, byval kind as integer ) as long
 declare sub qglDrFill ( byval d as long, _
                         byval x0 as integer, _
@@ -197,9 +202,7 @@ declare sub in_screenshot_key ( _
     byval h_dst_dc as long _
 )
 declare sub vid_update ( _
-    g as Game, _
-    h_dst_dc as long, _
-    page as integer _
+    g as Game _
 )
 declare function sys_mem_count ( ) as integer
 declare function sys_mem_fre ( byval i as integer ) as long
@@ -464,11 +467,6 @@ dim shared z_dc as long
 '' screenie was undeclared, so it was a fresh integer 0 on every entry to
 '' presentFrame and every screenshot overwrote scrn0.bmp.
 
-'' pal is loaded by texLoadAll (which needs its segment and offset to
-'' colour match) and consumed by videoOpen, which sets it as the hardware
-'' palette and frees it. Those were one scope inside the old monolithic
-'' doInit; splitting doInit apart left videoOpen reading an undeclared 0.
-
     ''
     '' This was `on errror goto HandleErr` for years -- three r's. BASIC
     '' also has a computed ON n GOTO, so the typo parsed as "branch to the
@@ -691,7 +689,7 @@ sub host_init ( _
     if ( g.qgl_diff ) then
         dim qgldbad as integer
         qgldbad = qglDiffAll()
-        uglRestore
+        qglVgaShutdown
         system
     end if
     '' -qglarr: the paged-array store against a real .pag fixture.
@@ -702,7 +700,7 @@ sub host_init ( _
     if ( g.qgl_arr ) then
         dim qglabad as integer
         qglabad = qglArrAll()
-        uglRestore
+        qglVgaShutdown
         system
     end if
 
@@ -846,7 +844,6 @@ sub host_main ( _
     
     dim i as integer
     dim hz as long
-    dim page as integer
     dim frame_no as long
     dim pt0 as single, ptd as single
     dim pr0 as long, prd as long
@@ -870,7 +867,7 @@ sub host_main ( _
     '' from here on only the view is blitted -- so anything it left
     '' outside the view would sit in the border for the whole run.
     ''
-    uglRectF g.env.h_video_dc, 0, 0, g.env.scr_x_res-1, g.env.scr_y_res-1, 0
+    qglDrFill qglVgaScreen(), 0, 0, g.env.scr_x_res-1, g.env.scr_y_res-1, 0
 
     mousePos 0, 0
 
@@ -895,11 +892,7 @@ sub host_main ( _
     hz = tmrMs2Freq&( 1000 )
     tmrNew g.env.sec_timer, TMR.AUTOINIT, hz    
     
-    if ( g.env.use_paging = false ) then
-        h_dst_dc = g.env.h_back_bdc
-    else        
-        h_dst_dc = g.env.h_video_dc
-    end if        
+    h_dst_dc = g.env.h_back_bdc
     
     ''
     '' The view's PHYSICAL shape, not its pixel count. A 320x200 mode
@@ -1038,7 +1031,7 @@ sub host_main ( _
         if ( g.qgl_face and frame_no >= g.env.bench_frames ) then
             dim qglfbad as integer
             qglfbad = qglFaceAll()
-            uglRestore
+            qglVgaShutdown
             system
         end if
         '' -campath ends when the route does, whatever -bench says
@@ -1067,7 +1060,7 @@ sub host_main ( _
         '' rather than folded into the mean.
         ''
         pr0 = sys_rdtsc()
-        vid_update g, h_dst_dc, page
+        vid_update g
         if ( g.ft.n > 0 ) then
             prd = sys_rdtsc() - pr0
             if ( prd >= 0 and prd <= 1000000 ) then
@@ -1100,9 +1093,10 @@ end sub
 sub host_shutdown
     
     ''
-    '' Restore video mode and end UGL
+    '' Restore the video mode, then end mgl. uglEnd stays until mgl does:
+    '' it still holds the paged-array stores and the lightmap atlas.
     ''
-    uglRestore
+    qglVgaShutdown
     uglEnd
     
     screen 0

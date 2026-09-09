@@ -1812,9 +1812,9 @@ What replaced what: `uglRectF` -> `qglDrFill`, `uglHLine`/`uglVLine` ->
 `qglDrLine`, `uglPset` -> `qglSfPset`, `uglShadeRect` -> `qglDrShade`,
 all with the same argument order and the same inclusive corners.
 `uglSetVideoDC(8BIT, 320, 200)` for the loading screen is `qglVgaInit`,
-and the loading palette goes in through `qglVgaPalette`. `vid_init`
-still sets the real mode through mgl afterwards and mgl still restores
-text mode at exit; qgl's mode 13h in between is invisible to it.
+and the loading palette goes in through `qglVgaPalette`. At the time of
+that cut `vid_init` still set the real mode through mgl afterwards; it
+no longer does -- see the mode/palette/shutdown cut below.
 
 The palette is no longer read back from the DAC. `mkassets.py` writes
 `pal.raw` (768 bytes of `color/palette.lmp`) beside the atlases,
@@ -1832,6 +1832,56 @@ which `mouse.bi` names, and `mouse.bi` for `MOUSEINF`, which `q_env.bi`
 names. Those go when the input state does. `RGB` is a reserved word to
 BC -- `type Rgb` fails with "Identifier expected" at every use and
 nowhere near the definition -- hence `PalRgb`.
+
+## Retiring mgl: the mode, the palette and the exit
+
+`uglInit` stays and `uglEnd` stays -- mgl still owns the paged-array
+stores, the lightmap atlas and `uglBuildSurf`, and `uglNew` refuses
+before `uglInit` has filled the DC-type table. What went is everything
+between them that touched the adapter: `uglSetVideoDC` -> `qglVgaInit`,
+`uglRectF` on the video DC -> `qglDrFill` on `qglVgaScreen()`,
+`uglPalSet` -> `qglVgaPalette`, and all five `uglRestore` ->
+`qglVgaShutdown`.
+
+**The mode is now brought up TWICE and the restore has to survive that.**
+`scr_begin_loading` enters 13h for the loading screen and `vid_init`
+enters it again for the run, and `qglVgaInit` recorded the current mode
+on every call -- so the second one saved 13h as the mode to go back to
+and the program would have exited into a graphics screen, where BASIC's
+error text is drawn as pixels and a failed run looks exactly like a slow
+one. It records on the first call only. `t26mode` is the regression: set
+mode 3, init, init, shutdown, and read `0040:0049` -- the adapter's own
+record of the current mode, not qgl's byte. Mutation-checked.
+
+**Paging is gone, not disabled.** `display.pages` and
+`display.usepaging` are out of `stuff.ini`, `EnvType` and the parser,
+with `uglSetVisPage`/`uglSetWrkPage`. It was mgl's, it needed mgl to own
+the mode, and the ini has shipped `usepaging = no` throughout -- so the
+branch was dead before this and impossible after. `vid_update` takes
+only `g` now; the backbuffer is the only destination there is.
+
+**`mouseInit` takes the qgl screen Surface, and that is safe for two
+specific reasons, not by luck.** `mouseReset` reads `xMin`/`yMin`/
+`xMax`/`yMax`, which sit at identical offsets in `DC` and `Surface` --
+the two structs are the same up to the scanline table, which is where
+they diverge (38 against 32). And every mgl routine that would DRAW
+through that handle -- `cursorPut`, `bakgrdGet`, `bakgrdPut`, the ISR's
+own move path -- returns early while the cursor is hidden, which it is
+from `mouseInit` onward because nothing here calls `mouseShow`. Adding a
+`mouseShow` would put mgl's filler on a Surface at `DC_addrTB`, which is
+the wandering-write bug in this file's other notes.
+
+Dropping `Game.pal` and three `EnvType` fields moved `Game` under the C
+side by eight bytes, and both hardcoded offsets -- `GAME_VIS_OFFSET` in
+`r_walk.c`, `GAME_DLIGHT_OFFSET` in `sb_build.c` -- had to follow. The
+startup assertion is what said so, by name and with the measured number
+to paste in. Removing a field ahead of `vis` is a C change too.
+
+`g.pal` and its `uglPalLoad` are gone with the rest: `pal.raw` and
+`scr_pal_load` have been the palette since the screen.bas cut, and
+`scr_hud_colors` is now `scr_pal_install` -- it puts those bytes in the
+DAC and then best-fits the overlay against them, in that order, because
+the second cannot run before the first.
 
 ## `-nostats` makes the picture deterministic
 

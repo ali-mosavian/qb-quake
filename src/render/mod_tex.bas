@@ -161,12 +161,6 @@ sub mod_load_textures ( _
     dim bmp_file as string
     dim ofs as long
 
-    ''
-    '' The palette is still read here because videoOpen installs it and frees
-    '' it. Nothing in this routine looks at its contents any more.
-    ''
-    g.pal = uglPalLoad( "base.dat::color/palette.lmp", PALRGB )
-
     scr_load_stage "textures"
 
     for  i = 0 to g.wld.count.textures-1

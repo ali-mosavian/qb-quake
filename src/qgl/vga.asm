@@ -19,8 +19,8 @@
 ;;       - the DAC is 6 bits a channel and Quake's palette is 8, so the
 ;;         load shifts down by two. Getting this wrong is not subtle: it
 ;;         shows as a picture four times too bright, clamped flat.
-;;       - qglVgaShutdown restores the mode found at qglVgaInit rather than
-;;         assuming 3.
+;;       - qglVgaShutdown restores the mode found at the FIRST qglVgaInit
+;;         rather than assuming 3.
 
                 .286
                 .model medium, pascal
@@ -45,7 +45,11 @@ VGA_H           equ     200
 ;; far pointer qgl$VgaShape fills on first ask, and 0:0 until then.
 ;; Internal: callers reach it through qglVgaScreen, not by name.
 qgl$screen      dd      0
-qgl$prevmode    db      3               ;; whatever was current at init
+;; The mode to go back to, recorded at the FIRST init and never again:
+;; the loading screen brings 13h up and vid_init brings it up a second
+;; time, and re-recording there would save 13h as the mode to restore.
+qgl$prevmode    db      3
+qgl$modeset     db      0
 
 
 .code
@@ -57,11 +61,14 @@ qgl$prevmode    db      3               ;; whatever was current at init
 ;; no failure path worth reporting: INT 10h has none.
 ;;::::::::::::::
 qglVgaInit    proc    public
+                cmp     [qgl$modeset], 0
+                jne     @F
                 mov     ah, 0Fh
                 int     10h                     ;; al = current mode
                 mov     [qgl$prevmode], al
+                mov     [qgl$modeset], 1
 
-                mov     ax, 0013h
+@@:             mov     ax, 0013h
                 int     10h
 
                 call    qgl$VgaShape

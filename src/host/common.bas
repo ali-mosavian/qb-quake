@@ -172,15 +172,13 @@ sub com_parse_config ( _
     const zn_flag   = 8
     const zf_flag   = 16
     const cmscr_flag= 32
-    const page_flag = 64
-    const usepg_flag= 128
     const clear_flag= 256
     const cminp_flag= 512
     const cmmde_flag= 1024
     const fov_flag  = 2048
     const sound_flag= 4096
     const all_flag = xres_flag or yres_flag or zn_flag or zf_flag or cmscr_flag or _
-                      page_flag or usepg_flag or clear_flag or cminp_flag or cmmde_flag or _
+                      clear_flag or cminp_flag or cmmde_flag or _
                       fov_flag or sound_flag
     
     dim flags as integer
@@ -230,14 +228,6 @@ sub com_parse_config ( _
                     g.env.clear_screen = com_yesno( strm(), strm_cnt, line_num )
                     flags = flags or clear_flag
                                         
-                case "display.pages"
-                    g.env.pages = val( com_arg( strm(), strm_cnt, line_num ) )
-                    flags = flags or page_flag
-                    
-                case "display.usepaging"
-                    g.env.use_paging = com_yesno( strm(), strm_cnt, line_num )
-                    flags = flags or usepg_flag
-                                    
                 case "world.frustum.zn"                
                     g.env.z_near = val( com_arg( strm(), strm_cnt, line_num ) )
                     flags = flags or zn_flag

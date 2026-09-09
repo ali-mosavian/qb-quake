@@ -49,6 +49,9 @@ declare sub in_init ( _
     g as Game _
 )
 
+'' The screen, for the mouse's range. See in_init.
+declare function qglVgaScreen ( ) as long
+
 
 '' Screenshot counter: without it every shot overwrote scrn0.bmp.
 dim shared screenie as integer
@@ -65,7 +68,15 @@ dim shared screenie as integer
 sub in_init ( _
     g as Game _
 )
-    if ( mouseInit( g.env.h_video_dc, g.env.mouse ) = FALSE ) then
+    ''
+    '' A qgl Surface where mgl wants a DC, and safe for exactly two
+    '' reasons. mouseReset reads only xMin/yMin/xMax/yMax, which sit at
+    '' the same offsets in both structs -- they diverge at the scanline
+    '' table, 38 against 32. And every routine that would DRAW through
+    '' the handle returns early while the cursor is hidden, which it is
+    '' from mouseInit onwards: nothing here ever calls mouseShow.
+    ''
+    if ( mouseInit( qglVgaScreen(), g.env.mouse ) = FALSE ) then
         sys_error "0x0006, Could not init mouse..."
     end if  
     

@@ -56,6 +56,9 @@ declare function sys_mem_tag ( byval i as integer ) as string
 declare function sys_mem_val ( byval i as integer ) as long
 declare function sys_mem_fre ( byval i as integer ) as long
 
+'' qgl restores the mode; mgl no longer sets one.
+declare sub qglVgaShutdown ()
+
 ''
 '' Declared here, not in a header: this module is the only caller, and a
 '' header would hand these to modules that never use them -- BC's symbol
@@ -280,7 +283,7 @@ sub sys_error ( msg as string )
     ''
     '' Record the message before touching the video mode.
     ''
-    '' Everything below draws to the screen, and if uglRestore leaves a
+    '' Everything below draws to the screen, and if the mode restore leaves a
     '' graphics mode the message is rendered as pixels: not in the text
     '' buffer, not on redirected stdout, and gone the moment the program
     '' ends. A failed run then looks exactly like a slow one from outside.
@@ -292,9 +295,10 @@ sub sys_error ( msg as string )
     close #errf
 
     ''
-    '' Restore video mode and end UGL
+    '' Restore the video mode, then end mgl. uglEnd stays until mgl does:
+    '' it still holds the paged-array stores and the lightmap atlas.
     ''
-    uglRestore
+    qglVgaShutdown
     uglEnd
     
     ''
