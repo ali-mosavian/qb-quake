@@ -86,6 +86,15 @@ n_wide          db      'huge u gradient draws  $'
 ;; the gate at a scale of 1, four times over it at tx's 8.
 n_flatuv        db      'flat ignores tex size  $'
 n_widecnt       db      'and covers 32 pixels   $'
+;; The clipper walks the caller's ring with a signed step and wraps by
+;; comparing the stepped pointer against vtx[0] UNSIGNED. A ring at
+;; offset 0 of its segment -- which is where BASIC puts a far-heap array
+;; -- steps backwards to 0FFECh, reads as past the end, and the fourth
+;; vertex comes out of whatever sits 64K above the array. The renderer's
+;; alias model drew screen-corner wedges out of it for months.
+n_seg0lin       db      'ring at seg:0 32 lines $'
+n_seg0cnt       db      'and 32x32 pixels       $'
+n_seg0box       db      'bounded 8..39 both ways$'
 ;; A one-pixel-wide column with a few thousand repeats of u across it.
 ;; vu is normalised, so that is legal data, and the gradient it gives is
 ;; 40000 texels per pixel -- fine as the float qgl$drawP reads, 2.62e9 in
@@ -106,6 +115,10 @@ narrow          QVert   <20.0,  8.0, 1.0, -2500.0, 0.0>
                 QVert   <21.0, 40.0, 1.0,  2500.0, 1.0>
                 QVert   <20.0, 40.0, 1.0, -2500.0, 1.0>
 narrowp         dd      0
+
+;; room for a ring copied to the next paragraph boundary, offset 0
+seg0            db      SIZEOF QVert*4 + 16 dup(?)
+seg0p           dd      0
 
 ;; a square, clockwise, top-left first. z is 1/z and constant, so the
 ;; whole polygon sits at one depth and the test is about the compare and
@@ -549,6 +562,36 @@ tmain           proc    far public uses bx cx dx si di es
                 invoke  qglRsPoly, dst, flatuvp, 4, QGL_M_FLAT, COL
                 invoke  scan, COL
                 CHK     n_flatuv, ax, 32*32
+
+                ;;
+                ;; 13. the CCW square again, at offset 0 of its segment:
+                ;;     the backwards walk has to wrap from vtx[0] to
+                ;;     vtx[3] without stepping below offset 0
+                ;;
+                mov     ax, ds
+                mov     bx, offset seg0
+                add     bx, 15
+                shr     bx, 4
+                add     ax, bx                  ;; paragraph past seg0's start
+                mov     es, ax
+                xor     di, di
+                mov     si, offset sqr
+                mov     cx, SIZEOF QVert*4
+                rep     movsb
+                mov     word ptr seg0p, 0
+                mov     word ptr seg0p+2, es
+                invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
+                invoke  qglRsPoly, dst, seg0p, 4, QGL_M_FLAT, COL
+                CHK     n_seg0lin, ax, 32
+                invoke  scan, COL
+                CHK     n_seg0cnt, ax, 32*32
+                mov     ax, xmin
+                add     ax, ymin
+                mov     bx, xmax
+                add     ax, bx
+                mov     bx, ymax
+                add     ax, bx
+                CHK     n_seg0box, ax, 94
 
                 ret
 tmain           endp

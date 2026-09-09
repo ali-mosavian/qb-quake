@@ -1691,81 +1691,39 @@ time), which evicts the surface cache differently, `sc_evict` 10 against
 2, and the frames then differ for reasons that are not the model's
 geometry. That confound cost a false FAIL here before it was recognised.
 
-### And it is still not the whole cause: qgl$drawP runs away on a small polygon
+### And the other half was the clipper's ring walk, not the scanner
 
-**Open.** The clip fix is necessary and it is not sufficient. Stand next
-to a spawned model and the streaks are still there -- less of the screen,
-and now filled wedges rather than slivers, because a bounded polygon that
-scans wrong fills instead of shooting off.
+Stand next to a spawned model after the clip fix and the streaks were
+still there -- filled wedges from a screen corner, not slivers. Every
+measurement said the scanner: 179 polygons inside an 11x18 pixel box, all
+in front of the near plane, and `qglRsPoly` answering 100 lines for one
+of them. Two sessions went into `qgl$drawA`'s edge arithmetic on that
+reading, and none of it was wrong.
 
-Measured, at `-at 264 -40 40 -yaw 0` on dm3ish with only entity 1 drawn
-(spawn positions are `-at`-independent; the eight are listed by a probe
-in `main.bas` after `mdl_spawn`):
+What found it was a breakpoint on the BASIC line after the call, armed
+only when `qz > 30`, and then reading `qgl$src` -- the clipper's output
+-- against the caller's `qv`:
 
-    wx -15.47 .. 19.67   wy -13.38 .. 16.49   wz -24.38 .. 25.04
-    w  192.84 .. 222.19  behind 0  znear 1
-    npoly 179  amin -8.09
-    sx 77.08 .. 88.38    sy 41.53 .. 59.05
+    qv      (142.2,54.7) (142.3,50.3) (120.0,50.6)      area -98, fine
+    qgl$src (142.3,50.3) (142.2,54.7) (0,0, z 0, u 0, v 0)
 
-So the model is exactly where and what it should be: 179 polygons, every
-corner inside an 11x18 pixel box, the largest twice-area 8 square pixels,
-nothing behind the near plane. **And `qglRsPoly` returned 100 for one of
-them** -- 100 scanlines covered, on a 100-tall surface.
+The third vertex was never the caller's. `qglClPolyEx` walks the ring
+from the topmost vertex with a signed step -- backwards for a CCW ring --
+and wrapped by comparing the pointer against `vtx[0]` AFTER stepping,
+unsigned. `qv` is a BASIC far-heap array and sits at offset 0 of its
+segment, so `0 - 20` is `0FFECh`, "past the end", and the vertex came out
+of whatever lay 64K above. Zeros here, hence the screen corner. World
+faces never saw it because `d_faces.c`'s ring sits at a DS offset well
+above 20, and the earlier live read of tri 39 happened to have its
+topmost at index 2, which walks 2,1,0 and never wraps.
 
-One reproducer, three corners (captured under `QGL_M_PTEX`, but the mode
-is not the point -- the scan is shared and `QGL_M_TEX` covers the same
-wedge, textured in stripes rather than solid black):
-
-    x 84.9342  y 47.73215  z 4.728949E-03  u 2.679742E-03  v 2.486353E-03
-    x 83.96495 y 48.60463  z 4.811694E-03  u 2.919147E-03  v 2.554675E-03
-    x 86.54337 y 48.11729  z 4.903246E-03  u 2.892985E-03  v 1.996643E-03
-
-2.6 x 0.9 pixels, twice-area -1.78, answered 100. Several more are in the
-same dump; they are the ones with a sub-scanline edge, which is what a
-15-pixel-tall model is made of and a world face never is. That is also why
-`-qglcheck`, `-qgldiff` and the whole world path have never seen it.
-
-Ruled out, so do not spend the time again:
-
-- **The 2.0 area cull is not being skipped.** `qgl$l1sqr` refuses a
-  twice-area under 2.0, and the first reproducer's was 1.777, which
-  looked like the cull failing. It is not: applying the same 2.0 gate on
-  the CALLER'S side, in `mdl_draw`, leaves the wedge pixel-identical. The
-  polygons that run away are ordinary legal ones -- twice-area 2.1 to
-  7.7 in the affine dump below.
-- **`@@lf_lt1`'s `65536 shl 14` reciprocal does not overflow** for any of
-  them. Worked by hand on `tri 39`: both edges that span a scanline have
-  a raw dy of ~90,000, far above the 32768 that selects the sub-scanline
-  path at all, and the resulting dxdy is 0.39 and 1.70 pixels per line.
-  The code is also a line-for-line match with mgl's `uglplxtp.asm` there.
-- **Chain termination** (`cmp si, O qgl$fx` / `cmp si, rg_lim`) walks
-  0,2,1 and 0,1,2 for a triangle and stops.
-- **The mapper is not it.** Affine (`QGL_M_TEX`) covers the same wedge as
-  perspective did, striped instead of solid black.
-
-`tri 39`, affine, three corners, twice-area -2.484, `qz` **100**:
-
-    x 84.39581 y 46.34516
-    x 84.9342  y 47.73215
-    x 86.71563 y 47.70761
-
-Its floors are 46, 47, 47, so `lf_hgt` and `rg_hgt` are 1 and the scan
-should cover one line. It covered a hundred. That contradiction -- one
-scanline of height, a hundred of `lines` -- is the thing to explain, and
-nothing above explains it.
-
-One unchecked lead: **`FXFLOOR` is `shr a, 16`, a LOGICAL shift**
-(`qgl.inc:485`), so it is floor only for a non-negative operand. `ky` is
-non-negative after the clip, but `lf_x`/`rg_x` at `rs.asm:1238` are x
-coordinates that a stepped edge can carry negative, and there `shr` turns
-a small negative into ~65535.
-
-Next step is a native test in `src/qgl/test/` -- `t09rs.asm` is the
-rasteriser one and `t12clip.asm` the clipper one, so it belongs beside
-them. Draw that triangle into a small surface, assert the returned line
-count is no more than the bbox height and that no pixel outside the bbox
-is written. It fails today, and it debugs in seconds against DOSBox's
-minutes.
+The wrap now happens BEFORE the step: at `vtx[0]` going backwards, jump
+to one past the end and then subtract. `t09rs` case 13 hands the CCW
+square in at `seg:0000` and failed all three of its assertions before
+the fix; `tools/check.sh --model` reads 0 / 55 pixels against the 2125
+it read before. The lesson is the second rule again: the runaway was
+measured from the caller's side and the scanner's side, and never from
+the buffer between them.
 
 ## `-nostats` makes the picture deterministic
 

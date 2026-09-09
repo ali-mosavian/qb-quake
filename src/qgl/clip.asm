@@ -414,20 +414,26 @@ qglClPolyEx   proc    public uses bx cx dx si di ds es,\
                 mov     ax, cx
 @@in:           call    qgl$Copyv               ;; advances si and di
                 sub     si, SIZEOF QVert        ;; copyv consumed it
-                add     si, step
                 push    ax
                 push    dx
                 mov     ax, cnt
                 imul    ax, SIZEOF QVert
-                cmp     si, base
-                jae     @@nound
-                add     si, ax                  ;; stepped below vtx[0]
-                jmp     short @@advd
-@@nound:        mov     dx, base
+                mov     dx, base
                 add     dx, ax                  ;; one past vtx[cnt-1]
+                ;; wrap BEFORE stepping: base can be 0 (a BASIC far-heap
+                ;; array), and a pointer already stepped below it has
+                ;; wrapped to 0FFECh, which no unsigned compare can see
+                cmp     step, 0
+                jl      @@back
+                add     si, step
                 cmp     si, dx
                 jb      @@advd
-                sub     si, ax
+                mov     si, base                ;; stepped past vtx[cnt-1]
+                jmp     short @@advd
+@@back:         cmp     si, base
+                jne     @@stepb
+                mov     si, dx                  ;; at vtx[0]: come round
+@@stepb:        add     si, step
 @@advd:         pop     dx
                 pop     ax
                 dec     ax
