@@ -215,6 +215,24 @@ Note `dosbox_debuginfo { op: "status" }` times out on this program --
 `sym_list` asks for a million symbols. Resolve names one at a time
 instead; that works.
 
+**The MCP owns port 2159 and cannot be moved, so use
+`tools/dbgsock.py`.** The MCP fixes its port for the life of the server
+(`DOSBOX_MCP_PORT`), and other worktrees' sessions take 2159 -- every
+launch here then comes back "debug socket did not open" and there is
+nothing to do about it from inside the session. The GUEST reads
+`DOSBOX_DEBUG_PORT`, so launching it ourselves gets a socket nobody can
+claim:
+
+    tools/dbgsock.py launch build/vbd-dbg/dosbox-viz.conf --port 2170
+    tools/dbgsock.py where
+    tools/dbgsock.py send '{"cmd":"resolve","spec":"d_faces.c:712"}' \
+                          '{"cmd":"bp_set","seg":X,"off":Y}'
+
+`where` answers with the file and line -- `d_mdl.obj:mdl_draw+0x5F9,
+d_mdl.bas line 406` -- for BASIC as well as C and asm. Every command
+freezes the CPU exactly as the MCP's do; `{"cmd":"continue"}` resumes.
+Default port is 2170 so it never fights the MCP.
+
 **Link with `/MAP` so the debugger can name things.** Without it
 `qrender.map` carries segments only and the best the debugger can say is
 `LMEM+0x943`; with it there are 2,545 publics and the same address comes
