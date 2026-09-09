@@ -13,15 +13,12 @@ option explicit
 '' one allocator, nothing to bridge.
 ''
 '$include: 'u3d.bi'
-'$include: 'ugl.bi'
-'$include: 'pal.bi'
+'$include: 'ugl.bi'         '' RECT, for mouse.bi below; no call goes through it
 '$include: 'kbd.bi'
 '$include: 'tmr.bi'
 '$include: 'dos.bi'
 '$include: 'arch.bi'
-'$include: 'uglu.bi'
-'$include: 'font.bi'
-'$include: 'mouse.bi'
+'$include: 'mouse.bi'       '' MOUSEINF, which q_env.bi names
 '$include: 'bspfile.bi'
 '$include: 'snd.bi'
 '$include: 'mod.bi'
@@ -36,6 +33,13 @@ option explicit
 '$include: 'q_snd.bi'
 '$include: 'q_mdl.bi'
 '$include: 'q_game.bi'
+
+type PalRgb
+    red   as string * 1
+    green as string * 1
+    blue  as string * 1
+end type
+
 
 ''
 '' This module's own procedures.
@@ -273,6 +277,41 @@ declare sub qglSfPset ( _
     byval y as integer, _
     byval col as integer _
 )
+declare sub qglDrVline ( _
+    byval d as long, _
+    byval x as integer, _
+    byval y0 as integer, _
+    byval y1 as integer, _
+    byval col as integer _
+)
+declare sub qglDrLine ( _
+    byval d as long, _
+    byval x0 as integer, _
+    byval y0 as integer, _
+    byval x1 as integer, _
+    byval y1 as integer, _
+    byval col as integer _
+)
+declare sub qglDrShade ( _
+    byval d as long, _
+    byval x0 as integer, _
+    byval y0 as integer, _
+    byval x1 as integer, _
+    byval y1 as integer, _
+    byval lut as long, _
+    byval row as integer _
+)
+'' mode 13h and the screen as a Surface. vid_init sets the real mode
+'' through mgl afterwards, and mgl restores text mode at exit.
+declare function qglVgaInit ( ) as long
+declare sub qglVgaPalette ( seg pal as PalRgb )
+declare sub scr_pal_load ( )
+declare function scr_pal_fit ( _
+    pal() as PalRgb, _
+    byval r as integer, _
+    byval g as integer, _
+    byval b as integer _
+) as integer
 
 ''
 '' Loading screen geometry. Private to this module on purpose: the bar is
@@ -405,7 +444,11 @@ dim shared ldr_stage as string * 28
 '' 768 bytes, and DGROUP has nowhere near that spare -- see the note on
 '' sc_lhead in d_surf.bas for what happens when something this size lands
 '' there. REDIM'd, used, and erased inside scr_load_palette.
-dim shared ldr_pal() as tRGB
+dim shared ldr_pal() as PalRgb
+'' Quake's palette, read from pal.raw once the mode is up. The HUD picks
+'' its colours out of it and the screenshot writes it; nothing reads it
+'' back from the DAC.
+dim shared scr_pal() as PalRgb
 dim shared spx() as integer      '' projected wireframe vertices
 dim shared spy() as integer
 '' Ring buffers behind the overlay graphs. Builds-per-frame is the one that
@@ -466,7 +509,7 @@ sub scr_load_palette
     dim i as integer
     dim f as single
 
-    redim ldr_pal(255) as tRGB
+    redim ldr_pal(255) as PalRgb
 
     for i = 0 to 255
         ldr_pal(i).red = chr$(0)
@@ -517,7 +560,7 @@ sub scr_load_palette
     ldr_pal(LP_TEXT).green = chr$(138)
     ldr_pal(LP_TEXT).blue  = chr$( 66)
 
-    uglPalSetBuff 0, 256, ldr_pal(0)
+    qglVgaPalette ldr_pal(0)
     erase ldr_pal
 
     redim spx(7) as integer
@@ -570,7 +613,7 @@ sub bg_band ( _
                     if ( k > LP_STN0 + LP_STNN - 1 ) then k = LP_STN0 + LP_STNN - 1
                     if ( sx0 < x0 ) then sx0 = x0
                     if ( sx1 > x1 ) then sx1 = x1
-                    uglHLine ldr.dc, sx0, y, sx1, k
+                    qglDrHline ldr.dc, sx0, y, sx1, k
                 end if
             next sg
 
@@ -594,7 +637,7 @@ sub bg_band ( _
             ''
             crs = y \ 22
             if ( (y mod 22) = 0 ) then
-                uglHLine ldr.dc, x0, y, x1, C_GRIMELO
+                qglDrHline ldr.dc, x0, y, x1, C_GRIMELO
             end if
             ofs = (crs and 1) * 27
 
@@ -602,7 +645,7 @@ sub bg_band ( _
                 h = cint( (clng(x) * 1619& + clng(y) * 7919& + _
                           ((clng(x) * clng(y)) mod 251&)) mod 997& )
                 if ( ((x + ofs) mod 54) = 0 and (y mod 22) <> 0 ) then
-                    uglPset ldr.dc, x, y, C_GRIMELO
+                    qglSfPset ldr.dc, x, y, C_GRIMELO
                 elseif ( h < 26 ) then
                     '' the speck sits a step above ITS column's light, not
                     '' the last column's -- k is stale here, so rederive
@@ -611,9 +654,9 @@ sub bg_band ( _
                     k = LP_STN0 + 44 - att
                     if ( k < LP_STN0 + 2 ) then k = LP_STN0 + 2
                     if ( k > LP_STN0 + LP_STNN - 1 ) then k = LP_STN0 + LP_STNN - 1
-                    uglPset ldr.dc, x, y, k
+                    qglSfPset ldr.dc, x, y, k
                 elseif ( h < 52 ) then
-                    uglPset ldr.dc, x, y, C_GRIMELO
+                    qglSfPset ldr.dc, x, y, C_GRIMELO
                 end if
             next x
         end if
@@ -664,7 +707,7 @@ sub draw_logo ( _
                         bx = px + gx*sc
                         by = y + gy*sc
                         if ( pass = 0 ) then
-                            uglRectF ldr.dc, bx+2, by+3, bx+sc+1, by+sc+2, C_GRIMELO
+                            qglDrFill ldr.dc, bx+2, by+3, bx+sc+1, by+sc+2, C_GRIMELO
                         else
                             '' lit from above: bright ember at the top of
                             '' the glyph falling to a dark red base
@@ -673,13 +716,13 @@ sub draw_logo ( _
                             '' wall. The base stays a readable ember.
                             col = LP_ACC0 + 29 - gy*3
                             if ( col < LP_ACC0 + 12 ) then col = LP_ACC0 + 12
-                            uglRectF ldr.dc, bx, by, bx+sc-1, by+sc-1, col
+                            qglDrFill ldr.dc, bx, by, bx+sc-1, by+sc-1, col
                             '' nibble the block's corner from the hash, so
                             '' the outline stops being ruler-straight
                             h = cint( (clng(bx) * 1619& + clng(by) * 7919&) mod 11& )
                             if ( h < 3 ) then
-                                uglPset ldr.dc, bx, by, col - 2
-                                uglPset ldr.dc, bx+sc-1, by+sc-1, col - 3
+                                qglSfPset ldr.dc, bx, by, col - 2
+                                qglSfPset ldr.dc, bx+sc-1, by+sc-1, col - 3
                             end if
                         end if
                     end if
@@ -701,10 +744,10 @@ sub rivet ( _
     x as integer, _
     y as integer _
 )
-    uglPset ldr.dc, x,   y,   C_METALHI
-    uglPset ldr.dc, x+1, y,   C_METAL
-    uglPset ldr.dc, x,   y+1, C_METAL
-    uglPset ldr.dc, x+1, y+1, C_METALLO
+    qglSfPset ldr.dc, x,   y,   C_METALHI
+    qglSfPset ldr.dc, x+1, y,   C_METAL
+    qglSfPset ldr.dc, x,   y+1, C_METAL
+    qglSfPset ldr.dc, x+1, y+1, C_METALLO
 end sub
 
 
@@ -724,10 +767,10 @@ sub bevel ( _
     else
         a = lo : b = hi
     end if
-    uglHLine ldr.dc, x0, y0, x1, a
-    uglVLine ldr.dc, x0, y0, y1, a
-    uglHLine ldr.dc, x0, y1, x1, b
-    uglVLine ldr.dc, x1, y0, y1, b
+    qglDrHline ldr.dc, x0, y0, x1, a
+    qglDrVline ldr.dc, x0, y0, y1, a
+    qglDrHline ldr.dc, x0, y1, x1, b
+    qglDrVline ldr.dc, x1, y0, y1, b
 end sub
 
 
@@ -786,7 +829,7 @@ sub draw_spinner
                 else
                     col = C_SPIN
                 end if
-                uglLine ldr.dc, spx(i), spy(i), spx(j), spy(j), col
+                qglDrLine ldr.dc, spx(i), spy(i), spx(j), spy(j), col
             end if
         next b
     next i
@@ -874,7 +917,7 @@ sub draw_pct ( _
     if ( p < 0 ) then p = 0
     if ( p > 100 ) then p = 100
 
-    uglRectF dc, xright-20, y, xright, y+6, C_PANEL
+    qglDrFill dc, xright-20, y, xright, y+6, C_PANEL
     draw_string_r dc, xright, y, ltrim$(str$( p )) + "%"
 end sub
 
@@ -888,7 +931,7 @@ end sub
 sub scr_load_stage ( msg as string )
     ldr_stage = msg
     if ( ldr.dc = 0 ) then exit sub
-    uglRectF ldr.dc, PAN_X+9, PAN_Y+8, PAN_X+PAN_W-32, PAN_Y+14, C_PANEL
+    qglDrFill ldr.dc, PAN_X+9, PAN_Y+8, PAN_X+PAN_W-32, PAN_Y+14, C_PANEL
     draw_string ldr.dc, PAN_X+10, PAN_Y+8, rtrim$( ldr_stage )
 end sub
 
@@ -927,11 +970,11 @@ sub draw_bar ( _
     '' than once because the fill only ever grows here -- but a flush during
     '' a map change rewinds it, and a stale tail is worse than the redraw.
     ''
-    uglRectF h_dc, x, y, x+wdt, y+hgt, C_TROUGH
-    uglHLine h_dc, x, y, x+wdt, C_EDGE
-    uglVLine h_dc, x, y, y+hgt, C_EDGE
-    uglHLine h_dc, x, y+hgt, x+wdt, C_EDGEHI
-    uglVLine h_dc, x+wdt, y, y+hgt, C_EDGEHI
+    qglDrFill h_dc, x, y, x+wdt, y+hgt, C_TROUGH
+    qglDrHline h_dc, x, y, x+wdt, C_EDGE
+    qglDrVline h_dc, x, y, y+hgt, C_EDGE
+    qglDrHline h_dc, x, y+hgt, x+wdt, C_EDGEHI
+    qglDrVline h_dc, x+wdt, y, y+hgt, C_EDGEHI
 
     if ( w < 1 ) then exit sub
 
@@ -942,9 +985,9 @@ sub draw_bar ( _
     ''
     for i = 1 to hgt-1
         k = LP_ACC0 + LP_ACCN - 1 - ((i * (LP_ACCN-4)) \ hgt)
-        uglHLine h_dc, x+1, y+i, x+w, k
+        qglDrHline h_dc, x+1, y+i, x+w, k
     next i
-    uglHLine h_dc, x+1, y+1, x+w, C_ACCHI
+    qglDrHline h_dc, x+1, y+1, x+w, C_ACCHI
 end sub
 
 
@@ -993,7 +1036,7 @@ sub scr_load_chrome ( _
     sub1 = rtrim$( g.env.map_name )
     plate_w = len(sub1)*4 + 26
     plate_x = (320 - plate_w) \ 2
-    uglRectF ldr.dc, plate_x, PAN_Y-19, plate_x+plate_w, PAN_Y-4, C_METAL
+    qglDrFill ldr.dc, plate_x, PAN_Y-19, plate_x+plate_w, PAN_Y-4, C_METAL
     bevel plate_x, PAN_Y-19, plate_x+plate_w, PAN_Y-4, C_METALHI, C_METALLO, -1
     bevel plate_x+2, PAN_Y-17, plate_x+plate_w-2, PAN_Y-6, C_METALHI, C_METALLO, 0
     rivet plate_x+4, PAN_Y-16
@@ -1003,7 +1046,7 @@ sub scr_load_chrome ( _
     draw_string ldr.dc, (320 - len(sub1)*4) \ 2, PAN_Y-14, sub1
 
     '' the well the bar sits in, sunken into the wall
-    uglRectF ldr.dc, PAN_X, PAN_Y, PAN_X+PAN_W, PAN_Y+PAN_H, C_PANEL
+    qglDrFill ldr.dc, PAN_X, PAN_Y, PAN_X+PAN_W, PAN_Y+PAN_H, C_PANEL
     bevel PAN_X, PAN_Y, PAN_X+PAN_W, PAN_Y+PAN_H, C_EDGEHI, C_EDGE, 0
 
     ftr = "powered by uGL"
@@ -1081,24 +1124,77 @@ end sub
 '' desc: Best-fits the overlay's colours against whatever palette videoOpen
 ''       just installed. Called once, after the Quake palette is live.
 ''::::::::::
-sub scr_hud_colors
-    redim hpal(255) as tRGB
+''::::::::::
+'' name: scr_pal_load
+'' desc: The game palette, 768 bytes of pal.raw -- mkassets writes it
+''       beside the exe from color/palette.lmp.
+''::::::::::
+sub scr_pal_load
+    dim f as integer
+    dim i as integer
 
-    uglPalGetBuff 0, 256, hpal(0)
-    hc_bg     = uglPalBestFitBuff( hpal(0),  12,  10,   8 )
-    hc_slab   = uglPalBestFitBuff( hpal(0),  52,  40,  28 )
-    hc_slabhi = uglPalBestFitBuff( hpal(0), 104,  84,  60 )
-    hc_slablo = uglPalBestFitBuff( hpal(0),  18,  14,  10 )
-    hc_hist   = uglPalBestFitBuff( hpal(0), 150, 104,  56 )
-    hc_peak   = uglPalBestFitBuff( hpal(0), 252, 216, 128 )
-    hc_meter  = uglPalBestFitBuff( hpal(0), 200, 128,  56 )
+    redim scr_pal(255) as PalRgb
+    f = freefile
+    open "pal.raw" for binary as #f
+    if ( lof( f ) < 768 ) then
+        close #f
+        sys_error "0x3002, pal.raw is missing -- run make assets"
+    end if
+    for i = 0 to 255
+        get #f, , scr_pal(i)
+    next i
+    close #f
+end sub
+
+''::::::::::
+'' name: scr_pal_fit
+'' desc: The palette index nearest an RGB, by mgl's uglPalBestFit rule:
+''       6-bit channels, green weighted 59, red 30, blue 11, squared,
+''       entry 0 never chosen, the first minimum kept.
+''::::::::::
+function scr_pal_fit ( _
+    pal() as PalRgb, _
+    byval r as integer, _
+    byval g as integer, _
+    byval b as integer _
+) as integer
+    dim i as integer
+    dim best as integer
+    dim d as long
+    dim lo as long
+    dim dr as long
+    dim dg as long
+    dim dbl as long
+
+    lo = 2147483647
+    for i = 1 to 255
+        dr  = ( asc( pal(i).red )   \ 4 ) - ( r \ 4 )
+        dg  = ( asc( pal(i).green ) \ 4 ) - ( g \ 4 )
+        dbl = ( asc( pal(i).blue )  \ 4 ) - ( b \ 4 )
+        d = dg*dg*3481 + dr*dr*900 + dbl*dbl*121
+        if ( d < lo ) then
+            lo = d
+            best = i
+        end if
+    next i
+    scr_pal_fit = best
+end function
+
+sub scr_hud_colors
+    scr_pal_load
+    hc_bg     = scr_pal_fit( scr_pal(),  12,  10,   8 )
+    hc_slab   = scr_pal_fit( scr_pal(),  52,  40,  28 )
+    hc_slabhi = scr_pal_fit( scr_pal(), 104,  84,  60 )
+    hc_slablo = scr_pal_fit( scr_pal(),  18,  14,  10 )
+    hc_hist   = scr_pal_fit( scr_pal(), 150, 104,  56 )
+    hc_peak   = scr_pal_fit( scr_pal(), 252, 216, 128 )
+    hc_meter  = scr_pal_fit( scr_pal(), 200, 128,  56 )
     '' gold, not green: Quake has no bright green -- a green target
     '' best-fits onto a BLUE ramp entry -- and its own status bar numbers
     '' are gold anyway, so this is the more Quake convention regardless
-    hc_good   = uglPalBestFitBuff( hpal(0), 244, 196,  92 )
-    hc_warn   = uglPalBestFitBuff( hpal(0), 224, 164,  48 )
-    hc_bad    = uglPalBestFitBuff( hpal(0), 216,  52,  36 )
-    erase hpal
+    hc_good   = scr_pal_fit( scr_pal(), 244, 196,  92 )
+    hc_warn   = scr_pal_fit( scr_pal(), 224, 164,  48 )
+    hc_bad    = scr_pal_fit( scr_pal(), 216,  52,  36 )
 
     vu_pk(0) = 0
     vu_pk(1) = 0
@@ -1111,7 +1207,7 @@ end sub
 ''::::::::::
 '' name: hud_shade
 '' desc: Tinted glass: darkens the scene under a rect by pushing every
-''       pixel through a dark row of Quake's own colormap -- uglShadeRect
+''       pixel through a dark row of Quake's own colormap -- qglDrShade
 ''       does the walk. Falls back to the opaque slab when no colormap is
 ''       loaded, so the overlay never depends on -lm's data being there.
 ''::::::::::
@@ -1126,7 +1222,7 @@ sub hud_shade ( _
 )
 
     if ( mod_cm_ready( g ) = 0 ) then
-        uglRectF dc, x0, y0, x1, y1, hc_slab
+        qglDrFill dc, x0, y0, x1, y1, hc_slab
         exit sub
     end if
     ''
@@ -1145,7 +1241,7 @@ sub hud_shade ( _
     '' way sb_build does.
     ''
     cmp = mod_cm_map ( g )
-    uglShadeRect dc, x0, y0, x1, y1, cmp, rw
+    qglDrShade dc, x0, y0, x1, y1, cmp, rw
 end sub
 
 
@@ -1164,22 +1260,22 @@ sub hud_panel ( _
     '' colormap, with the bevel and rivets on top saying where it ends.
     ''
     hud_shade g, dc, x, y, x+w, y+h, 46
-    uglHLine dc, x, y, x+w, hc_slabhi
-    uglVLine dc, x, y, y+h, hc_slabhi
-    uglHLine dc, x, y+h, x+w, hc_slablo
-    uglVLine dc, x+w, y, y+h, hc_slablo
+    qglDrHline dc, x, y, x+w, hc_slabhi
+    qglDrVline dc, x, y, y+h, hc_slabhi
+    qglDrHline dc, x, y+h, x+w, hc_slablo
+    qglDrVline dc, x+w, y, y+h, hc_slablo
 
-    uglPset dc, x+2,   y+2,   hc_slabhi
-    uglPset dc, x+3,   y+3,   hc_slablo
-    uglPset dc, x+w-3, y+2,   hc_slabhi
-    uglPset dc, x+w-2, y+3,   hc_slablo
-    uglPset dc, x+2,   y+h-3, hc_slabhi
-    uglPset dc, x+3,   y+h-2, hc_slablo
-    uglPset dc, x+w-3, y+h-3, hc_slabhi
-    uglPset dc, x+w-2, y+h-2, hc_slablo
+    qglSfPset dc, x+2,   y+2,   hc_slabhi
+    qglSfPset dc, x+3,   y+3,   hc_slablo
+    qglSfPset dc, x+w-3, y+2,   hc_slabhi
+    qglSfPset dc, x+w-2, y+3,   hc_slablo
+    qglSfPset dc, x+2,   y+h-3, hc_slabhi
+    qglSfPset dc, x+3,   y+h-2, hc_slablo
+    qglSfPset dc, x+w-3, y+h-3, hc_slabhi
+    qglSfPset dc, x+w-2, y+h-2, hc_slablo
 
     '' the title sits in the top rule, so blank the run it occupies
-    uglHLine dc, x+5, y, x+8 + len( title )*4, hc_slab
+    qglDrHline dc, x+5, y, x+8 + len( title )*4, hc_slab
     draw_string dc, x+7, y-3, title
 end sub
 
@@ -1215,9 +1311,9 @@ sub hud_num ( _
                         bx = px + gx*sc
                         by = y + gy*sc
                         if ( pass = 0 ) then
-                            uglRectF dc, bx+1, by+1, bx+sc, by+sc, hc_slablo
+                            qglDrFill dc, bx+1, by+1, bx+sc, by+sc, hc_slablo
                         else
-                            uglRectF dc, bx, by, bx+sc-1, by+sc-1, col
+                            qglDrFill dc, bx, by, bx+sc-1, by+sc-1, col
                         end if
                     end if
                 next gx
@@ -1257,10 +1353,10 @@ sub hud_vu ( _
         vu_pk(ch) = vu_pk(ch) - 1
     end if
 
-    uglRectF dc, x, y, x+w, y+h, hc_bg
-    uglRect  dc, x, y, x+w, y+h, hc_slablo
-    if ( f > 1 ) then uglRectF dc, x+1, y+1, x+f-1, y+h-1, hc_meter
-    if ( vu_pk(ch) > 1 ) then uglVLine dc, x+vu_pk(ch), y+1, y+h-1, hc_peak
+    qglDrFill dc, x, y, x+w, y+h, hc_bg
+    qglDrRect  dc, x, y, x+w, y+h, hc_slablo
+    if ( f > 1 ) then qglDrFill dc, x+1, y+1, x+f-1, y+h-1, hc_meter
+    if ( vu_pk(ch) > 1 ) then qglDrVline dc, x+vu_pk(ch), y+1, y+h-1, hc_peak
 end sub
 
 sub hud_row ( _
@@ -1294,7 +1390,7 @@ sub hud_graph ( _
 
     if ( mx < 1 ) then mx = 1
 
-    uglRectF dc, x, y, x+GRAPH_N, y+h, hc_bg
+    qglDrFill dc, x, y, x+GRAPH_N, y+h, hc_bg
 
     ''
     '' Reference lines at half and full scale, dashed. Without them a flat
@@ -1302,8 +1398,8 @@ sub hud_graph ( _
     '' read as broken rather than as steady and quiet respectively.
     ''
     for i = 0 to GRAPH_N-1 step 3
-        uglPset dc, x+i, y+1, hc_slablo
-        uglPset dc, x+i, y+h\2, hc_slablo
+        qglSfPset dc, x+i, y+1, hc_slablo
+        qglSfPset dc, x+i, y+h\2, hc_slablo
     next i
 
     for i = 0 to GRAPH_N-1
@@ -1313,10 +1409,10 @@ sub hud_graph ( _
             top = (v * h) \ mx
             if ( top > h ) then top = h
             if ( v >= mx ) then c = hc_peak else c = hc_hist
-            uglVLine dc, x+i, y+h-top, y+h, c
+            qglDrVline dc, x+i, y+h-top, y+h, c
         end if
     next i
-    uglRect dc, x, y, x+GRAPH_N, y+h, hc_slablo
+    qglDrRect dc, x, y, x+GRAPH_N, y+h, hc_slablo
 end sub
 
 
@@ -1334,9 +1430,9 @@ sub hud_bar ( _
     if ( percent > 100 ) then percent = 100
     f = (w * percent) / 100.0
 
-    uglRectF dc, x, y, x+w, y+h, hc_bg
-    uglRect  dc, x, y, x+w, y+h, hc_slablo
-    if ( f > 1 ) then uglRectF dc, x+1, y+1, x+f-1, y+h-1, hc_meter
+    qglDrFill dc, x, y, x+w, y+h, hc_bg
+    qglDrRect  dc, x, y, x+w, y+h, hc_slablo
+    if ( f > 1 ) then qglDrFill dc, x+1, y+1, x+f-1, y+h-1, hc_meter
 end sub
 
 
@@ -1554,7 +1650,6 @@ sub scr_screenshot ( _
     dim rowlen as integer
     dim imgsz as long
     dim off_bits as long
-    dim palbuf(255) as tRGB
     dim row as string
     dim buf as string
 
@@ -1565,8 +1660,6 @@ sub scr_screenshot ( _
     rowlen  = w + pad
     imgsz   = clng(rowlen) * clng(h)
     off_bits = 14 + 40 + 1024
-
-    uglPalGetBuff 0, 256, palbuf(0)
 
     f = freefile
     open flname for binary as #f
@@ -1590,7 +1683,7 @@ sub scr_screenshot ( _
     ''
     buf = ""
     for x = 0 to 255
-        buf = buf + palbuf(x).blue + palbuf(x).green + palbuf(x).red + chr$(0)
+        buf = buf + scr_pal(x).blue + scr_pal(x).green + scr_pal(x).red + chr$(0)
     next x
     put #f, , buf
 
@@ -1624,8 +1717,8 @@ end sub
 sub scr_begin_loading ( _
     g as Game _
 )
-    ldr.dc = uglSetVideoDC( UGL.8BIT, 320, 200, 1 )
-    if ( ldr.dc = false ) then
+    ldr.dc = qglVgaInit()
+    if ( ldr.dc = 0 ) then
         sys_error "0x3001, Could not set loading video mode"
     end if
 

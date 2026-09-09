@@ -791,6 +791,12 @@ def main():
         open(os.path.join(outdir, name), "wb").write(payload)
         print(f"  {name}: {LM_ATLAS_W}x{rows} = {len(payload):,} bytes (flat, unzipped)")
 
+    # The palette too, flat: screen.bas picks the HUD colours out of it and
+    # writes it into screenshots, and reads it with a plain OPEN.
+    pal_raw = pack_read(packpath, 'color/palette.lmp')[:768]
+    open(os.path.join(outdir, "pal.raw"), "wb").write(pal_raw)
+    print(f"  pal.raw: {len(pal_raw)} bytes (flat, unzipped)")
+
     tbl = bytearray()
     for k in range(ntex):
         for lvl in range(MIPS):

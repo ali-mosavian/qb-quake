@@ -16,6 +16,7 @@
 #   tools/check.sh --depth      the spawn fall with and without the depth
 #                               buffer. The two frames may differ only where
 #                               depth legitimately changes the picture.
+#   tools/check.sh --hud        the overlay, stats on, against tools/ref/hud.bmp
 #   tools/check.sh --model      the alias model against -nomdl at two campath
 #                               ticks: one where it must draw nothing, one
 #                               where it must draw something.
@@ -103,10 +104,8 @@ fi
 # it stretched the surviving sliver across the frame. On dm3ish's campath
 # that is a black wedge over the wall, wandering as the camera walks.
 #
-# It does NOT cover the second half of that bug: qgl$drawP can still run
-# away on a polygon a fraction of a scanline tall, which shows up only
-# standing next to a model. See AGENTS.md; that one wants a native qgl
-# test, not a frame.
+# The other half of those streaks -- the clipper's ring walk stepping
+# below offset 0 of a BASIC array -- is t09rs case 13, native.
 #
 # Two viewpoints, because one assertion cannot fail both ways:
 #
@@ -127,6 +126,20 @@ fi
 # "reuse after eviction is untested" note in AGENTS.md and not this
 # test's business. Unlit there is no cache at all and the comparison is
 # exact.
+# --hud draws the overlay. Its panels, bevels, bars and graphs went through
+# mgl's 2D calls onto what is now a qgl Surface -- SF_addrTB at 38 where
+# mgl reads DC_addrTB at 32 -- and a -stats run never returned at all: no
+# frame, no error.log, killed at 150s and at 600s under both cores. Two
+# ticks, unlit, so the fps still reads 0 and every counter is fixed;
+# measured byte-identical run to run.
+if [[ "${1:-}" == "--hud" ]]; then
+    build_exe
+    run_frame "-stats -yaw 183 -bench 2 -ticks 2" "$VBD_OUT/hud.bmp"
+    out=$(python3 "$ROOT/tools/imgdiff.py" "$ROOT/tools/ref/hud.bmp" "$VBD_OUT/hud.bmp" | tail -1)
+    [[ "$out" == IDENTICAL* ]] && { echo "PASS  hud: $out"; exit 0; }
+    echo "FAIL  hud: $out"; exit 1
+fi
+
 if [[ "${1:-}" == "--model" ]]; then
     build_exe
     rc=0

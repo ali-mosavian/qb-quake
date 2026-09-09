@@ -1753,6 +1753,45 @@ pixel over (48% of the bench frame) and is a fourth deviation from mgl.
 scattered over textured walls, no geometry. A reference regenerated for
 a sampling change is the fix, not a regression, but say so each time.
 
+## Retiring mgl, module by module: screen.bas
+
+`screen.bas` was the first module cut over, and it was not a port so
+much as a repair: the HUD's panels, bevels, bars and graphs went through
+`uglRectF`/`uglHLine`/`uglPset` onto `h_dst_dc`, which has been a qgl
+Surface since bd04500. mgl reads its scanline table at `DC_addrTB` (32)
+where a Surface keeps `SF_addrTB` (38), so every HUD write landed at an
+address read out of `zsf`/`zmode`, and a `-stats` run never returned:
+no frame, no `error.log`, killed at 150s and at 600s under both cores.
+`tools/check.sh --hud` is that run -- two ticks, unlit, so the fps still
+reads 0 and every counter is fixed, byte-identical run to run -- against
+`tools/ref/hud.bmp`.
+
+What replaced what: `uglRectF` -> `qglDrFill`, `uglHLine`/`uglVLine` ->
+`qglDrHline`/`qglDrVline`, `uglRect` -> `qglDrRect`, `uglLine` ->
+`qglDrLine`, `uglPset` -> `qglSfPset`, `uglShadeRect` -> `qglDrShade`,
+all with the same argument order and the same inclusive corners.
+`uglSetVideoDC(8BIT, 320, 200)` for the loading screen is `qglVgaInit`,
+and the loading palette goes in through `qglVgaPalette`. `vid_init`
+still sets the real mode through mgl afterwards and mgl still restores
+text mode at exit; qgl's mode 13h in between is invisible to it.
+
+The palette is no longer read back from the DAC. `mkassets.py` writes
+`pal.raw` (768 bytes of `color/palette.lmp`) beside the atlases,
+`scr_pal_load` reads it with a plain OPEN, `scr_pal_fit` is mgl's
+`uglPalBestFit` in BASIC (6-bit channels, green 59 / red 30 / blue 11
+squared, entry 0 never chosen), and the screenshot writes those bytes.
+That moved `tools/ref/bench.bmp` by ZERO pixels and 254 palette entries:
+the old reference carried mgl's 6-bit DAC read-back (every value a
+multiple of 4), the new one the 8-bit palette. `imgdiff` says `DIFFER 0
+of 16000` for that case, which is not IDENTICAL and not a picture change
+either.
+
+Two headers stay included for their types alone: `ugl.bi` for `RECT`,
+which `mouse.bi` names, and `mouse.bi` for `MOUSEINF`, which `q_env.bi`
+names. Those go when the input state does. `RGB` is a reserved word to
+BC -- `type Rgb` fails with "Identifier expected" at every use and
+nowhere near the definition -- hence `PalRgb`.
+
 ## `-nostats` makes the picture deterministic
 
 With the HUD off the renderer is **byte-identical run to run** -- one
