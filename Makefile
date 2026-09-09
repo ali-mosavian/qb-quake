@@ -99,6 +99,12 @@ ASSETS := data/assets/assets.zip
 # regenerated these. Only reachable with the PAK; wildcard-guarded so a
 # tree without it is not a build failure.
 MDL_ASSETS := $(if $(wildcard $(PAK)),data/assets/$(MDL).geo)
+# The A* flight path -bench -campath walks. Generated, untracked, and it
+# was a ZERO-BYTE file in every clean build: -campath then read nothing,
+# stood at the spawn for the whole run, and `check.sh --churn` -- whose
+# entire job is to walk it and provoke evictions -- compared two
+# identical standing frames and called that a pass.
+CAM_ASSETS := data/assets/campath.bin
 ASSET_FILES := $(wildcard data/assets/*)
 EXE  := $(BUILD)/qrender.exe
 
@@ -106,7 +112,7 @@ EXE  := $(BUILD)/qrender.exe
 
 all: build                      ## build the renderer (default)
 build: $(EXE)
-assets: $(ASSETS) $(MDL_ASSETS)   ## regenerate the preprocessed textures
+assets: $(ASSETS) $(MDL_ASSETS) $(CAM_ASSETS)   ## regenerate the preprocessed textures
 
 $(ASSETS): data/$(MAP) data/base.dat tools/mkassets.py
 	@python3 tools/mkassets.py data/$(MAP) data/base.dat data/assets
@@ -115,6 +121,9 @@ $(ASSETS): data/$(MAP) data/base.dat tools/mkassets.py
 # stands in for the texture set.
 data/assets/$(MDL).geo: $(PAK) tools/mkmdl.py
 	@python3 tools/mkmdl.py $(PAK) $(MDL) data/assets
+
+data/assets/campath.bin: data/$(MAP) tools/campath.py
+	@python3 tools/campath.py data/$(MAP) data/assets
 
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -165,7 +174,7 @@ $(BUILD)/.assets-stamp: $(ASSET_FILES) | $(BUILD)
 	cp -R data/assets/* $(BUILD)/
 	touch $@
 
-$(BUILD)/.assets-stamp: $(MDL_ASSETS)
+$(BUILD)/.assets-stamp: $(MDL_ASSETS) $(CAM_ASSETS)
 
 $(EXE): $(BAS_OBJS) $(C_OBJS) $(ASM_OBJS) $(BUILD)/stuff.ini $(BUILD)/base.dat $(BUILD)/FONT.FNT $(BUILD)/UGLV.LIB $(BUILD)/.assets-stamp
 	@python3 tools/qblint.py

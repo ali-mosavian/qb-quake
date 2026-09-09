@@ -272,6 +272,13 @@ viz)
     # windowed run for watching it live. core=dynamic always: it is several
     # times faster and it is what makes hands-on monitoring practical.
     # starves the debug socket; use dosbox.sh debug for a controllable one.
+    #
+    # The template's trailing `exit` is dropped here and nowhere else. It
+    # quits DOSBox the moment qrender returns, so a viz window shuts
+    # itself the instant you press Esc, taking with it whatever qrender
+    # drew on the way out -- and an error drawn as PIXELS is invisible to
+    # text_screen, so there is nothing left to read. build and run WANT
+    # that exit; watching does not.
     map="${arg:-dm3ish.bsp}"
     out="${VBD_OUT:-$ROOT/build/vbd}"
     [[ -f "$out/qrender.exe" ]] || { echo "no exe; run: tools/dosbox.sh build" >&2; exit 1; }
@@ -285,6 +292,7 @@ viz)
         -e "s|^cycles=75000$|cycles=${CYCLES:-75000}|" \
         -e "s|^core=dynamic$|core=${CORE:-dynamic}|" \
         -e 's/^output=surface$/output=opengl/' \
+        -e '$ { /^exit$/d; }' \
         -e '/^\[sdl\]/a\
 fullscreen=false\
 autolock=true' \
