@@ -25,8 +25,7 @@ option explicit
 
 defint a-z
 
-'' dos.bi FIRST: arch.bi says so in its own header, and the reason is
-'' that UAR's first member is `f As FILE`, which dos.bi defines.
+'' dos.bi FIRST: arch.bi says so in its own header.
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
 '$include: 'dos.bi'
@@ -61,6 +60,23 @@ declare function qglArHandle ( byval h as long ) as integer
 declare function qglArPerpg ( byval h as long ) as integer
 declare function qglArPages ( byval h as long ) as integer
 declare sub qglArFree ( byval h as long )
+''
+'' The archive reader, qgl's. mgl's uar carried an inflate and a UAR the
+'' caller had to declare and then only pass back; every member is stored
+'' now, and a handle is enough.
+''
+'' flname is NOT byval: VBDOS passes a plain "as string" parameter as a
+'' near pointer to its descriptor, which is what the assembly's s:word
+'' wants.
+''
+declare function qglZipOpenBas ( flname as string ) as integer
+declare function qglZipSize ( byval h as integer ) as long
+declare function qglZipRead ( _
+    byval h as integer, _
+    byval dst as long, _
+    byval nbytes as long _
+) as long
+declare sub qglZipClose ( byval h as integer )
 
 declare function qglArrAll () as integer
 declare function qgl_arr_count ( n as long ) as integer
@@ -70,14 +86,15 @@ declare function qgl_arr_fill ( byval h as long, byval cnt as long ) as integer
 '' map: -qglarr runs before mod_open, which is the only point at which
 '' all of the store slots are still free.
 function qgl_arr_count ( n as long ) as integer
-    dim u as UAR
+    dim u as integer
     dim sz as long
 
     qgl_arr_count = 0
     n = 0
-    if ( uarOpen( u, "assets.zip::faces.pag", F4READ ) = 0 ) then exit function
-    sz = uarSize&( u )
-    uarClose u
+    u = qglZipOpenBas( "assets.zip::faces.pag" )
+    if ( u = 0 ) then exit function
+    sz = qglZipSize( u )
+    qglZipClose u
     if ( sz <= 0 ) then exit function
     n = sz \ ARR_REC
     qgl_arr_count = -1
@@ -95,7 +112,7 @@ end function
 '' by four bytes -- which looks exactly like a mapping bug and is not.
 ''
 function qgl_arr_fill ( byval h as long, byval cnt as long ) as integer
-    dim u as UAR
+    dim u as integer
     dim pg as integer
     dim npg as integer
     dim perpg as long
@@ -114,7 +131,8 @@ function qgl_arr_fill ( byval h as long, byval cnt as long ) as integer
     payload = perpg * ARR_REC
     remain = cnt * ARR_REC
 
-    if ( uarOpen( u, "assets.zip::faces.pag", F4READ ) = 0 ) then exit function
+    u = qglZipOpenBas( "assets.zip::faces.pag" )
+    if ( u = 0 ) then exit function
 
     for pg = 0 to npg - 1
         ''
@@ -128,20 +146,20 @@ function qgl_arr_fill ( byval h as long, byval cnt as long ) as integer
         ''
         sg = emsMapEx( hnd, pg, ARR_SLOT )
         if ( sg = 0 ) then
-            uarClose u
+            qglZipClose u
             exit function
         end if
         p = clng( sg ) * 65536
         want = payload
         if ( want > remain ) then want = remain
-        if ( uarReadH( u, p, want ) <> want ) then
-            uarClose u
+        if ( qglZipRead( u, p, want ) <> want ) then
+            qglZipClose u
             exit function
         end if
         remain = remain - want
     next pg
 
-    uarClose u
+    qglZipClose u
     if ( remain <> 0 ) then exit function
     qgl_arr_fill = -1
 end function

@@ -88,6 +88,23 @@ declare function qglSfNew ( _
     byval whr as integer _
 ) as long
 declare function qglSfWrRow ( byval s as long, byval y as integer ) as long
+''
+'' The archive reader, qgl's. mgl's uar carried an inflate and a UAR the
+'' caller had to declare and then only pass back; every member is stored
+'' now, and a handle is enough.
+''
+'' flname is NOT byval: VBDOS passes a plain "as string" parameter as a
+'' near pointer to its descriptor, which is what the assembly's s:word
+'' wants.
+''
+declare function qglZipOpenBas ( flname as string ) as integer
+declare function qglZipSize ( byval h as integer ) as long
+declare function qglZipRead ( _
+    byval h as integer, _
+    byval dst as long, _
+    byval nbytes as long _
+) as long
+declare sub qglZipClose ( byval h as integer )
 declare sub qglSfFree ( byval s as long )
 declare function qglFileOpenBas ( flname as string ) as integer
 declare function qglFileRead ( _
@@ -139,7 +156,7 @@ sub mdl_load ( _
     dim fh as integer, ti as integer
     dim hdr as string * 38
     dim geopath as string, skinpath as string, vtxpath as string
-    dim u as UAR
+    dim u as integer
     dim vtxbytes as long
     dim vtxseg as integer
     dim skin_w as integer, skin_h as integer
@@ -208,12 +225,13 @@ sub mdl_load ( _
     if ( g.mdl.vtx_hnd <> 0 ) then
         vtxseg = emsMapEx%( g.mdl.vtx_hnd, 0, PAGE_SLOT )
         if ( vtxseg <> 0 ) then
-            if ( uarOpen( u, vtxpath, F4READ ) <> 0 ) then
-                if ( uarReadH( u, clng( vtxseg ) * 65536&, vtxbytes ) <> vtxbytes ) then
+            u = qglZipOpenBas( vtxpath )
+            if ( u <> 0 ) then
+                if ( qglZipRead( u, clng( vtxseg ) * 65536&, vtxbytes ) <> vtxbytes ) then
                     emsFree g.mdl.vtx_hnd
                     g.mdl.vtx_hnd = 0
                 end if
-                uarClose u
+                qglZipClose u
             else
                 emsFree g.mdl.vtx_hnd
                 g.mdl.vtx_hnd = 0

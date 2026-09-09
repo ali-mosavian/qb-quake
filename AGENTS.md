@@ -1753,6 +1753,47 @@ pixel over (48% of the bench frame) and is a fourth deviation from mgl.
 scattered over textured walls, no geometry. A reference regenerated for
 a sampling change is the fix, not a regression, but say so each time.
 
+## The archive reader: stored members only, and mkassets stores
+
+`src/qgl/zip.asm` replaces the slice of mgl's `uar*` this renderer used
+-- `uarOpen`, `uarSize`, `uarRead`, `uarReadH`, `uarClose`, on
+`"assets.zip::member"` and on plain names. `qglZipOpen` /
+`qglZipOpenBas` / `qglZipSize` / `qglZipRead` / `qglZipClose`, and a
+handle indexes a table here rather than the caller declaring a `UAR` it
+only ever passes back.
+
+**Stored only, and `tools/mkassets.py` now writes stored.** mgl's reader
+carries an inflate and a window table to drive it; deleting that is most
+of the point. A member by any other method is REFUSED rather than read
+as though it were stored -- the difference between a missing file and
+plausible garbage. The archive goes 236,287 -> 570,377 bytes on disk,
+which nothing here is measured in.
+
+It walks the LOCAL headers rather than the central directory. Reaching
+the directory means scanning backwards for a signature past a comment of
+unknown length; walking forward from byte 0 needs no such guess, and
+sixteen members is sixteen seeks, once.
+
+**The extra field is the trap, and our own archive cannot catch it.**
+mkassets writes no extra field, so the skip past one is dead code
+against every asset we ship -- and a reader that forgets it lands 28
+bytes into the data of any archive from any other tool. `t25zip` builds
+a second archive with the SYSTEM `zip -0`, which stores a 28-byte
+timestamp field on each local header, and diffs a read of it against the
+same member extracted by `unzip`. Mutation-checked: drop the
+`lh_xtralen` term and that case alone goes red.
+
+`lm.bmp` is still loaded by `uglNewBMPEx`, which reads the archive
+through mgl's own uar. That keeps working because mgl reads stored
+members; it goes when the lightmap atlas becomes a Surface.
+
+One thing this cost that was not the reader's fault: `t25zip`'s clamp
+case asks for 4096 bytes of a 320-byte member and its buffer was 256,
+so the 320 it correctly returned ran into the reference buffer behind
+it and the compare two cases later failed. The reader was right for an
+hour of looking at it. Size a test's buffer for the largest read the
+test makes, not for the one the case in front of you does.
+
 ## Retiring mgl, module by module: screen.bas
 
 `screen.bas` was the first module cut over, and it was not a port so

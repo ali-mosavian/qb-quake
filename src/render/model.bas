@@ -66,6 +66,23 @@ declare function qglArNew ( byval typ as integer, byval elsz as integer, _
 declare function qglArMap ( byval h as long, a() as any, _
                               byval idx as long ) as long
 declare function qglArWin ( byval h as long, byval idx as long ) as long
+''
+'' The archive reader, qgl's. mgl's uar carried an inflate and a UAR the
+'' caller had to declare and then only pass back; every member is stored
+'' now, and a handle is enough.
+''
+'' flname is NOT byval: VBDOS passes a plain "as string" parameter as a
+'' near pointer to its descriptor, which is what the assembly's s:word
+'' wants.
+''
+declare function qglZipOpenBas ( flname as string ) as integer
+declare function qglZipSize ( byval h as integer ) as long
+declare function qglZipRead ( _
+    byval h as integer, _
+    byval dst as long, _
+    byval nbytes as long _
+) as long
+declare sub qglZipClose ( byval h as integer )
 
 declare sub mod_load_clipnodes ( _
     g as Game _
@@ -296,7 +313,7 @@ sub mod_load_faces ( _
     faces() as Face _
 )
     dim mapped as long
-    dim u as UAR
+    dim u as integer
     dim p as long
     dim nbytes as long
 
@@ -318,18 +335,18 @@ sub mod_load_faces ( _
                                     clng( g.wld.count.faces ), 0 )
     if ( g.wld.store.faces = 0 ) then sys_error "0x0039, no qgl store for faces"
 
-    '' The block, then the bytes. uarReadH is mgl's reader and is proven;
-    '' what changed hands is where the bytes land.
+    '' The block, then the bytes.
     p = qglArWin( g.wld.store.faces, 0 )
     if ( p = 0 ) then sys_error "0x0039, qgl faces store would not map"
-    if ( uarOpen( u, "assets.zip::faces.pag", F4READ ) = 0 ) then
+    u = qglZipOpenBas( "assets.zip::faces.pag" )
+    if ( u = 0 ) then
         sys_error "0x0039, faces.pag would not open"
     end if
-    if ( uarReadH( u, p, nbytes ) <> nbytes ) then
-        uarClose u
+    if ( qglZipRead( u, p, nbytes ) <> nbytes ) then
+        qglZipClose u
         sys_error "0x0039, faces.pag came up short"
     end if
-    uarClose u
+    qglZipClose u
 
     '' Hands the descriptor over. NOT ceremony: this is what takes
     '' it out of the far heap's chain, and only BASIC can do that
@@ -366,7 +383,7 @@ end sub
 sub mod_load_colormap ( _
     g as Game _
 )
-    dim u as UAR
+    dim u as integer
 
     scr_load_stage "colormap"
 
@@ -375,19 +392,20 @@ sub mod_load_colormap ( _
     g.wld.cmap.dc = 0
     g.wld.cmap.size = 0
 
-    if ( uarOpen( u, "assets.zip::colmap.bin", F4READ ) = 0 ) then exit sub
+    u = qglZipOpenBas( "assets.zip::colmap.bin" )
+    if ( u = 0 ) then exit sub
 
     g.wld.cmap.dc = uglNew&( UGL.EMS, UGL.8BIT, 16384, 1 )
     if ( g.wld.cmap.dc <> 0 ) then
         p = uglMapEx&( g.wld.cmap.dc, 0, CM_SLOT )
         if ( p <> 0 ) then
-            if ( uarReadH( u, p, 16384 ) = 16384 ) then
+            if ( qglZipRead( u, p, 16384 ) = 16384 ) then
                 g.wld.cmap.size = 16384
             end if
         end if
     end if
 
-    uarClose u
+    qglZipClose u
 
     if ( g.wld.cmap.size = 0 ) then sys_error "0x0015, colormap would not load"
 end sub
@@ -413,7 +431,7 @@ sub mod_load_lightmaps ( _
     g as Game _
 )
     scr_load_stage "lightmaps"
-    dim u as UAR
+    dim u as integer
     dim got as long
 
     g.wld.light.atlas = 0
@@ -428,9 +446,10 @@ sub mod_load_lightmaps ( _
     '' It costs no conventional memory at all. The packed blob it replaces
     '' cost 40K on dm3ish and more on the bigger maps.
     ''
-    if ( uarOpen( u, "assets.zip::lm.bmp", F4READ ) <> 0 ) then
-        g.wld.light.size = uarSize( u )
-        uarClose u
+    u = qglZipOpenBas( "assets.zip::lm.bmp" )
+    if ( u <> 0 ) then
+        g.wld.light.size = qglZipSize( u )
+        qglZipClose u
     end if
     g.wld.light.atlas = uglNewBMPEx( UGL.EMS, UGL.8BIT, "assets.zip::lm.bmp", BMPOPT.NO332 )
     if ( g.wld.light.atlas <> 0 ) then
@@ -459,13 +478,14 @@ sub mod_load_facevtx ( _
     g as Game, _
     gv_buf() as integer _
 )
-    dim u as UAR
+    dim u as integer
     dim y as integer
     dim p as long
 
     scr_load_stage "face vertices"
 
-    if ( uarOpen( u, "assets.zip::fgeom.bin", F4READ ) = 0 ) then
+    u = qglZipOpenBas( "assets.zip::fgeom.bin" )
+    if ( u = 0 ) then
         sys_error "0x0011, fgeom.bin missing"
     end if
 
@@ -474,19 +494,19 @@ sub mod_load_facevtx ( _
     '' would write a whole record past it
     redim gv_buf(108) as integer
 
-    g.wld.geom.rows = cint( (uarSize&( u ) + GEOM_W - 1) \ GEOM_W )
+    g.wld.geom.rows = cint( (qglZipSize( u ) + GEOM_W - 1) \ GEOM_W )
     g.wld.geom.dc = uglNew&( UGL.EMS, UGL.8BIT, GEOM_W, g.wld.geom.rows )
     if ( g.wld.geom.dc = 0 ) then sys_error "0x0010, no EMS for the geometry store"
 
     for y = 0 to g.wld.geom.rows-1
         p = uglMapEx&( g.wld.geom.dc, y, PAGE_SLOT )
         if ( p = 0 ) then sys_error "0x0012, geometry store will not map"
-        if ( uarReadH( u, p, GEOM_W ) <> GEOM_W ) then
+        if ( qglZipRead( u, p, GEOM_W ) <> GEOM_W ) then
             sys_error "0x0013, fgeom.bin short read"
         end if
     next y
 
-    uarClose u
+    qglZipClose u
 
     scr_load_step
 end sub
@@ -591,24 +611,25 @@ end sub
 ''::::::::::
 '' name: mod_load_flat
 '' desc: One assets.zip member, whole, to a far destination -- what
-''       bload did, through the uar layer, so the member may arrive
-''       DEFLATEd. The size is the member's own.
+''       bload did. The size is the member's own -- the archive
+''       carries it, so no caller has to know one.
 ''::::::::::
 sub mod_load_flat ( _
     flname as string, _
     byval dst as long _
 )
-    dim u as UAR
+    dim u as integer
     dim n as long
 
-    if ( uarOpen( u, flname, F4READ ) = 0 ) then
+    u = qglZipOpenBas( flname )
+    if ( u = 0 ) then
         sys_error "0x0016, " + flname + " missing"
     end if
-    n = uarSize( u )
-    if ( uarRead( u, dst, n ) <> n ) then
+    n = qglZipSize( u )
+    if ( qglZipRead( u, dst, n ) <> n ) then
         sys_error "0x0017, " + flname + " short read"
     end if
-    uarClose u
+    qglZipClose u
 end sub
 
 
@@ -673,19 +694,20 @@ end sub
 sub mod_load_visibility ( _
     g as Game _
 )
-    dim u as UAR
+    dim u as integer
 
     scr_load_stage "visibility"
 
     g.wld.pvs.ptr = 0
     g.wld.pvs.size = 0
 
-    if ( uarOpen( u, "assets.zip::pvs.bin", F4READ ) <> 0 ) then
-        g.wld.pvs.size = uarSize&( u )
+    u = qglZipOpenBas( "assets.zip::pvs.bin" )
+    if ( u <> 0 ) then
+        g.wld.pvs.size = qglZipSize( u )
         if ( g.wld.pvs.size > 0 ) then
             g.wld.pvs.ptr = memAlloc( g.wld.pvs.size )
             if ( g.wld.pvs.ptr <> 0 ) then
-                if ( uarReadH( u, g.wld.pvs.ptr, g.wld.pvs.size ) <> g.wld.pvs.size ) then
+                if ( qglZipRead( u, g.wld.pvs.ptr, g.wld.pvs.size ) <> g.wld.pvs.size ) then
                     memFree g.wld.pvs.ptr
                     g.wld.pvs.ptr = 0
                     g.wld.pvs.size = 0
@@ -694,7 +716,7 @@ sub mod_load_visibility ( _
                 g.wld.pvs.size = 0
             end if
         end if
-        uarClose u
+        qglZipClose u
     end if
 
     if ( g.wld.pvs.ptr = 0 ) then sys_error "0x0014, visibility lump would not load"

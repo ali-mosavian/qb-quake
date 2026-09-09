@@ -21,21 +21,15 @@ import zlib
 OUT: dict[str, bytes] = {}
 
 
-def deflate12(data: bytes) -> bytes:
-    c = zlib.compressobj(9, zlib.DEFLATED, -12)
-    return c.compress(data) + c.flush()
-
-
 def write_zip(path: str) -> None:
-    # hand-rolled: members >= 1K are DEFLATEd at windowBits=-12 and tagged
-    # with the decoder's ring ('UW' extra field); zipfile offers neither
+    # STORED, every member. The reader is src/qgl/zip.asm, which walks
+    # local headers and refuses any method but 0 -- there is no inflate in
+    # the renderer any more, and a member it could not read would surface
+    # as a missing file rather than as wrong bytes. Costs ~330K on disk;
+    # nothing in the build or the run is measured in disk.
     locs, cens, pos = [], [], 0
     for name, data in OUT.items():
-        payload = deflate12(data) if len(data) >= 1024 else data
-        method = 8 if len(payload) < len(data) or len(data) >= 1024 else 0
-        if method == 0:
-            payload = data
-        xtra = struct.pack("<HHH", 0x5755, 2, 4096) if method == 8 else b""
+        payload, method, xtra = data, 0, b""
         crc = zlib.crc32(data)
         nm = name.encode()
         locs.append(struct.pack("<4sHHHHHLLLHH", b"PK\x03\x04", 20, 0, method,

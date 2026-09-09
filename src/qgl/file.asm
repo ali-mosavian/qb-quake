@@ -1,6 +1,7 @@
 ;; file.asm -- opening, sizing, reading and closing a file.
 ;;
-;; name: qglFileOpen / qglFileOpenBas / qglFileSize /
+;; name: qglFileOpen / qglFileOpenBas / qglFileNameBas /
+;;       qglFileSize /
 ;;       qglFileRead / qglFileClose
 ;; desc: DOS handles, and nothing above them. Every other qgl module that
 ;;       needs bytes off disk asks here rather than reaching for INT 21h
@@ -99,15 +100,16 @@ qglFileOpen   endp
 
 IFDEF __BASIC__
 ;;::::::::::::::
-;; qglFileOpenBas ( s:BASIC string ) -> ax = handle, 0 on failure
+;; qglFileNameBas ( s:BASIC string, dst:far ptr, cap:word ) -> ax = length
 ;;
-;; The parameter is a near pointer to a descriptor in ss, not a pointer
-;; to characters. See this module's header for the walk; the short of it
-;; is that the data is length-prefixed and has no terminator, so it is
-;; copied out and terminated here.
+;; The walk itself, without the open on the end of it: zip.asm has to
+;; take the name apart before anything can be opened, and this layer's
+;; one piece of BASIC knowledge stays in one place.
+;;
+;; The result is ASCIIZ and truncated to cap-1 characters.
 ;;::::::::::::::
-qglFileOpenBas proc  public uses bx cx dx si di ds es,\
-                        s:word
+qglFileNameBas proc  public uses bx cx dx si di ds es,\
+                        s:word, dst:dword, cap:word
 
                 mov     si, s                   ;; ss:si -> BasStr
                 mov     ax, ss:[si].BasStr.seg_tb
@@ -119,22 +121,43 @@ qglFileOpenBas proc  public uses bx cx dx si di ds es,\
                 mov     si, ds:[si]             ;; the string's offset
 
                 mov     cx, ds:[si].FStrg.slen
-                cmp     cx, PATH_MAX-1
+                mov     dx, cap
+                dec     dx
+                cmp     cx, dx
                 jbe     @F
-                mov     cx, PATH_MAX-1
+                mov     cx, dx
 @@:             add     si, FStrg.sdat          ;; ds:si -> the characters
 
-                mov     ax, @data
-                mov     es, ax
-                mov     di, offset qgl$path
+                les     di, dst
+                push    cx
                 jcxz    @F
                 cld
                 rep     movsb
 @@:             xor     al, al
                 stosb
+                pop     ax
+                ret
+qglFileNameBas endp
 
-                mov     ax, @data
-                mov     ds, ax
+
+;;::::::::::::::
+;; qglFileOpenBas ( s:BASIC string ) -> ax = handle, 0 on failure
+;;
+;; The parameter is a near pointer to a descriptor in ss, not a pointer
+;; to characters. See this module's header for the walk; the short of it
+;; is that the data is length-prefixed and has no terminator, so it is
+;; copied out and terminated first.
+;;::::::::::::::
+qglFileOpenBas proc  public uses bx cx dx si di es,\
+                        s:word
+
+                local   pathp:dword
+
+                mov     ax, ds
+                mov     W pathp+2, ax
+                mov     W pathp, offset qgl$path
+                invoke  qglFileNameBas, s, pathp, PATH_MAX
+
                 mov     dx, offset qgl$path
                 mov     ax, 3D00h
                 int     21h

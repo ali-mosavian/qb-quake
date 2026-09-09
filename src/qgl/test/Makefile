@@ -36,6 +36,7 @@ QGLCORE := $(QGL)/sf.asm $(QGL)/mem.asm $(QGL)/gem.asm \
 QGLSRC := $(QGL)/vga.asm $(QGLCORE) \
           $(QGL)/txt.asm $(QGL)/file.asm $(QGL)/dr.asm \
           $(QGL)/z.asm $(QGL)/clip.asm $(QGL)/rs.asm $(QGL)/sb.asm \
+          $(QGL)/zip.asm \
           $(QGL)/log.asm \
           $(QGL)/b8/b8fill.asm $(QGL)/b8/b8span.asm
 # Objects are DERIVED from QGLSRC, never listed again. Hand-listing them
@@ -105,11 +106,29 @@ $(B)/%/$(FONT): $(ROOT)/data/base.dat $(ROOT)/tools/mkfont.py
 # The real atlas, straight out of the project's own asset archive --
 # 114688 bytes, the size the renderer actually transfers. A synthesized
 # fixture of a convenient size would not have caught the wrap.
+# The archive itself, for the member reader, and one member extracted by a
+# real unzip so the test can diff its own read against it.
+$(B)/%/assets.zip: $(ROOT)/data/assets/assets.zip
+	@mkdir -p $(@D)
+	@cp $< $@
+
+$(B)/%/colmap.bin: $(ROOT)/data/assets/assets.zip
+	@mkdir -p $(@D)
+	@unzip -p $< colmap.bin > $@
+
+# The same member again, in an archive written by the SYSTEM zip rather
+# than by mkassets. It stores a 28-byte extra field on every local header
+# where ours writes none, so the skip past that field -- dead code
+# against our own archive, and the classic way to land a read 28 bytes
+# into the data -- is exercised by something we did not write.
+$(B)/%/sys.zip: $(B)/%/colmap.bin
+	@cd $(@D) && rm -f sys.zip && zip -0 -q sys.zip colmap.bin
+
 $(B)/%/fgeom.bin: $(ROOT)/data/assets/assets.zip
 	@mkdir -p $(@D)
 	@unzip -p $< fgeom.bin > $@
 
-$(B)/%/pass: $(B)/%/t.exe $(B)/%/$(FONT) $(B)/%/fgeom.bin run1.sh
+$(B)/%/pass: $(B)/%/t.exe $(B)/%/$(FONT) $(B)/%/fgeom.bin $(B)/%/assets.zip $(B)/%/colmap.bin $(B)/%/sys.zip run1.sh
 	@sh run1.sh $(DOSBOX) $(@D)
 
 # t21mem is the one test that needs the BASIC fallback in mem.asm, which

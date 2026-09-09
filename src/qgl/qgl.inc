@@ -411,6 +411,10 @@ QGL_AR_WIN      equ     16384           ;; one EMS page, and MEM's unit too
 QGL_AR_MEM      equ     0
 QGL_AR_EMS      equ     1
 
+;; Archive members open at once. One, everywhere: every caller opens,
+;; reads the whole member and closes before the next.
+QGL_ZIP_MAX     equ     4
+
 QGL_M_WIRE      equ     0
 QGL_M_FLAT      equ     1
 QGL_M_TEX       equ     2
