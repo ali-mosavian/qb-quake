@@ -332,7 +332,8 @@ const GEOM_MAXREC = 18 + GEOM_MAXVTX * 6
 const MEM_MARKS = 20
 
 '' The depth buffer is NOT here any more -- main.bas creates it and
-'' d_poly asks host_z_on whether depth is available.
+'' Depth is not asked about any more: it is attached to the destination
+'' Surface, and a draw reads it there (qgl/z.asm).
 ''
 '' The colormap: 64 light levels x 256 colours, in a memAlloc'd block.
 ''

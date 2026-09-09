@@ -157,21 +157,11 @@ sub sys_parse_args ( _
         if ( lcase$(argv(i)) = "-badorder" ) then
             g.env.bad_order = true
         end if
-        if ( lcase$(argv(i)) = "-polytp" ) then
-            g.env.poly_tp = true
-        end if
         if ( lcase$(argv(i)) = "-noz" ) then
             g.env.no_z = true
         end if
         if ( lcase$(argv(i)) = "-nocull" ) then
             g.env.no_cull = true
-        end if
-        if ( lcase$(argv(i)) = "-spandraw" ) then
-            '' The span renderer draws through mgl's uglSpanBegin and the
-            '' backbuffer is a qgl Surface, whose scanline table is not
-            '' where mgl looks for it. Refused rather than ignored: a
-            '' silently dead flag is a measurement of nothing.
-            sys_error "0x001B, -spandraw needs an mgl backbuffer"
         end if
         if ( lcase$(argv(i)) = "-nostats" ) then
             g.env.no_stats = true
@@ -188,15 +178,11 @@ sub sys_parse_args ( _
         if ( lcase$(argv(i)) = "-qgldiff" ) then
             g.qgl_diff = true
         end if
-        if ( lcase$(argv(i)) = "-qgl" ) then
-            g.qgl_slice = true
-        end if
         if ( lcase$(argv(i)) = "-qglarr" ) then
             g.qgl_arr = true
         end if
         if ( lcase$(argv(i)) = "-qglface" ) then
             g.qgl_face = true
-            g.qgl_slice = true
         end if
         if ( lcase$(argv(i)) = "-nodraw" ) then
             g.env.no_draw  = true

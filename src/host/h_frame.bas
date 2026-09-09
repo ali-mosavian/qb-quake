@@ -429,9 +429,6 @@ sub host_render ( _
     dparm.backface    = g.rdr.backface
     dparm.rend_mode   = g.rdr.rend_mode
     dparm.use_mips    = g.rdr.use_mips
-    dparm.poly_tp     = g.env.poly_tp
-    dparm.span_draw   = g.env.span_draw
-    dparm.use_qgl     = g.qgl_slice
     dparm.x_res       = g.env.x_res
     dparm.y_res       = g.env.y_res
     dparm.prof        = (g.ft.n > 0)

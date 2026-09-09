@@ -210,10 +210,12 @@ declare function sys_rdtsc ( ) as long
 declare function r_walk_layout_ok ( byval vis_off as long ) as integer
 '' sb_build.c. Only caller is host_init's startup layout check.
 declare function sb_layout_ok ( byval dlight_off as long ) as integer
-'' r_span.c. Only caller is host_init's one-time reset -- the rest of
-'' r_span.c's own declares moved to host_bench.bas with the -bench
-'' report, the only other caller.
-declare sub r_span_start_frame ( )
+'' d_faces.c, likewise: DrawParams is spelled out on both sides of the
+'' BASIC/C boundary and only this says the two still agree.
+declare function d_faces_layout_ok ( _
+    byval sz as long, _
+    byval drop_off as long _
+) as integer
 declare sub d_init_turb ( )
 declare sub in_init ( _
     g as Game _
@@ -352,9 +354,10 @@ dim shared cam_up as u3dVector3f
 dim shared lightmap as long
 
 ''
-'' THE DEPTH BUFFER. Created here, alongside the destination dc it belongs
-'' to. d_poly is the only other module that cares, and only to ask whether
-'' depth exists at all -- host_z_on answers that.
+'' THE DEPTH BUFFER. Created here and ATTACHED to the destination it was
+'' made for, so nothing else has to be told about it: a draw reads the
+'' depth of the surface it is drawing on. This handle only says whether
+'' the allocation worked.
 ''
 ''
 '' THE APPLICATION STATE. `dim`, not `dim shared`: module-level code can
@@ -623,6 +626,7 @@ sub host_init ( _
     '' rather than guessed -- twice now a bottleneck has been asserted from
     '' the shape of the code and been wrong.
     ''
+    dim dp_probe as DrawParams      '' the layout check below, nothing else
     dim t_start as single, t_sub as single, t_map as single
     dim t_lump as single, t_tex as single, t_vid as single
     dim pf as integer
@@ -636,12 +640,19 @@ sub host_init ( _
     '' once, at startup, so that shows up as a loud, clear exit instead.
     ''
     if ( r_walk_layout_ok( varptr( g.vis ) - varptr( g ) ) = 0 ) then
-        sys_error "0x0041, r_walk.c's Game.vis offset is stale"
+        sys_error "0x0041, r_walk.c's Game.vis offset is stale, is now" + str$( varptr( g.vis ) - varptr( g ) )
     end if
     if ( sb_layout_ok( varptr( g.rdr.dlight ) - varptr( g ) ) = 0 ) then
-        sys_error "0x0042, sb_build.c's Game.rdr.dlight offset is stale"
+        sys_error "0x0042, sb_build.c's Game.rdr.dlight offset is stale, is now" + str$( varptr( g.rdr.dlight ) - varptr( g ) )
     end if
-    r_span_start_frame
+    '' DrawParams crosses to d_faces.c by layout alone. Three fields
+    '' dropped from q_draw.bi and left in qcshared.h shifted every field
+    '' after them, and the frame came back empty with polys 0 -- the C
+    '' side was reading ord_count and x_res out of the wrong words.
+    if ( d_faces_layout_ok( len( dp_probe ), _
+                            varptr( dp_probe.qgl_drop ) - varptr( dp_probe ) ) = 0 ) then
+        sys_error "0x0043, d_faces.c's DrawParams layout is stale, len is" + str$( len( dp_probe ) ) + " drop at" + str$( varptr( dp_probe.qgl_drop ) - varptr( dp_probe ) )
+    end if
 
     '' TIMER, not a TMR: tmrInit does not run until inputOpen, the
     '' second-to-last step below, so a TMR counter reads zero for almost

@@ -386,17 +386,8 @@ type Env
                                 '' through the wall in front of it".
     bad_order   as integer      '' -badorder: put brush entities back after the
                                 '' world walk, the bug this flag exists to show.
-    poly_tp     as integer      '' -polytp: emit whole convex polygons via
-                                '' uglPolyTP instead of fanning each face
-                                '' into triangles. A/B against the proven
-                                '' uglTriTP path.
     no_z        as integer      '' -noz: skip the depth buffer entirely
     no_cull     as integer      '' -nocull: backface culling off, for A/B
-    span_draw   as integer      '' -spandraw: draw the frame from r_span.c's
-                                '' resolved spans, through uGL's scanline
-                                '' filler, instead of handing whole polygons
-                                '' to uglPolyTP. Suppresses the polygon path
-                                '' outright -- both would draw the same faces.
     cam_path     as integer      '' -campath: fly the A* route from
                                 '' campath.bin instead of standing still.
                                 '' The old bench rendered ONE viewpoint, so

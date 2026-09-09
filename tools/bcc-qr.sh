@@ -1,8 +1,8 @@
 #!/bin/bash
 # Compile one of qrender's OWN C modules (r_walk.c, sb_build.c, pl_trace.c,
-# r_span.c -- not mgl's) with Borland C++ 3.1 under DOSBox-X.
+# d_faces.c -- not mgl's) with Borland C++ 3.1 under DOSBox-X.
 #
-#   tools/bcc-qr.sh src/r_span.c build/vbd/r_span.obj
+#   tools/bcc-qr.sh src/render/r_walk.c build/vbd/r_walk.obj
 #
 # One DOSBox per file, same reasoning as tools/bcc.sh and tools/bc.sh.
 # A SEPARATE script from tools/bcc.sh on purpose: that one carries mgl's
@@ -10,12 +10,13 @@
 # project does not own and must not reinterpret. Otherwise the same
 # flags qrender's own C has always used: -3 -mm -Ox -IW:\ -IB:\INCLUDE.
 #
-# -B, and TASM mounted on the path, unconditionally: r_span.c's rdtsc_now
-# uses __emit__ plus an __asm { } block referencing ebx, which BCC's own
-# built-in inline assembler does not accept ("Undefined symbol 'ebx'")
-# -- only TASM's fuller support does. Harmless for the other three C
-# files, which have no inline asm of their own; simpler to always pass
-# it than to special-case the one file that needs it.
+# -B, and TASM mounted on the path, unconditionally. It was r_span.c's
+# rdtsc_now that needed it -- __emit__ plus an __asm { } block naming
+# ebx, which BCC's own inline assembler rejects ("Undefined symbol
+# 'ebx'") and only TASM's fuller support accepts. That file is gone with
+# the span renderer and none of the rest has inline asm today, but the
+# flag stays: it is harmless, and the next module to want __asm should
+# not have to rediscover this.
 set -euo pipefail
 
 SRC_REL="${1:?usage: bcc-qr.sh <src-c> <out-obj>}"

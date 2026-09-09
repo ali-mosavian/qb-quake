@@ -47,11 +47,12 @@
  * five nested structs (World, Env, PlayerState, CamState, RenderState)
  * before vis, and getting any one of their sizes wrong silently
  * corrupts whichever field lands on the wrong address. Measured instead,
- * via varptr(g.vis) - varptr(g) in a throwaway BASIC probe: 5028. main.bas
- * asserts this at startup (see r_walk_layout_ok) so a future field added
- * ahead of vis fails loud at run time instead of silently drifting.
+ * via varptr(g.vis) - varptr(g): main.bas asserts it at startup (see
+ * r_walk_layout_ok) so a field added ahead of vis fails loud at run time
+ * instead of silently drifting, and the failure prints the offset it
+ * measured -- which is the new number to put here.
  */
-#define GAME_VIS_OFFSET 5028
+#define GAME_VIS_OFFSET 5024
 
 /* ign here is BASIC's own "ign as integer" -- no byval in the original
    declare, so it is BYREF: r_emit_entities sets it true, walks the

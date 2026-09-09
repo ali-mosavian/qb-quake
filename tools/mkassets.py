@@ -56,8 +56,10 @@ def write_zip(path: str) -> None:
     raw = sum(len(v) for v in OUT.values())
     print(f"  assets.zip: {len(OUT)} members, {raw:,} -> {os.path.getsize(path):,} bytes")
 
-# The geometry store's row width, and the corner count d_poly.bas's
-# polyb()/uvbuffb() can hold. GEOM_W must match GEOM_W in q_map.bi: it is
+# The geometry store's row width, and the corner count a face record may
+# carry. GEOM_MAXVTX must match q_map.bi's, and d_faces.c sizes its own
+# vertex arrays as GEOM_MAXVTX + 8 -- the clipper's headroom. GEOM_W must
+# match GEOM_W in q_map.bi: it is
 # the unit uglMapEx maps, and a record that straddled it would be read
 # half from the wrong EMS page.
 GEOM_W = 8192
@@ -533,12 +535,12 @@ def convert_lumps(d, lumps, outdir):
     for k in range(0, len(raw), 20):
         firstedge, = struct.unpack_from('<i', raw, k + 4)
         nvtx, = struct.unpack_from('<h', raw, k + 8)
-        # d_poly.bas indexes polyb(32)/uvbuffb(32), so 33 corners is the
-        # standing contract; a face past it would run off the end of both.
+        # 33 corners is the standing contract, and d_faces.c's MAXV is
+        # derived from it; a face past it runs off every per-face array.
         if not (0 < nvtx <= GEOM_MAXVTX):
             raise SystemExit(
                 f"fgeom.bin: face {k // 20} has {nvtx} corners, and "
-                f"d_poly.bas's polyb() holds {GEOM_MAXVTX}")
+                f"GEOM_MAXVTX is {GEOM_MAXVTX}")
         fi = k // 20
         rec = bytearray(struct.pack('<h', nvtx))
         rec += lmtab[fi * 16:(fi + 1) * 16]

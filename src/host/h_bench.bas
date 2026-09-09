@@ -65,23 +65,6 @@ declare function qrProfScanCnt ( ) as long
 declare function qrProfOuterSum ( ) as long
 declare function qrProfZSetSum ( ) as long
 declare function qrProfEdgeSum ( ) as long
-'' r_span.c investigative prototype (see its own file for what it is).
-declare function r_span_overflow_count ( ) as integer
-declare function r_span_resolved_pixels ( ) as long
-declare function r_span_naive_pixels ( ) as long
-declare function r_span_bucket_cycles ( ) as long
-declare function r_span_merge_cycles ( ) as long
-declare function r_span_sweep_cycles ( ) as long
-declare function r_span_step_cycles ( ) as long
-declare function r_span_edges_total ( ) as long
-declare function r_span_rows_total ( ) as long
-declare function r_span_cross_total ( ) as long
-declare function r_span_spans_total ( ) as long
-declare function r_span_begins_total ( ) as long
-declare function r_span_draw_cycles ( ) as long
-declare function r_span_poly_peak ( ) as integer
-declare function r_span_edge_peak ( ) as integer
-declare function r_span_ael_peak ( ) as integer
 declare function sys_tick_hz ( ) as single
 '' qgl/mem.asm -- DOS's own numbers, not BASIC's. See the use site.
 declare function qglMemAvail ( byval what as integer ) as long
@@ -174,25 +157,6 @@ sub host_bench_report ( _
         print #benchf, "pt_aim_max " + ltrim$(str$( g.pt.aim_max * 1000.0 ))
         print #benchf, "pt_build_mean " + ltrim$(str$( (g.pt.build_sum / g.ft.n) * 1000.0 ))
         print #benchf, "pt_build_max " + ltrim$(str$( g.pt.build_max * 1000.0 ))
-        ''
-        '' r_span.c investigative prototype -- see PhaseTimes in
-        '' q_scr.bi. Nested inside pt_draw the same way pt_raster and
-        '' pt_build are, but this work is not in the real draw path at
-        '' all: it runs alongside it, resolving the same polygons into
-        '' a Quake-style global edge list -> sorted span list purely to
-        '' measure the cost. r_span_overflow_count non-zero means a
-        '' static bound was hit and these numbers are a truncated
-        '' frame's, not the whole one's.
-        ''
-        print #benchf, "pt_emit_mean " + ltrim$(str$( (g.pt.emit_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_emit_max " + ltrim$(str$( g.pt.emit_max * 1000.0 ))
-        print #benchf, "pt_span_mean " + ltrim$(str$( (g.pt.span_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_span_max " + ltrim$(str$( g.pt.span_max * 1000.0 ))
-        print #benchf, "r_span_overflow " + ltrim$(str$( r_span_overflow_count() ))
-        '' naive/resolved is the overdraw factor -- a property of the
-        '' map, not of r_span.c. See its own comment.
-        print #benchf, "span_resolved_pixels " + ltrim$(str$( r_span_resolved_pixels() ))
-        print #benchf, "span_naive_pixels " + ltrim$(str$( r_span_naive_pixels() ))
         qr_hz = sys_rdtsc_hz()
         print #benchf, "rdtsc_hz " + ltrim$(str$( qr_hz ))
         ''
@@ -218,25 +182,6 @@ sub host_bench_report ( _
         print #benchf, "qr_outer_ms " + ltrim$(str$( qrProfOuterSum() * qr_ms_per_cyc ))
         print #benchf, "qr_zset_ms " + ltrim$(str$( qrProfZSetSum() * qr_ms_per_cyc ))
         print #benchf, "qr_edge_ms " + ltrim$(str$( qrProfEdgeSum() * qr_ms_per_cyc ))
-        '' r_span_flush's own four phases, same conversion as above --
-        '' see r_span.c's own comment on what each one covers and why
-        '' they should together read close to
-        '' pt_span_mean * frames.
-        print #benchf, "span_bucket_ms " + ltrim$(str$( r_span_bucket_cycles() * qr_ms_per_cyc ))
-        print #benchf, "span_merge_ms " + ltrim$(str$( r_span_merge_cycles() * qr_ms_per_cyc ))
-        print #benchf, "span_sweep_ms " + ltrim$(str$( r_span_sweep_cycles() * qr_ms_per_cyc ))
-        print #benchf, "span_step_ms " + ltrim$(str$( r_span_step_cycles() * qr_ms_per_cyc ))
-        print #benchf, "span_draw_ms " + ltrim$(str$( r_span_draw_cycles() * qr_ms_per_cyc ))
-        '' Counts, not timings -- what the loops above actually iterate
-        '' over. cross/rows is the mean active edge list.
-        print #benchf, "span_edges_total " + ltrim$(str$( r_span_edges_total() ))
-        print #benchf, "span_rows_total " + ltrim$(str$( r_span_rows_total() ))
-        print #benchf, "span_cross_total " + ltrim$(str$( r_span_cross_total() ))
-        print #benchf, "span_spans_total " + ltrim$(str$( r_span_spans_total() ))
-        print #benchf, "span_begins_total " + ltrim$(str$( r_span_begins_total() ))
-        print #benchf, "span_poly_peak " + ltrim$(str$( r_span_poly_peak() ))
-        print #benchf, "span_edge_peak " + ltrim$(str$( r_span_edge_peak() ))
-        print #benchf, "span_ael_peak " + ltrim$(str$( r_span_ael_peak() ))
         ''
         '' Nested inside pt_cull, not subtracted from it -- see PhaseTimes
         '' in q_scr.bi. pt_cull_mean minus these two is frustum extraction

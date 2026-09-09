@@ -165,7 +165,7 @@ typedef struct {
     /* in */
     long  h_dst_dc;
     long  tex_ofs_ptr;      /* far pointer to g.wld.tex.ofs(0) */
-    long  turb_ptr;         /* far pointer to d_poly.bas's turb_sin(0) */
+    long  turb_ptr;         /* far pointer to d_turb.bas's turb_sin(0) */
     float xresh, yresh;
     float z_near, z_far;
     float anim_time;
@@ -179,9 +179,6 @@ typedef struct {
     short backface;
     short rend_mode;
     short use_mips;
-    short poly_tp;
-    short span_draw;
-    short use_qgl;          /* -qgl: draw the faces through qgl */
     short x_res, y_res;
     short prof;             /* g.ft.n > 0: accumulate build_us at all */
     /* out */

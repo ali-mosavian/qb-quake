@@ -363,7 +363,8 @@ wraps the body. Keep procedures tight and small enough to read whole.
     src/model.bas     mod_load_* lump readers                  (Quake model.c)
     src/mod_tex.bas   texture headers, preprocessed bitmaps
     src/r_bsp.bas     traversal + visibility                   (Quake r_bsp.c)
-    src/d_poly.bas    the rasteriser                           (Quake d_*.c)
+    src/d_faces.c     the rasteriser                           (Quake d_*.c)
+    src/d_turb.bas    the liquid turbulence table, all that is left of d_poly
     src/view.bas      where the camera is and looks            (Quake view.c)
     src/in_main.bas   keyboard, mouse, the toggles             (Quake in_*.c)
     src/snd.bas       sound device and loading music           (Quake snd_*.c)
@@ -963,6 +964,26 @@ every run.
 `anim_time`, so a tick-bounded run pins it: `-bench 400 -ticks 120` gave
 animtime 1.999995 and one md5 across three runs at 69, 68 and 68 frames. Every
 A/B in this file that compares images uses `-ticks`.
+
+**`check.sh`'s image comparison is a gate again, and was not one for a
+while.** The stored reference was 320x200 against a build that renders
+160x100, `BENCH` carried no `-ticks`, and the result was printed rather
+than acted on -- three separate reasons the picture could not fail the
+check. Meanwhile the screenshot itself was reading the qgl backbuffer
+through mgl's `uglPGet` and returning full-frame noise, and no run said
+so. `BENCH` is now `-lm -nostats -yaw 183 -bench 40 -ticks 60`, which is
+byte-identical run to run, and a difference exits non-zero.
+
+**A qgl Surface is no longer an mgl DC, and the compiler cannot say so.**
+Both are a `long` handle in BASIC, so `uglPGet( h_dst_dc, x, y )` compiled
+and ran; `SF_addrTB` sits at 38 where mgl's `DC_addrTB` is 32, so it read
+its scanline pointers out of `zsf`/`zmode` and every pixel came back from
+a random address. The symptom is specific and worth recognising: correct
+palette, no geometry at all, and the SAME bytes whatever the camera does,
+because it is not reading the frame. `sys.bas` already refused
+`-spandraw` for this exact reason, one line away, and the screenshot was
+missed anyway. Any remaining `ugl*` call taking a surface handle is the
+same bug waiting.
 
 **`make build` copies `data/stuff.ini` over `build/vbd/stuff.ini`.** Editing
 the build copy does not survive a rebuild. This is how `sound.enabled = true`

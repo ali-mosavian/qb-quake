@@ -130,12 +130,22 @@ extern void pascal far sb_build( void *g, long lm_dc, long tex_dc, short face, s
                                  BASARRAY *tri, BASARRAY *texinf, BASARRAY *gv,
                                  BASARRAY *mip_inf, BASARRAY *planes );
 
-/* r_span.c's prototype path, behind -spandraw. */
-extern void pascal far r_span_emit_ptr( short cnt, float far *vx, float far *vy,
-                                        float far *vu, float far *vv, float far *vw,
-                                        long src_dc, long tex_ofs );
-extern void pascal far r_span_draw_to ( long dst );
-extern short pascal far r_span_flush  ( short w, short h );
+/*
+ * DrawParams is declared twice -- q_draw.bi for BASIC, qcshared.h for
+ * this file -- and nothing made the two agree. Removing three dead
+ * fields from the BASIC side shifted every field after them here: the
+ * frame came back with polys 0 and no picture, because ord_count and
+ * x_res were being read out of the wrong words.
+ *
+ * Checked at startup the way r_walk.c's GAME_VIS_OFFSET is. Size alone
+ * would miss a reorder of two shorts, so the last field's offset goes
+ * with it; the two together catch an added, removed or moved field.
+ */
+short pascal far d_faces_layout_ok( long sz, long drop_off )
+{
+    return (short) ( sz == (long) sizeof( DrawParams ) &&
+                     drop_off == (long) &( (DrawParams near *) 0 )->qgl_drop );
+}
 
 /* Per-face scratch. Static, not automatic: the medium model's stack is
    not where a dozen MAXV float arrays belong. */
@@ -704,11 +714,6 @@ void pascal far d_draw_faces(
                 texofs = tex_ofs[ tex_id*4 + draw_mip ];
             }
 
-            if ( dp->span_draw ) {
-                r_span_emit_ptr( cnt, px, py, pu, pv, pw, src_dc, texofs );
-                continue;
-            }
-
             /*
              * ONE PATH. Every texture this loop can name is a qgl
              * Surface -- the atlas (mod_tex.bas) and the surface cache
@@ -843,11 +848,6 @@ void pascal far d_draw_faces(
            non-power-of-two side, over one 16K page) and is worth
            reading as a fault. */
     if ( dp->qgl_faces == 0 && q_ok ) dp->qgl_faces = q_gate ? -6 : -5;
-
-    if ( dp->span_draw ) {
-        r_span_draw_to( dp->h_dst_dc );
-        r_span_flush( dp->x_res, dp->y_res );
-    }
 
     dp->build_us = build_cyc;
 }
