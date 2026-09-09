@@ -578,12 +578,13 @@ PDIV            macro   ?u, ?v
                 fistp   D fs:?u                 ;; vf u' v' z'
                 fistp   D fs:?v                 ;; u' v' z'
 
-                ;; NO HALF TEXEL HERE. mgl adds it to u and v at the span
-                ;; start as 0.5*z, before the divide, so it comes out half
-                ;; a texel at that span's depth and moves with z; the
-                ;; scanner does that now (rs.asm, @@nodepth). Adding a
-                ;; flat 32768 to every sub-span endpoint here was half a
-                ;; texel at every depth, which is a different picture.
+                ;; half a texel, on THIS side of the divide, at both
+                ;; boundaries so the step between them is untouched. mgl
+                ;; adds it before the divide as 0.5*z at the span start,
+                ;; and it comes out scaled by z(x)/z(start) -- two texels
+                ;; where 1/z has fallen to a quarter. t09rs case 14.
+                add     D fs:?u, 32768
+                add     D fs:?v, 32768
 endm
 
 ;;:::::::::::::: the triple, one sub-span on

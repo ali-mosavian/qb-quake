@@ -95,6 +95,13 @@ n_widecnt       db      'and covers 32 pixels   $'
 n_seg0lin       db      'ring at seg:0 32 lines $'
 n_seg0cnt       db      'and 32x32 pixels       $'
 n_seg0box       db      'bounded 8..39 both ways$'
+;; The perspective half texel. Added to u/z at the span start as
+;; 0.5*(1/z) -- mgl's arrangement, uglplxtp.asm -- it comes out of the
+;; divide as 0.5*z(x)/z(start): half a texel at the left of the span and
+;; two texels where 1/z has fallen to a quarter. qgldiff measured that a
+;; texel further from the exact answer than a flat half added AFTER the
+;; divide, and the renderer carried it for three commits.
+n_pconst        db      'ptex half is flat in z $'
 ;; A one-pixel-wide column with a few thousand repeats of u across it.
 ;; vu is normalised, so that is legal data, and the gradient it gives is
 ;; 40000 texels per pixel -- fine as the float qgl$drawP reads, 2.62e9 in
@@ -119,6 +126,17 @@ narrowp         dd      0
 ;; room for a ring copied to the next paragraph boundary, offset 0
 seg0            db      SIZEOF QVert*4 + 16 dup(?)
 seg0p           dd      0
+
+;; u CONSTANT at texel 10 while 1/z falls 1.0 to 0.25 left to right, in
+;; the perspective convention: u holds u/z, so 10/64 and a quarter of it.
+;; Every pixel must read texel 10; a half texel that scales with depth
+;; reads 11 and 12 down the right-hand side.
+pconst          QVert   <2.0,  8.0,  1.0,  0.15625,   0.0>
+                QVert   <62.0, 8.0,  0.25, 0.0390625, 0.0>
+                QVert   <62.0, 40.0, 0.25, 0.0390625, 0.0>
+                QVert   <2.0,  40.0, 1.0,  0.15625,   0.0>
+pconstp         dd      0
+tcol            dd      0                       ;; 64x64, column x holds x
 
 ;; a square, clockwise, top-left first. z is 1/z and constant, so the
 ;; whole polygon sits at one depth and the test is about the compare and
@@ -592,6 +610,25 @@ tmain           proc    far public uses bx cx dx si di es
                 mov     bx, ymax
                 add     ax, bx
                 CHK     n_seg0box, ax, 94
+
+                ;;
+                ;; 14. perspective with u constant and 1/z falling 4x
+                ;;     across the span: the half texel must not grow
+                ;;     with depth
+                ;;
+                invoke  qglSfNew, 64, 64, SURF_CMEM
+                SAVEP   tcol
+                xor     si, si
+@@tcol:         invoke  qglDrFill, tcol, si, 0, si, 63, si
+                inc     si
+                cmp     si, 64
+                jb      @@tcol
+                mov     word ptr pconstp, offset pconst
+                mov     word ptr pconstp+2, ds
+                invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
+                invoke  qglRsPoly, dst, pconstp, 4, QGL_M_PTEX, tcol
+                invoke  scan, 10
+                CHK     n_pconst, ax, 60*32
 
                 ret
 tmain           endp

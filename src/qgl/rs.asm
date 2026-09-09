@@ -1562,31 +1562,26 @@ qgl$drawP       proc    near private,\
                 ;; leaves them for an unconditional three fstp after the
                 ;; call.
                 ;;
-                ;; HALF A TEXEL is 0.5*z, on the far side of the divide, so
-                ;; that once the filler divides it is half a texel at the
-                ;; span's own depth and follows z across the span. A flat
-                ;; 32768 on each sub-span's endpoints is half a texel
-                ;; everywhere, which is not the same picture.
+                ;; NO HALF TEXEL HERE. mgl adds 0.5*z to u and v at this
+                ;; point (uglplxtp.asm), and the divide turns that into
+                ;; 0.5*z(x)/z(start): half a texel at the span's left and
+                ;; two texels where 1/z has fallen to a quarter. The filler
+                ;; adds a flat half after each divide instead (PDIV);
+                ;; qgldiff reads that a texel closer to the exact answer.
                 fld     lf_z                    ;; z
                 fld     lf_v                    ;; v z
                 fld     lf_u                    ;; u v z
 
-                fld     qgl$half                ;; .5 u v z
-                fmul    st(0), st(3)            ;; .5z u v z
-                fild    D pfrac                 ;; fxdiff .5z u v z
-                fmul    qgl$r65536              ;; diff .5z u v z
+                fild    D pfrac                 ;; fxdiff u v z
+                fmul    qgl$r65536              ;; diff u v z
 
-                fld     qgl$fdudx               ;; dudx diff .5z u v z
+                fld     qgl$fdudx               ;; dudx diff u v z
                 fmul    st(0), st(1)
-                fadd    st(0), st(2)
-                faddp   st(3), st(0)            ;; diff .5z u' v z
+                faddp   st(2), st(0)            ;; diff u' v z
 
-                fld     qgl$fdvdx               ;; dvdx diff .5z u' v z
+                fld     qgl$fdvdx               ;; dvdx diff u' v z
                 fmul    st(0), st(1)
-                fadd    st(0), st(2)
-                faddp   st(4), st(0)            ;; diff .5z u' v' z
-                fxch    st(1)                   ;; .5z diff u' v' z
-                fstp    st(0)                   ;; diff u' v' z
+                faddp   st(3), st(0)            ;; diff u' v' z
 
                 fld     qgl$fdzdx               ;; dzdx diff u' v' z
                 fmulp   st(1), st(0)            ;; dzdx*diff u' v' z

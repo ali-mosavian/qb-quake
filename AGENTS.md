@@ -1725,6 +1725,34 @@ it read before. The lesson is the second rule again: the runaway was
 measured from the caller's side and the scanner's side, and never from
 the buffer between them.
 
+## The perspective half texel goes AFTER the divide, and mgl's does not
+
+`-qgldiff` measures both rasterisers against the exact answer and asserts
+qgl is no further from it than mgl. It passed at 28c3d56 with qgl at 6
+and 2 texels off against mgl's 8 and 4, and failed from 47e3897 -- the
+scanner rewrite "per mgl" -- at 9 and 4, for three commits.
+
+The rewrite transcribed mgl's span start (`uglplxtp.asm` :820): half a
+texel added to u/z and v/z as `0.5 * (1/z)` BEFORE the divide. After the
+divide that is `0.5 * z(x) / z(start)`: half a texel at the left of the
+span and two texels where 1/z has fallen to a quarter, which the 28c3d56
+message had already measured and avoided. The flat 32768 after each
+sub-span divide is back (`b8span.asm`, `PDIV`), and `t09rs` case 14 --
+u constant while 1/z falls 4x across the span, every pixel must read the
+same texel -- fails on mgl's arrangement and passes on this one.
+
+`-qgldiff` now reads 8 and 4: mgl parity, not the 6 and 2, and the
+assertion holds on equality. The remaining two texels are WHERE the span
+is sampled: `65536 - frac` puts the first sample on the pixel's right
+edge in the perspective path, whose converter adds no half pixel
+(F2FX_tp2d). Sampling at the centre (`32768 - frac`) reads 7 and 3 --
+measured, and not committed: it resamples every textured pixel half a
+pixel over (48% of the bench frame) and is a fourth deviation from mgl.
+
+`tools/ref/bench.bmp` moved with it: 564 of 16000 pixels, single texels
+scattered over textured walls, no geometry. A reference regenerated for
+a sampling change is the fix, not a regression, but say so each time.
+
 ## `-nostats` makes the picture deterministic
 
 With the HUD off the renderer is **byte-identical run to run** -- one
