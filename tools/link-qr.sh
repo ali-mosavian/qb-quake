@@ -47,9 +47,16 @@ OBJS="${OBJS}M:\\LIB\\ADDONS\\U3D.OBJ"
 CLIBS=""
 [[ -n "$C_MODS" ]] && CLIBS="+B:\\LIB\\MATHC.LIB+B:\\LIB\\CL.LIB"
 
+# /CO writes the per-module CodeView records the compilers put in the
+# OBJs into the tail of the EXE, where the emulator reads them at EXEC.
+# Without it those records are discarded and /MAP's publics are all the
+# debugger gets -- a name for a segment, no line and no local.
+LDBG=""
+[[ "${DEBUGINFO:-0}" == "1" ]] && LDBG=" /CO"
+
 {
   printf '%s\r\n' \
-    "/NOE /MAP /SEG:800 $OBJS" \
+    "/NOE /MAP$LDBG /SEG:800 $OBJS" \
     'qrender.exe' \
     'qrender.map' \
     "V:\\LIB\\VBDCL10E.LIB+C:\\UGLV.LIB$CLIBS" \

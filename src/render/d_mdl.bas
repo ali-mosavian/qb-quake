@@ -144,6 +144,14 @@ sub mdl_load ( _
 
     fh = freefile
     open geopath for binary as #fh
+    '' Binary OPEN CREATES the file when it is missing. So a tree whose
+    '' data/assets was never generated got a zero-byte soldier.geo, a
+    '' header of zeroes, ntri 0, and `redim tri( -1 )` -- runtime error 9
+    '' at line 0, nothing naming the file or the cause. Say which file.
+    if ( lof( fh ) < len( hdr ) ) then
+        close #fh
+        sys_error "0x0044, " + geopath + " missing or truncated, run make assets"
+    end if
     get #fh, 1, hdr
     g.mdl.ntri     = cvi( mid$( hdr, 5, 2 ) )
     g.mdl.nvert    = cvi( mid$( hdr, 7, 2 ) )
@@ -157,6 +165,10 @@ sub mdl_load ( _
     g.mdl.origin.y = cvs( mid$( hdr, 31, 4 ) )
     g.mdl.origin.z = cvs( mid$( hdr, 35, 4 ) )
     if ( g.mdl.nvert > MDL_MAXV + 1 ) then close #fh : exit sub
+    if ( g.mdl.ntri < 1 or g.mdl.nvert < 1 or g.mdl.nframe < 1 ) then
+        close #fh
+        sys_error "0x0045, " + geopath + " header is empty, run make assets"
+    end if
 
     sys_mem_mark "mdl_pre_redim"
     redim tri( g.mdl.ntri - 1 ) as MdlTri

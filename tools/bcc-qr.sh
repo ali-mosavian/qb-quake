@@ -32,6 +32,11 @@ if [[ -z "$DOSBOX_BIN" ]]; then
 fi
 [[ -n "$DOSBOX_BIN" ]] || { echo "no dosbox-x found; set DOSBOX_BIN" >&2; exit 1; }
 
+# -v is Borland's own debug format, which Microsoft LINK carries through
+# as CodeView. -y alone (line numbers) would leave the C locals unnamed.
+CC_DBG=""
+[[ "${DEBUGINFO:-0}" == "1" ]] && CC_DBG=" -v"
+
 base=$(basename "$SRC_REL" .c)
 up=$(echo "$base" | tr 'a-z' 'A-Z')
 
@@ -49,7 +54,7 @@ done
   echo "mount t $TOOLCHAINS/tasm50/TASM/BIN"
   echo "path b:\\bin;t:"
   echo "w:"
-  echo "b:\\bin\\bcc.exe -c -B -3 -mm -Ox -IW:\\ -IB:\\INCLUDE $base.c > w:\\cc.txt"
+  echo "b:\\bin\\bcc.exe -c -B -3 -mm -Ox$CC_DBG -IW:\\ -IB:\\INCLUDE $base.c > w:\\cc.txt"
   echo "exit"
 } > "$W/build.conf"
 

@@ -22,11 +22,24 @@ MGL        ?= $(HOME)/work/badlogic/mgl
 TOOLCHAINS ?= $(HOME)/work/other/d32x/toolchains
 DOSBOX_BIN ?=
 MAP        ?= dm3ish.bsp
+# Quake's own PAK, for the monster mkmdl.py cuts the soldier out of. Not
+# in the repo and not redistributable, so a tree without it builds and
+# runs without the monster rather than failing -- see the MDL rule below.
+PAK        ?= $(HOME)/dos/QUAKE_SW/ID1/PAK0.PAK
+MDL        ?= soldier
 TIMEOUT    ?= 600
 BUILD      ?= $(CURDIR)/build/vbd
 NATIVE_UGL ?= $(CURDIR)/build/native-mgl/UGLV.LIB
 
-export MGL TOOLCHAINS DOSBOX_BIN TIMEOUT
+# Symbols, on by default. The debug records go in the OBJs and then in
+# the tail of the EXE; nothing is loaded at run time, so this costs disk
+# and not the conventional memory that is actually scarce here. The
+# dosbox-x MCP reads them as the guest EXECs the program, which turns
+# "spinning somewhere in LMEM" into a routine, a source file and a line.
+# DEBUGINFO=0 for a lean EXE.
+DEBUGINFO  ?= 1
+
+export MGL TOOLCHAINS DOSBOX_BIN TIMEOUT DEBUGINFO
 
 BC     := $(CURDIR)/tools/bc.sh
 BCC_QR := $(CURDIR)/tools/bcc-qr.sh
@@ -80,6 +93,12 @@ DATA := data/stuff.ini data/base.dat
 ## colour-matching the miptex lump at every launch; the raw atlas stands in
 ## for the whole set as far as make is concerned.
 ASSETS := data/assets/assets.zip
+# The monster's geometry, vertex frames and skin. host_init loads these by
+# name at startup, so a build without them dies in mdl_load -- which is
+# how it went missing: data/assets is generated, not tracked, and nothing
+# regenerated these. Only reachable with the PAK; wildcard-guarded so a
+# tree without it is not a build failure.
+MDL_ASSETS := $(if $(wildcard $(PAK)),data/assets/$(MDL).geo)
 ASSET_FILES := $(wildcard data/assets/*)
 EXE  := $(BUILD)/qrender.exe
 
@@ -87,10 +106,15 @@ EXE  := $(BUILD)/qrender.exe
 
 all: build                      ## build the renderer (default)
 build: $(EXE)
-assets: $(ASSETS)         ## regenerate the preprocessed textures
+assets: $(ASSETS) $(MDL_ASSETS)   ## regenerate the preprocessed textures
 
 $(ASSETS): data/$(MAP) data/base.dat tools/mkassets.py
 	@python3 tools/mkassets.py data/$(MAP) data/base.dat data/assets
+
+# .geo stands in for the three files mkmdl.py writes, the way assets.zip
+# stands in for the texture set.
+data/assets/$(MDL).geo: $(PAK) tools/mkmdl.py
+	@python3 tools/mkmdl.py $(PAK) $(MDL) data/assets
 
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -118,7 +142,7 @@ $(BUILD)/%.obj: %.asm $(ASM_INC) | $(BUILD)
 	# __BASIC__: this build links BASIC's runtime, so qgl may call
 	# B$$SETM to reclaim far-heap memory. The qgl test suite does not
 	# define it and links free-standing.
-	$(JWASM) -c -Cp -Zg -omf -D__BASIC__=1 $(QGL_DEFS) -I$(CURDIR)/src/qgl -Fo$@ $<
+	$(JWASM) -c -Cp -Zg -omf $(if $(filter 1,$(DEBUGINFO)),-Zi,) -D__BASIC__=1 $(QGL_DEFS) -I$(CURDIR)/src/qgl -Fo$@ $<
 
 $(BUILD)/stuff.ini: data/stuff.ini | $(BUILD)
 	cp $< $@
@@ -140,6 +164,8 @@ $(BUILD)/UGLV.LIB: $(NATIVE_UGL) | $(BUILD)
 $(BUILD)/.assets-stamp: $(ASSET_FILES) | $(BUILD)
 	cp -R data/assets/* $(BUILD)/
 	touch $@
+
+$(BUILD)/.assets-stamp: $(MDL_ASSETS)
 
 $(EXE): $(BAS_OBJS) $(C_OBJS) $(ASM_OBJS) $(BUILD)/stuff.ini $(BUILD)/base.dat $(BUILD)/FONT.FNT $(BUILD)/UGLV.LIB $(BUILD)/.assets-stamp
 	@python3 tools/qblint.py

@@ -133,6 +133,14 @@ proved the atlas right while the fault was elsewhere.
 a known-good build; BSP and asset fixtures are real map data. A fixture
 you synthesised tests your idea of the format.
 
+**Verify in a build directory you made from clean.** An incremental
+`$(BUILD)` accumulates files nothing produces any more, and it keeps
+running while a fresh checkout cannot: `data/assets` is generated and
+untracked, nothing regenerated `soldier.geo`, and every clean build died
+in `mdl_load` with `runtime error 9 at line 0` while the old directory
+ran fine on a copy made by hand months earlier. `make assets` builds the
+monster too now, and `mdl_load` says which file is missing.
+
 **A fix starts with a failing test.** Reproduce it, watch it fail, then
 fix. New code does not need the test first, but the coverage has to be
 real. `tools/check.sh --churn` was written this way: it failed on the
@@ -191,6 +199,21 @@ Two traps that make the blind approach worse than useless:
   that is fine) and check `dosbox_status` before believing any reading.
 - **A stale `process_exit` notification holds a newly launched program
   frozen.** Always confirm `cpuRunning` before concluding anything.
+
+**The build carries CodeView symbols, and the emulator reads them by
+itself.** `DEBUGINFO=1` is the default and threads through all four
+tools -- BC `/Zi`, BCC `-v`, jwasm `-Zi`, LINK `/CO`. Any one of them
+missing gives nothing: the records have to survive from the OBJ into the
+tail of the EXE. Then `dosbox_debug_prepare { verifySymbol: "d_draw_faces" }`
+answers `source: "codeview"` and `dosbox_where` names the routine, the
+source file and the line rather than `LMEM+0x943`. The EXE goes
+345K -> 577K and the frame is byte-identical, so this costs disk and not
+the conventional memory that is actually scarce. `DEBUGINFO=0` for a
+lean build.
+
+Note `dosbox_debuginfo { op: "status" }` times out on this program --
+`sym_list` asks for a million symbols. Resolve names one at a time
+instead; that works.
 
 **Link with `/MAP` so the debugger can name things.** Without it
 `qrender.map` carries segments only and the best the debugger can say is
