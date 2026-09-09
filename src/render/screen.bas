@@ -193,6 +193,16 @@ declare sub scr_begin_loading ( _
 '' header would hand these to modules that never use them -- BC's symbol
 '' table is finite, and it ran out when they all got everything.
 ''
+'' The destination is a qgl Surface, and a Surface stopped being an
+'' mgl DC when depth moved onto it: SF_addrTB sits at 38 where mgl's
+'' DC_addrTB is 32. uglPGet read its scanline table out of zsf/zmode and
+'' the screenshot came back full-frame noise -- correct palette, no
+'' geometry, the same bytes whatever the camera was doing.
+declare function qglSfPget ( _
+    byval s as long, _
+    byval x as integer, _
+    byval y as integer _
+) as integer
 declare function sc_frame_end ( ) as integer
 declare function mod_cm_ready ( _
     g as Game _
@@ -1590,7 +1600,7 @@ sub scr_screenshot ( _
     for y = h-1 to 0 step -1
         row = string$( rowlen, 0 )
         for x = 0 to w-1
-            mid$( row, x+1, 1 ) = chr$( uglPGet( dc, x, y ) and 255 )
+            mid$( row, x+1, 1 ) = chr$( qglSfPget( dc, x, y ) and 255 )
         next x
         put #f, , row
     next y

@@ -29,7 +29,14 @@ VBD_OUT="${VBD_OUT:-$ROOT/build/vbd}"
 export VBD_OUT
 REF="${REF:-$ROOT/tools/ref/bench.bmp}"
 PASSES="${PASSES:-2}"
-BENCH="${BENCH:--lm -nostats -bench 30}"
+# -ticks pins anim_time, and without it the liquids leave the last frame
+# wherever the host's speed put them -- three runs of one binary gave three
+# md5s. With it, two runs are byte-identical, which is what lets the image
+# comparison below be a gate rather than a report.
+# -yaw 183 turns the spawn to face the pool room: 285 polygons against
+# the 153 the default look draws, with liquid, lightmaps and mips all
+# in frame. A reference wants the busiest view, not the nearest wall.
+BENCH="${BENCH:--lm -nostats -yaw 183 -bench 40 -ticks 60}"
 
 # The native gates go first, and go before --churn as well: they take
 # fifteen seconds against the DOS build's minutes, and a qgl fault caught
@@ -156,8 +163,14 @@ for ((i=0; i<PASSES; i++)); do
 done
 
 echo "== image"
+# A gate, not a report. It was a report, against a 320x200 reference this
+# build could never produce, while the screenshot itself read the qgl
+# backbuffer through mgl's uglPGet and came back as full-frame noise for
+# every commit since the depth buffer moved onto the Surface. Nothing
+# said so, because nothing was comparing.
 if [[ -f "$REF" ]]; then
-    python3 "$ROOT/tools/imgdiff.py" "$REF" "$VBD_OUT/BENCH.BMP"
+    python3 "$ROOT/tools/imgdiff.py" "$REF" "$VBD_OUT/BENCH.BMP" || {
+        echo "IMAGE DIFFERS from $REF"; exit 1; }
 else
     echo "  (no reference at $REF -- run tools/check.sh --save)"
 fi
