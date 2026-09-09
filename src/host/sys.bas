@@ -117,6 +117,9 @@ sub sys_parse_args ( _
     cl = rtrim$(ltrim$( command$ ))
     if ( cl = "" ) then
         print "Usage: qrender mapname.bsp [-bench N]"
+        print "  -nomip        mip 0 everywhere, for A/B"
+        print "  -affine       the linear mapper instead of the perspective one"
+        print "  -nomdl        draw no alias models, for A/B"
         print "  -bench N      render N frames, write bench.bmp and bench.txt, exit"
         print "  -benchsecs N  run for N real seconds, then report, exit"
         print "  -lm           composite lightmaps via the surface cache"
@@ -162,6 +165,15 @@ sub sys_parse_args ( _
         end if
         if ( lcase$(argv(i)) = "-nocull" ) then
             g.env.no_cull = true
+        end if
+        if ( lcase$(argv(i)) = "-nomip" ) then
+            g.env.no_mip = true
+        end if
+        if ( lcase$(argv(i)) = "-affine" ) then
+            g.env.affine = true
+        end if
+        if ( lcase$(argv(i)) = "-nomdl" ) then
+            g.env.no_mdl = true
         end if
         if ( lcase$(argv(i)) = "-nostats" ) then
             g.env.no_stats = true

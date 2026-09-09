@@ -388,6 +388,15 @@ type Env
                                 '' world walk, the bug this flag exists to show.
     no_z        as integer      '' -noz: skip the depth buffer entirely
     no_cull     as integer      '' -nocull: backface culling off, for A/B
+    no_mip      as integer      '' -nomip: mip 0 for every face, whatever
+                                '' the distance. The A/B for anything that
+                                '' looks like it tracks a texture's size.
+    affine      as integer      '' -affine: rend_mode 1, the linear mapper,
+                                '' instead of the perspective one.
+    no_mdl      as integer      '' -nomdl: draw no alias models. The A/B
+                                '' that separated the wandering streaks
+                                '' from the world renderer -- 138 stray
+                                '' pixels with the model, 0 without.
     cam_path     as integer      '' -campath: fly the A* route from
                                 '' campath.bin instead of standing still.
                                 '' The old bench rendered ONE viewpoint, so

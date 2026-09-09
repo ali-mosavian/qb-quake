@@ -1608,6 +1608,48 @@ in looking like a fix -- and note it makes the squeeze worse, not better:
 four windows want slots (destination, atlas, luxels, colormap) and pinning
 two leaves the builder cycling the atlas through the other two.
 
+## The wandering streaks are the MODEL, not the renderer
+
+Long black diagonal bands across walls, moving as the camera moves. They
+were read as a surface-cache fault for a long time. They are alias-model
+triangles projected into screen-spanning slivers.
+
+The bisect, all at campath tick 360 (`-campath -bench 4000 -ticks 360`),
+which is the first frame that shows them, counting index-0 pixels below
+the HUD bar:
+
+| arm | stray pixels |
+|---|---|
+| lit, depth on | 138 |
+| `-noz` | 138 |
+| unlit -- `sc_built 0`, no surface cache at all | 138 |
+| `-nocull` | 138 |
+| `-nomip` | 138 |
+| `-affine` | 138 |
+| **`-nomdl`** | **0** |
+
+Identical to the pixel across every renderer variable, and gone entirely
+without the model. Two more measurements pinned what they are:
+
+- **Clearing the backbuffer to 251 left them black.** So the filler
+  WRITES those pixels; they are not cracks between polygons showing the
+  cleared ground through.
+- **Drawing the model `QGL_M_FLAT` in colour 251 turned them red.** So
+  they are model triangles, and the fault is in the geometry, not in the
+  skin fetch.
+
+The cause is in `mdl_draw` (`d_mdl.bas`): it REJECTS vertices behind the
+near plane (`if tw < z_near then mdl_okv(v) = 0`) and draws a triangle
+only when all three survive. That is not the same as clipping. A triangle
+entirely in front but with one vertex just barely past `z_near` keeps its
+`rw = 1/tw`, which is enormous, and projects to a sliver running off the
+screen. `d_faces.c` does the real thing for world faces -- `clip_w` clips
+against the near plane and emits the clipped polygon. The model path
+needs the same and does not have it.
+
+Not fixed yet. `-nomdl` is the A/B, and the tick-360 frame with zero
+index-0 pixels is the test to write against it.
+
 ## `-nostats` makes the picture deterministic
 
 With the HUD off the renderer is **byte-identical run to run** -- one
