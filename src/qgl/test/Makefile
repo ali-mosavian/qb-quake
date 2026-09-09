@@ -36,7 +36,7 @@ QGLCORE := $(QGL)/sf.asm $(QGL)/mem.asm $(QGL)/gem.asm \
 QGLSRC := $(QGL)/vga.asm $(QGLCORE) \
           $(QGL)/txt.asm $(QGL)/file.asm $(QGL)/dr.asm \
           $(QGL)/z.asm $(QGL)/clip.asm $(QGL)/rs.asm $(QGL)/sb.asm \
-          $(QGL)/zip.asm $(QGL)/ar.asm emsstub.asm \
+          $(QGL)/zip.asm $(QGL)/ar.asm \
           $(QGL)/log.asm \
           $(QGL)/b8/b8fill.asm $(QGL)/b8/b8span.asm
 # Objects are DERIVED from QGLSRC, never listed again. Hand-listing them

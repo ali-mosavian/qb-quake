@@ -1909,6 +1909,38 @@ the window read back a perfect copy. The hand-filled store now stays
 alive across the loader arm. Both tests were watched to fail with the
 bug put back.
 
+## Retiring mgl: every EMS page goes through qglGemMap
+
+mgl's `emsAlloc`/`emsMapEx`/`emsFree` and `uglNew(UGL.EMS)`/`uglMapEx`
+map nothing now. The colormap, the luxel atlas and the geometry store
+are `qglArLoadBas` EMS stores of one row per record -- 16384x1, 8192xN,
+8192xN -- and `mod_cm_map`/`mod_lm_map`/`mod_geom_map` are `qglArWin`.
+The model's vertex page is raw `qglGemAlloc`/`qglGemMap`, and ar.asm's
+EMS backend is `qglGem*` too, so the native suite no longer needs an
+`emsstub`. `lm.bmp` is `lm.bin`: the same bytes, top down, without a
+header to un-flip.
+
+**The per-slot record moved into `qglGemMap`.** mgl's `emsMapEx` kept
+one and ar.asm leaned on it, asking for its page on every access; a
+store keeping its own "I mapped page N here" is wrong the moment another
+store sharing the slot takes the window. `qglGemFree` forgets the handle,
+because EMM hands a freed number straight back to the next allocation
+and a surviving record would answer its first map with the old page.
+`t28gemmap` hooks INT 67h and counts function 44h, so "no remap" is a
+number: the same page again costs none, a new page one, a slot 4 request
+none and a 0. Both halves were watched to fail with the code put back.
+
+**Two `@@:` in one loop is one label too many.** `qglGemFree`'s forget
+loop ended `loop @B` with an `@@:` in front of `add bx, 2`, so it went
+back to that one and only slot 0 was ever asked. Named labels for
+anything a second jump targets -- the plan file says so, and this is why.
+
+**Arm the case before trusting the mutant.** The first version freed
+with page 1 on record and then asked for page 0, so the map issued
+whatever the free had forgotten, and the forgetless mutant passed. The
+test now maps page 0 before the free -- and with that armed, the real
+code failed too, which is how the loop above was found.
+
 ## `-nostats` makes the picture deterministic
 
 With the HUD off the renderer is **byte-identical run to run** -- one

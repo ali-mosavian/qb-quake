@@ -13,7 +13,7 @@ option explicit
 '' vertex.
 ''
 '' Vertices are packed bytes (trivertx_t, one per axis), flat and
-'' frame-major, in ONE EMS page (raw emsAlloc/emsMapEx, g.mdl.vtx_hnd) --
+'' frame-major, in ONE EMS page (raw qglGemAlloc/qglGemMap, g.mdl.vtx_hnd) --
 '' read with PEEK. See q_mdl.bi's own note for the three designs tried
 '' before this one and exactly which measurement ruled each out: a
 '' space$()'d BASIC string (hit BASIC's own "string space" ceiling), a
@@ -88,6 +88,10 @@ declare function qglSfNew ( _
     byval whr as integer _
 ) as long
 declare function qglSfWrRow ( byval s as long, byval y as integer ) as long
+declare function qglGemAlloc ( byval nbytes as long ) as integer
+declare function qglGemMap ( byval h as integer, byval pg as integer, _
+                             byval slot as integer ) as integer
+declare sub qglGemFree ( byval h as integer )
 ''
 '' The archive reader, qgl's. mgl's uar carried an inflate and a UAR the
 '' caller had to declare and then only pass back; every member is stored
@@ -209,35 +213,35 @@ sub mdl_load ( _
     close #fh
     sys_mem_mark "mdl_post_tri_gets"
 
-    '' Vertices: one EMS page, raw emsAlloc/emsMapEx (not a uGL DC or
-    '' array) -- see this module's own header comment for the three
+    '' Vertices: one EMS page, raw qglGemAlloc/qglGemMap (not a Surface
+    '' or a store) -- see this module's own header comment for the three
     '' designs tried and ruled out before this one. PAGE_SLOT, not a
-    '' dedicated slot: slots 0 and 1 are hardwired to uglBuildSurf's and
-    '' uglTriT's own rdAccess/wrAccess (uglwin.asm) -- every textured
-    '' triangle drawn anywhere, world or model, remaps one of those two
-    '' internally, so claiming either one just means fighting the busiest
-    '' traffic in the renderer for no reason. PAGE_SLOT is what nodes/
-    '' leaves/clips/lightmap/geometry already share safely, and this
-    '' shares it the same way they do: mapped fresh immediately before
-    '' each read, never held across another call.
+    '' dedicated slot: slots 0 and 1 are the surfaces' own read and write
+    '' windows -- every textured triangle drawn anywhere, world or model,
+    '' remaps one of those two internally, so claiming either one just
+    '' means fighting the busiest traffic in the renderer for no reason.
+    '' PAGE_SLOT is what nodes/leaves/clips/lightmap/geometry already
+    '' share safely, and this shares it the same way they do: mapped
+    '' fresh immediately before each read, never held across another
+    '' call.
     vtxbytes = clng( g.mdl.nframe ) * clng( g.mdl.nvert ) * 3
-    g.mdl.vtx_hnd = emsAlloc%( vtxbytes )
+    g.mdl.vtx_hnd = qglGemAlloc( vtxbytes )
     if ( g.mdl.vtx_hnd <> 0 ) then
-        vtxseg = emsMapEx%( g.mdl.vtx_hnd, 0, PAGE_SLOT )
+        vtxseg = qglGemMap( g.mdl.vtx_hnd, 0, PAGE_SLOT )
         if ( vtxseg <> 0 ) then
             u = qglZipOpenBas( vtxpath )
             if ( u <> 0 ) then
                 if ( qglZipRead( u, clng( vtxseg ) * 65536&, vtxbytes ) <> vtxbytes ) then
-                    emsFree g.mdl.vtx_hnd
+                    qglGemFree g.mdl.vtx_hnd
                     g.mdl.vtx_hnd = 0
                 end if
                 qglZipClose u
             else
-                emsFree g.mdl.vtx_hnd
+                qglGemFree g.mdl.vtx_hnd
                 g.mdl.vtx_hnd = 0
             end if
         else
-            emsFree g.mdl.vtx_hnd
+            qglGemFree g.mdl.vtx_hnd
             g.mdl.vtx_hnd = 0
         end if
     end if
@@ -283,7 +287,7 @@ end sub
 ''       Writes wxr()/wyr()/wzr(), BSP space (Z up), for every vertex of
 ''       this frame. yaw is degrees, rotating the model's local +X
 ''       (forward) into the world the same way d_mdl.c's real-geometry
-''       path does. g.mdl.vtx_hnd is one EMS page (emsAlloc), mapped
+''       path does. g.mdl.vtx_hnd is one EMS page (qglGemAlloc), mapped
 ''       through PAGE_SLOT -- flat, frame-major, one PEEK per byte, same
 ''       as reading through any other far pointer.
 ''::::::::::::::
@@ -305,10 +309,10 @@ sub mdl_rotate_all ( _
     cy = cos( rad ) : sn = sin( rad )
 
     '' PAGE_SLOT, shared with nodes/leaves/clips/lightmap/geometry --
-    '' emsMapEx's own slot-cache check (ems.bi) means this costs nothing
-    '' when nobody else has claimed the slot since our own last read, and
-    '' a real remap (still correct, just not free) when they have.
-    vtxseg = emsMapEx%( g.mdl.vtx_hnd, 0, PAGE_SLOT )
+    '' qglGemMap's own record of the slot means this costs nothing when
+    '' nobody else has claimed the slot since our own last read, and a
+    '' real remap (still correct, just not free) when they have.
+    vtxseg = qglGemMap( g.mdl.vtx_hnd, 0, PAGE_SLOT )
     def seg = vtxseg
 
     for v = 0 to g.mdl.nvert - 1

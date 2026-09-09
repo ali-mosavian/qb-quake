@@ -8,6 +8,16 @@
 ;;       that takes an explicit slot is the one anything sharing the page
 ;;       frame has to use.
 ;;
+;;       What each slot holds IS this module's business, and the record
+;;       lives here and nowhere else. A caller keeping its own "I mapped
+;;       page N there" is wrong the moment anyone else remaps the slot,
+;;       and wrong silently. Asked for the page a slot already holds,
+;;       qglGemMap answers with a compare and no INT 67h -- which is what
+;;       lets ar.asm ask on every access and a sequential walk cost
+;;       nothing. qglGemFree forgets the handle: EMM hands a freed number
+;;       straight back to the next allocation, and a record that survived
+;;       would answer the new handle's first map with the old page.
+;;
 ;;       This exists because it is a handful of INT 67h calls and owning
 ;;       them removes a dependency, not because mgl's were wrong.
 ;;
@@ -28,9 +38,13 @@ EMS_PAGE_SIZE   equ     4000h           ;; 16K
 EMS_PAGE_SHIFT  equ     14
 
 
+EMS_SLOTS       equ     4
+
 .data
 qgl$pgframe     dw      0               ;; segment, 0 until qglGemInit says otherwise
 qgl$emsok       dw      0
+qgl$gem_hnd     dw      EMS_SLOTS dup (0)   ;; handle mapped per slot, 0 = nothing
+qgl$gem_pg      dw      EMS_SLOTS dup (0)   ;; and its logical page
 
 
 .code
@@ -53,6 +67,7 @@ qglGemInit    proc    public uses bx cx si di es
 
                 mov     [qgl$emsok], 0
                 mov     [qgl$pgframe], 0
+                call    qgl$GemForget
 
                 ;; "EMMXXXX0" at handler_seg:000A
                 mov     ax, 3567h               ;; get vector 67h
@@ -137,16 +152,41 @@ qglGemAlloc   endp
 ;;::::::::::::::
 ;; qglGemFree ( handle:word )
 ;;::::::::::::::
-qglGemFree    proc    public uses dx,\
+qglGemFree    proc    public uses bx cx dx,\
                         hnd:word
 
                 mov     dx, hnd
                 test    dx, dx
-                jz      @F
+                jz      @@done
                 mov     ah, 45h
                 int     EMS_INT
-@@:             ret
+
+                ;; every slot that held a page of it forgets. Named
+                ;; labels: with two `@@:` in the loop, `loop @B` went
+                ;; back to the nearer one and only slot 0 was ever asked.
+                mov     dx, hnd                 ;; the driver owes no register
+                mov     cx, EMS_SLOTS
+                xor     bx, bx
+@@slot:         cmp     [qgl$gem_hnd+bx], dx
+                jne     @@next
+                mov     [qgl$gem_hnd+bx], 0
+@@next:         add     bx, 2
+                loop    @@slot
+@@done:         ret
 qglGemFree    endp
+
+
+;;::::::::::::::
+;; qgl$GemForget -- no slot holds anything, as far as this module knows
+;;::::::::::::::
+qgl$GemForget   proc    near private uses bx cx
+                mov     cx, EMS_SLOTS
+                xor     bx, bx
+@@:             mov     [qgl$gem_hnd+bx], 0
+                add     bx, 2
+                loop    @B
+                ret
+qgl$GemForget   endp
 
 
 ;;::::::::::::::
@@ -154,27 +194,52 @@ qglGemFree    endp
 ;;
 ;; Maps one logical page of a handle into one physical page, and hands
 ;; back the segment it now answers at. The caller owns the slot; nothing
-;; here tracks or arbitrates them.
+;; here arbitrates them. What a slot holds is recorded here, and a
+;; request for the page already there is answered without the driver.
 ;;::::::::::::::
 qglGemMap     proc    public uses bx cx dx,\
                         hnd:word, logpage:word, slot:word
 
-                mov     dx, hnd
+                mov     bx, slot
+                cmp     bx, EMS_SLOTS
+                jae     @@fail                  ;; four physical pages, no more
+                shl     bx, 1
+
+                mov     ax, hnd
+                cmp     [qgl$gem_hnd+bx], ax
+                jne     @@map
+                mov     ax, logpage
+                cmp     [qgl$gem_pg+bx], ax
+                je      @@seg                   ;; already there
+
+@@map:          mov     dx, hnd
                 mov     bx, logpage
                 mov     ax, slot
                 mov     ah, 44h                 ;; al = physical page
                 int     EMS_INT
                 test    ah, ah
-                jnz     @F
+                jnz     @@lost
 
-                ;; frame + slot*400h -- 16K in paragraphs
+                mov     bx, slot
+                shl     bx, 1
+                mov     ax, hnd
+                mov     [qgl$gem_hnd+bx], ax
+                mov     ax, logpage
+                mov     [qgl$gem_pg+bx], ax
+
+@@seg:          ;; frame + slot*400h -- 16K in paragraphs
                 mov     ax, slot
                 mov     cl, 10
                 shl     ax, cl
                 add     ax, [qgl$pgframe]
                 ret
 
-@@:             xor     ax, ax
+@@lost:         ;; the driver refused, and what the slot holds now is
+                ;; its business: the record must not claim otherwise
+                mov     bx, slot
+                shl     bx, 1
+                mov     [qgl$gem_hnd+bx], 0
+@@fail:         xor     ax, ax
                 ret
 qglGemMap     endp
 

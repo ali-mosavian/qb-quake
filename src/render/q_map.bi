@@ -51,12 +51,12 @@ type MapStore
 end type
 
 type GeomStore
-    dc          as long         '' one face record per lookup, through PAGE_SLOT
+    store       as long         '' a qgl EMS store, one row per record
     rows        as integer
 end type
 
 type LightStore
-    atlas       as long         '' every luxel in the map, one 8-bit EMS dc
+    atlas       as long         '' every luxel in the map, a qgl EMS store
     size        as long         '' bytes on disk
     loaded      as long         '' bytes that actually arrived
 end type
@@ -100,7 +100,7 @@ type TexStore
 end type
 
 type ColorMap
-    dc          as long
+    store       as long         '' a qgl EMS store, one page, CM_SLOT
     size        as long
 end type
 
@@ -167,12 +167,13 @@ end type
 ''
 '' The renderer's inner loop only ever asked the mesh one question: what
 '' are this face's corners? An indexed mesh cannot answer without both
-'' tables resident. Flat, it streams: one uglMapEx and one memCopy per
-'' DRAWN face, and the working set is a single face -- no cache, no
-'' eviction, no prefetch, and no cliff when the view opens out.
+'' tables resident. Flat, it streams: one map and one copy per DRAWN
+'' face, and the working set is a single face -- no cache, no eviction,
+'' no prefetch, and no cliff when the view opens out.
 ''
-'' GEOM_W must match mkassets.py's: it is the row uglMapEx maps, and the
-'' builder guarantees no record straddles one.
+'' GEOM_W must match mkassets.py's: it is the store's record, the row
+'' mod_geom_map hands back, and the builder guarantees no face record
+'' straddles one.
 ''
 '' A record is a corner count, then the 16-byte lightmap header, then the
 '' corners -- so gv_buf(0) is nvtx, gv_buf(1..8) the header, and the
@@ -181,8 +182,8 @@ end type
 ''
 '' THE SHARED PAGING WINDOW.
 ''
-'' EMS gives four physical slots. uglBuildSurf takes 0 and 1 for its own
-'' source and destination, the colormap holds 3 for the whole run, and
+'' EMS gives four physical slots. qgl takes 0 and 1 for its own source
+'' and destination, the colormap holds 3 for the whole run, and
 '' everything else that needs a window takes turns in 2.
 ''
 '' "Takes turns" is safe because every user maps it immediately before
@@ -199,11 +200,12 @@ end type
 const PAGE_SLOT = 2
 
 const GEOM_W = 8192
+const LM_ATLAS_W = 8192         '' mkassets.py's LM_ATLAS_W
 ''
-'' The BSP nodes take turns in PAGE_SLOT too. emsMapEx consults the
-'' EMS layer's record of what a slot holds before remapping, so the
-'' alternation costs a compare when the page has not moved. The walk
-'' finishes before drawing starts, so it is one remap per ordered node.
+'' The BSP nodes take turns in PAGE_SLOT too. qglGemMap consults its
+'' record of what a slot holds before remapping, so the alternation
+'' costs a compare when the page has not moved. The walk finishes
+'' before drawing starts, so it is one remap per ordered node.
 ''
 '' only used if MEM refuses; shares the same physical page
 const GEOM_MAXVTX = 33
@@ -290,11 +292,11 @@ const GEOM_MAXREC = 18 + GEOM_MAXVTX * 6
 '' The faces. 55,160 bytes on e1m1, the largest single item left.
 
 ''
-'' Lightmaps. The luxels are one 8-bit atlas in a single EMS dc, loaded by
-'' uglNewBMPEx exactly as the textures are -- so they cost no conventional
-'' memory at all, where the old packed blob cost 40K on dm3ish and more on
-'' bigger maps. A face's rect is fetched with one uglMapEx into PAGE_SLOT,
-'' which the atlas packer guarantees is a single page.
+'' Lightmaps. The luxels are one 8-bit atlas, LM_ATLAS_W wide, in a qgl
+'' EMS store of one row per record -- so they cost no conventional memory
+'' at all, where the old packed blob cost 40K on dm3ish and more on
+'' bigger maps. A face's rect is fetched with one map into PAGE_SLOT,
+'' which the atlas packer guarantees is a single row.
 ''
 '' The per-face placement table is not a block of its own: it rides in
 '' each face's geometry record, so one mapping and one copy fetch the

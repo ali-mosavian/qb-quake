@@ -27,10 +27,11 @@
 ;; obs.: - MEM keeps the flat bind: perpg = cnt, one window, one map,
 ;;         and no per-access cost. That is the hot production path and
 ;;         it is not made slower to fix a bug in the fallback.
-;;       - EMS remaps when the requested index leaves the current page.
-;;         emsMapEx consults the EMS layer's own record of what a slot
-;;         holds, so a request for the page already there costs a
-;;         compare and not an INT 67h.
+;;       - EMS asks qglGemMap for the page on every access. gem keeps
+;;         the record of what a slot holds, so the page already there
+;;         costs a compare and not an INT 67h -- and a store's own
+;;         record would be wrong the moment another store sharing the
+;;         slot took the window.
 ;;       - Only a DYNAMIC array can be bound. BC bakes a STATIC array's
 ;;         address into the instruction stream, so repointing its
 ;;         descriptor changes nothing. redim then erase is required.
@@ -58,7 +59,6 @@ QAr             struc
                 ar_slot         dw      ?
                 ar_adesc        dw      ?
                 ar_adj0         dw      ?
-                ar_curpg        dw      ?       ;; -1 when nothing is mapped
                 ar_perpg        dw      ?
                 ar_used         dw      ?
 QAr             ends
@@ -77,9 +77,9 @@ ENDIF
                 qglArMap      proto   far pascal :dword, :word, :dword
                 qglMemAlloc   proto   far pascal :dword
                 qglMemFree    proto   far pascal :dword
-                emsAlloc        proto   far pascal :dword
-                emsFree         proto   far pascal :word
-                emsMapEx        proto   far pascal :word, :word, :word
+                qglGemAlloc     proto   far pascal :dword
+                qglGemFree      proto   far pascal :word
+                qglGemMap       proto   far pascal :word, :word, :word
                 qglZipOpen      proto   far pascal :dword
                 qglZipRead      proto   far pascal :word, :dword, :dword
                 qglZipClose     proto   far pascal :word
@@ -162,7 +162,6 @@ qglArNew      proc    public uses bx cx si di,\
                 mov     [si].QAr.ar_slot, ax
                 mov     [si].QAr.ar_adesc, 0
                 mov     [si].QAr.ar_adj0, 0
-                mov     [si].QAr.ar_curpg, -1
                 mov     [si].QAr.ar_ofs, 0
 
                 cmp     typ, QGL_AR_EMS
@@ -194,14 +193,14 @@ qglArNew      proc    public uses bx cx si di,\
                 jz      @@no
                 mov     [si].QAr.ar_perpg, ax
 
-                ;; BYTES, not pages. emsAlloc takes a byte count and
+                ;; BYTES, not pages. qglGemAlloc takes a byte count and
                 ;; rounds it up to page granularity itself -- handing it
                 ;; ceil(nbytes/16384) allocated 2 bytes for a 22,926-byte
                 ;; fixture, one page, and the remap to page 1 then failed
                 ;; in a way indistinguishable from the paging bug this
                 ;; module exists to fix.
                 push    si
-                invoke  emsAlloc, nbytes
+                invoke  qglGemAlloc, nbytes
                 pop     si
                 test    ax, ax                  ;; handle in ax, 0 on failure
                 jz      @@no
@@ -262,35 +261,17 @@ qglArMap      proc    public uses bx cx si di,\
                 mov     woff, ax
                 jmp     @@bind
 
-@@ems:          ;; Remap ONLY when the page actually changes. emsMapEx
-                ;; checks the slot's own record first, so this is a
-                ;; compare and not an INT 67h when it is already there --
-                ;; but skipping the call entirely on a curpg match is
-                ;; what makes a sequential walk cost nothing extra.
-                mov     ax, pg
-                cmp     ax, [si].QAr.ar_curpg
-                je      @@ems_here
+@@ems:          ;; Ask every time. Another store sharing the slot may
+                ;; have taken the window since; gem's record says, and
+                ;; it is a compare and not an INT 67h when the page is
+                ;; still there.
                 push    si
-                invoke  emsMapEx, [si].QAr.ar_hnd, pg, [si].QAr.ar_slot
+                invoke  qglGemMap, [si].QAr.ar_hnd, pg, [si].QAr.ar_slot
                 pop     si
                 test    ax, ax
                 jz      @@no
                 mov     wseg, ax
-                mov     cx, pg
-                mov     [si].QAr.ar_curpg, cx
-                jmp     @@ems_off
-
-@@ems_here:     ;; the page is ours already, but another store sharing
-                ;; the slot may have taken the window since. Ask again;
-                ;; it is a compare inside the EMS layer when it agrees.
-                push    si
-                invoke  emsMapEx, [si].QAr.ar_hnd, pg, [si].QAr.ar_slot
-                pop     si
-                test    ax, ax
-                jz      @@no
-                mov     wseg, ax
-
-@@ems_off:      mov     woff, 0
+                mov     woff, 0
 
 @@bind:         mov     di, adesc
                 test    di, di
@@ -440,7 +421,7 @@ qglArFree     proc    public uses bx cx dx si di,\
 @@nodesc:       cmp     [si].QAr.ar_typ, QGL_AR_EMS
                 jne     @@mem
                 push    si
-                invoke  emsFree, [si].QAr.ar_hnd
+                invoke  qglGemFree, [si].QAr.ar_hnd
                 pop     si
                 jmp     @@clear
 
@@ -456,7 +437,6 @@ qglArFree     proc    public uses bx cx dx si di,\
 
 @@clear:        mov     [si].QAr.ar_used, 0
                 mov     [si].QAr.ar_adesc, 0
-                mov     [si].QAr.ar_curpg, -1
 @@done:         ret
 qglArFree     endp
 

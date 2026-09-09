@@ -21,6 +21,7 @@ import struct, sys, os
 
 ASSETS = os.path.join(os.path.dirname(__file__), '..', 'data', 'assets')
 BSP    = os.path.join(os.path.dirname(__file__), '..', 'data', 'dm3ish.bsp')
+LM_ATLAS_W = 8192       # mkassets.py's, the luxel atlas row
 
 
 def asset_bytes(path):
@@ -111,7 +112,8 @@ def build(face, mip):
     tex = atlas_cell(mi, mip, cell)
     tw, th = cell, cell
 
-    aw_, ah_, lm, _ = read_bmp8(os.path.join(ASSETS, 'lm.bmp'))
+    lm = asset_bytes(os.path.join(ASSETS, 'lm.bin'))
+    aw_ = LM_ATLAS_W
     cmap = bload(os.path.join(ASSETS, 'colmap.bld'))
 
     # The face's rect inside the atlas: raw luxel bytes, rows pot(lmw)

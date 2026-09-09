@@ -60,6 +60,8 @@ declare sub mod_load_nodes ( _
 declare function qglArNew ( byval typ as integer, byval elsz as integer, _
                               byval cnt as long, byval slot as integer ) as long
 declare function qglArWin ( byval h as long, byval idx as long ) as long
+declare function qglMemAlloc ( byval nbytes as long ) as long
+declare sub qglMemFree ( byval p as long )
 ''
 '' qgl's paged-array store. flname is NOT byval: VBDOS passes a plain
 '' "as string" parameter as a near pointer to its descriptor, which is
@@ -208,13 +210,13 @@ dim shared tex_info_tmp as DiskTexInfo       '' tex_inf_buff dropped flags and
 '' pointer to the mapped table. They get that from mod_cm_map( wld ), so CM_SLOT
 '' stops being a constant three modules have to agree about.
 ''
-'' One row of 16,384, which is one EMS page, so a single uglMapEx reaches
+'' One record of 16,384, which is one EMS page, so a single map reaches
 '' the whole table and the rows the builder indexes flat really are
-'' contiguous. CM_SLOT is its own window and shares with nothing: qgl owns
-'' slots 0 and 1 (QGL_TEX_SLOT reads, QGL_Z_SLOT and every other qgl write)
-'' and mgl owns 2 and 3, so the two ppgTB caches never claim one page. This
-'' used to say CM_SLOT borrowed the depth buffer's; that stopped being true
-'' when depth moved to EMS_WRITEPAGE.
+'' contiguous. CM_SLOT is its own window and shares with nothing: qgl's
+'' surfaces own slots 0 and 1 (QGL_TEX_SLOT reads, QGL_Z_SLOT and every
+'' other qgl write) and everything paged takes turns in 2. This used to
+'' say CM_SLOT borrowed the depth buffer's; that stopped being true when
+'' depth moved to EMS_WRITEPAGE.
 ''
 const CM_SLOT = 3
 
@@ -398,27 +400,17 @@ sub mod_load_colormap ( _
 
     scr_load_stage "colormap"
 
-    dim p as long
-
-    g.wld.cmap.dc = 0
+    g.wld.cmap.store = 0
     g.wld.cmap.size = 0
 
+    '' a missing table is not an error -- hud_shade draws opaque instead
     u = qglZipOpenBas( "assets.zip::colmap.bin" )
     if ( u = 0 ) then exit sub
-
-    g.wld.cmap.dc = uglNew&( UGL.EMS, UGL.8BIT, 16384, 1 )
-    if ( g.wld.cmap.dc <> 0 ) then
-        p = uglMapEx&( g.wld.cmap.dc, 0, CM_SLOT )
-        if ( p <> 0 ) then
-            if ( qglZipRead( u, p, 16384 ) = 16384 ) then
-                g.wld.cmap.size = 16384
-            end if
-        end if
-    end if
-
     qglZipClose u
 
-    if ( g.wld.cmap.size = 0 ) then sys_error "0x0015, colormap would not load"
+    g.wld.cmap.store = qglArLoadBas&( "assets.zip::colmap.bin", QGL_AR_EMS, 16384, 1&, CM_SLOT )
+    if ( g.wld.cmap.store = 0 ) then sys_error "0x0015, colormap would not load"
+    g.wld.cmap.size = 16384
 end sub
 
 
@@ -430,10 +422,9 @@ end sub
 ''       The table is 16 bytes a face and BLOADs like every other lump. The
 ''       luxels never could: 71K of them made BASIC fail with 'out of
 ''       string space' while setmem reported 397K of far heap free. They
-''       are now one 8-bit atlas in a single EMS dc, loaded by uglNewBMPEx
-''       exactly as the textures are -- which puts them outside
-''       conventional memory entirely rather than merely outside the BASIC
-''       heap, and costs no bespoke loader at all.
+''       are now one 8-bit atlas in a qgl EMS store, a row per record --
+''       which puts them outside conventional memory entirely rather
+''       than merely outside the BASIC heap, and costs no bespoke loader.
 ''
 ''       No pointer fixup here: a face's rect is found by mapping its atlas
 ''       scanline, which sb_build does per build.
@@ -443,31 +434,24 @@ sub mod_load_lightmaps ( _
 )
     scr_load_stage "lightmaps"
     dim u as integer
-    dim got as long
 
     g.wld.light.atlas = 0
     g.wld.light.size = 0
+    g.wld.light.loaded = 0
 
     ''
-    '' Every luxel in the map, as one 8-bit EMS dc built straight from a
-    '' BMP -- the same path mod_tex.bas takes for the textures, and
-    '' BMPOPT.NO332 for the same reason: these bytes are luxel values, not
-    '' colours for uGL to remap through its own palette.
-    ''
+    '' Every luxel in the map, raw rows of LM_ATLAS_W, straight into EMS.
     '' It costs no conventional memory at all. The packed blob it replaces
     '' cost 40K on dm3ish and more on the bigger maps.
     ''
-    u = qglZipOpenBas( "assets.zip::lm.bmp" )
-    if ( u <> 0 ) then
-        g.wld.light.size = qglZipSize( u )
-        qglZipClose u
-    end if
-    g.wld.light.atlas = uglNewBMPEx( UGL.EMS, UGL.8BIT, "assets.zip::lm.bmp", BMPOPT.NO332 )
-    if ( g.wld.light.atlas <> 0 ) then
-        g.wld.light.loaded = g.wld.light.size
-    else
-        g.wld.light.loaded = 0
-    end if
+    u = qglZipOpenBas( "assets.zip::lm.bin" )
+    if ( u = 0 ) then exit sub
+    g.wld.light.size = qglZipSize( u )
+    qglZipClose u
+
+    g.wld.light.atlas = qglArLoadBas&( "assets.zip::lm.bin", QGL_AR_EMS, LM_ATLAS_W, _
+                                       g.wld.light.size \ LM_ATLAS_W, PAGE_SLOT )
+    if ( g.wld.light.atlas <> 0 ) then g.wld.light.loaded = g.wld.light.size
 
     scr_load_step
 end sub
@@ -479,19 +463,19 @@ end sub
 '' name: mod_load_facevtx
 ''::::::::::
 ''
-'' Read straight into the mapped window, a row at a time. There is no
-'' conventional-memory staging buffer anywhere in here: the point of the
-'' store is that the geometry never lands in low memory, and a loader
-'' that read it into an array first would defeat that at the worst
-'' possible moment -- while every other buffer is also allocated.
+'' Streamed straight into the mapped window, a page at a time, by
+'' qglArLoad. There is no conventional-memory staging buffer anywhere in
+'' here: the point of the store is that the geometry never lands in low
+'' memory, and a loader that read it into an array first would defeat
+'' that at the worst possible moment -- while every other buffer is also
+'' allocated. mkassets pads the last row, so the member is rows*GEOM_W
+'' exactly, which is what the loader demands.
 ''
 sub mod_load_facevtx ( _
     g as Game, _
     gv_buf() as integer _
 )
     dim u as integer
-    dim y as integer
-    dim p as long
 
     scr_load_stage "face vertices"
 
@@ -499,25 +483,17 @@ sub mod_load_facevtx ( _
     if ( u = 0 ) then
         sys_error "0x0011, fgeom.bin missing"
     end if
+    g.wld.geom.rows = cint( qglZipSize( u ) \ GEOM_W )
+    qglZipClose u
 
     '' 108 as a literal, not GEOM_MAXREC \ 2: an expression bound makes the
-    '' array dynamic and therefore zero length until a REDIM, and memCopy
+    '' array dynamic and therefore zero length until a REDIM, and the copy
     '' would write a whole record past it
     redim gv_buf(108) as integer
 
-    g.wld.geom.rows = cint( (qglZipSize( u ) + GEOM_W - 1) \ GEOM_W )
-    g.wld.geom.dc = uglNew&( UGL.EMS, UGL.8BIT, GEOM_W, g.wld.geom.rows )
-    if ( g.wld.geom.dc = 0 ) then sys_error "0x0010, no EMS for the geometry store"
-
-    for y = 0 to g.wld.geom.rows-1
-        p = uglMapEx&( g.wld.geom.dc, y, PAGE_SLOT )
-        if ( p = 0 ) then sys_error "0x0012, geometry store will not map"
-        if ( qglZipRead( u, p, GEOM_W ) <> GEOM_W ) then
-            sys_error "0x0013, fgeom.bin short read"
-        end if
-    next y
-
-    qglZipClose u
+    g.wld.geom.store = qglArLoadBas&( "assets.zip::fgeom.bin", QGL_AR_EMS, GEOM_W, _
+                                      clng( g.wld.geom.rows ), PAGE_SLOT )
+    if ( g.wld.geom.store = 0 ) then sys_error "0x0010, the geometry store would not load"
 
     scr_load_step
 end sub
@@ -716,10 +692,10 @@ sub mod_load_visibility ( _
     if ( u <> 0 ) then
         g.wld.pvs.size = qglZipSize( u )
         if ( g.wld.pvs.size > 0 ) then
-            g.wld.pvs.ptr = memAlloc( g.wld.pvs.size )
+            g.wld.pvs.ptr = qglMemAlloc( g.wld.pvs.size )
             if ( g.wld.pvs.ptr <> 0 ) then
                 if ( qglZipRead( u, g.wld.pvs.ptr, g.wld.pvs.size ) <> g.wld.pvs.size ) then
-                    memFree g.wld.pvs.ptr
+                    qglMemFree g.wld.pvs.ptr
                     g.wld.pvs.ptr = 0
                     g.wld.pvs.size = 0
                 end if
@@ -753,14 +729,14 @@ end sub
 ''::::::::::
 '' name: mod_cm_map( wld )
 '' desc: The colormap, mapped, as a far pointer. Mapped per call and never
-''       held: CM_SLOT is mgl's alone (see the block comment above), but a
+''       held: CM_SLOT is its own (see the block comment above), but a
 ''       pointer kept across anything that could remap is the bug class
 ''       this codebase keeps hitting, so it is re-taken instead.
 ''::::::::::
 function mod_cm_map ( _
     g as Game _
 ) as long
-    mod_cm_map = uglMapEx&( g.wld.cmap.dc, 0, CM_SLOT )
+    mod_cm_map = qglArWin( g.wld.cmap.store, 0& )
 end function
 
 ''::::::::::
@@ -794,7 +770,7 @@ function mod_lm_map ( _
     g as Game, _
     byval row as integer _
 ) as long
-    mod_lm_map = uglMapEx&( g.wld.light.atlas, row, PAGE_SLOT )
+    mod_lm_map = qglArWin( g.wld.light.atlas, clng( row ) )
 end function
 
 ''::::::::::
@@ -824,7 +800,7 @@ function mod_geom_map ( _
     g as Game, _
     byval row as integer _
 ) as long
-    mod_geom_map = uglMapEx&( g.wld.geom.dc, row, PAGE_SLOT )
+    mod_geom_map = qglArWin( g.wld.geom.store, clng( row ) )
 end function
 
 ''::::::::::

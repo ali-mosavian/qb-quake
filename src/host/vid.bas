@@ -149,8 +149,9 @@ end function
 ''::::::::::
 '' name: vid_init_ugl
 '' desc: mgl's library init, and no longer its video mode. mgl still holds
-''       the paged-array stores, the lightmap atlas and uglBuildSurf, and
-''       uglNew refuses until uglInit has filled the DC-type table.
+''       the timer, the keyboard and the mouse -- and uglInit is what
+''       links the upper memory blocks and sets the allocation strategy
+''       every qglMemAlloc lands in them by.
 ''::::::::::
 sub vid_init_ugl
     if ( uglInit() = FALSE ) then 

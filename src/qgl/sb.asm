@@ -101,17 +101,9 @@
 ;;         PAGE_SLOT and was describing code that no longer exists. So
 ;;         the four windows are four distinct slots: atlas 0, destination
 ;;         1, luxels 2, colormap 3.
-;;       - it is qglGemMap doing the mapping now, not mgl's emsMapEx.
-;;         There ARE two ppgTB caches over the same four physical pages
-;;         (qgl$emsCtx in dct/dctems.asm, em$emsCtx in mgl's), and one
-;;         object does cross the line: the model skin is an mgl DC
-;;         (d_mdl.bas, uglNewBMPEx UGL.EMS) read through qgl's accessor.
-;;         What keeps them from desyncing is that the SLOT SETS are
-;;         disjoint -- qgl only ever maps 0 and 1, mgl only ever 2
-;;         (PAGE_SLOT) and 3 (CM_SLOT) -- not that the handles are
-;;         unreachable, which is what this note used to claim. Nothing
-;;         enforces the split; adding a qgl map of slot 2 or 3, or an
-;;         mgl plain rd/wrAccess on any EMS DC at draw time, breaks it.
+;;       - every map anywhere goes through qglGemMap now; mgl's emsMapEx
+;;         maps nothing. The per-slot record is gem's, and qgl$emsCtx's
+;;         ppgTB in dct/dctems.asm is a copy of it for slots 0 and 1.
 ;;       - the scratch block is sized SC_PGBYTES (16384): the same bound
 ;;         SC_MAXSUM enforces on every surface sc_alloc will ever hand
 ;;         back. A surface that could not fit could not have been

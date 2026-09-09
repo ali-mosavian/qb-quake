@@ -13,11 +13,9 @@
 ;;     record the segment gem hands back, which is where mgl's frame+slot
 ;;     arithmetic went.
 ;;
-;;   * qglGemMap KEEPS NO CACHE. mgl's emsMapEx records the mapped page in
-;;     em$emsCtx.ppgTB[slot] and skips a redundant remap; gem does neither.
-;;     The cache is therefore entirely qgl$emsCtx's here, kept by
-;;     qgl$AccessEx and by the macros -- which is where mgl kept most of it
-;;     anyway.
+;;   * qglGemMap keeps the per-slot record now, as mgl's emsMapEx did, so
+;;     qgl$emsCtx's ppgTB is a second copy kept by qgl$AccessEx and the
+;;     macros. Coherent because every map anywhere goes through gem.
 ;;
 ;;   * emsCalloc -> qglGemAlloc, which does not zero and reports failure as
 ;;     handle 0 rather than CF.

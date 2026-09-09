@@ -1094,7 +1094,7 @@ sub host_shutdown
     
     ''
     '' Restore the video mode, then end mgl. uglEnd stays until mgl does:
-    '' it still holds the paged-array stores and the lightmap atlas.
+    '' it still holds the timer, the keyboard and the mouse.
     ''
     qglVgaShutdown
     uglEnd

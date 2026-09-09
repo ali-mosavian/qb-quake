@@ -53,7 +53,7 @@ type MdlState
     nvert       as integer
     nframe      as integer
     skin        as long        '' the skin's dc
-    vtx_hnd     as integer     '' emsAlloc's handle -- see mdl_rotate_all
+    vtx_hnd     as integer     '' qglGemAlloc's handle -- see mdl_rotate_all
     scale       as u3dVector3f '' vertex byte -> model unit: unit = byte*scale + origin
     origin      as u3dVector3f
 end type

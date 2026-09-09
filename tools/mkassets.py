@@ -384,12 +384,10 @@ def convert_lightmaps(d, lumps, out):
                              styles[0] | (styles[1] << 8),
                              styles[2] | (styles[3] << 8))
 
-    # An 8-bit BMP, loaded by uglNewBMPEx straight into one EMS dc -- the
-    # same path the textures take. BMPOPT.NO332 keeps the bytes verbatim, so
-    # the palette below is never consulted; it is an identity ramp purely so
-    # the file is a valid BMP.
-    out['lm.bmp'] = bmp8_bytes(LM_ATLAS_W, atlas_h, bytes(atlas),
-                               [(i, i, i) for i in range(256)])
+    # Raw rows of LM_ATLAS_W, top down, into a qgl EMS store of one row
+    # per record -- the same shape fgeom.bin has. Padded above to a whole
+    # row, which the loader demands.
+    out['lm.bin'] = bytes(atlas)
     blob = atlas
 
     # The table is not written out on its own any more: convert_lumps folds
@@ -640,11 +638,10 @@ def convert_lumps(d, lumps, outdir):
             else:
                 # page-padded: read a page at a time into an EMS window
                 total += write_paged(path, payload, PAGED_ELEM[name])
-        elif name.endswith('.bin') or name.endswith('.bmp'):
-            # raw: .bin is read by mgl's fileRead -- into a memAlloc'd
-            # block for lmface, straight into a mapped EMS window for
-            # fgeom -- and .bmp by uglNewBMPEx, so none of them is bound
-            # by BLOAD's 64K cap or by BASIC's far heap
+        elif name.endswith('.bin'):
+            # raw: read through qglZipRead into a block or straight into
+            # a mapped EMS window, so none of them is bound by BLOAD's
+            # 64K cap or by BASIC's far heap
             OUT[name] = bytes(payload)
             total += len(payload)
         else:

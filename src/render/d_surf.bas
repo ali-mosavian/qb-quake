@@ -245,17 +245,6 @@ const SC_STORE#  = 4194304#      '' 256 * 16384
 '' destination surface, so the atlas takes 2 and survives the whole build.
 ''
 ''
-'' Atlas width, mirroring LM_ATLAS_W in tools/mkassets.py -- the two move
-'' together, the same rule the .bld lumps live by. A face's luxel rect is
-'' packed into a power-of-two slot aligned to its own size, so it never
-'' crosses one scanline and one uglMapEx reaches all of it.
-''
-'' 8192 is also uglbmp.asm's BMP_MAX_BPS, the widest scanline that loader
-'' accepts.
-''
-const LM_ATLAS_W = 8192
-
-''
 '' One luxel, for faces the compiler left unlit. DIM SHARED rather than a
 '' literal because the builder wants an address to read it from.
 ''
