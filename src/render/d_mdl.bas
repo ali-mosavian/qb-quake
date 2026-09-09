@@ -55,6 +55,10 @@ const MDL_MAXV = 191
 '' UV fixed-point -> Single: must match mkmdl.py's own UV_SCALE.
 const MDL_UV_SCALE = 32767.0
 
+'' Clip-ring ceiling. Five planes, one added corner each, three to start:
+'' eight corners, so nine is the highest index a ring can reach.
+const MDL_CLIPV = 9
+
 '' MdlTri/MdlState come from q_mdl.bi -- shared with main.bas (mdl_load's
 '' caller) and h_frame.bas (mdl_draw's caller).
 
@@ -110,9 +114,13 @@ declare sub mdl_rotate_all ( _
 dim shared mdl_wxr( MDL_MAXV ) as single
 dim shared mdl_wyr( MDL_MAXV ) as single
 dim shared mdl_wzr( MDL_MAXV ) as single
-dim shared mdl_sx( MDL_MAXV ) as single
-dim shared mdl_sy( MDL_MAXV ) as single
-dim shared mdl_sw( MDL_MAXV ) as single
+'' Clip space, not screen space. A near-plane clip has to interpolate
+'' BEFORE the perspective divide -- that is the whole point of it -- so
+'' these hold the numerators and w, and the divide happens per emitted
+'' corner down in the triangle loop.
+dim shared mdl_cx( MDL_MAXV ) as single
+dim shared mdl_cy( MDL_MAXV ) as single
+dim shared mdl_cw( MDL_MAXV ) as single
 dim shared mdl_okv( MDL_MAXV ) as integer
 
 ''::::::::::::::
@@ -321,18 +329,30 @@ sub mdl_draw ( _
     byval z_near as single, _
     byval dst as long _
 )
-    dim v as integer, j as integer, a as integer, b as integer, c as integer
+    dim v as integer, j as integer, k as integer, k2 as integer
     dim wx as single, wy as single, wz as single
     dim rx as single, ry as single, rz as single    '' renderer space, Y up
-    dim tw as single, rw as single
+    dim rw as single
     dim area as single
-    dim t as TriType
     dim zm as integer
     dim frame as integer
     dim qdst as long
     dim qskin as long
     dim qz as integer
-    dim qv(2) as QglVtx
+    '' Five planes add at most one corner each, so eight is the ceiling
+    '' and MDL_CLIPV is nine. qglRsPoly scans any convex polygon.
+    dim qv( MDL_CLIPV ) as QglVtx
+    dim ia(2) as integer                            '' the triangle's corners
+    dim cbx(1, MDL_CLIPV) as single                 '' the ping-pong rings,
+    dim cby(1, MDL_CLIPV) as single                 '' clip space
+    dim cbw(1, MDL_CLIPV) as single
+    dim cbu(1, MDL_CLIPV) as single
+    dim cbv(1, MDL_CLIPV) as single
+    dim cd( MDL_CLIPV ) as single                   '' distance to this plane
+    dim cn(1) as integer
+    dim sbuf as integer, dbuf as integer, cp as integer
+    dim nin as integer, nout as integer
+    dim f as single
 
     if ( g.mdl.loaded = 0 ) then exit sub
 
@@ -361,16 +381,15 @@ sub mdl_draw ( _
         '' d_faces.c reads a raw BSP vertex: x unchanged, z becomes y.
         rx = wx : ry = wz : rz = wy
 
-        tw = rx * mtx_fin.m14 + ry * mtx_fin.m24 + rz * mtx_fin.m34 + mtx_fin.m44
-        if ( tw < z_near ) then
-            mdl_okv( v ) = 0
-        else
-            rw = 1.0 / tw
-            mdl_sx( v ) = xresh + ( rx * mtx_fin.m11 + ry * mtx_fin.m21 + rz * mtx_fin.m31 + mtx_fin.m41 ) * rw * xresh
-            mdl_sy( v ) = yresh - ( rx * mtx_fin.m12 + ry * mtx_fin.m22 + rz * mtx_fin.m32 + mtx_fin.m42 ) * rw * yresh
-            mdl_sw( v ) = rw
-            mdl_okv( v ) = -1
-        end if
+        '' No divide here. A vertex in front of the near plane by a
+        '' hair has a colossal 1/w, and projecting it flings the corner
+        '' thousands of pixels off screen -- which is what the triangle
+        '' loop below used to draw, as a sliver stretched across the
+        '' frame. Keep w and clip against it first.
+        mdl_cw( v ) = rx * mtx_fin.m14 + ry * mtx_fin.m24 + rz * mtx_fin.m34 + mtx_fin.m44
+        mdl_cx( v ) = rx * mtx_fin.m11 + ry * mtx_fin.m21 + rz * mtx_fin.m31 + mtx_fin.m41
+        mdl_cy( v ) = rx * mtx_fin.m12 + ry * mtx_fin.m22 + rz * mtx_fin.m32 + mtx_fin.m42
+        mdl_okv( v ) = ( mdl_cw( v ) >= z_near )
     next v
 
     '' qgl from here: the destination and the skin are both Surfaces.
@@ -387,24 +406,113 @@ sub mdl_draw ( _
     zm    = qglSfZMode%( qdst, QGL_Z_TEST )
 
     for j = 0 to g.mdl.ntri - 1
-        a = tri( j ).a : b = tri( j ).b : c = tri( j ).c
-        if ( mdl_okv( a ) and mdl_okv( b ) and mdl_okv( c ) ) then
-            area = ( mdl_sx(b) - mdl_sx(a) ) * ( mdl_sy(c) - mdl_sy(a) ) _
-                 - ( mdl_sx(c) - mdl_sx(a) ) * ( mdl_sy(b) - mdl_sy(a) )
+        ia(0) = tri( j ).a : ia(1) = tri( j ).b : ia(2) = tri( j ).c
+        nout = 0
+
+        if ( mdl_okv( ia(0) ) or mdl_okv( ia(1) ) or mdl_okv( ia(2) ) ) then
+            sbuf  = 0
+            cn(0) = 3
+            for k = 0 to 2
+                cbx(0, k) = mdl_cx( ia(k) )
+                cby(0, k) = mdl_cy( ia(k) )
+                cbw(0, k) = mdl_cw( ia(k) )
+            next k
+            cbu(0, 0) = csng( tri(j).u1 ) / MDL_UV_SCALE
+            cbu(0, 1) = csng( tri(j).u2 ) / MDL_UV_SCALE
+            cbu(0, 2) = csng( tri(j).u3 ) / MDL_UV_SCALE
+            cbv(0, 0) = csng( tri(j).v1 ) / MDL_UV_SCALE
+            cbv(0, 1) = csng( tri(j).v2 ) / MDL_UV_SCALE
+            cbv(0, 2) = csng( tri(j).v3 ) / MDL_UV_SCALE
+
+            '' Sutherland-Hodgman in CLIP space against all five planes:
+            '' w >= z_near, then |x| <= w and |y| <= w, which is the view
+            '' rectangle expressed before the divide.
+            ''
+            '' qgl clips to the view rectangle too (clip.asm), but AFTER
+            '' the divide, and by then the damage is done: a corner whose
+            '' w is a hair above z_near projects to tens of thousands of
+            '' pixels, and clipping that to the rect does not discard the
+            '' triangle -- it stretches the surviving sliver across the
+            '' frame. That is the wandering streak. Clipping x and y
+            '' against w here bounds every projected corner to the
+            '' viewport, so nothing reaches qgl that it has to rescue.
+            for cp = 0 to 4
+                nin = 0
+                for k = 0 to cn(sbuf) - 1
+                    select case cp
+                    case 0    : cd(k) = cbw(sbuf, k) - z_near
+                    case 1    : cd(k) = cbw(sbuf, k) - cbx(sbuf, k)
+                    case 2    : cd(k) = cbw(sbuf, k) + cbx(sbuf, k)
+                    case 3    : cd(k) = cbw(sbuf, k) - cby(sbuf, k)
+                    case else : cd(k) = cbw(sbuf, k) + cby(sbuf, k)
+                    end select
+                    if ( cd(k) >= 0.0 ) then nin = nin + 1
+                next k
+
+                if ( nin = 0 ) then
+                    cn(sbuf) = 0
+                    exit for
+                end if
+
+                '' Wholly inside: the ring is already the answer for this
+                '' plane, and copying it would only cost.
+                if ( nin < cn(sbuf) ) then
+                    dbuf = 1 - sbuf
+                    nout = 0
+                    for k = 0 to cn(sbuf) - 1
+                        k2 = k + 1 : if ( k2 = cn(sbuf) ) then k2 = 0
+
+                        if ( cd(k) >= 0.0 ) then
+                            cbx(dbuf, nout) = cbx(sbuf, k)
+                            cby(dbuf, nout) = cby(sbuf, k)
+                            cbw(dbuf, nout) = cbw(sbuf, k)
+                            cbu(dbuf, nout) = cbu(sbuf, k)
+                            cbv(dbuf, nout) = cbv(sbuf, k)
+                            nout = nout + 1
+                        end if
+
+                        if ( (cd(k) >= 0.0) <> (cd(k2) >= 0.0) ) then
+                            f = cd(k) / ( cd(k) - cd(k2) )
+                            cbx(dbuf, nout) = cbx(sbuf,k) + f * ( cbx(sbuf,k2) - cbx(sbuf,k) )
+                            cby(dbuf, nout) = cby(sbuf,k) + f * ( cby(sbuf,k2) - cby(sbuf,k) )
+                            cbw(dbuf, nout) = cbw(sbuf,k) + f * ( cbw(sbuf,k2) - cbw(sbuf,k) )
+                            cbu(dbuf, nout) = cbu(sbuf,k) + f * ( cbu(sbuf,k2) - cbu(sbuf,k) )
+                            cbv(dbuf, nout) = cbv(sbuf,k) + f * ( cbv(sbuf,k2) - cbv(sbuf,k) )
+                            nout = nout + 1
+                        end if
+                    next k
+                    cn(dbuf) = nout
+                    sbuf     = dbuf
+                end if
+            next cp
+
+            nout = cn(sbuf)
+        end if
+
+        if ( nout >= 3 ) then
+            '' The divide, finally, on corners that are all inside the
+            '' frustum and so all project onto the viewport.
+            for k = 0 to nout - 1
+                rw = 1.0 / cbw( sbuf, k )
+                qv(k).x = xresh + cbx( sbuf, k ) * rw * xresh
+                qv(k).y = yresh - cby( sbuf, k ) * rw * yresh
+                qv(k).z = rw
+                '' RAW u and v, not u/w. The model is drawn affine --
+                '' QGL_M_TEX below, uglTriT's mode, which is what this
+                '' path has always been -- and the affine filler steps u
+                '' and v linearly in screen space, so it wants the
+                '' coordinates themselves. Only QGL_M_PTEX owes the
+                '' divided pair (d_faces.c's pu[j] = vt_u[j]*rw).
+                qv(k).u = cbu( sbuf, k )
+                qv(k).v = cbv( sbuf, k )
+            next k
+
+            '' Backface after the clip, not before: clipping preserves
+            '' winding, so the first three corners answer for all of them.
+            area = ( qv(1).x - qv(0).x ) * ( qv(2).y - qv(0).y ) _
+                 - ( qv(2).x - qv(0).x ) * ( qv(1).y - qv(0).y )
             if ( area < 0.0 ) then
-                t.v1.x = mdl_sx(a) : t.v1.y = mdl_sy(a) : t.v1.z = mdl_sw(a)
-                t.v1.u = csng( tri(j).u1 ) / MDL_UV_SCALE : t.v1.v = csng( tri(j).v1 ) / MDL_UV_SCALE
-                t.v2.x = mdl_sx(b) : t.v2.y = mdl_sy(b) : t.v2.z = mdl_sw(b)
-                t.v2.u = csng( tri(j).u2 ) / MDL_UV_SCALE : t.v2.v = csng( tri(j).v2 ) / MDL_UV_SCALE
-                t.v3.x = mdl_sx(c) : t.v3.y = mdl_sy(c) : t.v3.z = mdl_sw(c)
-                t.v3.u = csng( tri(j).u3 ) / MDL_UV_SCALE : t.v3.v = csng( tri(j).v3 ) / MDL_UV_SCALE
-                qv(0).x = t.v1.x : qv(0).y = t.v1.y : qv(0).z = t.v1.z
-                qv(0).u = t.v1.u : qv(0).v = t.v1.v
-                qv(1).x = t.v2.x : qv(1).y = t.v2.y : qv(1).z = t.v2.z
-                qv(1).u = t.v2.u : qv(1).v = t.v2.v
-                qv(2).x = t.v3.x : qv(2).y = t.v3.y : qv(2).z = t.v3.z
-                qv(2).u = t.v3.u : qv(2).v = t.v3.v
-                qz = qglRsPoly%( qdst, qv(0), 3, QGL_M_PTEX, qskin )
+                qz = qglRsPoly%( qdst, qv(0), nout, QGL_M_TEX, qskin )
             end if
         end if
     next j

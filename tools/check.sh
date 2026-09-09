@@ -16,6 +16,9 @@
 #   tools/check.sh --depth      the spawn fall with and without the depth
 #                               buffer. The two frames may differ only where
 #                               depth legitimately changes the picture.
+#   tools/check.sh --model      the alias model against -nomdl at two campath
+#                               ticks: one where it must draw nothing, one
+#                               where it must draw something.
 #
 # -nostats is not optional. The overlay prints live fps and frame time, so
 # two runs of the SAME build differ by ~28 pixels in the digits, and a
@@ -91,6 +94,65 @@ if [[ "${1:-}" == "--depth" ]]; then
     fi
     echo "FAIL  the depth buffer changed the picture, not the ordering"
     exit 1
+fi
+
+# --model is the streak test. mdl_draw projected every vertex and then
+# handed the triangle to qgl, which clips to the view rectangle AFTER the
+# divide -- so a corner whose w sat a hair above z_near projected to tens
+# of thousands of pixels and the rect clip did not discard that triangle,
+# it stretched the surviving sliver across the frame. On dm3ish's campath
+# that is a black wedge over the wall, wandering as the camera walks.
+#
+# It does NOT cover the second half of that bug: qgl$drawP can still run
+# away on a polygon a fraction of a scanline tall, which shows up only
+# standing next to a model. See AGENTS.md; that one wants a native qgl
+# test, not a frame.
+#
+# Two viewpoints, because one assertion cannot fail both ways:
+#
+#   away  campath tick 360, where no entity is in frame, so the model must
+#         add NOTHING. Before the fix it added 138 index-0 pixels of
+#         streak; 947 with lightmaps on.
+#   near  a fixed camera 200 units in front of spawned entity 1, so the
+#         model must add SOMETHING -- otherwise "draws no streaks" also
+#         passes for "draws nothing at all". The spawns are seeded
+#         `randomize 1` under -bench and do not move with -at, so this
+#         viewpoint is stable.
+#
+# UNLIT, and that is not a shortcut. With `-lm` the two arms render a
+# different NUMBER of frames over the same ticks -- drawing the model
+# costs time -- and a different frame count evicts the surface cache
+# differently (sc_evict 10 against 2). The frames then differ for reasons
+# that have nothing to do with the model's geometry, which is the open
+# "reuse after eviction is untested" note in AGENTS.md and not this
+# test's business. Unlit there is no cache at all and the comparison is
+# exact.
+if [[ "${1:-}" == "--model" ]]; then
+    build_exe
+    rc=0
+    for arm in "away:-campath -bench 4000 -ticks 360" \
+               "near:-at 264 -40 40 -yaw 0 -bench 8 -ticks 2"; do
+        tag="${arm%%:*}"; flags="${arm#*:}"
+        run_frame "-nostats $flags"         "$VBD_OUT/mdl-$tag-on.bmp"
+        run_frame "-nostats $flags -nomdl"  "$VBD_OUT/mdl-$tag-off.bmp"
+        out=$(python3 "$ROOT/tools/imgdiff.py" "$VBD_OUT/mdl-$tag-off.bmp" "$VBD_OUT/mdl-$tag-on.bmp" | tail -1)
+        if [[ "$tag" == away ]]; then
+            if [[ "$out" == IDENTICAL* ]]; then
+                echo "PASS  away: the model adds nothing where it is not"
+            else
+                echo "FAIL  away: $out -- the model painted outside itself"
+                rc=1
+            fi
+        else
+            if [[ "$out" == IDENTICAL* ]]; then
+                echo "FAIL  near: the model drew nothing at all"
+                rc=1
+            else
+                echo "PASS  near: $out -- the model still renders"
+            fi
+        fi
+    done
+    exit $rc
 fi
 
 # --churn is a DETERMINISM check, not a reference-image one: it runs the

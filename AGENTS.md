@@ -1608,7 +1608,7 @@ in looking like a fix -- and note it makes the squeeze worse, not better:
 four windows want slots (destination, atlas, luxels, colormap) and pinning
 two leaves the builder cycling the atlas through the other two.
 
-## The wandering streaks are the MODEL, not the renderer
+## The wandering streaks were the MODEL, and the near plane was half of it
 
 Long black diagonal bands across walls, moving as the camera moves. They
 were read as a surface-cache fault for a long time. They are alias-model
@@ -1638,17 +1638,104 @@ without the model. Two more measurements pinned what they are:
   they are model triangles, and the fault is in the geometry, not in the
   skin fetch.
 
-The cause is in `mdl_draw` (`d_mdl.bas`): it REJECTS vertices behind the
-near plane (`if tw < z_near then mdl_okv(v) = 0`) and draws a triangle
-only when all three survive. That is not the same as clipping. A triangle
-entirely in front but with one vertex just barely past `z_near` keeps its
-`rw = 1/tw`, which is enormous, and projects to a sliver running off the
-screen. `d_faces.c` does the real thing for world faces -- `clip_w` clips
-against the near plane and emits the clipped polygon. The model path
-needs the same and does not have it.
+`mdl_draw` (`d_mdl.bas`) REJECTED vertices behind the near plane
+(`if tw < z_near then mdl_okv(v) = 0`) and drew a triangle only when all
+three survived. That is not clipping, and it was the obvious cause: a
+triangle entirely in front but with one vertex a hair past `z_near` keeps
+an enormous `rw = 1/tw` and projects to a sliver. `d_faces.c` does the
+real thing for world faces (`clip_w`).
 
-Not fixed yet. `-nomdl` is the A/B, and the tick-360 frame with zero
-index-0 pixels is the test to write against it.
+**Porting `clip_w` to the model made it WORSE -- 138 stray pixels to
+381.** That is the interesting part, and it is why this note is longer
+than the fix. The near clip was correct and it exposed more of the same
+defect, because it kept triangles the old reject threw away.
+
+A second false step is worth recording because it looked like a fix and
+was a bug: the draw was `QGL_M_PTEX`, which wants u/w and v/w, so raw u,v
+was "corrected" to divided ones (381 to 378, i.e. nothing). **The model
+is drawn AFFINE.** It always was -- this module's own header names
+`uglTriT`, mgl's affine textured triangle -- and the affine filler steps
+u and v linearly in screen space, so raw coordinates were right all
+along. It is `QGL_M_TEX` now, with raw u,v, and only `QGL_M_PTEX` owes
+the divided pair.
+
+**The cause is that clipping to the near plane does not bound the
+projection.** A corner at `w = z_near` with a large `x` still projects to
+tens of thousands of pixels: measured, the model reached screen x 76,750
+on a 160-wide surface. qgl clips to the view rectangle -- `clip.asm`,
+Sutherland-Hodgman on four edges -- but AFTER the divide, and that clip
+does not DISCARD such a triangle, it stretches the surviving sliver across
+the whole frame. That is the streak, and mgl behaves the same way; the
+world path escapes it only because `r_cull_box` and the frustum keep
+world faces off that ledge.
+
+So the clip has to be five planes in CLIP space: `w >= z_near`, then
+`|x| <= w` and `|y| <= w`, which is the view rectangle expressed before
+the divide. With that, every projected corner lands inside [0,160] x
+[0,100] (measured: x max exactly 160.0, min -4e-06) and the strays go to
+zero.
+
+The general rule, worth more than this bug: **clipping to the near plane
+bounds w, not the projection.** Anything handing a projected polygon to a
+rasteriser that clips in screen space owes it side planes too.
+
+`tools/check.sh --model` is the regression test. Two viewpoints, because
+one assertion cannot fail both ways: at campath tick 360 no entity is in
+frame so the model must add NOTHING, and from a fixed camera 200 units in
+front of spawned entity 1 it must add SOMETHING. Campath tick 240 was the
+positive control first and is not one -- unlit the model contributes zero
+pixels there, and the 185 it seemed to contribute with `-lm` were cache
+noise. It runs UNLIT on purpose -- with `-lm` the two arms render a
+different number of frames over the same ticks (drawing the model costs
+time), which evicts the surface cache differently, `sc_evict` 10 against
+2, and the frames then differ for reasons that are not the model's
+geometry. That confound cost a false FAIL here before it was recognised.
+
+### And it is still not the whole cause: qgl$drawP runs away on a small polygon
+
+**Open.** The clip fix is necessary and it is not sufficient. Stand next
+to a spawned model and the streaks are still there -- less of the screen,
+and now filled wedges rather than slivers, because a bounded polygon that
+scans wrong fills instead of shooting off.
+
+Measured, at `-at 264 -40 40 -yaw 0` on dm3ish with only entity 1 drawn
+(spawn positions are `-at`-independent; the eight are listed by a probe
+in `main.bas` after `mdl_spawn`):
+
+    wx -15.47 .. 19.67   wy -13.38 .. 16.49   wz -24.38 .. 25.04
+    w  192.84 .. 222.19  behind 0  znear 1
+    npoly 179  amin -8.09
+    sx 77.08 .. 88.38    sy 41.53 .. 59.05
+
+So the model is exactly where and what it should be: 179 polygons, every
+corner inside an 11x18 pixel box, the largest twice-area 8 square pixels,
+nothing behind the near plane. **And `qglRsPoly` returned 100 for one of
+them** -- 100 scanlines covered, on a 100-tall surface.
+
+One reproducer, three corners (captured under `QGL_M_PTEX`, but the mode
+is not the point -- the scan is shared and `QGL_M_TEX` covers the same
+wedge, textured in stripes rather than solid black):
+
+    x 84.9342  y 47.73215  z 4.728949E-03  u 2.679742E-03  v 2.486353E-03
+    x 83.96495 y 48.60463  z 4.811694E-03  u 2.919147E-03  v 2.554675E-03
+    x 86.54337 y 48.11729  z 4.903246E-03  u 2.892985E-03  v 1.996643E-03
+
+2.6 x 0.9 pixels, twice-area -1.78, answered 100. Several more are in the
+same dump; they are the ones with a sub-scanline edge, which is what a
+15-pixel-tall model is made of and a world face never is. That is also why
+`-qglcheck`, `-qgldiff` and the whole world path have never seen it.
+
+Ruled out by reading, so do not spend the time again: `@@lf_lt1`'s
+`65536 shl 14` reciprocal does not overflow for this triangle (dx/dy is
+4.18 px per scanline, nowhere near the 32768 ceiling), and the code is a
+line-for-line match with mgl's `uglplxtp.asm` there. The chain
+termination (`cmp si, O qgl$fx` / `cmp si, rg_lim`) walks 0,2,1 and 0,1,2
+for a triangle and stops.
+
+Next step is a native test in `src/qgl/test/`: draw that triangle into a
+small surface, assert the returned line count is no more than the bbox
+height and that no pixel outside the bbox is written. It fails today, and
+it debugs in seconds against DOSBox's minutes.
 
 ## `-nostats` makes the picture deterministic
 
