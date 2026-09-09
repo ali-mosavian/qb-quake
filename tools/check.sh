@@ -209,16 +209,19 @@ build_exe
 grep -qiE "^ *[1-9][0-9]* Severe" /tmp/check-build.log && {
     echo "COMPILE ERRORS"; grep -iB4 -E "^ *[1-9][0-9]* Severe" /tmp/check-build.log | grep -E "\^|Severe"; exit 1; }
 
-# The two BASIC-side qgl gates, before any timing. They run in the built
-# EXE against the same UGLV.LIB the renderer links, which is the only
-# place either can say anything: the ABI is BASIC's to get wrong, and the
-# differential needs an mgl that is initialised the way the renderer
-# initialises it.
+# The three BASIC-side qgl gates, before any timing. They run in the
+# built EXE against the same UGLV.LIB the renderer links, which is the
+# only place any of them can say anything: the ABI is BASIC's to get
+# wrong, and the differential and the store both need an mgl that is
+# initialised the way the renderer initialises it.
+#
+# -qglarr was written as a gate and then never run by one, which is how
+# it kept a 25-second hold on the end for a human to look at.
 #
 # The map argument comes FIRST. sys_parse_args takes argv(0) as the map
 # name and scans options from index 1, so `qrender.exe -qgldiff` makes
 # the flag the map name and the check silently never runs.
-for pair in "qglcheck:QGLCHK.LOG" "qgldiff:QGLDIFF.LOG"; do
+for pair in "qglcheck:QGLCHK.LOG" "qgldiff:QGLDIFF.LOG" "qglarr:QGLARR.LOG"; do
     f="${pair%%:*}"
     log="$VBD_OUT/${pair##*:}"
     rm -f "$log"
@@ -228,7 +231,7 @@ for pair in "qglcheck:QGLCHK.LOG" "qgldiff:QGLDIFF.LOG"; do
         exit 1
     fi
 done
-echo "== qgl: -qglcheck and -qgldiff both PASS"
+echo "== qgl: -qglcheck, -qgldiff and -qglarr all PASS"
 
 ticks=()
 for ((i=0; i<PASSES; i++)); do

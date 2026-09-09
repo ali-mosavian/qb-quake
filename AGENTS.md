@@ -1883,6 +1883,32 @@ to paste in. Removing a field ahead of `vis` is a C change too.
 DAC and then best-fits the overlay against them, in that order, because
 the second cannot run before the first.
 
+## Retiring mgl: the paged-array stores
+
+`uglArrLoad`/`uglArrMap` are `qglArLoadBas`/`qglArMap` in model.bas,
+r_bsp.bas and pl_move.bas -- nodes, leaves and clipnodes, MEM first
+and EMS on a refusal, as before. `qglArLoad` streams the member in
+through `qglArWin`, a page payload at a time, so the seam padding is
+the store's own arithmetic and not the loader's.
+
+**The three stores came up all zeros, and every instrument agreed.**
+Handles live, counts right, descriptors bound to the right segments,
+the read reporting every byte -- and 17,820 bytes of nothing. `-qglarr`
+passed on the same loader. The loader tested `qglArWin`'s pointer with
+`or ax, dx` and stored `ax` AFTERWARDS, so the destination offset was
+`0 | segment` and every read landed that many bytes past the window:
+in the renderer 53,961 bytes past a 22,926-byte block, which is
+somebody else's memory. What found it was the native `t27arload`
+dumping the MEM store: its contents were the file shifted by exactly
+7,459 bytes, and 7,459 is 0x1D23, the window's segment.
+
+**`-qglarr` passed because it could not fail.** Its loader arm freed
+the hand-filled EMS store first, and the loader's store got the same
+pages back still holding the fixture; a loader writing nowhere near
+the window read back a perfect copy. The hand-filled store now stays
+alive across the loader arm. Both tests were watched to fail with the
+bug put back.
+
 ## `-nostats` makes the picture deterministic
 
 With the HUD off the renderer is **byte-identical run to run** -- one

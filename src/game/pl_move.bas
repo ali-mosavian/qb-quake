@@ -35,10 +35,29 @@ option explicit
 '$include: 'q_snd.bi'
 '$include: 'q_mdl.bi'
 '$include: 'q_game.bi'
+'$include: 'qgl.bi'
 
 ''
 '' This module's own procedures.
 ''
+''
+'' qgl's paged-array store. flname is NOT byval: VBDOS passes a plain
+'' "as string" parameter as a near pointer to its descriptor, which is
+'' what the assembly wants.
+''
+declare function qglArLoadBas ( _
+    flname as string, _
+    byval typ as integer, _
+    byval elsz as integer, _
+    byval cnt as long, _
+    byval slot as integer _
+) as long
+declare function qglArMap ( _
+    byval h as long, _
+    a() as any, _
+    byval idx as long _
+) as long
+
 declare function pl_hull_contents ( _
     byval node as integer, _
     p as Vec3, _
@@ -1052,11 +1071,11 @@ sub pl_load_hulls ( _
     '' hole for the allocations that come after. The far heap is the
     '' fragmented pool; DOS memory is not.
     ''
-    g.wld.store.clips = uglArrLoad&( "assets.zip::clip.pag", UGL.MEM, len( clp_buffer(0) ), _
-                                     clng( g.wld.count.clips ), 0 )
+    g.wld.store.clips = qglArLoadBas&( "assets.zip::clip.pag", QGL_AR_MEM, len( clp_buffer(0) ), _
+                                            clng( g.wld.count.clips ), 0 )
     if ( g.wld.store.clips = 0 ) then
-        g.wld.store.clips = uglArrLoad&( "assets.zip::clip.pag", UGL.EMS, len( clp_buffer(0) ), _
-                                         clng( g.wld.count.clips ), PAGE_SLOT )
+        g.wld.store.clips = qglArLoadBas&( "assets.zip::clip.pag", QGL_AR_EMS, len( clp_buffer(0) ), _
+                                                clng( g.wld.count.clips ), PAGE_SLOT )
     end if
     if ( g.wld.store.clips = 0 ) then sys_error "0x0033, clip.pag would not load"
 
@@ -1064,7 +1083,7 @@ sub pl_load_hulls ( _
     '' of the far heap's chain, and only BASIC can do that correctly. Left
     '' in, B$FHCompact walks into a descriptor aimed at memory it does not
     '' own and moves it -- the far heap is then corrupt. The variable still
-    '' exists afterwards, which is what uglArrMap binds to.
+    '' exists afterwards, which is what qglArMap binds to.
     erase clp_buffer
 
     ''
@@ -1072,7 +1091,7 @@ sub pl_load_hulls ( _
     '' the descriptor at the entire block and every subscript works from
     '' here on with no further calls.
     ''
-    mapped = uglArrMap&( g.wld.store.clips, clp_buffer(), 0 )
+    mapped = qglArMap&( g.wld.store.clips, clp_buffer(), 0 )
 end sub
 
 '' Clipnode record size, for the bench report.

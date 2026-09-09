@@ -32,3 +32,7 @@ const QGL_M_WIRE = 0
 const QGL_M_FLAT = 1
 const QGL_M_TEX  = 2
 const QGL_M_PTEX = 3
+
+'' Where a paged array store's records live.
+const QGL_AR_MEM = 0
+const QGL_AR_EMS = 1

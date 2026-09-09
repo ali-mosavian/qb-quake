@@ -1,6 +1,6 @@
 ;; ar.asm -- paged array stores: capacity, mapping, and access semantics.
 ;;
-;; name: qglArNew / qglArMap / qglArFree / qglArPerpg /
+;; name: qglArNew / qglArLoad / qglArMap / qglArFree / qglArPerpg /
 ;;       qglArPages
 ;; desc: A store holds one flat array of fixed-size records somewhere
 ;;       that is not BASIC's far heap, and rewrites a dynamic array's
@@ -66,12 +66,26 @@ QAr             ends
 .data
 qgl$ar_tb       QAr     QGL_AR_MAX dup (<>)
 
+IFDEF __BASIC__
+;; Module-private and reused per call: the store outlives the name, the
+;; name does not need to outlive the load. Same size as zip.asm's, which
+;; is what will parse it.
+AR_PATH         equ     80
+qgl$ar_path     db      AR_PATH dup (0)
+ENDIF
+
                 qglArMap      proto   far pascal :dword, :word, :dword
                 qglMemAlloc   proto   far pascal :dword
                 qglMemFree    proto   far pascal :dword
                 emsAlloc        proto   far pascal :dword
                 emsFree         proto   far pascal :word
                 emsMapEx        proto   far pascal :word, :word, :word
+                qglZipOpen      proto   far pascal :dword
+                qglZipRead      proto   far pascal :word, :dword, :dword
+                qglZipClose     proto   far pascal :word
+IFDEF __BASIC__
+                qglFileNameBas  proto   far pascal :word, :dword, :word
+ENDIF
 
 .code
 
@@ -445,5 +459,127 @@ qglArFree     proc    public uses bx cx dx si di,\
                 mov     [si].QAr.ar_curpg, -1
 @@done:         ret
 qglArFree     endp
+
+
+;;::::::::::::::
+;; qglArLoad ( path:dword, typ:word, elsz:word, cnt:dword, slot:word )
+;;      -> dx:ax, a live store, or 0
+;;
+;; uglArrLoad's job: make the store, then stream the archive member into
+;; it one WINDOW at a time, so the array is never resident whole. That is
+;; the whole reason a store exists rather than a read into a BASIC array.
+;;
+;; A page carries perpg*elsz bytes and NOT QGL_AR_WIN. 16384\elsz floors
+;; -- 2730 six-byte records is 16,380 -- and the four bytes left over are
+;; padding the store keeps so no record straddles a page. Read a whole
+;; window per page and the record on the seam is split and every later
+;; one shifts, which reads exactly like a mapping fault and is not one.
+;;
+;; Through qglArWin deliberately: production streams in through the same
+;; accessor it will read back through. -qglarr maps by hand for the
+;; opposite reason -- a test that shares the arithmetic cannot see a
+;; fault in it.
+;;::::::::::::::
+qglArLoad     proc    public uses bx cx si di,\
+                        path:dword, typ:word, elsz:word, cnt:dword, slot:word
+
+                local   h:dword, u:word, perpg:word
+                local   payload:dword, remain:dword, idx:dword
+                local   want:dword, p:dword
+
+                invoke  qglArNew, typ, elsz, cnt, slot
+                mov     W h+0, ax
+                mov     W h+2, dx
+                or      ax, dx
+                jz      @@no
+
+                invoke  qglZipOpen, path
+                mov     u, ax
+                test    ax, ax
+                jz      @@kill
+
+                invoke  qglArPerpg, h
+                mov     perpg, ax
+                test    ax, ax
+                jz      @@shut
+
+                movzx   eax, perpg
+                movzx   ecx, elsz
+                mul     ecx
+                mov     payload, eax
+
+                mov     eax, cnt
+                movzx   ecx, elsz
+                mul     ecx
+                mov     remain, eax
+
+                mov     idx, 0
+
+@@page:         cmp     remain, 0
+                je      @@done
+
+                invoke  qglArWin, h, idx
+                mov     W p+0, ax               ;; BEFORE the null test: `or
+                mov     W p+2, dx               ;; ax, dx` first made the
+                or      ax, dx                  ;; offset 0|seg and every
+                jz      @@shut                  ;; read landed seg bytes in
+
+                mov     eax, payload
+                cmp     eax, remain
+                jbe     @F
+                mov     eax, remain
+@@:             mov     want, eax
+
+                invoke  qglZipRead, u, p, want
+                cmp     ax, W want+0
+                jne     @@shut
+                cmp     dx, W want+2
+                jne     @@shut                  ;; short read: the member is
+                                                ;; not the size cnt claims
+
+                mov     eax, remain
+                sub     eax, want
+                mov     remain, eax
+                movzx   eax, perpg
+                add     eax, idx
+                mov     idx, eax
+                jmp     @@page
+
+@@done:         invoke  qglZipClose, u
+                mov     ax, W h+0
+                mov     dx, W h+2
+                ret
+
+@@shut:         invoke  qglZipClose, u
+@@kill:         invoke  qglArFree, h
+@@no:           xor     ax, ax
+                xor     dx, dx
+                ret
+qglArLoad     endp
+
+
+IFDEF __BASIC__
+;;::::::::::::::
+;; qglArLoadBas ( s:BASIC string, typ, elsz, cnt, slot ) -> dx:ax
+;;::::::::::::::
+qglArLoadBas  proc    public uses bx cx si di,\
+                        s:word, typ:word, elsz:word, cnt:dword, slot:word
+
+                local   pathp:dword
+
+                mov     W pathp+0, O qgl$ar_path
+                mov     W pathp+2, ds
+                invoke  qglFileNameBas, s, pathp, AR_PATH
+                test    ax, ax
+                jz      @@no
+
+                invoke  qglArLoad, pathp, typ, elsz, cnt, slot
+                ret
+
+@@no:           xor     ax, ax
+                xor     dx, dx
+                ret
+qglArLoadBas  endp
+ENDIF
 
                 end

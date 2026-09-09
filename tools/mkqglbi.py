@@ -34,6 +34,8 @@ EXPORT = [
         "QGL_Z_OFF", "QGL_Z_SET", "QGL_Z_TEST"]),
     ("Drawing mode, for qglRsPoly.", [
         "QGL_M_WIRE", "QGL_M_FLAT", "QGL_M_TEX", "QGL_M_PTEX"]),
+    ("Where a paged array store's records live.", [
+        "QGL_AR_MEM", "QGL_AR_EMS"]),
 ]
 
 # qgl.inc spells two of them without the QGL_ prefix

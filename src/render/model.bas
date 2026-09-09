@@ -30,6 +30,7 @@ option explicit
 '$include: 'q_snd.bi'
 '$include: 'q_mdl.bi'
 '$include: 'q_game.bi'
+'$include: 'qgl.bi'
 
 ''
 '' This module's own procedures.
@@ -56,16 +57,26 @@ declare sub mod_load_nodes ( _
     g as Game, _
     nodes() as Node _
 )
-'' qgl_ar_* store types, mirroring src/qgl/qgl.inc. A store is MEM or
-'' EMS; faces is MEM, one flat window, so no page ever changes under it.
-const QGL_AR_MEM = 0
-const QGL_AR_EMS = 1
-
 declare function qglArNew ( byval typ as integer, byval elsz as integer, _
                               byval cnt as long, byval slot as integer ) as long
-declare function qglArMap ( byval h as long, a() as any, _
-                              byval idx as long ) as long
 declare function qglArWin ( byval h as long, byval idx as long ) as long
+''
+'' qgl's paged-array store. flname is NOT byval: VBDOS passes a plain
+'' "as string" parameter as a near pointer to its descriptor, which is
+'' what the assembly wants.
+''
+declare function qglArLoadBas ( _
+    flname as string, _
+    byval typ as integer, _
+    byval elsz as integer, _
+    byval cnt as long, _
+    byval slot as integer _
+) as long
+declare function qglArMap ( _
+    byval h as long, _
+    a() as any, _
+    byval idx as long _
+) as long
 ''
 '' The archive reader, qgl's. mgl's uar carried an inflate and a UAR the
 '' caller had to declare and then only pass back; every member is stored
@@ -353,7 +364,7 @@ sub mod_load_faces ( _
     '' correctly. Left in, B$FHCompact walks into a descriptor
     '' aimed at memory it does not own and moves it -- the far
     '' heap is then corrupt. The variable still exists afterwards,
-    '' which is what uglArrMap binds to.
+    '' which is what qglArMap binds to.
     erase faces
 
     ''
@@ -565,13 +576,13 @@ sub mod_load_nodes ( _
     scr_load_stage "bsp nodes"
 
     ''
-    '' EMS first, conventional only as a fallback. uglArrLoad streams
+    '' EMS first, conventional only as a fallback. qglArLoad streams
     '' nodes.pag a page at a time into the mapped window, so the tree is
     '' never resident -- which is the whole point, and why this is not a
     '' BLOAD followed by a copy.
     ''
-    '' UGL.MEM, not UGL.EMS, deliberately. The store is windowed either
-    '' way -- the same uglArrMap, the same page arithmetic -- but the MEM
+    '' QGL_AR_MEM, not QGL_AR_EMS, deliberately. The store is windowed
+    '' either way -- the same qglArMap, the same page arithmetic -- but MEM
     '' path computes a segment where the EMS path issues an INT 67h. That
     '' isolates the two costs: if MEM is fast, what the walk cannot afford
     '' is the remap, not the far call.
@@ -579,11 +590,11 @@ sub mod_load_nodes ( _
     '' It still gets the tree out of BASIC's far heap, which is what FRE(-1)
     '' measures; memAlloc takes it from DOS (upper memory when there is
     '' room), not from the heap the BSP arrays compete for.
-    g.wld.store.nodes = uglArrLoad&( "assets.zip::nodes.pag", UGL.MEM, len( nodes(0) ), _
-                                     clng( g.wld.count.nodes ), 0 )
+    g.wld.store.nodes = qglArLoadBas&( "assets.zip::nodes.pag", QGL_AR_MEM, len( nodes(0) ), _
+                                            clng( g.wld.count.nodes ), 0 )
     if ( g.wld.store.nodes = 0 ) then
-        g.wld.store.nodes = uglArrLoad&( "assets.zip::nodes.pag", UGL.EMS, len( nodes(0) ), _
-                                         clng( g.wld.count.nodes ), PAGE_SLOT )
+        g.wld.store.nodes = qglArLoadBas&( "assets.zip::nodes.pag", QGL_AR_EMS, len( nodes(0) ), _
+                                                clng( g.wld.count.nodes ), PAGE_SLOT )
     end if
     if ( g.wld.store.nodes = 0 ) then sys_error "0x0030, nodes.pag would not load"
 
@@ -592,7 +603,7 @@ sub mod_load_nodes ( _
     '' correctly. Left in, B$FHCompact walks into a descriptor
     '' aimed at memory it does not own and moves it -- the far
     '' heap is then corrupt. The variable still exists afterwards,
-    '' which is what uglArrMap binds to.
+    '' which is what qglArMap binds to.
     erase nodes
 
     ''
@@ -600,7 +611,7 @@ sub mod_load_nodes ( _
     '' the descriptor at the entire block and every subscript works from
     '' here on with no further calls.
     ''
-    mapped = uglArrMap&( g.wld.store.nodes, nodes(), 0 )
+    mapped = qglArMap&( g.wld.store.nodes, nodes(), 0 )
 
     scr_load_step
 end sub

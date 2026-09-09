@@ -31,13 +31,11 @@ defint a-z
 '$include: 'dos.bi'
 '$include: 'arch.bi'
 '$include: 'ems.bi'
+'$include: 'qgl.bi'
 
 const ARR_WIN = 16384
 const ARR_REC = 6
 const ARR_SLOT = 2              '' mgl reads through 0, writes 1, depth 3
-
-const QGL_AR_MEM = 0
-const QGL_AR_EMS = 1
 
 const NPROBE = 16
 const NFIX = 3                  '' the three that must be named, not sampled
@@ -60,6 +58,13 @@ declare function qglArHandle ( byval h as long ) as integer
 declare function qglArPerpg ( byval h as long ) as integer
 declare function qglArPages ( byval h as long ) as integer
 declare sub qglArFree ( byval h as long )
+declare function qglArLoadBas ( _
+    flname as string, _
+    byval typ as integer, _
+    byval elsz as integer, _
+    byval cnt as long, _
+    byval slot as integer _
+) as long
 ''
 '' The archive reader, qgl's. mgl's uar carried an inflate and a UAR the
 '' caller had to declare and then only pass back; every member is stored
@@ -182,9 +187,13 @@ function qglArrAll () as integer
     dim badhi as integer
     dim firstbad as long
     dim bad as integer
-    dim t0 as single
     dim ptr(NFIX) as long
     dim a(0) as ArrRec
+    dim b(0) as ArrRec
+    dim hl as long
+    dim got2(NPROBE) as long
+    dim ldlo as integer
+    dim ldhi as integer
 
     lg = freefile
     open "qglarr.log" for output as #lg
@@ -296,12 +305,57 @@ function qglArrAll () as integer
         print #lg, "     ptr at"; idx(i); " ="; ptr(i)
     next i
     ''
+    '' The LOADER, same fixture, same probes. qgl_arr_fill above maps by
+    '' hand so that a fault in the accessor cannot hide inside the round
+    '' trip; this arm is deliberately the opposite, because qglArLoad is
+    '' what production calls and it streams in THROUGH the accessor.
+    ''
+    '' What it is really watching is the page payload. A page carries
+    '' perpg*ARR_REC bytes and not ARR_WIN -- 2730 six-byte records is
+    '' 16,380, four short of the window -- so a loader that reads a whole
+    '' window per page splits the record on the seam and shifts every
+    '' later one. idx(1), the first record of page 1, is where that lands.
+    ''
+    '' The hand-filled store is still ALIVE here, on purpose. Freed first,
+    '' the loader's store got the same EMS pages back, still holding the
+    '' hand-filled fixture, and a loader that wrote its bytes anywhere at
+    '' all -- it wrote them 0E800h bytes past the window -- read back a
+    '' perfect copy. This arm passed on that loader.
+    ''
+    hl = qglArLoadBas( "assets.zip::faces.pag", QGL_AR_EMS, ARR_REC, cnt, ARR_SLOT )
+    if ( hl = 0 ) then
+        print #lg, "   FAIL qglArLoad would not load the fixture"
+        print #lg, "RESULT FAIL"
+        qglArFree hq
+        close #lg
+        qglArrAll = 1
+        exit function
+    end if
+
+    erase b
+    for i = 0 to NPROBE - 1
+        p = qglArMap( hl, b(), idx(i) )
+        if ( p = 0 ) then
+            print #lg, "   FAIL qglArMap refused element"; idx(i); "on the loaded store"
+            print #lg, "RESULT FAIL"
+            qglArFree hl
+            qglArFree hq
+            close #lg
+            qglArrAll = 1
+            exit function
+        end if
+        got2(i) = clng( b( idx(i) ).a ) * 65536 + ( clng( b( idx(i) ).b ) and 65535 )
+    next i
+
+    ''
     '' TEARDOWN, deliberately exercised. qglArFree must detach the
     '' descriptor before releasing the memory behind it, or this erase
     '' hands B$FHDealloc a pointer into memory BASIC never owned and the
     '' run ends "Far heap corrupt" -- after the log is written, which is
     '' why it was invisible until a screenshot caught it on screen.
     ''
+    qglArFree hl
+    erase b
     qglArFree hq
     erase a
     redim a(0) as ArrRec
@@ -310,6 +364,9 @@ function qglArrAll () as integer
         if ( ref(i) <> got(i) ) then
             if ( idx(i) < perpg ) then badlo = badlo + 1 else badhi = badhi + 1
             if ( firstbad < 0 ) then firstbad = idx(i)
+        end if
+        if ( ref(i) <> got2(i) ) then
+            if ( idx(i) < perpg ) then ldlo = ldlo + 1 else ldhi = ldhi + 1
         end if
     next i
 
@@ -325,28 +382,36 @@ function qglArrAll () as integer
     print #lg, "   probes"; nlo; "below the window,"; nhi; "at or above"
     print #lg, "   mismatch vs mgl MEM: below"; badlo; " above"; badhi
     if ( firstbad >= 0 ) then print #lg, "   first at element"; firstbad
+    print #lg, "   qglArLoad vs mgl MEM: below"; ldlo; " above"; ldhi
 
-    if ( badlo <> 0 ) then
-        print #lg, "RESULT FAIL wrong INSIDE the first window -- not the"
-        print #lg, "       paging bug, something worse"
+    ''
+    '' The verdict is the LAST line, always. check.sh reads tail -1 and
+    '' compares it to "RESULT PASS", so an explanation printed after the
+    '' verdict failed the gate on a run where every assertion held.
+    ''
+    if ( ldlo <> 0 or ldhi <> 0 ) then
+        print #lg, "   qglArLoad streamed the fixture into the wrong place"
+        print #lg, "   -- check the per-page payload"
+        print #lg, "RESULT FAIL"
+        bad = 1
+    elseif ( badlo <> 0 ) then
+        print #lg, "   wrong INSIDE the first window -- not the paging bug,"
+        print #lg, "   something worse"
+        print #lg, "RESULT FAIL"
         bad = 1
     elseif ( badhi <> 0 ) then
-        print #lg, "RESULT FAIL wrong past the first window: the store is"
-        print #lg, "       not remapping on the requested index"
+        print #lg, "   wrong past the first window: the store is not"
+        print #lg, "   remapping on the requested index"
+        print #lg, "RESULT FAIL"
         bad = 1
     else
-        print #lg, "RESULT PASS qgl EMS matches mgl MEM across the window"
-        print #lg, "       boundary, on both sides and at the last record"
+        print #lg, "   qgl EMS matches mgl MEM across the window boundary,"
+        print #lg, "   on both sides and at the last record, hand-filled"
+        print #lg, "   and through qglArLoad"
+        print #lg, "RESULT PASS"
     end if
 
     close #lg
-
-    '' -qglarr only: hold so status, text_screen, screenshot and where
-    '' can all land while the program is still live. The result is
-    '' already on disk; this only keeps the process up to be looked at.
-    t0 = timer
-    while ( timer - t0 < 25.0 )
-    wend
 
     qglArrAll = bad
 end function

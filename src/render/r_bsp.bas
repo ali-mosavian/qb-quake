@@ -31,10 +31,29 @@ option explicit
 '$include: 'q_snd.bi'
 '$include: 'q_mdl.bi'
 '$include: 'q_game.bi'
+'$include: 'qgl.bi'
 
 ''
 '' This module's own procedures.
 ''
+''
+'' qgl's paged-array store. flname is NOT byval: VBDOS passes a plain
+'' "as string" parameter as a near pointer to its descriptor, which is
+'' what the assembly wants.
+''
+declare function qglArLoadBas ( _
+    flname as string, _
+    byval typ as integer, _
+    byval elsz as integer, _
+    byval cnt as long, _
+    byval slot as integer _
+) as long
+declare function qglArMap ( _
+    byval h as long, _
+    a() as any, _
+    byval idx as long _
+) as long
+
 declare sub mod_load_flat ( _
     flname as string, _
     byval dst as long _
@@ -704,11 +723,11 @@ sub r_load_leaves ( _
     '' array out of it leaves a larger contiguous hole behind even when the
     '' total free does not change.
     ''
-    g.wld.store.leaves = uglArrLoad&( "assets.zip::leaves.pag", UGL.MEM, len( lef_buffer(0) ), _
-                                       clng( g.wld.count.leaves ), 0 )
+    g.wld.store.leaves = qglArLoadBas&( "assets.zip::leaves.pag", QGL_AR_MEM, len( lef_buffer(0) ), _
+                                             clng( g.wld.count.leaves ), 0 )
     if ( g.wld.store.leaves = 0 ) then
-        g.wld.store.leaves = uglArrLoad&( "assets.zip::leaves.pag", UGL.EMS, len( lef_buffer(0) ), _
-                                          clng( g.wld.count.leaves ), PAGE_SLOT )
+        g.wld.store.leaves = qglArLoadBas&( "assets.zip::leaves.pag", QGL_AR_EMS, len( lef_buffer(0) ), _
+                                                 clng( g.wld.count.leaves ), PAGE_SLOT )
     end if
     if ( g.wld.store.leaves = 0 ) then sys_error "0x0036, leaves.pag would not load"
 
@@ -716,7 +735,7 @@ sub r_load_leaves ( _
     '' of the far heap's chain, and only BASIC can do that correctly. Left
     '' in, B$FHCompact walks into a descriptor aimed at memory it does not
     '' own and moves it -- the far heap is then corrupt. The variable still
-    '' exists afterwards, which is what uglArrMap binds to.
+    '' exists afterwards, which is what qglArMap binds to.
     erase lef_buffer
 
     ''
@@ -724,7 +743,7 @@ sub r_load_leaves ( _
     '' the descriptor at the entire block and every subscript works from
     '' here on with no further calls.
     ''
-    mapped = uglArrMap&( g.wld.store.leaves, lef_buffer(), 0 )
+    mapped = qglArMap&( g.wld.store.leaves, lef_buffer(), 0 )
 end sub
 
 ''::::::::::
