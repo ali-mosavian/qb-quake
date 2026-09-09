@@ -30,7 +30,7 @@ EXPORT = [
         "QGL_SURF_CMEM", "QGL_SURF_EMS"]),
     ("Physical EMS page a surface is mapped through.", [
         "QGL_TEX_SLOT", "QGL_Z_SLOT"]),
-    ("Depth mode, for qglRsPoly.", [
+    ("Depth mode, for qglSfZMode.", [
         "QGL_Z_OFF", "QGL_Z_SET", "QGL_Z_TEST"]),
     ("Drawing mode, for qglRsPoly.", [
         "QGL_M_WIRE", "QGL_M_FLAT", "QGL_M_TEX", "QGL_M_PTEX"]),

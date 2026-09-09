@@ -31,9 +31,10 @@ qglSfRow      proto   far :dword, :word
 qglSfPget     proto   far :dword, :word, :word
 qglDrFill     proto   far :dword, :word, :word, :word, :word, :word
 qglClRect     proto   far :word, :word, :word, :word
-qglRsPoly     proto   far :dword, :dword, :word, :word, :dword, :dword, :word
-qglZNew       proto   far :dword, :word
-qglZClear     proto   far :dword, :word
+qglRsPoly     proto   far :dword, :dword, :word, :word, :dword
+qglSfZMode    proto   far :dword, :word
+qglSfZNew     proto   far :dword, :word
+qglSfZClear   proto   far :dword, :word
 qglZScale     proto   far :dword
 
 SFW             equ     160
@@ -233,7 +234,7 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;
                 ;; 1. the depth buffer, and its shape
                 ;;
-                invoke  qglZNew, dst, SURF_EMS
+                invoke  qglSfZNew, dst, SURF_EMS
                 SAVEP   zb
                 mov     ax, word ptr zb
                 or      ax, word ptr zb+2
@@ -252,10 +253,11 @@ tmain           proc    far public uses bx cx dx si di es
                 call    texsum
                 mov     sum0, eax
 
-                invoke  qglZClear, zb, 0
+                invoke  qglSfZClear, dst, 0
                 invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, BGCOL
                 call    build
-                invoke  qglRsPoly, dst, polyp, 4, QGL_M_PTEX, vw, zb, QGL_Z_SET
+                invoke  qglSfZMode, dst, QGL_Z_SET
+                invoke  qglRsPoly, dst, polyp, 4, QGL_M_PTEX, vw
                 CHK     n_lines, ax, PY1-PY0
 
                 invoke  scan, VIEWCOL
@@ -289,10 +291,11 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;
                 ;; 3. and the test reads the same pages it wrote
                 ;;
-                invoke  qglZClear, zb, 200
+                invoke  qglSfZClear, dst, 200
                 invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, BGCOL
                 call    build
-                invoke  qglRsPoly, dst, polyp, 4, QGL_M_PTEX, vw, zb, QGL_Z_TEST
+                invoke  qglSfZMode, dst, QGL_Z_TEST
+                invoke  qglRsPoly, dst, polyp, 4, QGL_M_PTEX, vw
                 invoke  scan, VIEWCOL
                 CHK     n_test, ax, 0
 

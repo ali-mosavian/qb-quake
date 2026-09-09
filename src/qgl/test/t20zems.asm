@@ -2,7 +2,7 @@
 ;; beside it on another slot.
 ;;
 ;; t09rs already covers depth, but only in conventional memory
-;; (qglZNew, dst, SURF_CMEM, 0). The renderer's is EMS: 160x100 of two
+;; (qglSfZNew dst, SURF_CMEM). The renderer's is EMS: 160x100 of two
 ;; bytes a pixel does not fit in what conventional memory has spare, so
 ;; main.bas asks for SURF_EMS on QGL_Z_SLOT. That path had no test and
 ;; the first frame that used it hung -- the whole world's geometry, no
@@ -27,9 +27,10 @@
 
 qglDrFill     proto   far :dword, :word, :word, :word, :word, :word
 qglClRect     proto   far :word, :word, :word, :word
-qglRsPoly     proto   far :dword, :dword, :word, :word, :dword, :dword, :word
-qglZNew       proto   far :dword, :word
-qglZClear     proto   far :dword, :word
+qglRsPoly     proto   far :dword, :dword, :word, :word, :dword
+qglSfZMode    proto   far :dword, :word
+qglSfZNew     proto   far :dword, :word
+qglSfZClear   proto   far :dword, :word
 qglZScale     proto   far :dword
 
 SFW             equ     64
@@ -106,7 +107,7 @@ tmain           proc    far public uses bx cx dx si di es
 
                 invoke  qglClRect, 0, 0, SFW-1, SFH-1
 
-                invoke  qglZNew, dst, SURF_EMS
+                invoke  qglSfZNew, dst, SURF_EMS
                 SAVEP   zb
                 mov     ax, word ptr zb
                 or      ax, word ptr zb+2
@@ -118,9 +119,10 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;
                 ;; 1. flat over EMS depth: the write, then both compares
                 ;;
-                invoke  qglZClear, zb, 0
+                invoke  qglSfZClear, dst, 0
                 invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, dst, sqp, 4, QGL_M_FLAT, COL, zb, QGL_Z_SET
+                invoke  qglSfZMode, dst, QGL_Z_SET
+                invoke  qglRsPoly, dst, sqp, 4, QGL_M_FLAT, COL
 
                 invoke  qglSfRow, zb, 24
                 mov     di, ax
@@ -128,15 +130,17 @@ tmain           proc    far public uses bx cx dx si di es
                 mov     ax, es:[di+48]          ;; x = 24, two bytes a pixel
                 CHK     n_zset, ax, 100
 
-                invoke  qglZClear, zb, 200
+                invoke  qglSfZClear, dst, 200
                 invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, dst, sqp, 4, QGL_M_FLAT, COL, zb, QGL_Z_TEST
+                invoke  qglSfZMode, dst, QGL_Z_TEST
+                invoke  qglRsPoly, dst, sqp, 4, QGL_M_FLAT, COL
                 invoke  scan, COL
                 CHK     n_znear, ax, 0
 
-                invoke  qglZClear, zb, 50
+                invoke  qglSfZClear, dst, 50
                 invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, dst, sqp, 4, QGL_M_FLAT, COL, zb, QGL_Z_TEST
+                invoke  qglSfZMode, dst, QGL_Z_TEST
+                invoke  qglRsPoly, dst, sqp, 4, QGL_M_FLAT, COL
                 invoke  scan, COL
                 CHK     n_zfar, ax, 32*32
 
@@ -149,14 +153,16 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;
                 invoke  qglDrFill, tx, 0, 0, 7, 7, TEXCOL
 
-                invoke  qglZClear, zb, 50
+                invoke  qglSfZClear, dst, 50
                 invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, dst, sqp, 4, QGL_M_TEX, tx, zb, QGL_Z_SET
+                invoke  qglSfZMode, dst, QGL_Z_SET
+                invoke  qglRsPoly, dst, sqp, 4, QGL_M_TEX, tx
                 ;; an accepted EMS texture answers with scanlines, never
                 ;; the -1 a refusal returns
                 NNEG    ax
                 CHK     n_tex, ax, 1
-                invoke  qglRsPoly, dst, sqp, 4, QGL_M_TEX, tx, zb, QGL_Z_SET
+                invoke  qglSfZMode, dst, QGL_Z_SET
+                invoke  qglRsPoly, dst, sqp, 4, QGL_M_TEX, tx
                 invoke  scan, TEXCOL
                 CHK     n_both, ax, 32*32
 

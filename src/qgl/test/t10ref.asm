@@ -29,9 +29,10 @@
 qglDrFill     proto   far :dword, :word, :word, :word, :word, :word
 qglClRect     proto   far :word, :word, :word, :word
 qglRsRef      proto   far :word
-qglRsPoly     proto   far :dword, :dword, :word, :word, :dword, :dword, :word
-qglZNew       proto   far :dword, :word
-qglZClear     proto   far :dword, :word
+qglRsPoly     proto   far :dword, :dword, :word, :word, :dword
+qglSfZMode    proto   far :dword, :word
+qglSfZNew     proto   far :dword, :word
+qglSfZClear   proto   far :dword, :word
 qglZScale     proto   far :dword
 
 SFW             equ     64
@@ -121,13 +122,15 @@ cmpsf           endp
 BOTH            macro   ?nm, ?md, ?zm, ?sr
                 invoke  qglRsRef, 0                   ;; the patched fillers
                 invoke  qglDrFill, sa, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglZClear, za, 50
-                invoke  qglRsPoly, sa, pp, 4, ?md, ?sr, za, ?zm
+                invoke  qglSfZClear, sa, 50
+                invoke  qglSfZMode, sa, ?zm
+                invoke  qglRsPoly, sa, pp, 4, ?md, ?sr
 
                 invoke  qglRsRef, 1                   ;; the reference
                 invoke  qglDrFill, sb, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglZClear, zbb, 50
-                invoke  qglRsPoly, sb, pp, 4, ?md, ?sr, zbb, ?zm
+                invoke  qglSfZClear, sb, 50
+                invoke  qglSfZMode, sb, ?zm
+                invoke  qglRsPoly, sb, pp, 4, ?md, ?sr
 
 
                 invoke  cmpsf, sa, sb, SFW, SFH
@@ -178,9 +181,9 @@ tmain           proc    far public uses bx cx dx si di es
 
                 ;; a depth buffer each, so the two runs cannot see each
                 ;; other's writes
-                invoke  qglZNew, sa, SURF_CMEM
+                invoke  qglSfZNew, sa, SURF_CMEM
                 SAVEP   za
-                invoke  qglZNew, sa, SURF_CMEM
+                invoke  qglSfZNew, sb, SURF_CMEM
                 SAVEP   zbb
                 invoke  qglZScale, dword ptr zs
 

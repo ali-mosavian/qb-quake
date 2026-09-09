@@ -21,9 +21,10 @@
 
 qglDrFill     proto   far :dword, :word, :word, :word, :word, :word
 qglClRect     proto   far :word, :word, :word, :word
-qglRsPoly     proto   far :dword, :dword, :word, :word, :dword, :dword, :word
-qglZNew       proto   far :dword, :word
-qglZClear     proto   far :dword, :word
+qglRsPoly     proto   far :dword, :dword, :word, :word, :dword
+qglSfZMode    proto   far :dword, :word
+qglSfZNew     proto   far :dword, :word
+qglSfZClear   proto   far :dword, :word
 qglZScale     proto   far :dword
 
 SFW             equ     160
@@ -152,13 +153,16 @@ cmpin           endp
 ;; over it, both from a cleared depth buffer of their own.
 PAIR            macro   ?md, ?zm
                 invoke  qglDrFill, sb, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglZClear, zbb, 0
-                invoke  qglRsPoly, sb, bigp, 4, ?md, tx, zbb, QGL_Z_SET
+                invoke  qglSfZClear, sb, 0
+                invoke  qglSfZMode, sb, QGL_Z_SET
+                invoke  qglRsPoly, sb, bigp, 4, ?md, tx
 
                 invoke  qglDrFill, sa, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglZClear, za, 0
-                invoke  qglRsPoly, sa, bigp, 4, ?md, tx, za, QGL_Z_SET
-                invoke  qglRsPoly, sa, smallp, 4, ?md, tx, za, ?zm
+                invoke  qglSfZClear, sa, 0
+                invoke  qglSfZMode, sa, QGL_Z_SET
+                invoke  qglRsPoly, sa, bigp, 4, ?md, tx
+                invoke  qglSfZMode, sa, ?zm
+                invoke  qglRsPoly, sa, smallp, 4, ?md, tx
 endm
 
 tmain           proc    far public uses bx cx dx si di es
@@ -196,9 +200,9 @@ tmain           proc    far public uses bx cx dx si di es
 @@tdone:
                 invoke  qglClRect, 0, 0, SFW-1, SFH-1
 
-                invoke  qglZNew, sa, SURF_CMEM
+                invoke  qglSfZNew, sa, SURF_CMEM
                 SAVEP   za
-                invoke  qglZNew, sa, SURF_CMEM
+                invoke  qglSfZNew, sb, SURF_CMEM
                 SAVEP   zbb
                 invoke  qglZScale, dword ptr zs
 

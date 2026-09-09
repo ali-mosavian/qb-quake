@@ -26,9 +26,11 @@ qglSfViewNew  proto   far :dword, :word, :word, :word
 qglSfViewAim  proto   far :dword, :dword
 qglDrFill     proto   far :dword, :word, :word, :word, :word, :word
 qglClRect     proto   far :word, :word, :word, :word
-qglRsPoly     proto   far :dword, :dword, :word, :word, :dword, :dword, :word
-qglZNew       proto   far :dword, :word
-qglZClear     proto   far :dword, :word
+qglRsPoly     proto   far :dword, :dword, :word, :word, :dword
+qglSfZMode    proto   far :dword, :word
+qglSfZNew     proto   far :dword, :word
+qglSfZClear   proto   far :dword, :word
+qglSfZFree    proto   far :dword
 qglZScale     proto   far :dword
 
 SFW              equ     64
@@ -317,7 +319,7 @@ tmain           proc    far public uses bx cx dx si di es
                 ;; 1. a flat square, and exactly which pixels it takes
                 ;;
                 invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, dst, sqp, 4, QGL_M_FLAT, COL, 0, QGL_Z_OFF
+                invoke  qglRsPoly, dst, sqp, 4, QGL_M_FLAT, COL
                 CHK     n_lines, ax, 32
 
                 invoke  scan, COL
@@ -339,13 +341,14 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;
                 ;; 2. depth, and its polarity
                 ;;
-                invoke  qglZNew, dst, SURF_CMEM
+                invoke  qglSfZNew, dst, SURF_CMEM
                 SAVEP   zb
                 invoke  qglZScale, dword ptr zs
 
-                invoke  qglZClear, zb, 0
+                invoke  qglSfZClear, dst, 0
                 invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, dst, sqp, 4, QGL_M_FLAT, COL, zb, QGL_Z_SET
+                invoke  qglSfZMode, dst, QGL_Z_SET
+                invoke  qglRsPoly, dst, sqp, 4, QGL_M_FLAT, COL
 
                 invoke  qglSfRow, zb, 24
                 mov     di, ax
@@ -354,16 +357,18 @@ tmain           proc    far public uses bx cx dx si di es
                 CHK     n_zset, ax, 100
 
                 ;; something NEARER is already there: nothing may draw
-                invoke  qglZClear, zb, 200
+                invoke  qglSfZClear, dst, 200
                 invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, dst, sqp, 4, QGL_M_FLAT, COL, zb, QGL_Z_TEST
+                invoke  qglSfZMode, dst, QGL_Z_TEST
+                invoke  qglRsPoly, dst, sqp, 4, QGL_M_FLAT, COL
                 invoke  scan, COL
                 CHK     n_znear, ax, 0
 
                 ;; something FARTHER: all of it must draw
-                invoke  qglZClear, zb, 50
+                invoke  qglSfZClear, dst, 50
                 invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, dst, sqp, 4, QGL_M_FLAT, COL, zb, QGL_Z_TEST
+                invoke  qglSfZMode, dst, QGL_Z_TEST
+                invoke  qglRsPoly, dst, sqp, 4, QGL_M_FLAT, COL
                 invoke  scan, COL
                 CHK     n_zfar, ax, 32*32
 
@@ -373,16 +378,24 @@ tmain           proc    far public uses bx cx dx si di es
                 ;; unclamped 3 calls into whatever follows it. Drawn over
                 ;; a buffer cleared NEARER than the polygon: depth off
                 ;; means every pixel lands, a live test means none do.
-                invoke  qglZClear, zb, 200
+                invoke  qglSfZClear, dst, 200
                 invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, dst, sqp, 4, QGL_M_FLAT, COL, zb, QGL_Z_TEST+1
+                invoke  qglSfZMode, dst, QGL_Z_TEST+1
+                invoke  qglRsPoly, dst, sqp, 4, QGL_M_FLAT, COL
                 invoke  scan, COL
                 CHK     n_zbadmode, ax, 32*32
 
-                ;; and a mode with NO buffer likewise, or qglSfWrRowEx
-                ;; reads Surface fields out of 0000:0000
+                ;; and a surface with NO depth takes no mode, or
+                ;; qglSfWrRowEx reads Surface fields out of 0000:0000.
+                ;; The buffer is freed here and not remade: THE MODE IS
+                ;; STICKY -- it lives on the surface, so every case below
+                ;; would otherwise inherit whichever one ran last, and a
+                ;; texture case silently testing depth is a texture case
+                ;; that proves nothing.
+                invoke  qglSfZFree, dst
                 invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, dst, sqp, 4, QGL_M_FLAT, COL, 0, QGL_Z_TEST
+                invoke  qglSfZMode, dst, QGL_Z_TEST
+                invoke  qglRsPoly, dst, sqp, 4, QGL_M_FLAT, COL
                 invoke  scan, COL
                 CHK     n_znobuf, ax, 32*32
 
@@ -391,7 +404,7 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;
                 invoke  qglDrFill, tx, 0, 0, 7, 7, 99
                 invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, dst, sqp, 4, QGL_M_TEX, tx, 0, QGL_Z_OFF
+                invoke  qglRsPoly, dst, sqp, 4, QGL_M_TEX, tx
                 NNEG    ax
                 CHK     n_tex, ax, 1
                 invoke  scan, 99
@@ -409,7 +422,7 @@ tmain           proc    far public uses bx cx dx si di es
                 invoke  qglSfViewAim, svwp, STRAD_OFS
                 ;; refused, and a refusal answers -1 -- not the 0 a face
                 ;; that merely covered nothing answers
-                invoke  qglRsPoly, dst, sqp, 4, QGL_M_TEX, svwp, 0, QGL_Z_OFF
+                invoke  qglRsPoly, dst, sqp, 4, QGL_M_TEX, svwp
                 CHK     n_straddle, ax, -1
 
                 ;;
@@ -418,7 +431,7 @@ tmain           proc    far public uses bx cx dx si di es
                 mov     word ptr sqhp, offset sqh
                 mov     word ptr sqhp+2, ds
                 invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, dst, sqhp, 4, QGL_M_PTEX, tx, 0, QGL_Z_OFF
+                invoke  qglRsPoly, dst, sqhp, 4, QGL_M_PTEX, tx
                 invoke  scan, 99
                 mov     ax, xmin
                 add     ax, ymin
@@ -434,7 +447,7 @@ tmain           proc    far public uses bx cx dx si di es
                 mov     word ptr sqrp, offset sqr
                 mov     word ptr sqrp+2, ds
                 invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, dst, sqrp, 4, QGL_M_FLAT, COL, 0, QGL_Z_OFF
+                invoke  qglRsPoly, dst, sqrp, 4, QGL_M_FLAT, COL
                 invoke  scan, COL
                 CHK     n_ccw, ax, 32*32
 
@@ -444,7 +457,7 @@ tmain           proc    far public uses bx cx dx si di es
                 mov     word ptr colp, offset col
                 mov     word ptr colp+2, ds
                 invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, dst, colp, 4, QGL_M_FLAT, COL, 0, QGL_Z_OFF
+                invoke  qglRsPoly, dst, colp, 4, QGL_M_FLAT, COL
                 invoke  scan, COL
                 NZ      ax
                 CHK     n_coll, ax, 1
@@ -454,15 +467,19 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;
                 mov     word ptr dzqp, offset dzq
                 mov     word ptr dzqp+2, ds
+                invoke  qglSfZNew, dst, SURF_CMEM       ;; freed back in 2
+                SAVEP   zb
                 invoke  qglZScale, dword ptr dzs
-                invoke  qglZClear, zb, 0
+                invoke  qglSfZClear, dst, 0
                 invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, dst, dzqp, 4, QGL_M_FLAT, COL, zb, QGL_Z_SET
+                invoke  qglSfZMode, dst, QGL_Z_SET
+                invoke  qglRsPoly, dst, dzqp, 4, QGL_M_FLAT, COL
                 invoke  qglSfRow, zb, 8
                 mov     di, ax
                 mov     es, dx
                 mov     ax, es:[di+48]          ;; x = 24
                 CHK     n_dzdy, ax, 19692
+                invoke  qglSfZFree, dst                 ;; the rest draw flat
 
                 ;;
                 ;; 9. a polygon the clipper actually rewrote
@@ -470,7 +487,7 @@ tmain           proc    far public uses bx cx dx si di es
                 mov     word ptr clpp, offset clp
                 mov     word ptr clpp+2, ds
                 invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, dst, clpp, 4, QGL_M_FLAT, COL, 0, QGL_Z_OFF
+                invoke  qglRsPoly, dst, clpp, 4, QGL_M_FLAT, COL
                 CHK     n_cliplin, ax, 32
 
                 invoke  scan, COL
@@ -502,7 +519,7 @@ tmain           proc    far public uses bx cx dx si di es
                 jb      @@tfyl
 
                 invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, dst, sqp, 4, QGL_M_PTEX, tx, 0, QGL_Z_OFF
+                invoke  qglRsPoly, dst, sqp, 4, QGL_M_PTEX, tx
 
                 invoke  rowruns
                 CHK     n_pruns, ax, 8
@@ -517,7 +534,7 @@ tmain           proc    far public uses bx cx dx si di es
                 mov     word ptr narrowp+2, ds
                 invoke  qglDrFill, tx, 0, 0, 7, 7, 99
                 invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, dst, narrowp, 4, QGL_M_PTEX, tx, 0, QGL_Z_OFF
+                invoke  qglRsPoly, dst, narrowp, 4, QGL_M_PTEX, tx
                 CHK     n_wide, ax, 32
                 invoke  scan, 99
                 CHK     n_widecnt, ax, 32
@@ -529,7 +546,7 @@ tmain           proc    far public uses bx cx dx si di es
                 mov     word ptr flatuvp, offset flatuv
                 mov     word ptr flatuvp+2, ds
                 invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
-                invoke  qglRsPoly, dst, flatuvp, 4, QGL_M_FLAT, COL, 0, QGL_Z_OFF
+                invoke  qglRsPoly, dst, flatuvp, 4, QGL_M_FLAT, COL
                 invoke  scan, COL
                 CHK     n_flatuv, ax, 32*32
 

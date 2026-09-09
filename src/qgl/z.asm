@@ -1,6 +1,6 @@
 ;; z.asm -- the depth buffer, and the state the fillers read.
 ;;
-;; name: qglZNew / qglZFree / qglZClear / qglZScale
+;; name: qglSfZNew / qglSfZFree / qglSfZClear / qglSfZMode / qglZScale
 ;; desc: Depth is 1/z in 16.16 and only the integer half is stored, so
 ;;       LARGER IS NEARER and a cleared buffer is 0 = infinitely far.
 ;;       That is mgl's convention and the renderer's scale factor already
@@ -16,17 +16,21 @@
 ;;
 ;; obs.: - qglSfNew demands a power-of-two stride for an EMS surface, so
 ;;         that a row cannot straddle a 16K page. 160 pixels of depth is
-;;         320 bytes and 320 is not one; qglZNew pads up to 512 rather
+;;         320 bytes and 320 is not one; qglSfZNew pads up to 512 rather
 ;;         than refusing. The padding is dead space in EMS, which has
 ;;         megabytes of it, and it costs nothing per pixel because the
 ;;         scanner addresses depth off the row pointer.
 ;;       - the per-scanline and per-polygon slots (zline, zacc, zdzdx)
 ;;         live here rather than in rs.asm because the FILLERS read them
 ;;         and the fillers are patched from two places. One owner.
-;;       - which buffer and which mode are NOT here: they are arguments
-;;         to qglRsPoly and scratch in rs.asm, so a draw cannot inherit
-;;         a depth setting some earlier call left behind. There is no
-;;         installed buffer, so nothing here has an install side effect.
+;;       - A DEPTH BUFFER BELONGS TO THE SURFACE IT WAS MADE FOR.
+;;         qglSfZNew stores it in that surface's zsf and no entry point
+;;         takes one as an argument, so a draw cannot be handed the
+;;         depth of some other destination -- nor inherit a setting an
+;;         earlier call installed, because there is nothing installed:
+;;         qglRsPoly reads both fields off the surface it is drawing on.
+;;       - the scale is NOT per surface. It is the projection's, one for
+;;         the frame, and every depth buffer in it shares the units.
 
                 .model  medium, pascal
                 .386
@@ -76,22 +80,30 @@ qgl$Pow2        endp
 
 
 ;;::::::::::::::
-;; qglZNew ( dst:far ptr Surface, kind:word ) -> dx:ax
+;; qglSfZNew ( surf:far ptr Surface, kind:word ) -> dx:ax
 ;;
-;; A depth buffer shaped to a destination. Nothing installs it: a caller
-;; may hold as many as it likes and hands the one it wants to qglRsPoly.
+;; A depth buffer shaped to surf, and ATTACHED to it. The pointer comes
+;; back so a caller can look at what it got -- the tests read depth rows
+;; through it -- and no entry point anywhere takes one, so there is no
+;; way to draw against a depth buffer belonging to another destination.
+;;
+;; Refuses when surf already has one. Freeing the old buffer here would
+;; drop it under whoever still holds the pointer; resizing is qglSfZFree
+;; and then this.
 ;;::::::::::::::
-qglZNew       proc    public uses bx cx si di es,\
-                        dst:dword, kind:word
+qglSfZNew     proc    public uses bx cx si di es,\
+                        surf:dword, kind:word
 
                 local   bytes:word
                 local   rows:word
                 local   wide:word
 
-                les     bx, dst
+                les     bx, surf
                 mov     ax, es
                 or      ax, bx
                 jz      @@fail
+                cmp     D es:[bx].Surface.zsf, 0
+                jne     @@fail
 
                 mov     ax, es:[bx].Surface.xRes
                 test    ax, ax
@@ -107,10 +119,13 @@ qglZNew       proc    public uses bx cx si di es,\
 
                 ;; EMS wants a power-of-two stride so a row cannot
                 ;; straddle a 16K page: 160 pixels of depth is 320 bytes,
-                ;; which is not one, so pad to 512. The padding is dead
-                ;; space in a store that has megabytes of it, and it costs
-                ;; nothing per pixel -- the scanner addresses depth off
-                ;; the row pointer, never off the width.
+                ;; which is not one, so pad to 512. Depth is read and
+                ;; written a scanline at a time, so the buffer may span as
+                ;; many pages as it likes -- unlike a texture, which is
+                ;; sampled at random and must fit in one. The padding is
+                ;; dead space in a store that has megabytes of it, and it
+                ;; costs nothing per pixel: the scanner addresses depth
+                ;; off the row pointer, never off the width.
                 cmp     kind, SURF_EMS
                 jne     @F
                 mov     ax, bytes
@@ -119,22 +134,89 @@ qglZNew       proc    public uses bx cx si di es,\
                 jz      @@fail
                 mov     bytes, ax
 @@:             invoke  qglSfNewEx, wide, rows, bytes, kind
+                mov     cx, ax
+                or      cx, dx
+                jz      @@fail
+
+                les     bx, surf
+                mov     W es:[bx].Surface.zsf+0, ax
+                mov     W es:[bx].Surface.zsf+2, dx
+                mov     es:[bx].Surface.zmode, QGL_Z_OFF
                 ret
 
 @@fail:         xor     ax, ax
                 xor     dx, dx
                 ret
-qglZNew       endp
+qglSfZNew     endp
 
 
 ;;::::::::::::::
-;; qglZFree ( s:far ptr Surface )
+;; qglSfZMode ( surf:far ptr Surface, mode:word ) -> ax = 1 set, 0 refused
+;;
+;; What a draw into surf does with the depth attached to it. A refusal --
+;; no buffer, or a mode that is not one -- leaves OFF behind rather than
+;; whatever was there, so a caller that ignores the return draws with no
+;; depth instead of against a buffer it never set up.
+;;
+;; IT DOES NOT ANSWER WITH THE MODE THAT WAS IN FORCE. The entry it
+;; replaces did, d_faces.c cached that answer, and after a run of entity
+;; faces the cache said SET while TEST was live -- the next world face
+;; tested against a buffer it was meant to write. There is nothing here
+;; to cache: the mode lives on the surface and qglRsPoly reads it there.
 ;;::::::::::::::
-qglZFree      proc    public uses ax,\
-                        s:dword
-                invoke  qglSfFree, s
+qglSfZMode    proc    public uses bx es,\
+                        surf:dword, mode:word
+
+                les     bx, surf
+                mov     ax, es
+                or      ax, bx
+                jz      @@fail                  ;; nothing to set it on
+
+                mov     es:[bx].Surface.zmode, QGL_Z_OFF
+                cmp     D es:[bx].Surface.zsf, 0
+                je      @@fail
+                mov     ax, mode
+                cmp     ax, QGL_Z_TEST
+                ja      @@fail
+                mov     es:[bx].Surface.zmode, ax
+                mov     ax, 1
                 ret
-qglZFree      endp
+
+@@fail:         xor     ax, ax
+                ret
+qglSfZMode    endp
+
+
+;;::::::::::::::
+;; qglSfZFree ( surf:far ptr Surface )
+;;
+;; Detaches first, frees second: the surface is left describing no depth
+;; whatever the free does, and OFF with it.
+;;::::::::::::::
+qglSfZFree    proc    public uses ax bx cx dx es,\
+                        surf:dword
+
+                local   zb:dword
+
+                les     bx, surf
+                mov     ax, es
+                or      ax, bx
+                jz      @@out
+
+                mov     ax, W es:[bx].Surface.zsf+0
+                mov     dx, W es:[bx].Surface.zsf+2
+                mov     cx, ax
+                or      cx, dx
+                jz      @@out
+                mov     D es:[bx].Surface.zsf, 0
+                mov     es:[bx].Surface.zmode, QGL_Z_OFF
+
+                mov     W zb+0, ax
+                mov     W zb+2, dx
+                invoke  qglSfFree, zb
+
+@@out:          ret
+qglSfZFree    endp
 
 
 ;;::::::::::::::
@@ -156,22 +238,37 @@ qglZFree      endp
 
 
 ;;::::::::::::::
-;; qglZClear ( s:far ptr Surface, val:word )
+;; qglSfZClear ( surf:far ptr Surface, val:word )
+;;
+;; Clears the depth attached to surf, and does nothing where there is
+;; none -- a frame loop may run against a surface with depth off without
+;; asking first.
 ;;
 ;; A WORD fill: a byte fill would be right only for 0, and the one value
 ;; that matters after 0 is 0FFFFh -- clear to "nearest" and the next
 ;; frame draws nothing at all, which is how a depth test is proved to be
 ;; testing rather than passing everything.
 ;;::::::::::::::
-qglZClear     proc    public uses ax bx cx dx si di es,\
-                        s:dword, val:word
+qglSfZClear   proc    public uses ax bx cx dx si di es,\
+                        surf:dword, val:word
 
                 local   wide:word, rows:word
+                local   zb:dword
 
-                les     bx, s
+                les     bx, surf
                 mov     ax, es
                 or      ax, bx
                 jz      @@out
+                mov     ax, W es:[bx].Surface.zsf+0
+                mov     dx, W es:[bx].Surface.zsf+2
+                mov     cx, ax
+                or      cx, dx
+                jz      @@out
+                mov     W zb+0, ax
+                mov     W zb+2, dx
+
+                mov     es, dx
+                mov     bx, ax
                 mov     ax, es:[bx].Surface.xRes
                 mov     wide, ax
                 mov     ax, es:[bx].Surface.yRes
@@ -181,7 +278,7 @@ qglZClear     proc    public uses ax bx cx dx si di es,\
                 xor     si, si                  ;; row
 @@row:          cmp     si, rows
                 jae     @@out
-                invoke  qglSfWrRow, s, si
+                invoke  qglSfWrRow, zb, si
                 mov     di, ax
                 mov     es, dx
                 mov     cx, wide
@@ -191,7 +288,7 @@ qglZClear     proc    public uses ax bx cx dx si di es,\
                 jmp     @@row
 
 @@out:          ret
-qglZClear     endp
+qglSfZClear   endp
 
 
 ;;::::::::::::::

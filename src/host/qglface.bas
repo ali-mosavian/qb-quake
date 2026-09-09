@@ -63,9 +63,7 @@ declare function qglRsPoly ( byval d as long, _
                              seg v as any, _
                              byval cnt as integer, _
                              byval mode as integer, _
-                             byval src as long, _
-                             byval zsf as long, _
-                             byval zmode as integer ) as integer
+                             byval src as long ) as integer
 declare function qglSfSize ( byval s as long, byval sel as integer ) as integer
 
 declare function qf_plane ( byval f0 as single, byval f1 as single, _
@@ -312,7 +310,7 @@ function qglFaceAll () as integer
         qglDrFill d0, 0, 0, FW - 1, FH - 1, a
         '' Depth OFF, and a refusal is a failure: the texture is
         '' validated inside the draw now, so a bad one shows up here.
-        zm = qglRsPoly%( d0, v(0), n, QGL_M_PTEX, dc, 0, QGL_Z_OFF )
+        zm = qglRsPoly%( d0, v(0), n, QGL_M_PTEX, dc )
         if ( zm < 0 ) then
             print #lg, "   FAIL qglRsPoly refused the texture"
             print #lg, "RESULT FAIL"

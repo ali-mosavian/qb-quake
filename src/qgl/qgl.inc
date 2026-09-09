@@ -646,6 +646,18 @@ yMax            dw      ?               ;; is a divergence in its own right
                                 EMS_SF  <>
                 ends
 
+                ;; DEPTH BELONGS TO THE SURFACE IT IS DRAWN AGAINST.
+                ;; qglSfZNew makes a depth Surface shaped to this one and
+                ;; stores it here; nothing outside ever names it, so no
+                ;; draw can be handed a depth buffer belonging to another
+                ;; destination. zmode says what a draw INTO this surface
+                ;; does with it -- qglSfZMode sets it, qglRsPoly reads it.
+                ;;
+                ;; Zero on a depth buffer and on a view alike: a view is a
+                ;; source, and only a destination has depth.
+zsf             dd      ?               ;; far ptr Surface, or 0
+zmode           dw      ?               ;; QGL_Z_OFF / _SET / _TEST
+
         ifdef   _DEBUG_
 sign            dd      QGL_SIGN
         endif
@@ -662,8 +674,9 @@ Surface         ends
 ;; not an accident of the allocator: every accessor reads gs:[Surface.f]
 ;; and gs:[SF_addrTB][si] with no base register, exactly as mgl's do.
 ;; Anything handing a Surface pointer around must therefore have got it
-;; from qglNew/qglNewEx/qglNewView -- or be an mgl DC, which is the same
-;; struct from the same allocator.
+;; from qglNew/qglNewEx/qglNewView. It was once also true of an mgl DC,
+;; which shared the layout byte for byte; the depth fields above ended
+;; that, and nothing hands qgl an mgl DC any more.
 
 ;;::::::::::::::
 ;; mgl's CHECKDC. A no-op unless _DEBUG_, which nothing here defines --

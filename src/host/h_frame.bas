@@ -9,11 +9,13 @@ option explicit
 ''
 '' host_accum and host_ticks are main.bas's own state (dim shared
 '' there), passed byref rather than reached for: host_advance both
-'' reads and updates them every call. cam_up and z_dc are likewise
-'' main.bas's, passed into host_render -- the first byref (never
-'' written here, but a UDT, and this project passes those byref
-'' throughout rather than by value), the second byval since a plain
-'' long read-only is simplest passed that way.
+'' reads and updates them every call. cam_up is likewise main.bas's,
+'' passed byref into host_render -- never written here, but a UDT, and
+'' this project passes those byref throughout rather than by value.
+''
+'' The depth buffer used to travel the same way and no longer does: it
+'' is attached to the backbuffer, so the surface this file already holds
+'' is the whole of it.
 ''
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
@@ -142,7 +144,7 @@ declare function dbg_keys ( byval which as integer ) as long
 '' The whole face loop, in C, once per frame -- see d_faces.c.
 '' `z`, not `val`: VAL is a BASIC intrinsic and BC rejects it as a
 '' formal parameter name.
-declare sub qglZClear ( byval s as long, byval z as integer )
+declare sub qglSfZClear ( byval surf as long, byval z as integer )
 
 declare sub d_draw_faces ( _
     g as Game, _
@@ -327,7 +329,6 @@ sub host_render ( _
     mip_buff_inf() as MipTex, _
     face_mdl() as integer, _
     cam_up as u3dVector3f, _
-    byval z_dc as long, _
     mdltri_buffer() as MdlTri, _
     mdl_ent() as MdlEnt _
 )
@@ -396,7 +397,7 @@ sub host_render ( _
     '' nearer, so zero is infinitely distant and the first surface to
     '' cover a pixel always wins.
     ''
-    if ( z_dc <> 0 ) then qglZClear z_dc, 0
+    qglSfZClear h_dst_dc, 0
 
     '' -nodraw stops HERE: the walk above has run and filled order_list,
     '' so everything the node paging touches has happened. What is skipped

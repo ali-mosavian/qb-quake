@@ -24,6 +24,10 @@
 ;;              an ODD value was the impossible one; that is exactly the
 ;;              coupling that let SURF_EMS drift from 2 to 10 under BASIC's
 ;;              feet, and it is gone.
+;;   attach  -- the buffer belongs to the surface it was made for and is
+;;              named nowhere else, so what the accessors do to the field
+;;              IS the API. A second one on the same surface is refused
+;;              rather than replacing the first under whoever holds it.
 
                 .model  medium, pascal
                 .386
@@ -31,9 +35,10 @@
                 include qgl.inc
                 include tfw.inc
 
-qglZNew       proto   far :dword, :word
-qglZFree      proto   far :dword
-qglZClear     proto   far :dword, :word
+qglSfZNew     proto   far :dword, :word
+qglSfZFree    proto   far :dword
+qglSfZClear   proto   far :dword, :word
+qglSfZMode    proto   far :dword, :word
 qglZScale     proto   far :dword
 
 DST_W           equ     160
@@ -47,6 +52,13 @@ n_high          db      'as tall as its target  $'
 n_clear         db      'clear fills WORDS      $'
 n_scale         db      'scale returns the old  $'
 n_emspad        db      'ems stride padded to 2^$'
+n_attach        db      'attached to its surface$'
+n_twice         db      'a second one is refused$'
+n_mode_set      db      'mode SET takes         $'
+n_mode_bad      db      'mode 3 refused, left off$'
+n_mode_none     db      'no buffer, no mode     $'
+n_detach        db      'free detaches and offs $'
+n_freed         db      'and clears the mode    $'
 
 dst             dd      0
 zb              dd      0
@@ -90,7 +102,7 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;
                 ;; 1. shape
                 ;;
-                invoke  qglZNew, dst, SURF_CMEM
+                invoke  qglSfZNew, dst, SURF_CMEM
                 SAVEP   zb
                 mov     bx, ax
                 or      bx, dx
@@ -103,28 +115,77 @@ tmain           proc    far public uses bx cx dx si di es
                 CHK     n_high,   es:[bx].Surface.yRes,  DST_H
 
                 ;;
-                ;; 2. the clear writes words, not bytes
+                ;; 2. it is ON the destination, and only one of it
                 ;;
-                invoke  qglZClear, zb, 0BEEFh
+                les     bx, dst
+                mov     ax, W es:[bx].Surface.zsf+0
+                cmp     ax, W zb+0
+                jne     @F
+                mov     ax, W es:[bx].Surface.zsf+2
+                cmp     ax, W zb+2
+                jne     @F
+                mov     ax, 1
+                jmp     short @@att
+@@:             xor     ax, ax
+@@att:          CHK     n_attach, ax, 1
+
+                invoke  qglSfZNew, dst, SURF_CMEM
+                or      ax, dx
+                CHK     n_twice, ax, 0
+
+                ;;
+                ;; 3. the mode, which lives on the destination too
+                ;;
+                invoke  qglSfZMode, dst, QGL_Z_SET
+                les     bx, dst
+                shl     ax, 4                   ;; 1 -> 16, so one CHK
+                add     ax, es:[bx].Surface.zmode
+                CHK     n_mode_set, ax, 16 + QGL_Z_SET
+
+                invoke  qglSfZMode, dst, QGL_Z_TEST+1
+                les     bx, dst
+                shl     ax, 4
+                add     ax, es:[bx].Surface.zmode
+                CHK     n_mode_bad, ax, QGL_Z_OFF
+
+                ;;
+                ;; 4. the clear writes words, not bytes -- through the
+                ;;    destination, which is the only handle there is
+                ;;
+                invoke  qglSfZClear, dst, 0BEEFh
                 invoke  z_const, zb, DST_W, DST_H, 0BEEFh
                 CHK     n_clear, ax, 0
 
                 ;;
-                ;; 3. the scale hands back what it replaced
+                ;; 5. the scale hands back what it replaced. It is the
+                ;;    projection's, not a surface's, so it stays global.
                 ;;
                 invoke  qglZScale, 12345678h
                 invoke  qglZScale, 0
                 CHK     n_scale, ax, 5678h
 
-                ;; A null buffer and an out-of-range mode are qglRsPoly's
-                ;; to refuse now, not this module's -- there is nothing
-                ;; installed to refuse them against. Both are tested where
-                ;; they are decided, in t09rs.
                 ;;
-                ;; 4. EMS: 320 bytes a row is not a power of two, so the
+                ;; 6. free detaches, and a surface with no depth takes no
+                ;;    mode -- a draw into it cannot be given one either
+                ;;
+                invoke  qglSfZFree, dst
+                les     bx, dst
+                mov     ax, W es:[bx].Surface.zsf+0
+                or      ax, W es:[bx].Surface.zsf+2
+                CHK     n_detach, ax, 0
+                CHK     n_freed,  es:[bx].Surface.zmode, QGL_Z_OFF
+
+                invoke  qglSfZMode, dst, QGL_Z_SET
+                les     bx, dst
+                shl     ax, 4
+                add     ax, es:[bx].Surface.zmode
+                CHK     n_mode_none, ax, QGL_Z_OFF
+
+                ;;
+                ;; 7. EMS: 320 bytes a row is not a power of two, so the
                 ;;    stride has to be padded or nothing is allocated
                 ;;
-                invoke  qglZNew, dst, SURF_EMS
+                invoke  qglSfZNew, dst, SURF_EMS
                 SAVEP   ems
                 mov     bx, ax
                 or      bx, dx
@@ -135,7 +196,7 @@ tmain           proc    far public uses bx cx dx si di es
 @@:             xor     ax, ax
 @@chk:          CHK     n_emspad, ax, 512
 
-                invoke  qglZFree, zb
+                invoke  qglSfZFree, dst
                 invoke  qglSfFree, dst
                 ret
 tmain           endp

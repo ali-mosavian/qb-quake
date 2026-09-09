@@ -42,8 +42,8 @@
 qglMemAvail   proto   far :word
 qglSfNewEx   proto   far :word, :word, :word, :word
 qglSfAdoptDc proto   far :dword, :dword
-qglZNew       proto   far :dword, :word
-qglZFree      proto   far :dword
+qglSfZNew     proto   far :dword, :word
+qglSfZFree    proto   far :dword
 uglInit         proto   far
 uglEnd          proto   far
 uglNew          proto   far :word, :word, :word, :word
@@ -178,7 +178,7 @@ alloc_arm       proc    near private uses bx cx dx si di,\
                 jne     @@surf
                 cmp     arm, ARM_QGL
                 jne     @@mz
-                invoke  qglZNew, padopt, SURF_EMS
+                invoke  qglSfZNew, padopt, SURF_EMS
                 jmp     @@save
 @@mz:           invoke  uglNewZ, parent, DC_EMS
                 jmp     @@save
@@ -210,7 +210,7 @@ free_arm        proc    near private uses ax bx cx dx si di,\
                 jne     @@surf
                 cmp     arm, ARM_QGL
                 jne     @@md
-                invoke  qglZFree, p
+                invoke  qglSfZFree, padopt
                 ret
 @@md:           invoke  uglDel, addr p
                 ret
@@ -849,7 +849,7 @@ tmain           proc    far public uses ax bx cx dx si di es
                 ;;      main.bas:910 does uglNewZ( h_dst_dc, UGL.EMS )
                 ;;      over the shipped backbuffer.
                 ;;
-                ;;      qglZNew shapes from a Surface and uglNewZ from
+                ;;      qglSfZNew shapes from a Surface and uglNewZ from
                 ;;      a DC, so one retained MEM DC is adopted and both
                 ;;      arms shape from that same parent. EVERYTHING here
                 ;;      is gated on the parent: a descriptor read through

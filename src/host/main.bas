@@ -97,7 +97,6 @@ declare sub host_render ( _
     mip_buff_inf() as MipTex, _
     face_mdl() as integer, _
     cam_up as u3dVector3f, _
-    byval z_dc as long, _
     mdltri_buffer() as MdlTri, _
     mdl_ent() as MdlEnt _
 )
@@ -122,7 +121,7 @@ declare function qglDiffAll () as integer
 declare function qglFaceAll () as integer
 declare function qglArrAll () as integer
 declare function qglSfInit () as integer
-declare function qglZNew ( byval dst as long, byval kind as integer ) as long
+declare function qglSfZNew ( byval surf as long, byval kind as integer ) as long
 declare sub qglDrFill ( byval d as long, _
                         byval x0 as integer, _
                         byval y0 as integer, _
@@ -186,7 +185,6 @@ declare sub host_main ( _
 '' This module's own procedures.
 ''
 declare sub host_shutdown ( )
-declare function host_z_dc ( ) as long
 
 ''
 '' Declared here, not in a header: this module is the only caller, and a
@@ -915,15 +913,15 @@ sub host_main ( _
     '' range; anything closer would saturate, and nothing is, because the
     '' clipper drops it first.
     ''
-    '' qgl's, not mgl's: nothing draws through mgl any more, so nothing
-    '' would read an mgl depth buffer. qglZNew sizes itself from the
-    '' destination Surface, and an mgl DC is one.
+    '' THE BUFFER IS ATTACHED TO THE BACKBUFFER, not held here. Nothing
+    '' passes it anywhere afterwards -- a draw reads the depth of the
+    '' surface it is drawing on -- so this handle exists only to say
+    '' whether the allocation worked. The scale is the projection's and
+    '' stays global: every depth buffer in the frame is in its units.
     z_dc = 0
     if ( g.env.no_z = 0 ) then
-        z_dc = qglZNew&( h_dst_dc, QGL_SURF_EMS )
+        z_dc = qglSfZNew&( h_dst_dc, QGL_SURF_EMS )
         if ( z_dc = 0 ) then sys_error "0x0019, no qgl depth buffer"
-    end if
-    if ( z_dc <> 0 ) then
         zz = qglZScale&( 65535.0 * g.env.z_near )
     end if
     
@@ -1009,7 +1007,7 @@ sub host_main ( _
         host_render g, h_dst_dc, mtx_prj, xresh, yresh, tri_buffer(), tex_inf_buff(), _
                      pln_buffer(), nds_buffer(), mdl_buffer(), order_list(), poly_flag(), _
                      gv_buf(), brush(), frustum(), bit_array(), _
-                     mip_buff_inf(), face_mdl(), cam_up, z_dc, _
+                     mip_buff_inf(), face_mdl(), cam_up, _
                      mdltri_buffer(), mdl_ent()
 
 
@@ -1275,13 +1273,3 @@ end sub
 
 
 
-''::::::::::
-'' name: host_z_dc
-'' desc: The depth buffer, or 0 if there is none. main.bas creates it, so
-''       it answers for it; every draw hands it to qglRsPoly, which has no
-''       installed buffer of its own to fall back on. d_poly hoists this
-''       once a frame rather than calling per face.
-''::::::::::
-function host_z_dc ( ) as long
-    host_z_dc = z_dc
-end function

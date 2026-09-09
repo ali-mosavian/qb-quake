@@ -101,8 +101,11 @@ extern void  pascal far qglClRect    ( short x0, short y0, short x1, short y1 );
    overload of uglPolyTP's srcDC against uglPolyF's col. Returns the
    scanlines covered, 0 for a face clipped away, -1 for a refusal. */
 extern short pascal far qglRsPoly    ( long dst, void far *v, short cnt,
-                                       short mode, long src,
-                                       long zsf, short zmode );
+                                       short mode, long src );
+/* Depth is not an argument: it belongs to the destination. Refuses -- and
+   leaves the surface with depth OFF -- when the surface has no depth
+   buffer, which is what -noz produces, so this may be called blind. */
+extern short pascal far qglSfZMode   ( long surf, short mode );
 extern void  pascal far qglDrLine    ( long d, short x0, short y0,
                                        short x1, short y1, short col );
 
@@ -111,7 +114,6 @@ extern void  pascal far qglDrLine    ( long d, short x0, short y0,
 extern long  pascal far mod_geom_map   ( void *g, short row );
 extern long  pascal far mod_tex_raw    ( void *g, short k, short mip );
 extern long  pascal far mod_tex_shaded ( void *g, short k, short mip );
-extern long  pascal far host_z_dc      ( void );
 extern short pascal far sc_ready       ( void );
 extern short pascal far sc_mipfloor    ( short extw, short exth );
 extern short pascal far sc_held        ( short face );
@@ -291,7 +293,6 @@ void pascal far d_draw_faces(
     short mi, m_node, ti, i, j, v0, gn, vcnt, cnt;
     short tex, tex_id, draw_mip, mip_level, liquid;
     short z_mode, lm_use, lm_on;
-    long  z_sf;                 /* the depth Surface, 0 if there is none */
     long  q_dst;                /* the destination Surface */
     short q_ok = 0;             /* and whether the setup stood up */
     short q_gate = 0;
@@ -323,7 +324,6 @@ void pascal far d_draw_faces(
 
     /* Asked once: which depth buffer, if any, cannot change inside a
        frame. It is handed to every draw -- qgl installs nothing. */
-    z_sf    = host_z_dc();
     z_mode  = QGL_Z_OFF;
     turbph  = dp->anim_time * (float)TURB_RATE;
 
@@ -443,18 +443,19 @@ void pascal far d_draw_faces(
              * because a door swinging through a doorway has no such
              * guarantee.
              *
-             * Recomputed per face rather than switched on change: the
-             * mode travels with the draw now, so there is no installed
-             * one to keep a cache in step with. That cache is what the
-             * dark moving streaks were -- it took qglZMode's return,
-             * which answers with the mode that WAS in force, so after a
-             * run of entity faces it said SET while TEST was live and
-             * the next world face was tested against a buffer it was
-             * meant to write. A bug the shape of the API, not of the
-             * code, and it cannot be written again this way.
+             * Set per face rather than switched on change. There was a
+             * cache here once; it took qglZMode's return, which answered
+             * with the mode that WAS in force, so after a run of entity
+             * faces it said SET while TEST was live and the next world
+             * face was tested against a buffer it was meant to write.
+             * qglSfZMode answers only whether it took, so the same
+             * mistake has nothing to be built out of.
+             *
+             * OFF is not a case here: with no depth buffer attached
+             * qglSfZMode refuses and leaves the surface OFF, which is
+             * exactly what -noz should draw.
              */
-            z_mode = ( z_sf == 0 ) ? QGL_Z_OFF
-                   : ( facemdl[i] == 0 ) ? QGL_Z_SET : QGL_Z_TEST;
+            z_mode = ( facemdl[i] == 0 ) ? QGL_Z_SET : QGL_Z_TEST;
 
             tw = mipinf[tex_id].wdth;
             th = mipinf[tex_id].hght;
@@ -741,10 +742,11 @@ void pascal far d_draw_faces(
                        only the return says whether the texture was
                        accepted, and a refused face must not be latched
                        as the frame's exemplar. */
+                    qglSfZMode( q_dst, z_mode );
                     if ( qglRsPoly( q_dst, (void far *)qvtx, cnt,
                                     dp->rend_mode == 0 ? QGL_M_PTEX
                                                        : QGL_M_TEX,
-                                    src_dc, z_sf, z_mode ) >= 0 ) {
+                                    src_dc ) >= 0 ) {
                         /* The BIGGEST face on screen, not the first. An
                            exact texel test needs a face that is
                            magnified; the first one drawn is typically 6
@@ -816,8 +818,9 @@ void pascal far d_draw_faces(
                 qvtx[0].u = 0.0f; qvtx[0].v = 0.0f;
                 qvtx[1].u = 0.0f; qvtx[1].v = 0.0f;
                 qvtx[2].u = 0.0f; qvtx[2].v = 0.0f;
+                qglSfZMode( q_dst, z_mode );
                 qglRsPoly( q_dst, (void far *)qvtx, 3,
-                           QGL_M_FLAT, 200L, z_sf, z_mode );
+                           QGL_M_FLAT, 200L );
                 qglDrLine( q_dst, (short)tri1.v1.x, (short)tri1.v1.y,
                                   (short)tri1.v2.x, (short)tri1.v2.y, 0 );
                 qglDrLine( q_dst, (short)tri1.v2.x, (short)tri1.v2.y,

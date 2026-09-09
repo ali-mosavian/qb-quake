@@ -230,6 +230,12 @@ qglNewView      proc    public uses bx cx di si fs gs,\
                 mov     fs:[Surface.pages], 1
                 mov     fs:[Surface.startSL], 0
 
+                ;; No depth until qglSfZNew makes one. qglMemAlloc does
+                ;; not zero what it hands back, and a stale pointer here
+                ;; is a depth write into whatever it names.
+                mov     D fs:[Surface.zsf], 0
+                mov     fs:[Surface.zmode], QGL_Z_OFF
+
                 ;; size= bps * yRes
                 mov     ax, bx
                 mul     si

@@ -22,7 +22,7 @@ const QGL_SURF_EMS  = 2
 const QGL_TEX_SLOT = 0
 const QGL_Z_SLOT   = 1
 
-'' Depth mode, for qglRsPoly.
+'' Depth mode, for qglSfZMode.
 const QGL_Z_OFF  = 0
 const QGL_Z_SET  = 1
 const QGL_Z_TEST = 2

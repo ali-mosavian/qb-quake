@@ -22,7 +22,8 @@ qglDrFill     proto   far :dword, :word, :word, :word, :word, :word
 qglTxtLoad    proto   far :dword
 qglTxtStr     proto   far :dword, :word, :word, :dword, :dword, :word
 qglClRect     proto   far :word, :word, :word, :word
-qglRsPoly     proto   far :dword, :dword, :word, :word, :dword, :dword, :word
+qglRsPoly     proto   far :dword, :dword, :word, :word, :dword
+qglSfZMode    proto   far :dword, :word
 
 SFW             equ     64
 SFH             equ     16
@@ -204,7 +205,7 @@ tmain           proc    far public uses bx cx dx si di es
                 invoke  qglClRect, 0, 0, SFW-1, SFH-1
                 invoke  qglDrFill, sf, 0, 0, SFW-1, SFH-1, FILLB
                 invoke  gfill
-                invoke  qglRsPoly, sf, pp, 4, QGL_M_TEX, tex, 0, QGL_Z_OFF
+                invoke  qglRsPoly, sf, pp, 4, QGL_M_TEX, tex
                 invoke  gchk
                 CHK     n_poly, ax, 0
 

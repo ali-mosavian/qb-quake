@@ -584,7 +584,7 @@ qgl$Rev         endp
 
 ;;::::::::::::::
 ;; qglRsPoly ( d:far ptr Surface, v:far ptr QVert, n:word,
-;;             mode:word, src:dword, zsf:far ptr Surface, zmode:word ) -> ax
+;;             mode:word, src:dword ) -> ax
 ;;
 ;; Draws one convex polygon and returns the scanlines it covered, 0 if it
 ;; covered none, and -1 if the call was refused. The vertices arrive in
@@ -594,13 +594,19 @@ qgl$Rev         endp
 ;; the denominator's magnitude, take the winding off its sign, and only
 ;; then clip.
 ;;
-;; EVERY DRAW PARAMETER ARRIVES HERE. There is no qglRsTex, qglRsMode,
-;; qglRsFlat or qglZMode to call first, deliberately: a texture is an EMS
-;; page that has to be mapped, and a mapping installed by one call and
-;; read by another is a mapping some third call is free to evict. So the
-;; texture is validated and mapped inside this proc, used, and never
-;; spoken of again -- and mode and depth come with it rather than being
-;; left as two more things a caller has to have got right earlier.
+;; EVERY DRAW PARAMETER ARRIVES HERE. There is no qglRsTex, qglRsMode
+;; or qglRsFlat to call first, deliberately: a texture is an EMS page
+;; that has to be mapped, and a mapping installed by one call and read by
+;; another is a mapping some third call is free to evict. So the texture
+;; is validated and mapped inside this proc, used, and never spoken of
+;; again -- and the mode comes with it rather than being left as one more
+;; thing a caller has to have got right earlier.
+;;
+;; DEPTH IS THE EXCEPTION, and it is not state either: it belongs to the
+;; DESTINATION. qglSfZNew attaches a depth Surface to the surface it was
+;; made for and qglSfZMode says what a draw into that surface does with
+;; it, so there is no depth argument to get wrong -- a draw reads both
+;; off d, which is the one thing it cannot be mistaken about.
 ;;
 ;; src is one slot read two ways -- a Surface pointer when the mode is
 ;; textured, a colour when it is flat -- and that is qgl's, NOT mgl's.
@@ -617,7 +623,7 @@ qgl$Rev         endp
 ;;::::::::::::::
 qglRsPoly     proc    public uses bx cx dx si di ds es,\
                         d:dword, v:dword, n:word,\
-                        mode:word, src:dword, zsf:dword, zmode:word
+                        mode:word, src:dword
 
                 local   cnt:word, fillp:word, persp:word
                 local   srcp:dword, ringp:dword
@@ -626,6 +632,11 @@ qglRsPoly     proc    public uses bx cx dx si di ds es,\
 
                 mov     ax, @data
                 mov     fs, ax                  ;; DGROUP, for every filler
+
+                les     bx, d
+                mov     ax, es
+                or      ax, bx
+                jz      @@bad                   ;; no destination, no draw
 
                 mov     ax, n
                 mov     cnt, ax
@@ -639,16 +650,19 @@ qglRsPoly     proc    public uses bx cx dx si di ds es,\
                 ja      @@bad
                 mov     qgl$mode, ax
 
-                ;; depth: a mode without a buffer is no depth at all, and
-                ;; saying so here saves the fillers a null test per pixel
-                mov     ax, word ptr zsf
-                mov     word ptr qgl$zsf, ax
-                mov     dx, word ptr zsf+2
-                mov     word ptr qgl$zsf+2, dx
+                ;; DEPTH COMES OFF THE DESTINATION, both of it. es:bx
+                ;; still points at d from the null test above.
+                ;;
+                ;; A mode without a buffer is no depth at all, and saying
+                ;; so once here saves the fillers a null test per pixel.
+                mov     ax, W es:[bx].Surface.zsf+0
+                mov     dx, W es:[bx].Surface.zsf+2
+                mov     W qgl$zsf+0, ax
+                mov     W qgl$zsf+2, dx
                 or      ax, dx
                 mov     ax, QGL_Z_OFF
                 jz      @F
-                mov     ax, zmode
+                mov     ax, es:[bx].Surface.zmode
                 cmp     ax, QGL_Z_TEST
                 jbe     @F
                 mov     ax, QGL_Z_OFF

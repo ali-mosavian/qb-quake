@@ -76,10 +76,8 @@ declare function qglRsPoly ( byval dst as long, _
                              seg v as any, _
                              byval cnt as integer, _
                              byval mode as integer, _
-                             byval src as long, _
-                             byval zsf as long, _
-                             byval zmode as integer ) as integer
-declare function host_z_dc ( ) as long
+                             byval src as long ) as integer
+declare function qglSfZMode ( byval surf as long, byval mode as integer ) as integer
 declare function qglSfNew ( _
     byval wid as integer, _
     byval hgt as integer, _
@@ -321,7 +319,6 @@ sub mdl_draw ( _
     dim frame as integer
     dim qdst as long
     dim qskin as long
-    dim qzsf as long
     dim qz as integer
     dim qv(2) as QglVtx
 
@@ -364,15 +361,18 @@ sub mdl_draw ( _
         end if
     next v
 
-    '' qgl from here: the destination and the skin are both mgl DCs, and
-    '' an mgl DC is a qgl Surface, so both go straight through. The skin
-    '' is EMS and is handed to every triangle, so its page is mapped
-    '' inside the draw that reads it and never held across one.
+    '' qgl from here: the destination and the skin are both Surfaces.
+    '' The skin is EMS and is handed to every triangle, so its page is
+    '' mapped inside the draw that reads it and never held across one.
+    ''
+    '' A model tests depth, never merely writes it: it is drawn after the
+    '' world, which the BSP order already put in front of it where it
+    '' belongs. Set once for the whole model -- nothing between these
+    '' triangles draws anything else -- and left OFF for us by qglSfZMode
+    '' itself when the destination has no depth buffer, which is -noz.
     qdst  = dst
     qskin = g.mdl.skin
-    qzsf  = host_z_dc&
-    zm    = QGL_Z_TEST
-    if ( qzsf = 0 ) then zm = QGL_Z_OFF
+    zm    = qglSfZMode%( qdst, QGL_Z_TEST )
 
     for j = 0 to g.mdl.ntri - 1
         a = tri( j ).a : b = tri( j ).b : c = tri( j ).c
@@ -392,8 +392,7 @@ sub mdl_draw ( _
                 qv(1).u = t.v2.u : qv(1).v = t.v2.v
                 qv(2).x = t.v3.x : qv(2).y = t.v3.y : qv(2).z = t.v3.z
                 qv(2).u = t.v3.u : qv(2).v = t.v3.v
-                qz = qglRsPoly%( qdst, qv(0), 3, QGL_M_PTEX, _
-                                 qskin, qzsf, zm )
+                qz = qglRsPoly%( qdst, qv(0), 3, QGL_M_PTEX, qskin )
             end if
         end if
     next j
