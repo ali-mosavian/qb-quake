@@ -1725,17 +1725,47 @@ same dump; they are the ones with a sub-scanline edge, which is what a
 15-pixel-tall model is made of and a world face never is. That is also why
 `-qglcheck`, `-qgldiff` and the whole world path have never seen it.
 
-Ruled out by reading, so do not spend the time again: `@@lf_lt1`'s
-`65536 shl 14` reciprocal does not overflow for this triangle (dx/dy is
-4.18 px per scanline, nowhere near the 32768 ceiling), and the code is a
-line-for-line match with mgl's `uglplxtp.asm` there. The chain
-termination (`cmp si, O qgl$fx` / `cmp si, rg_lim`) walks 0,2,1 and 0,1,2
-for a triangle and stops.
+Ruled out, so do not spend the time again:
 
-Next step is a native test in `src/qgl/test/`: draw that triangle into a
-small surface, assert the returned line count is no more than the bbox
-height and that no pixel outside the bbox is written. It fails today, and
-it debugs in seconds against DOSBox's minutes.
+- **The 2.0 area cull is not being skipped.** `qgl$l1sqr` refuses a
+  twice-area under 2.0, and the first reproducer's was 1.777, which
+  looked like the cull failing. It is not: applying the same 2.0 gate on
+  the CALLER'S side, in `mdl_draw`, leaves the wedge pixel-identical. The
+  polygons that run away are ordinary legal ones -- twice-area 2.1 to
+  7.7 in the affine dump below.
+- **`@@lf_lt1`'s `65536 shl 14` reciprocal does not overflow** for any of
+  them. Worked by hand on `tri 39`: both edges that span a scanline have
+  a raw dy of ~90,000, far above the 32768 that selects the sub-scanline
+  path at all, and the resulting dxdy is 0.39 and 1.70 pixels per line.
+  The code is also a line-for-line match with mgl's `uglplxtp.asm` there.
+- **Chain termination** (`cmp si, O qgl$fx` / `cmp si, rg_lim`) walks
+  0,2,1 and 0,1,2 for a triangle and stops.
+- **The mapper is not it.** Affine (`QGL_M_TEX`) covers the same wedge as
+  perspective did, striped instead of solid black.
+
+`tri 39`, affine, three corners, twice-area -2.484, `qz` **100**:
+
+    x 84.39581 y 46.34516
+    x 84.9342  y 47.73215
+    x 86.71563 y 47.70761
+
+Its floors are 46, 47, 47, so `lf_hgt` and `rg_hgt` are 1 and the scan
+should cover one line. It covered a hundred. That contradiction -- one
+scanline of height, a hundred of `lines` -- is the thing to explain, and
+nothing above explains it.
+
+One unchecked lead: **`FXFLOOR` is `shr a, 16`, a LOGICAL shift**
+(`qgl.inc:485`), so it is floor only for a non-negative operand. `ky` is
+non-negative after the clip, but `lf_x`/`rg_x` at `rs.asm:1238` are x
+coordinates that a stepped edge can carry negative, and there `shr` turns
+a small negative into ~65535.
+
+Next step is a native test in `src/qgl/test/` -- `t09rs.asm` is the
+rasteriser one and `t12clip.asm` the clipper one, so it belongs beside
+them. Draw that triangle into a small surface, assert the returned line
+count is no more than the bbox height and that no pixel outside the bbox
+is written. It fails today, and it debugs in seconds against DOSBox's
+minutes.
 
 ## `-nostats` makes the picture deterministic
 
