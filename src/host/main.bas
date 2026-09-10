@@ -339,6 +339,13 @@ declare sub ent_load_spawn ( _
 declare sub pl_init ( _
     g as Game _
 )
+declare function ent_load_monsters ( _
+    g as Game, _
+    mdl_ent() as MdlEnt, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+) as integer
 declare sub mdl_spawn ( _
     g as Game, _
     ent as MdlEnt, _
@@ -818,12 +825,17 @@ sub host_init ( _
         dim mdl_i as integer
         dim mdl_spawn_rad as single, mdl_spawn_fallback as Vec3, mdl_spawn_org as Vec3
         redim mdl_ent( MDL_MAX_ENTS% - 1 ) as MdlEnt
-        for mdl_i = 0 to MDL_MAX_ENTS% - 1
+        '' the map's own, where it put them; a deathmatch map has none
+        g.mdl_count = ent_load_monsters( g, mdl_ent(), mdl_buffer(), brush(), pln_buffer() )
+        if ( g.mdl_count = 0 ) then
+        for mdl_i = 0 to MDL_CROWD% - 1
             '' the old ring around the player, kept as mdl_pick_section's
             '' own fallback when the map doesn't offer enough separated
             '' rooms (or on a mishap: a leaf whose box centre sits inside
             '' geometry the droptofloor trace below can't recover from).
-            mdl_spawn_rad = ( g.cam.start_angle + mdl_i * ( 360.0 / MDL_MAX_ENTS% ) ) * 0.017453293
+            '' seeded from the map's own angle, as before the yaw mirror,
+            '' so the crowd the fight and model gates stand beside stays put
+            mdl_spawn_rad = ( 360.0 - g.cam.start_angle + mdl_i * ( 360.0 / MDL_CROWD% ) ) * 0.017453293
             mdl_spawn_fallback.x = g.pl.pos.x + 96.0 * cos( mdl_spawn_rad )
             mdl_spawn_fallback.y = g.pl.pos.y + 96.0 * sin( mdl_spawn_rad )
             mdl_spawn_fallback.z = g.pl.pos.z
@@ -834,7 +846,8 @@ sub host_init ( _
             mdl_pick_section g, mdl_ent(), mdl_i, mdl_spawn_fallback, mdl_spawn_org
             mdl_spawn g, mdl_ent( mdl_i ), mdl_spawn_org, mdl_buffer(), brush(), pln_buffer()
         next mdl_i
-        g.mdl_count = MDL_MAX_ENTS%
+        g.mdl_count = MDL_CROWD%
+        end if
         '' where they stood: a bench run is aimed at one with -at
         if ( g.env.bench_frames > 0 or g.env.bench_ticks > 0 ) then
             dim mdl_sf as integer

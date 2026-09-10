@@ -85,8 +85,11 @@ const MDL_STAND_MAX#      = 4.0     '' longest idle pause between wanders
 
 '' How many can be on screen at once -- an array, not a scalar, so
 '' host_init can spawn a crowd instead of the one soldier this used to
-'' be limited to. Sized for DGROUP headroom, not for any map's own need.
-const MDL_MAX_ENTS%     = 8
+'' be limited to. e1m1 on easy places nine soldiers.
+const MDL_MAX_ENTS%     = 12
+'' the crowd scattered on a map with no monsters of its own; the fight
+'' and model gates stand beside one of these eight
+const MDL_CROWD%        = 8
 
 type MdlState
     loaded      as integer     '' 0 until mdl_load succeeds

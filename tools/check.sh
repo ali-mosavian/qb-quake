@@ -222,7 +222,8 @@ fi
 # carry the player through it, where a door that does not open stops
 # them at x 271. Then the plunger floor at the first button: -walk into
 # the button must press it and send the floor, a targeted door, down with
-# the player on it. The exit reference carries the "Walk into the
+# the player on it, and the bench's ent lines must count the nine
+# soldiers the map places on easy. The exit reference carries the "Walk into the
 # slipgate" centerprint, since its camera stands in that trigger. Needs
 # the shareware PAK; skips without it.
 if [[ "${1:-}" == "--e1m1" ]]; then
@@ -249,7 +250,9 @@ PY
     rc=0
     for arm in "spawn:-yaw 270" "exit:-at 1312 660 -200 -yaw 90"; do
         tag="${arm%%:*}"; flags="${arm#*:}"
-        run_frame "-lm -nostats $flags -bench 40 -ticks 60" "$VBD_OUT/e1m1-$tag.bmp" e1m1.bsp
+        # -noai: a soldier behind the exit camera shot the player within
+        # the second, and the health digits moved the frame
+        run_frame "-lm -nostats -noai $flags -bench 40 -ticks 60" "$VBD_OUT/e1m1-$tag.bmp" e1m1.bsp
         out=$(python3 "$ROOT/tools/imgdiff.py" "$ROOT/tools/ref/e1m1-$tag.bmp" "$VBD_OUT/e1m1-$tag.bmp" | tail -1)
         if [[ "$out" == IDENTICAL* ]]; then echo "PASS  e1m1 $tag: $out"; else echo "FAIL  e1m1 $tag: $out"; rc=1; fi
     done
@@ -266,6 +269,13 @@ PY
         echo "PASS  e1m1 button: pz $pz, the floor went down"
     else
         echo "FAIL  e1m1 button: pz ${pz:-none}, the button did nothing"; rc=1
+    fi
+    # and the map's own monsters: nine soldiers on easy, from ents.bin
+    nent=$(tr -d '\r' < "$VBD_OUT/bench.txt" | grep -c '^ent[0-9]')
+    if [[ "$nent" == 9 ]]; then
+        echo "PASS  e1m1 monsters: $nent from the map"
+    else
+        echo "FAIL  e1m1 monsters: $nent spawned, the map places 9"; rc=1
     fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc

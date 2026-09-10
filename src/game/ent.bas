@@ -165,6 +165,21 @@ declare function ent_box_touched ( _
     maxs as Vec3, _
     byval slack as single _
 ) as integer
+declare sub mdl_spawn ( _
+    g as Game, _
+    ent as MdlEnt, _
+    org as Vec3, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+)
+declare function ent_load_monsters ( _
+    g as Game, _
+    mdl_ent() as MdlEnt, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+) as integer
 declare sub ent_place_models ( _
     byval model_count as integer, _
     models() as Submodel, _
@@ -235,13 +250,52 @@ sub ent_load_spawn ( _
     g.cam.pos.x = h.spawn.x
     g.cam.pos.z = h.spawn.y
     g.cam.pos.y = h.spawn.z
-    g.cam.start_angle = h.angle
+    '' the map's angle runs CCW from +x; -yaw runs the other way, so
+    '' angle 90, +y, is our 270
+    g.cam.start_angle = 360.0 - h.angle
+    if ( g.cam.start_angle >= 360.0 ) then g.cam.start_angle = g.cam.start_angle - 360.0
 
     scr_load_step
 
 end sub
 
 
+
+
+''::::::::::
+'' name: ent_load_monsters
+'' desc: Spawns the map's monsters where it put them, facing its angle;
+''       how many, or 0 on a map with none (dm3ish), and host_init then
+''       scatters its own crowd.
+''::::::::::
+function ent_load_monsters ( _
+    g as Game, _
+    mdl_ent() as MdlEnt, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+) as integer
+    dim u as integer
+    dim h as EntsHead
+    dim mr as EntsMon
+    dim i as integer, n as integer
+
+    ent_open_bin g, u, h
+    n = 0
+    for  i = 1 to h.nmon
+        ent_get u, clng( varseg( mr ) ) * 65536& + (clng( varptr( mr ) ) and 65535&), len( mr )
+        if ( n < MDL_MAX_ENTS% ) then
+            mdl_ent( n ).kind = mr.kind
+            if ( mr.kind = MDL_KIND_KNIGHT% and g.kmdl.loaded = 0 ) then mdl_ent( n ).kind = MDL_KIND_ARMY%
+            mdl_spawn g, mdl_ent( n ), mr.org, models(), brush(), planes()
+            mdl_ent( n ).yaw = mr.angle
+            mdl_ent( n ).ideal_yaw = mr.angle
+            n = n + 1
+        end if
+    next i
+    qglFileClose u
+    ent_load_monsters = n
+end function
 
 
 ''::::::::::
@@ -270,10 +324,15 @@ sub ent_load_teleports ( _
     dim pr as EntsPlat
     dim dr as EntsDoor
     dim xr as EntsTrig
+    dim mr as EntsMon
     dim i as integer, j as integer, k as integer
     dim mdlnum as integer
 
     ent_open_bin g, u, h
+    '' the monsters come first, for ent_load_monsters
+    for  i = 1 to h.nmon
+        ent_get u, clng( varseg( mr ) ) * 65536& + (clng( varptr( mr ) ) and 65535&), len( mr )
+    next i
 
     '' Sized to the map, not a fixed 64: e1m3 has 106 submodels, and
     '' ent_place_models and pl_trace walk every one of them.

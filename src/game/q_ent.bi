@@ -50,6 +50,16 @@ type EntsHead
     nitem       as integer
     ndoor       as integer
     ntrig       as integer
+    nmon        as integer
+end type
+
+'' A monster where the map put it, first in the file so host_init can
+'' read them without walking the rest. Skill easy: mkassets drops the
+'' ones flagged NOT_EASY.
+type EntsMon
+    kind        as integer      '' MDL_KIND_*
+    org         as Vec3
+    angle       as single       '' the map's, CCW from +x
 end type
 
 type EntsItem

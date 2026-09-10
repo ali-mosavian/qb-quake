@@ -2215,12 +2215,24 @@ brown. `mod_load_textures` refuses an atlas shorter than its table
 submodel; e1m1's `trigger_changelevel` drew as a column of the
 `trigger` texture in front of the exit. `parse_entities` hides them all.
 
-**The spawn looks at a wall.** `angle 90` is +y in the map and `-yaw
-270` looks down +y here, so the spawn yaw wants `360 - angle`. Not
-applied: dm3ish's spawn is `angle 90` too and the monster ring in
-`main.bas` is seeded from it, so mirroring moves the knight the fight
-and model gates stand beside. Do it when e1m1 spawns its own monsters.
-The gate aims with `-yaw 270`.
+**The spawn yaw is mirrored.** `angle 90` is +y in the map and `-yaw
+270` looks down +y here, so `ent_load_spawn` sets `360 - angle`. The
+monster ring `main.bas` scatters on a map with no monsters of its own
+is seeded from the map's angle as before, so the crowd the fight and
+model gates stand beside stays put. The gate aims with `-yaw 270`.
+
+**The map's monsters come from ents.bin.** mkassets emits every
+`monster_army` and `monster_knight` not flagged NOT_EASY (256) --
+easy is the skill played -- with origin and angle, first in the file;
+`ent_load_monsters` spawns them through `mdl_spawn` and faces them the
+map's way (a model's yaw is Quake's, CCW from +x, no mirror). Nine
+soldiers on e1m1; its eight dogs wait for a dog model. `MDL_MAX_ENTS`
+is 12; a map with none, dm3ish, still gets the scattered crowd of
+`MDL_CROWD`, eight. The e1m1 image arms run `-noai`: a soldier
+behind the exit camera shot the player inside the second and the
+health digits moved the frame. `tools/ref/e1m1-spawn.bmp` moved by 13
+pixels with this: the old one carried a sliver of the scattered crowd
+at its right edge, and the map's own soldiers stand nowhere near.
 
 ## Doors
 

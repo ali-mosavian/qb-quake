@@ -405,8 +405,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
     # and e1m3's entities lump is 45,762 -- mod_find_spawn died at error 5
     # before anything else could. The renderer wants four facts out of the
     # text, so those are what ships: spawn, matched teleporter pairs,
-    # func_plats, func_doors, what fires them, and which submodels a
-    # trigger hides. Layout must match the Ents* types in q_ent.bi.
+    # func_plats, func_doors, what fires them, the monsters, and which
+    # submodels a trigger hides. Layout must match the Ents* types in q_ent.bi.
     spawn: tuple[float, float, float] = (0.0, 0.0, 0.0)
     angle = 0.0
     dests: dict[str, tuple[tuple[float, float, float], float]] = {}
@@ -417,6 +417,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
     items: list[tuple[int, int, tuple[float, float, float]]] = []
     uses: list[tuple] = []
     names: dict[str, int] = {}
+    mons: list[tuple[int, tuple[float, float, float], float]] = []
+    mon_kind = {'monster_army': 0, 'monster_knight': 1}   # MDL_KIND_*; no model for the rest
     item_kind = {'item_health': 0, 'item_shells': 1}
 
     def vec(v: str) -> tuple[float, float, float]:
@@ -516,6 +518,9 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
                 plats.append((model(kv['model']),
                               float(kv.get('speed', '0')),
                               float(kv.get('height', '0'))))
+            case str(c) if c in mon_kind and not int(kv.get('spawnflags', '0')) & 256:
+                # 256 is NOT_EASY, and easy is the skill played here
+                mons.append((mon_kind[c], vec(kv.get('origin', '0 0 0')), float(kv.get('angle', '0'))))
             case str(c) if c in item_kind:
                 items.append((item_kind[c], item_amount(c, int(kv.get('spawnflags', '0'))),
                               vec(kv.get('origin', '0 0 0'))))
@@ -523,8 +528,10 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
     # a teleporter with no destination still hides its brush
     teles = [(m, *dests[t]) for t, m in trigs if t in dests]
 
-    buf = bytearray(struct.pack('<4f7h', *spawn, angle, nmodels,
-                                len(teles), len(plats), len(hides), len(items), len(doors), len(uses)))
+    buf = bytearray(struct.pack('<4f8h', *spawn, angle, nmodels,
+                                len(teles), len(plats), len(hides), len(items), len(doors), len(uses), len(mons)))
+    for kind, org, yaw in mons:
+        buf += struct.pack('<h3ff', kind, *org, yaw)
     for m, org, yaw in teles:
         buf += struct.pack('<h3ff', m, *org, yaw)
     for m, speed, height in plats:
