@@ -155,6 +155,12 @@ declare sub ent_move_trigs ( _
     door() as DoorEnt, _
     trig() as TrigEnt _
 )
+declare sub ent_reset ( _
+    g as Game, _
+    brush() as BrushModel, _
+    door() as DoorEnt, _
+    trig() as TrigEnt _
+)
 declare sub ent_say ( _
     g as Game, _
     msg as string _
@@ -677,6 +683,7 @@ sub ent_trig_init ( _
     t.name      = xr.name
     t.state     = ENT_TRIG_READY
     t.left      = xr.count
+    t.count     = xr.count
     t.wait      = xr.wait
     t.wait_left = 0.0
     t.speed     = xr.speed
@@ -686,6 +693,32 @@ sub ent_trig_init ( _
     t.msg       = xr.msg
     trig( g.trig_count ) = t
     g.trig_count = g.trig_count + 1
+end sub
+
+
+'' pl_game_reset's half of the world: every door shut, every trigger and
+'' button as the map loaded.
+sub ent_reset ( _
+    g as Game, _
+    brush() as BrushModel, _
+    door() as DoorEnt, _
+    trig() as TrigEnt _
+)
+    dim k as integer
+    dim home as Vec3
+
+    for  k = 0 to g.door_count-1
+        door(k).state = ENT_DOOR_SHUT
+        door(k).hold_left = 0.0
+        brush( door(k).model ).ofs = door(k).ofs_shut
+    next k
+    for  k = 0 to g.trig_count-1
+        trig(k).state = ENT_TRIG_READY
+        trig(k).left = trig(k).count
+        trig(k).wait_left = 0.0
+        if ( trig(k).kind = ENT_TRIG_BUTTON ) then brush( trig(k).model ).ofs = home
+    next k
+    g.fight.msg_until = 0.0
 end sub
 
 
@@ -792,6 +825,16 @@ sub ent_move_trigs ( _
                             end if
                         end if
                 end select
+            case ENT_TRIG_EXIT
+                if ( trig(k).state = ENT_TRIG_READY ) then
+                    if ( ent_box_touched( g, trig(k).mins, trig(k).maxs, 0.0 ) ) then
+                        '' the intermission: the map's title stays up
+                        ent_say g, trig(k).msg
+                        g.fight.msg_until = g.rdr.anim_time + 3600.0
+                        g.fight.state = GS_EXIT%
+                        trig(k).state = ENT_TRIG_DONE
+                    end if
+                end if
             case ENT_TRIG_ONCE, ENT_TRIG_MULTI
                 select case trig(k).state
                     case ENT_TRIG_READY

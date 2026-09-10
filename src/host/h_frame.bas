@@ -101,6 +101,12 @@ declare sub ent_move_doors ( _
     brush() as BrushModel, _
     door() as DoorEnt _
 )
+declare sub ent_reset ( _
+    g as Game, _
+    brush() as BrushModel, _
+    door() as DoorEnt, _
+    trig() as TrigEnt _
+)
 declare sub ent_move_trigs ( _
     g as Game, _
     byval dt as single, _
@@ -372,8 +378,9 @@ sub host_tick ( _
         end if
     case else
         if ( fire and g.fight.fire_prev = 0 ) then
-            if ( g.fight.state = GS_WON% ) then
+            if ( g.fight.state = GS_WON% or g.fight.state = GS_EXIT% ) then
                 pl_game_reset g, mdl_ent(), item(), models(), brush(), planes()
+                ent_reset g, brush(), door(), trig()
             end if
             g.fight.state = GS_PLAY%
         end if

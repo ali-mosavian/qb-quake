@@ -1806,9 +1806,18 @@ sub scr_draw_hud ( _
     case GS_TITLE% : msg = "FIRE TO START"
     case GS_DEAD%  : msg = "YOU DIED"
     case GS_WON%   : msg = "AREA CLEARED - FIRE TO GO AGAIN"
+    case GS_EXIT%  : msg = "LEVEL COMPLETE - FIRE TO GO AGAIN"
     case else      : msg = ""
     end select
-    if ( len( msg ) = 0 and g.rdr.anim_time < g.fight.msg_until ) then msg = rtrim$( g.fight.msg )
+    '' the centerprint takes the state line when it is free, else the
+    '' line above it: the map's title over LEVEL COMPLETE
+    if ( g.rdr.anim_time < g.fight.msg_until ) then
+        if ( len( msg ) = 0 ) then
+            msg = rtrim$( g.fight.msg )
+        else
+            draw_string h_dst_dc, w \ 2 - len( rtrim$( g.fight.msg ) ) * 2, h \ 2 - 11, rtrim$( g.fight.msg )
+        end if
+    end if
     if ( len( msg ) > 0 ) then
         if ( g.fight.state = GS_DEAD% ) then qglDrFill h_dst_dc, 0, h \ 2 - 8, w, h \ 2 + 8, hc_bad
         draw_string h_dst_dc, w \ 2 - len( msg ) * 2, h \ 2 - 3, msg

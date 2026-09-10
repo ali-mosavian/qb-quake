@@ -170,6 +170,7 @@ const GS_TITLE% = 0             '' fire starts the fight
 const GS_PLAY%  = 1
 const GS_DEAD%  = 2             '' the pause, then pl_respawn
 const GS_WON%   = 3             '' every soldier down; fire resets them all
+const GS_EXIT%  = 4             '' the slipgate: LEVEL COMPLETE, fire resets
 
 
 ''

@@ -165,6 +165,7 @@ const ENT_TRIG_ONCE    = 0
 const ENT_TRIG_MULTI   = 1
 const ENT_TRIG_COUNTER = 2
 const ENT_TRIG_BUTTON  = 3
+const ENT_TRIG_EXIT    = 4      '' trigger_changelevel: the level ends
 
 '' Anything that fires a target, resolved offline: a trigger's volume, a
 '' button's travel. Names are ids -- a door's targeted, a trigger's name
@@ -202,6 +203,7 @@ type TrigEnt
     name        as integer
     state       as integer      '' ENT_TRIG_READY..DONE
     left        as integer      '' a counter's uses to go
+    count       as integer      '' what left resets to
     wait        as single
     wait_left   as single
     speed       as single

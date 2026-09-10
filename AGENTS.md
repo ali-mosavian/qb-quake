@@ -2296,9 +2296,17 @@ units where a touch door's is grown 60. `tools/ref/e1m1-exit.bmp`
 carries "Walk into the slipgate to exit." because its camera stands in
 that trigger; the reference is what proves the text draws.
 
+`trigger_changelevel` is the level's end: touching it is `GS_EXIT`,
+LEVEL COMPLETE with the worldspawn's message -- the map's title --
+above it, and fire starts the map over: `pl_game_reset` puts the
+monsters, items and player back and `ent_reset` every door shut and
+every trigger and button as it loaded.
+
 `tools/check.sh --e1m1`'s fourth frame walks into the first button:
 the plunger floor (`*3`, a door targeted by `*4`) must go down with the
-player on it, pz below -100 by tick 240.
+player on it, pz below -100 by tick 240. The sixth walks and jumps
+into the slipgate -- its pad is 32 units up, past the 18 a step climbs
+-- and wants `gs_state 4`.
 
 ## `-nostats` makes the picture deterministic
 

@@ -397,7 +397,7 @@ def convert_lightmaps(d, lumps, out):
 
 
 ENT_PAIR = re.compile(r'"([^"]*)"\s*"([^"]*)"')
-TRIG_ONCE, TRIG_MULTI, TRIG_COUNTER, TRIG_BUTTON = 0, 1, 2, 3   # ENT_TRIG_* in q_ent.bi
+TRIG_ONCE, TRIG_MULTI, TRIG_COUNTER, TRIG_BUTTON, TRIG_EXIT = 0, 1, 2, 3, 4   # ENT_TRIG_* in q_ent.bi
 
 
 def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> bytes:
@@ -408,6 +408,7 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
     # func_plats, func_doors, what fires them, the monsters, and which
     # submodels a trigger hides. Layout must match the Ents* types in q_ent.bi.
     spawn: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    title = ''
     angle = 0.0
     dests: dict[str, tuple[tuple[float, float, float], float]] = {}
     trigs: list[tuple[str, int]] = []
@@ -488,6 +489,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
     for block in text.split('{')[1:]:
         kv = dict(ENT_PAIR.findall(block.split('}')[0]))
         match kv.get('classname'):
+            case 'worldspawn':
+                title = kv.get('message', '')
             case 'info_player_start':
                 spawn = vec(kv.get('origin', '0 0 0'))
                 angle = float(kv.get('angle', '0'))
@@ -506,6 +509,11 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
                 if model(kv.get('model', '')):
                     hides.append(model(kv['model']))
                 uses.append(trig_record(model(kv.get('model', '')), kv))
+            case 'trigger_changelevel' if model(kv.get('model', '')):
+                # the level ends here; its message is the map's title
+                hides.append(model(kv['model']))
+                uses.append((model(kv['model']), TRIG_EXIT, 0, 0, 0, -1.0, 0.0, (0.0, 0.0, 0.0),
+                             title[:40].encode('latin1').ljust(40)))
             case 'func_button' if model(kv.get('model', '')):
                 uses.append(button_record(model(kv['model']), kv, boxes[model(kv['model'])]))
             case str(c) if c.startswith('trigger_') and model(kv.get('model', '')):

@@ -194,6 +194,7 @@ sub host_bench_report ( _
     print #benchf, "mdl_drawn " + ltrim$(str$( g.mdl.drawn ))
     print #benchf, "vmdl_loaded " + ltrim$(str$( g.vmdl.loaded ))
     print #benchf, "kmdl_loaded " + ltrim$(str$( g.kmdl.loaded ))
+    print #benchf, "gs_state " + ltrim$(str$( g.fight.state ))
     print #benchf, "pl_health " + ltrim$(str$( g.fight.health ))
     print #benchf, "pl_kills " + ltrim$(str$( g.fight.kills ))
     print #benchf, "pl_deaths " + ltrim$(str$( g.fight.deaths ))

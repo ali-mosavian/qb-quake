@@ -222,7 +222,8 @@ fi
 # carry the player through it, where a door that does not open stops
 # them at x 271. Then the plunger floor at the first button: -walk into
 # the button must press it and send the floor, a targeted door, down with
-# the player on it, and the bench's ent lines must count the nine
+# the player on it, the slipgate must end the level (gs_state 4), and
+# the bench's ent lines must count the nine
 # soldiers the map places on easy. The exit reference carries the "Walk into the
 # slipgate" centerprint, since its camera stands in that trigger. Needs
 # the shareware PAK; skips without it.
@@ -276,6 +277,14 @@ PY
         echo "PASS  e1m1 monsters: $nent from the map"
     else
         echo "FAIL  e1m1 monsters: $nent spawned, the map places 9"; rc=1
+    fi
+    # and the exit: the slipgate's pad is 32 units up, so -jump too
+    run_frame "-lm -nostats -noai -at 1312 660 -200 -yaw 90 -walk -jump -bench 400 -ticks 240" "$VBD_OUT/e1m1-slipgate.bmp" e1m1.bsp
+    gs=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="gs_state"{print $2}')
+    if [[ "$gs" == 4 ]]; then
+        echo "PASS  e1m1 slipgate: gs_state 4, the level ends"
+    else
+        echo "FAIL  e1m1 slipgate: gs_state ${gs:-none}, the slipgate did nothing"; rc=1
     fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc
