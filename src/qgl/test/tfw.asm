@@ -241,4 +241,12 @@ tvrfy           proc    far public uses bx cx di es,\
                 ret
 tvrfy           endp
 
+;; The three long-arithmetic entries cpi4.asm forwards to BASIC's runtime,
+;; which no native test links. Reaching one is a fault, not a stub.
+                public  __aFlmul, __aFldiv, __aFlrem
+__aFlmul        label   far
+__aFldiv        label   far
+__aFlrem        label   far
+                int     3
+
                 end     start
