@@ -3,7 +3,6 @@ option explicit
 '' snd.bas -- sound device and the loading music. Split out of sys_init.bas,
 ''            which was initialising five different subsystems.
 ''
-'$include: 'u3d.bi'
 '$include: 'in.bi'
 '$include: 'bspfile.bi'
 '$include: 'dos.bi'

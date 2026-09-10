@@ -7,7 +7,6 @@ option explicit
 '' follows. Quake splits it the same way: r_bsp.c decides what is seen, the
 '' d_ side draws it.
 ''
-'$include: 'u3d.bi'
 '$include: 'in.bi'
 '$include: 'bspfile.bi'
 '$include: 'dos.bi'
@@ -55,7 +54,7 @@ declare sub mod_load_flat ( _
 declare sub r_mark_leaves ( _
     g as Game, _
     byval nodenr as integer, _
-    campos as u3dVector3f, _
+    campos as Vec3, _
     nodes() as Node, _
     planes() as Plane, _
     bit_array() as integer, _
@@ -67,7 +66,7 @@ declare function r_cull_box ( _
 ) as integer
 declare function r_node_side ( _
     byval node_idx as integer, _
-    pt as u3dVector3f, _
+    pt as Vec3, _
     nodes() as Node, _
     planes() as Plane _
 )
@@ -80,14 +79,14 @@ declare function r_plane_dist ( _
 '' This module's own procedures.
 ''
 declare function r_cam_plane_dist ( _
-    pt as u3dVector3f, _
+    pt as Vec3, _
     pl as Plane _
 ) as single
 declare sub r_emit_entities ( _
     g as Game, _
     byval nodenr as integer, _
     byval model_count as long, _
-    campos as u3dVector3f, _
+    campos as Vec3, _
     ign as integer, _
     models() as Submodel, _
     brush() as BrushModel, _
@@ -101,7 +100,7 @@ declare sub r_emit_entities ( _
 declare sub r_draw_world ( _
     g as Game, _
     byval model as integer, _
-    campos as u3dVector3f, _
+    campos as Vec3, _
     models() as Submodel, _
     brush() as BrushModel, _
     nodes() as Node, _
@@ -113,7 +112,7 @@ declare sub r_draw_world ( _
 )
 declare sub r_set_frustum ( _
     frustum() as DiskPlane, _
-    mtx as u3dMtrx _
+    mtx as Mat4 _
 )
 declare sub r_load_lfaces ( byval lump_bytes as long )
 declare sub r_alloc_pvs ( byval leaf_count as long )
@@ -167,7 +166,7 @@ declare sub r_recursive_world_node ( _
     byval model_count as long, _
     models() as Submodel, _
     brush() as BrushModel, _
-    cpos as u3dVector3f, _
+    cpos as Vec3, _
     byval ign as integer, _
     nds() as Node, _
     pln() as Plane, _
@@ -222,7 +221,7 @@ function r_point_leaf ( _
 end function
 
 function r_cam_plane_dist ( _
-    pt as u3dVector3f, _
+    pt as Vec3, _
     pl as Plane _
 ) as single
     r_cam_plane_dist = pt.x*pl.norm.x + _
@@ -233,7 +232,7 @@ end function
 '' Which side of a node's splitting plane a point falls on: -1 front, 0 behind.
 function r_node_side ( _
     byval node_idx as integer, _
-    pt as u3dVector3f, _
+    pt as Vec3, _
     nodes() as Node, _
     planes() as Plane _
 )
@@ -265,7 +264,7 @@ sub r_emit_entities ( _
     g as Game, _
     byval nodenr as integer, _
     byval model_count as long, _
-    campos as u3dVector3f, _
+    campos as Vec3, _
     ign as integer, _
     models() as Submodel, _
     brush() as BrushModel, _
@@ -317,7 +316,7 @@ end sub
 sub r_draw_world ( _
     g as Game, _
     byval model as integer, _
-    campos as u3dVector3f, _
+    campos as Vec3, _
     models() as Submodel, _
     brush() as BrushModel, _
     nodes() as Node, _
@@ -416,7 +415,7 @@ end sub
 '':::::::::
 sub r_set_frustum ( _
     frustum() as DiskPlane, _
-    mtx as u3dMtrx _
+    mtx as Mat4 _
 )
     dim i as integer
     dim d as single
@@ -566,7 +565,7 @@ end function
 sub r_mark_leaves ( _
     g as Game, _
     byval nodenr as integer, _
-    campos as u3dVector3f, _
+    campos as Vec3, _
     nodes() as Node, _
     planes() as Plane, _
     bit_array() as integer, _

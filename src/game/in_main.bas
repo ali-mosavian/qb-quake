@@ -5,7 +5,6 @@ option explicit
 ''                and the screenshot key from vid.bas, where it was being
 ''                polled from inside the present path.
 ''
-'$include: 'u3d.bi'
 '$include: 'in.bi'
 '$include: 'bspfile.bi'
 '$include: 'dos.bi'

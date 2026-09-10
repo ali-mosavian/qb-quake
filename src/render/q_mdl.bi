@@ -54,8 +54,8 @@ type MdlState
     nframe      as integer
     skin        as long        '' the skin's dc
     vtx_hnd     as integer     '' qglGemAlloc's handle -- see mdl_rotate_all
-    scale       as u3dVector3f '' vertex byte -> model unit: unit = byte*scale + origin
-    origin      as u3dVector3f
+    scale       as Vec3 '' vertex byte -> model unit: unit = byte*scale + origin
+    origin      as Vec3
 end type
 
 '' One spawned instance's own state -- everything mdl_think (pl_move.bas)

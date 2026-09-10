@@ -11,7 +11,6 @@ option explicit
 '' the branch was dead before qgl took the mode and impossible after.
 ''
 ''
-'$include: 'u3d.bi'
 '$include: 'in.bi'
 '$include: 'bspfile.bi'
 '$include: 'dos.bi'

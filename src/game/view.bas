@@ -5,7 +5,6 @@ option explicit
 ''             Was r_main.bas, which also held the render-mode key
 ''             handling; that is input and now lives in in_main.bas.
 ''
-'$include: 'u3d.bi'
 '$include: 'in.bi'
 '$include: 'bspfile.bi'
 '$include: 'dos.bi'
@@ -26,8 +25,8 @@ option explicit
 
 declare sub qglMousePos ( byval x as integer, byval y as integer )
 declare sub v_bezier ( _
-    pts() as u3dVector3f, _
-    ctl() as u3dVector3f, _
+    pts() as Vec3, _
+    ctl() as Vec3, _
     byval c0 as integer, _
     byval levels as integer _
 )
@@ -99,10 +98,10 @@ declare sub pl_move ( _
 '' never executes outside the main module, so v_open_script REDIMs them.
 ''
 '$dynamic
-dim shared ppos() as u3dVector3f
-dim shared plok() as u3dVector3f
-dim shared cbzp() as u3dVector3f
-dim shared cbzl() as u3dVector3f
+dim shared ppos() as Vec3
+dim shared plok() as Vec3
+dim shared cbzp() as Vec3
+dim shared cbzl() as Vec3
 
 '$static
 dim shared pa as integer            '' step within the current segment
@@ -135,7 +134,7 @@ sub v_update_camera ( _
     planes() as Plane, _
     nodes() as Node _
 )
-    dim cam_pos_c as u3dVector3f
+    dim cam_pos_c as Vec3
     dim tmx as integer, tmy as integer
     dim theta as single, phi as single
     dim fwd as single, strafe as single
@@ -362,10 +361,10 @@ sub v_open_script ( _
 )
     dim i as integer
 
-    redim ppos( g.env.cam_interp ) as u3dVector3f
-    redim plok( g.env.cam_interp ) as u3dVector3f
-    redim cbzp( 10 ) as u3dVector3f
-    redim cbzl( 10 ) as u3dVector3f
+    redim ppos( g.env.cam_interp ) as Vec3
+    redim plok( g.env.cam_interp ) as Vec3
+    redim cbzp( 10 ) as Vec3
+    redim cbzl( 10 ) as Vec3
 
     if ( g.env.cam_mode = 1 ) then
         g.cam.script_file = freefile
@@ -398,8 +397,8 @@ end sub
 ''       replaces, in the same order of operations.
 ''::::::::::
 sub v_bezier ( _
-    pts() as u3dVector3f, _
-    ctl() as u3dVector3f, _
+    pts() as Vec3, _
+    ctl() as Vec3, _
     byval c0 as integer, _
     byval levels as integer _
 )

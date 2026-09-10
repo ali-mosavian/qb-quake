@@ -6,7 +6,6 @@ option explicit
 '' counts only this module consumes stay local; the buffers the renderer
 '' walks are in qshared.bi as COMMON SHARED.
 ''
-'$include: 'u3d.bi'
 '$include: 'in.bi'
 '$include: 'bspfile.bi'
 '$include: 'dos.bi'

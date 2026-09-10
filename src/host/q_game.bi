@@ -74,7 +74,7 @@ declare sub mdl_draw ( _
     g as Game, _
     tri() as MdlTri, _
     ent as MdlEnt, _
-    mtx_fin as u3dMtrx, _
+    mtx_fin as Mat4, _
     byval xresh as single, _
     byval yresh as single, _
     byval z_near as single, _

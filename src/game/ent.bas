@@ -8,7 +8,6 @@ option explicit
 ''            already holds. Its "target" names an info_teleport_destination,
 ''            which carries the origin and facing to arrive at.
 ''
-'$include: 'u3d.bi'
 '$include: 'in.bi'
 '$include: 'bspfile.bi'
 '$include: 'dos.bi'

@@ -15,7 +15,6 @@ option explicit
 '' thing wanted from it, and everything before is what bspfile.bi's Game
 '' needs to parse. Includes are read in file order and a type must be
 '' defined before the line naming it, so the order is not negotiable.
-'$include: 'u3d.bi'
 '$include: 'in.bi'
 '$include: 'bspfile.bi'
 '$include: 'dos.bi'

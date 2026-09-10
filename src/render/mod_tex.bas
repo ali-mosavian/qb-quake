@@ -13,7 +13,6 @@ option explicit
 '' to stay '$DYNAMIC. Getting this backwards is what killed the first
 '' attempt at this cut.
 ''
-'$include: 'u3d.bi'
 '$include: 'in.bi'
 '$include: 'bspfile.bi'
 '$include: 'dos.bi'

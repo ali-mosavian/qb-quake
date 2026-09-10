@@ -5,7 +5,6 @@ option explicit
 '' Split out of main.bas: 257 lines that touch exactly one piece of
 '' shared state (env), so the module boundary costs nothing.
 ''
-'$include: 'u3d.bi'
 '$include: 'in.bi'
 '$include: 'bspfile.bi'
 '$include: 'dos.bi'

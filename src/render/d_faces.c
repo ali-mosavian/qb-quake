@@ -255,7 +255,7 @@ static short near clip_w(
 void pascal far d_draw_faces(
     void        *g,
     DrawParams  *dp,
-    float       *m,          /* u3dMtrx, 16 floats */
+    float       *m,          /* Mat4, 16 floats */
     Vec3f       *campos,
     BASARRAY    *a_tri,
     BASARRAY    *a_texinf,

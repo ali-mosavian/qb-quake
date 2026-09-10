@@ -17,7 +17,6 @@ option explicit
 '' is attached to the backbuffer, so the surface this file already holds
 '' is the whole of it.
 ''
-'$include: 'u3d.bi'
 '$include: 'qgl.bi'
 '$include: 'in.bi'
 '$include: 'bspfile.bi'
@@ -38,15 +37,15 @@ option explicit
 '$include: 'q_game.bi'
 
 declare sub qglM4LookAt ( _
-    seg m as u3dMtrx, _
-    seg eye as u3dVector3f, _
-    seg at as u3dVector3f, _
-    seg up as u3dVector3f _
+    seg m as Mat4, _
+    seg eye as Vec3, _
+    seg at as Vec3, _
+    seg up as Vec3 _
 )
 declare sub qglM4Conc ( _
-    seg m as u3dMtrx, _
-    seg a as u3dMtrx, _
-    seg b as u3dMtrx _
+    seg m as Mat4, _
+    seg a as Mat4, _
+    seg b as Mat4 _
 )
 
 dim shared lm_want_dbg as integer
@@ -123,12 +122,12 @@ declare sub mdl_think ( _
 declare sub ls_animate ( byval anim_time as single )
 declare sub r_set_frustum ( _
     frustum() as DiskPlane, _
-    mtx as u3dMtrx _
+    mtx as Mat4 _
 )
 declare sub r_draw_world ( _
     g as Game, _
     byval model as integer, _
-    campos as u3dVector3f, _
+    campos as Vec3, _
     models() as Submodel, _
     brush() as BrushModel, _
     nodes() as Node, _
@@ -155,8 +154,8 @@ declare sub qglSfZClear ( byval surf as long, byval z as integer )
 declare sub d_draw_faces ( _
     g as Game, _
     dp as DrawParams, _
-    mtx_fin as u3dMtrx, _
-    campos as u3dVector3f, _
+    mtx_fin as Mat4, _
+    campos as Vec3, _
     tri_buffer() as Face, _
     tex_inf_buff() as TexInfo, _
     gv_buf() as integer, _
@@ -318,7 +317,7 @@ end sub
 sub host_render ( _
     g as Game, _
     byval h_dst_dc as long, _
-    mtx_prj as u3dMtrx, _
+    mtx_prj as Mat4, _
     byval xresh as single, _
     byval yresh as single, _
     tri_buffer() as Face, _
@@ -334,14 +333,14 @@ sub host_render ( _
     bit_array() as integer, _
     mip_buff_inf() as MipTex, _
     face_mdl() as integer, _
-    cam_up as u3dVector3f, _
+    cam_up as Vec3, _
     mdltri_buffer() as MdlTri, _
     mdl_ent() as MdlEnt _
 )
-    dim mtx_mdl as u3dMtrx
+    dim mtx_mdl as Mat4
     dim mdl_i as integer
-    dim mtx_fin as u3dMtrx
-    dim cam_pos_b as u3dVector3f
+    dim mtx_fin as Mat4
+    dim cam_pos_b as Vec3
     dim bm as integer
     dim pt0 as single, ptd as single
     dim dparm as DrawParams

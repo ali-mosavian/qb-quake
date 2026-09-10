@@ -11,7 +11,6 @@ option explicit
 '' cam.pos is derived from it once per frame in pl_move, so the swap lives in
 '' exactly one place.
 ''
-'$include: 'u3d.bi'
 '$include: 'in.bi'
 '$include: 'bspfile.bi'
 '$include: 'dos.bi'

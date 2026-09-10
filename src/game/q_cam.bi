@@ -14,8 +14,8 @@
 '' camera and the backface test reads it for every face.
 ''
 type CamState
-    pos         as u3dVector3f  '' eye, from the map's spawn then mouse-driven
-    look_at     as u3dVector3f
+    pos         as Vec3  '' eye, from the map's spawn then mouse-driven
+    look_at     as Vec3
     start_angle as single       '' spawn yaw, seeds the mouse position
     fps_view     as integer      '' false = the fixed overhead view
     script_file as integer      '' open handle in cammode 1 and 2, else 0

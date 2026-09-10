@@ -8,7 +8,6 @@ option explicit
 '' BCFAIL. Same fix as that file's own history: split on how rarely a
 '' routine runs, not how it happens to relate to what stayed behind.
 ''
-'$include: 'u3d.bi'
 '$include: 'in.bi'
 '$include: 'bspfile.bi'
 '$include: 'dos.bi'

@@ -34,7 +34,6 @@ option explicit
 ''
 '' Copyleft Blitz, july/2003.
 ''
-'$include: 'u3d.bi'
 '$include: 'qgl.bi'
 '$include: 'in.bi'
 '$include: 'bspfile.bi'
@@ -74,7 +73,7 @@ declare sub host_bench_report ( _
 declare sub host_render ( _
     g as Game, _
     byval h_dst_dc as long, _
-    mtx_prj as u3dMtrx, _
+    mtx_prj as Mat4, _
     byval xresh as single, _
     byval yresh as single, _
     tri_buffer() as Face, _
@@ -90,7 +89,7 @@ declare sub host_render ( _
     bit_array() as integer, _
     mip_buff_inf() as MipTex, _
     face_mdl() as integer, _
-    cam_up as u3dVector3f, _
+    cam_up as Vec3, _
     mdltri_buffer() as MdlTri, _
     mdl_ent() as MdlEnt _
 )
@@ -248,7 +247,7 @@ declare sub vid_init ( _
 )
 declare sub qglMemInit ()
 declare sub qglM4Persp ( _
-    seg m as u3dMtrx, _
+    seg m as Mat4, _
     byval fov as single, _
     byval asp as single, _
     byval zn as single, _
@@ -358,7 +357,7 @@ dim shared host_ticks as long          '' steps run, for the benchmark
 '' texiCount was the one lump count never declared shared. Inside the old
 '' monolithic doInit that did not matter; once bspOpen and bspAlloc were
 '' separate routines, bspAlloc read 0 and did redim texInfBuff(-1).
-dim shared cam_up as u3dVector3f    
+dim shared cam_up as Vec3    
 
 '$dynamic
 dim shared lightmap as long
@@ -840,7 +839,7 @@ sub host_main ( _
     mdltri_buffer() as MdlTri, _
     mdl_ent() as MdlEnt _
 )
-    dim mtx_prj as u3dMtrx
+    dim mtx_prj as Mat4
     dim aspect as single
     
     

@@ -12,7 +12,6 @@ option explicit
 '' is passed straight through as the destination Surface -- one struct,
 '' one allocator, nothing to bridge.
 ''
-'$include: 'u3d.bi'
 '$include: 'in.bi'
 '$include: 'bspfile.bi'
 '$include: 'dos.bi'

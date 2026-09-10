@@ -1,5 +1,4 @@
 option explicit
-'$include: 'u3d.bi'
 '$include: 'qgl.bi'
 '$include: 'in.bi'
 '$include: 'bspfile.bi'

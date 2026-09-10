@@ -21,7 +21,6 @@ option explicit
 '' and memAlloc'd conventional memory (fits the allocator, not the
 '' budget -- only ~13KB free by the time the model loads).
 ''
-'$include: 'u3d.bi'
 '$include: 'qgl.bi'
 '$include: 'in.bi'
 '$include: 'bspfile.bi'
@@ -322,7 +321,7 @@ sub mdl_draw ( _
     g as Game, _
     tri() as MdlTri, _
     ent as MdlEnt, _
-    mtx_fin as u3dMtrx, _
+    mtx_fin as Mat4, _
     byval xresh as single, _
     byval yresh as single, _
     byval z_near as single, _

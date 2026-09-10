@@ -1983,7 +1983,9 @@ player. The camera's matrices are `qglM4Persp`/`qglM4LookAt`/
 instruction for instruction because `tools/ref/bench.bmp` is a
 byte-for-byte reference and a rounding that moves by an ulp moves it;
 `t32m4` checks them on values a real4 holds exactly, and the bench
-staying IDENTICAL is the real test. `ugluCubicBez3D` is `v_bezier` in view.bas, the same
+staying IDENTICAL is the real test. `u3dVector3f` folded into bspfile.bi's own
+`Vec3`, the same three singles; `u3dMtrx` is `Mat4` beside it; `u3d.bi`
+is out with the rest. `ugluCubicBez3D` is `v_bezier` in view.bas, the same
 forward differencing in BASIC, and `ugl.bi`, `uglu.bi`, `dos.bi`,
 `arch.bi`, `font.bi`, `pal.bi` and `ems.bi` are out of every module
 but the three oracles; `PalRgb` moved to bspfile.bi so mod_tex reads

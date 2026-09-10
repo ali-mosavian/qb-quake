@@ -7,7 +7,6 @@ option explicit
 ''            initialisation. Sound went to snd.bas, input to
 ''            in_main.bas, the font and loading screen to screen.bas.
 ''
-'$include: 'u3d.bi'
 '$include: 'in.bi'
 '$include: 'bspfile.bi'
 '$include: 'dos.bi'

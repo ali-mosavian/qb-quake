@@ -322,6 +322,26 @@ end type
 const FALSE = 0
 const TRUE  = -1
 
+'' The 4x4 the camera projects through: row-major, what qglM4* fill.
+type Mat4
+    m11 as single
+    m12 as single
+    m13 as single
+    m14 as single
+    m21 as single
+    m22 as single
+    m23 as single
+    m24 as single
+    m31 as single
+    m32 as single
+    m33 as single
+    m34 as single
+    m41 as single
+    m42 as single
+    m43 as single
+    m44 as single
+end type
+
 '' pal.raw: 256 of these, r g b, 8 bits each
 type PalRgb
     red   as string * 1
