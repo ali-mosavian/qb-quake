@@ -107,8 +107,9 @@ end type
 '' memAlloc'd rather than a uGL store: r_bsp reaches it by DEF SEG and an
 '' offset rather than as an array.
 type VisLump
-    ptr         as long
+    ptr         as long        '' conventional, or 0 with
     size        as long
+    hnd         as integer     '' the EMS handle it lives in instead
 end type
 
 ''
@@ -267,7 +268,7 @@ const GEOM_MAXREC = 18 + GEOM_MAXVTX * 6
 '' and 40K on e1m1, which is the largest single item on that map.
 ''
 '' The visibility lump is NOT here any more. model.bas allocates it and
-'' hands out its base through mod_pvs_base; pvs_size never left that module
+'' hands out its pages through mod_pvs_page; pvs_size never left that module
 '' at all, so it needs no accessor.
 
 ''

@@ -189,7 +189,6 @@ declare sub d_draw_faces ( _
     tri_buffer() as Face, _
     tex_inf_buff() as TexInfo, _
     gv_buf() as integer, _
-    face_mdl() as integer, _
     brush() as BrushModel, _
     pln_buffer() as Plane, _
     nds_buffer() as Node, _
@@ -413,7 +412,6 @@ sub host_render ( _
     frustum() as DiskPlane, _
     bit_array() as integer, _
     mip_buff_inf() as MipTex, _
-    face_mdl() as integer, _
     cam_up as Vec3, _
     mdltri_buffer() as MdlTri, _
     vmtri_buffer() as MdlTri, _
@@ -528,7 +526,7 @@ sub host_render ( _
 
     pt0 = sys_now()
     d_draw_faces g, dparm, mtx_fin, g.cam.pos, _
-                  tri_buffer(), tex_inf_buff(), gv_buf(), face_mdl(), _
+                  tri_buffer(), tex_inf_buff(), gv_buf(), _
                   brush(), pln_buffer(), nds_buffer(), mip_buff_inf(), _
                   order_list(), poly_flag()
 

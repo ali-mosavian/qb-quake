@@ -83,7 +83,7 @@ declare sub ent_load_teleports ( _
     models() as Submodel, _
     brush() as BrushModel, _
     tele() as Teleporter, _
-    face_mdl() as integer, _
+    faces() as Face, _
     plat() as PlatEnt, _
     item() as ItemEnt _
 )
@@ -189,7 +189,7 @@ sub ent_load_teleports ( _
     models() as Submodel, _
     brush() as BrushModel, _
     tele() as Teleporter, _
-    face_mdl() as integer, _
+    faces() as Face, _
     plat() as PlatEnt, _
     item() as ItemEnt _
 )
@@ -206,7 +206,6 @@ sub ent_load_teleports ( _
     '' Sized to the map, not a fixed 64: e1m3 has 106 submodels, and
     '' ent_place_models and pl_trace walk every one of them.
     redim brush( g.wld.count.models-1 ) as BrushModel
-    redim face_mdl( g.wld.count.faces ) as integer
     redim tele( h.ntele ) as Teleporter
     redim plat( h.nplat ) as PlatEnt
     '' room after the map's items for one backpack a soldier
@@ -224,16 +223,15 @@ sub ent_load_teleports ( _
     next i
 
     ''
-    '' Which submodel owns each face. The world's faces come first and the
-    '' submodels' follow in order, so this is a walk rather than a search.
+    '' Which submodel owns each face, in the bits above Face.side's one:
+    '' a table of its own cost 11K on e1m1. The world's faces come first
+    '' and the submodels' follow in order, so this is a walk, not a search.
     ''
-    for  i = 0 to g.wld.count.faces-1
-        face_mdl(i) = 0
-    next i
-
     for  j = 1 to g.wld.count.models-1
         for  k = models(j).first_face to models(j).first_face + models(j).num_faces - 1
-            if ( k >= 0 and k <= g.wld.count.faces-1 ) then face_mdl(k) = j
+            if ( k >= 0 and k <= g.wld.count.faces-1 ) then
+                faces(k).side = ( faces(k).side and 1 ) or ( j * 2 )
+            end if
         next k
     next j
 

@@ -148,9 +148,10 @@ declare sub r_leaf_bound ( byval leafnr as integer, b as Bounds )
 '' table is finite, and it ran out when they all got everything.
 ''
 declare function sb_seg ( byval p as long ) as integer
-declare function mod_pvs_base ( _
-    g as Game _
-) as long
+declare function mod_pvs_page ( _
+    g as Game, _
+    byval pg as integer _
+) as integer
 
 '$static
 ''
@@ -175,12 +176,14 @@ dim shared pvs_buffer_b() as integer
 '' the PVS narrowed to what the portals reach from where the eye is.
 dim shared pt_idx() as integer
 dim shared pt_ref() as integer
+dim shared pt_ok as integer     '' both tables loaded; e1m1's 6,624 refs exceed a 64K array
 dim shared pvs_now() as integer
 
 dim shared r_ignore_pvs as integer
 '$dynamic
 dim shared pvs_leaf as integer
 dim shared dbg_camleaf as integer
+dim shared dbg_pvscnt as integer   '' leaves the last decode marked visible
 dim shared dbg_pvscull as integer
 
 ''
@@ -363,7 +366,7 @@ sub r_draw_world ( _
     g.vis.ord_count = 0
     g.vis.cul_leafs = 0
     g.vis.drw_leafs = 0
-    
+
     ''
     '' Advance the frame stamp instead of clearing every face flag.
     ''
@@ -381,7 +384,7 @@ sub r_draw_world ( _
         g.vis.frame_stamp = 0
     end if
     g.vis.frame_stamp = g.vis.frame_stamp + 1
-    
+
     ''
     '' Extract pvs
     ''
@@ -404,14 +407,15 @@ sub r_draw_world ( _
     '' only on a leaf change -- a bit cleared there stays cleared.
     ''
     g.vis.pt_culled = 0
-    if ( g.rdr.portal ) then
+    if ( g.rdr.portal and pt_ok ) then
         g.vis.pt_culled = r_portal_mark( mtx_fin, dbg_camleaf, _
                                           int( g.wld.count.leaves-1 ), _
                                           g.env.x_res / 2.0, g.env.y_res / 2.0, _
                                           g.env.z_near, pt_idx(), pt_ref(), _
                                           pvs_buffer_b(), pvs_now() )
     end if
-    if ( g.vis.pt_culled < 0 or g.rdr.portal = 0 ) then
+    '' pt_ok = 0: a map whose portal table did not load walks the PVS as is
+    if ( g.vis.pt_culled < 0 or g.rdr.portal = 0 or pt_ok = 0 ) then
         for  i = 0 to g.wld.count.leaves-1
             pvs_now(i) = pvs_buffer_b(i)
         next i
@@ -457,7 +461,7 @@ sub r_draw_world ( _
             end if
         next i
     end if
-    
+
 end sub
 
 
@@ -473,55 +477,55 @@ sub r_set_frustum ( _
     dim d as single
 
     ''
-    '' Left clipping plane    
+    '' Left clipping plane
     ''
     frustum(0).norm.x = -(mtx.m14 + mtx.m11)
     frustum(0).norm.y = -(mtx.m24 + mtx.m21)
     frustum(0).norm.z = -(mtx.m34 + mtx.m31)
     frustum(0).dist   = -(mtx.m44 + mtx.m41)
-    
+
     ''
-    '' Right clipping plane    
+    '' Right clipping plane
     ''
     frustum(1).norm.x = -(mtx.m14 - mtx.m11)
     frustum(1).norm.y = -(mtx.m24 - mtx.m21)
     frustum(1).norm.z = -(mtx.m34 - mtx.m31)
     frustum(1).dist   = -(mtx.m44 - mtx.m41)
-    
+
     ''
-    '' Top clipping plane    
+    '' Top clipping plane
     ''
     frustum(2).norm.x = -(mtx.m14 - mtx.m12)
     frustum(2).norm.y = -(mtx.m24 - mtx.m22)
     frustum(2).norm.z = -(mtx.m34 - mtx.m32)
     frustum(2).dist   = -(mtx.m44 - mtx.m42)
-    
+
     ''
-    '' Bottom clipping plane    
+    '' Bottom clipping plane
     ''
     frustum(3).norm.x = -(mtx.m14 + mtx.m12)
     frustum(3).norm.y = -(mtx.m24 + mtx.m22)
     frustum(3).norm.z = -(mtx.m34 + mtx.m32)
     frustum(3).dist   = -(mtx.m44 + mtx.m42)
-    
-   
+
+
     ''
-    '' Near clipping plane    
+    '' Near clipping plane
     ''
     frustum(4).norm.x = -(mtx.m14 + mtx.m13)
     frustum(4).norm.y = -(mtx.m24 + mtx.m23)
     frustum(4).norm.z = -(mtx.m34 + mtx.m33)
     frustum(4).dist   = -(mtx.m44 + mtx.m43)
-    
+
     ''
-    '' Far clipping plane    
+    '' Far clipping plane
     ''
     frustum(5).norm.x = -(mtx.m14 - mtx.m13)
     frustum(5).norm.y = -(mtx.m24 - mtx.m23)
     frustum(5).norm.z = -(mtx.m34 - mtx.m33)
     frustum(5).dist   = -(mtx.m44 - mtx.m43)
-       
-    
+
+
     ''
     '' Normalize
     ''
@@ -529,11 +533,11 @@ sub r_set_frustum ( _
         d = 1.0 / sqr( frustum(i).norm.x*frustum(i).norm.x + _
                        frustum(i).norm.y*frustum(i).norm.y + _
                        frustum(i).norm.z*frustum(i).norm.z )
-                  
+
         frustum(i).norm.x = frustum(i).norm.x * d
         frustum(i).norm.y = frustum(i).norm.y * d
         frustum(i).norm.z = frustum(i).norm.z * d
-        frustum(i).dist   = frustum(i).dist   * d        
+        frustum(i).dist   = frustum(i).dist   * d
     next i
 
 end sub
@@ -596,17 +600,17 @@ function r_cull_box ( _
                     near_point.z = bbox.max.y
                 end if
             end if
-        end if            
-            
+        end if
+
         dp = frustum(i).norm.x*near_point.x + frustum(i).norm.y*near_point.y + _
              frustum(i).norm.z*near_point.z
-             
+
         if ( (dp+frustum(i).dist) > 0 ) then
             r_cull_box = 0
             exit function
         end if
-    next i    
-    
+    next i
+
     r_cull_box = -1
 end function
 
@@ -668,7 +672,7 @@ sub r_mark_leaves ( _
     bit_array() as integer, _
     pvsb() as integer _
 )
-    dim pvs_base as long
+    dim pg as integer
     dim mp as long
     dim v as long
     dim l as long
@@ -677,8 +681,6 @@ sub r_mark_leaves ( _
     dim byte as integer
     dim i as integer
 
-    pvs_base = mod_pvs_base ( g )
-    
     ''
     '' Find the node that the camera is in
     ''
@@ -689,7 +691,7 @@ sub r_mark_leaves ( _
             nodenr = nodes(nodenr).child0
         else
             nodenr = nodes(nodenr).child1
-        end if            
+        end if
     wend
 
     ''
@@ -701,71 +703,77 @@ sub r_mark_leaves ( _
     dbg_camleaf = not nodenr
     if ( nodenr = pvs_leaf ) then exit sub
     pvs_leaf = nodenr
-    
-    '' 
+    dbg_pvscnt = 0
+
+    ''
     '' Setup
-    ''    
+    ''
     v = lef_buffer( not nodenr ).vis_list
     if ( v = -2 ) then sys_error "Leaf has no pvs data."
-        
-    '' memAlloc is paragraph-aligned, so the block's own offset is zero
-    '' and v is the offset within it exactly as the lump stores it
-    v = v + (pvs_base and 65535&)
-    def seg = sb_seg( pvs_base )
-    
+
+    '' The lump is read through 16K pages -- conventional or EMS, the
+    '' window is mod_pvs_page's business -- so v is an offset within
+    '' page pg and steps over the seam wherever a read lands on it.
+    pg = int( v \ 16384 )
+    v = v - pg * 16384&
+    def seg = mod_pvs_page( g, pg )
+
     if ( lef_buffer( not nodenr ).vis_list = -1 ) then
         for  i = 0 to g.wld.count.leaves-1
             pvsb(i) = -1
-        next i           
+        next i
 
         exit sub
     end if
-    
-    '' 
+
+    ''
     '' Extract the pvs data
     ''
     l = 1
     while ( l < g.wld.count.leaves )
-        
-        if ( peek( v ) = 0 ) then
+
+        if ( v >= 16384 ) then
+            pg = pg + 1 : v = v - 16384 : def seg = mod_pvs_page( g, pg )
+        end if
+        byte = peek( v )
+        v = v + 1
+        if ( byte = 0 ) then
+            '' a zero run is marker plus count, and Mod_DecompressVis
+            '' advances past both
+            if ( v >= 16384 ) then
+                pg = pg + 1 : v = v - 16384 : def seg = mod_pvs_page( g, pg )
+            end if
             j = l
-            l = l + 8& * peek( v+1 ) 
+            l = l + 8& * peek( v )
+            v = v + 1
             if ( l > g.wld.count.leaves ) then l = g.wld.count.leaves
-            
+
             for  j = j to l-1
                 pvsb(j) = 0
             next j
-            
-            '' one here, one at the bottom of the loop: a zero run is
-            '' marker plus count, and Mod_DecompressVis advances past
-            '' both
-            v = v + 1
         else
-            byte = peek(v)
-            
             for  bit = 0 to 7
                 ''
                 '' A run can carry past the last leaf; in real mode that
                 '' writes over whatever follows the array.
                 ''
                 if ( l >= g.wld.count.leaves ) then exit for
-                
-                        
+
+
                 if ( byte and bit_array(bit) ) then
                     pvsb(l) = 1
-                else                 
+                    dbg_pvscnt = dbg_pvscnt + 1
+                else
                     pvsb(l) = 0
                 end if
-                
+
                 l = l + 1
-            next bit            
-        end if            
-            
-        v = v + 1        
+            next bit
+        end if
     wend
 
 
-end sub 
+end sub
 
 
 
@@ -814,7 +822,11 @@ sub r_load_portals ( byval leaf_count as long )
         clng( varseg( pt_idx(0) ) ) * 65536& + (clng( varptr( pt_idx(0) ) ) and 65535&)
 
     nrefs = pt_idx( leaf_count )
-    if ( nrefs <= 0 ) then exit sub
+    pt_ok = 0
+    '' seven shorts a ref: past 4,681 the array passes 64K and the redim
+    '' itself is error 9. The flood refuses such a map's leaf count anyway.
+    if ( nrefs <= 0 or nrefs > 4681 ) then exit sub
+    pt_ok = -1
 
     redim pt_ref( nrefs*7 - 1 ) as integer
     mod_load_flat "assets.zip::portalref.bld", _
@@ -904,4 +916,8 @@ end sub
 ''::::::::::
 function rb_dbg_camleaf ( ) as integer
     rb_dbg_camleaf = dbg_camleaf
+end function
+
+function rb_dbg_pvscnt ( ) as integer
+    rb_dbg_pvscnt = dbg_pvscnt
 end function

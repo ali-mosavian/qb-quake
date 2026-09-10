@@ -121,7 +121,8 @@ end type
 '' d_poly.bas where lid is read.
 type Face
     plane_id     as integer
-    side        as integer
+    side        as integer      '' bit 0; the owning submodel above it,
+                                '' written by ent_load_teleports
     geom_row    as integer      '' this face's record in the geometry
     geom_ofs    as integer      '' store: the row uglMapEx maps, and the
                                 '' byte offset of the record inside it.
@@ -209,7 +210,6 @@ end type
 type CacheSlot
     blk         as integer      '' index into the block table, -1 for none
     tag         as integer      '' generation * 4 + mip the CONTENT holds
-    cls         as integer      '' size class of the block, fixed per face
     stag        as integer      '' the face's light style epoch the CONTENT
                                 '' holds -- see ls_epoch in d_surf.bas. Costs
                                 '' 2 bytes/face on top of the 6 already kept
@@ -293,10 +293,10 @@ end type
 type MipTex    
     wdth        as single
     hght        as single
-    lnext       as integer
+    anim_next   as integer      '' name began with +N: the next frame's
     liquid      as integer      '' name began with *: scrolls
-    anim_base   as integer      '' name began with +N: first frame's index,
-    anim_count  as integer      '' and how many frames the chain has
+    anim_pos    as integer      '' texture, this one's place in the ring,
+    anim_count  as integer      '' and how many frames the ring has
 end type
 
 '' planenum narrowed long->integer: verified max value across all 9 target

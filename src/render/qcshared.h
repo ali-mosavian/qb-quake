@@ -119,9 +119,9 @@ typedef struct {
 typedef struct {
     float wdth;
     float hght;
-    short lnext;
+    short anim_next;
     short liquid;
-    short anim_base;
+    short anim_pos;
     short anim_count;
 } MipTex;
 

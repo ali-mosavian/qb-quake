@@ -410,6 +410,7 @@ def parse_entities(text: str, nmodels: int) -> bytes:
     angle = 0.0
     dests: dict[str, tuple[tuple[float, float, float], float]] = {}
     trigs: list[tuple[str, int]] = []
+    hides: list[int] = []
     plats: list[tuple[int, float, float]] = []
     items: list[tuple[int, int, tuple[float, float, float]]] = []
     item_kind = {'item_health': 0, 'item_shells': 1}
@@ -442,6 +443,11 @@ def parse_entities(text: str, nmodels: int) -> bytes:
                     vec(kv.get('origin', '0 0 0')), float(kv.get('angle', '0')))
             case 'trigger_teleport' if model(kv.get('model', '')):
                 trigs.append((kv.get('target', ''), model(kv['model'])))
+                hides.append(model(kv['model']))
+            case str(c) if c.startswith('trigger_') and model(kv.get('model', '')):
+                # any trigger's brush is a volume: e1m1 drew its changelevel
+                # as a column of the "trigger" texture
+                hides.append(model(kv['model']))
             case 'func_plat' if model(kv.get('model', '')):
                 plats.append((model(kv['model']),
                               float(kv.get('speed', '0')),
@@ -450,10 +456,8 @@ def parse_entities(text: str, nmodels: int) -> bytes:
                 items.append((item_kind[c], item_amount(c, int(kv.get('spawnflags', '0'))),
                               vec(kv.get('origin', '0 0 0'))))
 
-    # a trigger with no destination still hides its brush, exactly as the
-    # BASIC pass 1 did before pass 2 paired them
+    # a teleporter with no destination still hides its brush
     teles = [(m, *dests[t]) for t, m in trigs if t in dests]
-    hides = [m for _, m in trigs]
 
     buf = bytearray(struct.pack('<4f5h', *spawn, angle, nmodels,
                                 len(teles), len(plats), len(hides), len(items)))

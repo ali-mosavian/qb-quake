@@ -130,7 +130,6 @@ declare sub mod_load_world ( _
     gv() as integer, _
     brush() as BrushModel, _
     tele() as Teleporter, _
-    face_mdl() as integer, _
     plat() as PlatEnt, _
     item() as ItemEnt _
 )
@@ -155,9 +154,16 @@ declare function mod_lm_got ( _
 declare function mod_geom_rows ( _
     g as Game _
 ) as integer
-declare function mod_pvs_base ( _
-    g as Game _
-) as long
+declare function mod_pvs_page ( _
+    g as Game, _
+    byval pg as integer _
+) as integer
+declare function sb_seg ( byval p as long ) as integer
+declare function qglMemAvail ( byval what as integer ) as long
+declare function qglGemAlloc ( byval nbytes as long ) as integer
+declare function qglGemMap ( byval h as integer, byval pg as integer, _
+                             byval slot as integer ) as integer
+declare sub qglGemFree ( byval h as integer )
 
 ''
 '' Declared here, not in a header: this module is the only caller, and a
@@ -172,7 +178,7 @@ declare sub ent_load_teleports ( _
     models() as Submodel, _
     brush() as BrushModel, _
     tele() as Teleporter, _
-    face_mdl() as integer, _
+    faces() as Face, _
     plat() as PlatEnt, _
     item() as ItemEnt _
 )
@@ -677,28 +683,51 @@ sub mod_load_visibility ( _
 
     scr_load_stage "visibility"
 
+    dim remain as long, n as long, avail as long
+    dim pg as integer, wseg as integer
+
     g.wld.pvs.ptr = 0
+    g.wld.pvs.hnd = 0
     g.wld.pvs.size = 0
 
     u = qglFileOpenBas( "assets.zip::pvs.bin" )
-    if ( u <> 0 ) then
-        g.wld.pvs.size = qglFileSize( u )
-        if ( g.wld.pvs.size > 0 ) then
-            g.wld.pvs.ptr = qglMemAlloc( g.wld.pvs.size )
-            if ( g.wld.pvs.ptr <> 0 ) then
-                if ( qglFileRead( u, g.wld.pvs.ptr, g.wld.pvs.size ) <> g.wld.pvs.size ) then
-                    qglMemFree g.wld.pvs.ptr
-                    g.wld.pvs.ptr = 0
-                    g.wld.pvs.size = 0
-                end if
-            else
-                g.wld.pvs.size = 0
-            end if
-        end if
-        qglFileClose u
+    if ( u = 0 ) then sys_error "0x0014, visibility lump would not load"
+    g.wld.pvs.size = qglFileSize( u )
+    '' decided here, not by a refusal: qglMemAlloc answers a DOS refusal
+    '' by shrinking BASIC's heap, and that is the memory the map needs
+    avail = qglMemAvail( QGL_MEM_LARGEST )
+    if ( g.wld.pvs.size > 0 ) then
+        if ( avail >= g.wld.pvs.size ) then g.wld.pvs.ptr = qglMemAlloc( g.wld.pvs.size )
     end if
+    if ( g.wld.pvs.ptr <> 0 ) then
+        if ( qglFileRead( u, g.wld.pvs.ptr, g.wld.pvs.size ) <> g.wld.pvs.size ) then
+            qglMemFree g.wld.pvs.ptr
+            g.wld.pvs.ptr = 0
+        end if
+    elseif ( g.wld.pvs.size > 0 ) then
+        '' EMS, a page at a time through PAGE_SLOT: 41K of BASIC's heap
+        '' on e1m1 otherwise.
+        g.wld.pvs.hnd = qglGemAlloc( g.wld.pvs.size )
+        remain = g.wld.pvs.size
+        pg = 0
+        do while ( remain > 0 and g.wld.pvs.hnd <> 0 )
+            n = remain
+            if ( n > 16384 ) then n = 16384
+            wseg = qglGemMap( g.wld.pvs.hnd, pg, PAGE_SLOT )
+            if ( wseg = 0 ) then
+                qglGemFree g.wld.pvs.hnd
+                g.wld.pvs.hnd = 0
+            elseif ( qglFileRead( u, clng( wseg ) * 65536&, n ) <> n ) then
+                qglGemFree g.wld.pvs.hnd
+                g.wld.pvs.hnd = 0
+            end if
+            remain = remain - n
+            pg = pg + 1
+        loop
+    end if
+    qglFileClose u
 
-    if ( g.wld.pvs.ptr = 0 ) then sys_error "0x0014, visibility lump would not load"
+    if ( g.wld.pvs.ptr = 0 and g.wld.pvs.hnd = 0 ) then sys_error "0x0014, visibility lump would not load"
 
     scr_load_step
 end sub
@@ -806,14 +835,23 @@ function mod_geom_rows ( _
 end function
 
 ''::::::::::
-'' name: mod_pvs_base( wld )
-'' desc: Far pointer to the visibility lump. Fixed for the whole run, so
-''       callers hoist it rather than asking per leaf.
+'' name: mod_pvs_page
+'' desc: The segment holding 16K page pg of the visibility lump: paragraph
+''       arithmetic on the conventional block, or the EMS window mapped.
 ''::::::::::
-function mod_pvs_base ( _
-    g as Game _
-) as long
-    mod_pvs_base = g.wld.pvs.ptr
+function mod_pvs_page ( _
+    g as Game, _
+    byval pg as integer _
+) as integer
+    dim s as long
+
+    if ( g.wld.pvs.hnd <> 0 ) then
+        mod_pvs_page = qglGemMap( g.wld.pvs.hnd, pg, PAGE_SLOT )
+        exit function
+    end if
+    s = ( clng( sb_seg( g.wld.pvs.ptr ) ) and 65535& ) + pg * 1024&
+    if ( s > 32767 ) then s = s - 65536&
+    mod_pvs_page = cint( s )
 end function
 
 
@@ -838,7 +876,6 @@ sub mod_load_world ( _
     gv() as integer, _
     brush() as BrushModel, _
     tele() as Teleporter, _
-    face_mdl() as integer, _
     plat() as PlatEnt, _
     item() as ItemEnt _
 )
@@ -850,15 +887,21 @@ sub mod_load_world ( _
     sys_mem_mark "lm_table"
 
     mod_load_facevtx g, gv()
+    sys_mem_mark "facevtx"
     mod_load_leafs g
+    sys_mem_mark "leafs"
     mod_load_marksurfaces g
+    sys_mem_mark "marksurf"
     mod_load_nodes g, nodes()
+    sys_mem_mark "nodes"
     mod_load_planes planes()
+    sys_mem_mark "planes"
     mod_load_submodels models()
     mod_load_visibility g
+    sys_mem_mark "vis"
     mod_load_clipnodes g
     sys_mem_mark "clip_nodes"
 
-    ent_load_teleports g, models(), brush(), tele(), face_mdl(), plat(), item()
+    ent_load_teleports g, models(), brush(), tele(), faces(), plat(), item()
 
 end sub

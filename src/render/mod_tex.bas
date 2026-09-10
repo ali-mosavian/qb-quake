@@ -64,6 +64,9 @@ declare sub mod_link_anims ( _
     g as Game, _
     mip_buff_inf() as MipTex _
 )
+declare function mod_anim_class ( nm as string ) as integer
+declare function mod_anim_slot ( nm as string ) as integer
+declare function qglSfSize ( byval s as long, byval sel as integer ) as integer
 
 ''
 '' This module's own procedures.
@@ -169,7 +172,8 @@ sub mod_load_textures ( _
         '' the rest of whose frames share the name after the digit.
         ''
         mip_buff_inf(i).liquid     = false
-        mip_buff_inf(i).anim_base  = i
+        mip_buff_inf(i).anim_next  = i
+        mip_buff_inf(i).anim_pos   = 0
         mip_buff_inf(i).anim_count = 1
 
         if ( left$( t_mip_inf(i).name, 1 ) = "*" ) then
@@ -215,6 +219,15 @@ sub mod_load_textures ( _
     mod_load_flat "assets.zip::texofs.bld", _
         clng( varseg( g.wld.tex.ofs(0) ) ) * 65536& + (clng( varptr( g.wld.tex.ofs(0) ) ) and 65535&)
 
+    '' The flat atlas is staged beside the exe apart from the zip, so it
+    '' can be another map's: dm3ish's 14 rows under e1m1's table drew
+    '' every texture as some other one, and nothing said so.
+    dim last as integer
+    last = g.wld.count.textures * 4 - 1
+    if ( g.wld.tex.ofs(last) + 64 > clng( qglSfSize( g.wld.tex.raw, 1 ) ) * TEX_ATLAS_W ) then
+        sys_error "0x0018, texture atlas shorter than its offset table"
+    end if
+
     for  j = 0 to 3
         g.wld.tex.cell(j) = 64 \ (2 ^ j)
         g.wld.tex.aim_raw(j) = -1
@@ -258,39 +271,69 @@ sub mod_link_anims ( _
     g as Game, _
     mip_buff_inf() as MipTex _
 )
-    dim i as integer, j as integer
-    dim chain0 as integer, n as integer
+    dim i as integer, j as integer, k as integer, n as integer
+    dim seq as integer, slot as integer
     dim suffix as string
+    dim ring( 9 ) as integer     '' Quake's own cap: ten frames a chain
 
+    '' Mod_LoadTextures: +0..+9 are one sequence, +a..+j the alternate,
+    '' both keyed by the name after the digit. The frames sit anywhere in
+    '' the lump -- e1m1 has +0planet at 55 and +1planet at 70 -- so they
+    '' are found by digit and linked in a ring, never assumed adjacent.
     for  i = 0 to g.wld.count.textures-1
         if ( left$( t_mip_inf(i).name, 1 ) = "+" ) then
-
-            '' already claimed by an earlier frame's chain
-            if ( mip_buff_inf(i).anim_count > 1 ) then goto next_tex
-
-            suffix$ = mid$( rtrim$(t_mip_inf(i).name), 3 )
-            chain0 = i
-            n    = 0
-
-            for  j = i to g.wld.count.textures-1
-                if ( left$( t_mip_inf(j).name, 1 ) = "+" ) then
-                    if ( mid$( rtrim$(t_mip_inf(j).name), 3 ) = suffix$ ) then
-                        n = n + 1
+            if ( mip_buff_inf(i).anim_count = 1 ) then
+                seq = mod_anim_class( t_mip_inf(i).name )
+                suffix = mid$( rtrim$( t_mip_inf(i).name ), 3 )
+                for  k = 0 to 9
+                    ring(k) = -1
+                next k
+                n = 0
+                for  j = i to g.wld.count.textures-1
+                    if ( left$( t_mip_inf(j).name, 1 ) = "+" ) then
+                        if ( mod_anim_class( t_mip_inf(j).name ) = seq ) then
+                            if ( mid$( rtrim$( t_mip_inf(j).name ), 3 ) = suffix ) then
+                                slot = mod_anim_slot( t_mip_inf(j).name )
+                                if ( ring(slot) < 0 ) then n = n + 1
+                                ring(slot) = j
+                            end if
+                        end if
                     end if
-                end if
-            next j
-
-            if ( n > 1 ) then
-                for  j = chain0 to chain0+n-1
-                    mip_buff_inf(j).anim_base  = chain0
-                    mip_buff_inf(j).anim_count = n
                 next j
+                '' a gap in 0..n-1 is a broken chain: leave its frames single
+                for  k = 0 to n-1
+                    if ( ring(k) < 0 ) then n = 0
+                next k
+                if ( n > 1 ) then
+                    for  k = 0 to n-1
+                        mip_buff_inf( ring(k) ).anim_pos   = k
+                        mip_buff_inf( ring(k) ).anim_next  = ring( (k+1) mod n )
+                        mip_buff_inf( ring(k) ).anim_count = n
+                    next k
+                end if
             end if
         end if
-next_tex:
     next i
-
 end sub
+
+'' 0 for +0..+9, 1 for +a..+j, -1 for anything else after the +
+function mod_anim_class ( nm as string ) as integer
+    dim c as integer
+    c = asc( mid$( nm, 2, 1 ) )
+    mod_anim_class = -1
+    if ( c >= 48 and c <= 57 ) then mod_anim_class = 0
+    if ( c >= 97 and c <= 106 ) then mod_anim_class = 1
+    if ( c >= 65 and c <= 74 ) then mod_anim_class = 1
+end function
+
+'' the frame's place in its sequence: the digit, or the letter from a
+function mod_anim_slot ( nm as string ) as integer
+    dim c as integer
+    c = asc( mid$( nm, 2, 1 ) )
+    if ( c >= 48 and c <= 57 ) then mod_anim_slot = c - 48
+    if ( c >= 97 and c <= 106 ) then mod_anim_slot = c - 97
+    if ( c >= 65 and c <= 74 ) then mod_anim_slot = c - 65
+end function
 
 
 '' Cell k of mip j, as a dc. Re-aims a view rather than owning 648 of them.

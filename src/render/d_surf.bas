@@ -1220,7 +1220,6 @@ function sc_alloc ( _
         sc_bprev(blk) = -1
         sc_bnext(blk) = -1
         sc_slot(face).blk = blk
-        sc_slot(face).cls = bord
         sc_live = sc_live + 1
     end if
     ofs = clng( sc_bgrn(blk) ) * SC_GRAN
@@ -1395,9 +1394,9 @@ function sc_selftest ( _
 
     '' face 0 is the oldest, so touching it must make face 1 the victim
     if ( sc_find( 0, 0, 112, 112, 0 ) = 0 ) then sc_selftest = -27 : exit function
-    if ( sc_lhead( sc_slot(0).cls ) < 0 ) then sc_selftest = -28 : exit function
-    if ( sc_bown( sc_lhead( sc_slot(0).cls ) ) <> 1 ) then _
-        sc_selftest = -(4000 + sc_bown( sc_lhead( sc_slot(0).cls ) )) : exit function
+    if ( sc_lhead( sc_bord( sc_slot(0).blk ) ) < 0 ) then sc_selftest = -28 : exit function
+    if ( sc_bown( sc_lhead( sc_bord( sc_slot(0).blk ) ) ) <> 1 ) then _
+        sc_selftest = -(4000 + sc_bown( sc_lhead( sc_bord( sc_slot(0).blk ) ) )) : exit function
 
     '' rebuilding the SAME face at a new mip must reuse its own block, not
     '' take a second one -- this is the leak the old allocator had

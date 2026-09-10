@@ -24,6 +24,8 @@
 #                               where it must draw something.
 #   tools/check.sh --fight      ten seconds next to a knight: it must reach
 #                               the player and strike, and nothing may crash
+#   tools/check.sh --e1m1       id's e1m1, from the shareware PAK: it must
+#                               load and draw polygons at the spawn
 #
 # -nostats is not optional. The overlay prints live fps and frame time, so
 # two runs of the SAME build differ by ~28 pixels in the digits, and a
@@ -64,12 +66,13 @@ build_exe() {
 # One headless run into VBD_OUT, retried: a run in four dies before
 # writing anything -- empty run.out, no error.log -- and that is its own
 # open bug, not a verdict on the picture.
-run_frame() {   # $1 = flags, $2 = where to keep BENCH.BMP
+run_frame() {   # $1 = flags, $2 = where to keep BENCH.BMP, $3 = map (default dm3ish)
     local try
     for try in 1 2 3; do
-        rm -f "$VBD_OUT/BENCH.BMP" "$VBD_OUT/bench.txt"
-        QFLAGS="$1" TIMEOUT=900 "$ROOT/tools/dosbox.sh" run > /dev/null 2>&1
+        rm -f "$VBD_OUT/BENCH.BMP" "$VBD_OUT/bench.txt" "$VBD_OUT/ERROR.LOG"
+        QFLAGS="$1" TIMEOUT=900 "$ROOT/tools/dosbox.sh" run ${3:-} > /dev/null 2>&1
         [[ -f "$VBD_OUT/BENCH.BMP" ]] && break
+        [[ -f "$VBD_OUT/ERROR.LOG" ]] && { echo "RUN FAILED: $(cat "$VBD_OUT/ERROR.LOG")"; exit 1; }
         echo "  attempt $try produced nothing; retrying"
     done
     [[ -f "$VBD_OUT/BENCH.BMP" ]] || { echo "RUN PRODUCED NOTHING"; exit 1; }
@@ -205,6 +208,45 @@ if [[ "${1:-}" == "--fight" ]]; then
         echo "PASS  fight: health $hp, deaths $deaths -- the knight struck"; exit 0
     fi
     echo "FAIL  fight: health ${hp:-none}, deaths ${deaths:-none} -- nothing hit the player"; exit 1
+fi
+
+# --e1m1 is the first id map through the loader: 5,516 faces, a tree 62
+# deep, a portal table past 64K, a PVS that only fits in EMS. Two frames
+# against references: the spawn hall (-yaw 270 is the map's angle 90,
+# mirrored) and the exit slipgate, whose walls the old frame linking
+# painted with the "trigger" texture -- it assumed a chain's frames sit
+# side by side in the lump -- and whose changelevel volume drew as a
+# column. Needs the shareware PAK; skips without it.
+if [[ "${1:-}" == "--e1m1" ]]; then
+    PAK="${PAK:-$HOME/dos/QUAKE_SW/ID1/PAK0.PAK}"
+    if [[ ! -f "$ROOT/data/e1m1.bsp" ]]; then
+        [[ -f "$PAK" ]] || { echo "SKIP  e1m1: no $PAK"; exit 0; }
+        python3 - "$PAK" "$ROOT/data/e1m1.bsp" <<'PY'
+import struct, sys
+d = open(sys.argv[1], "rb").read()
+off, n = struct.unpack_from("<ii", d, 4)
+for i in range(n // 64):
+    name, fo, fs = struct.unpack_from("<56sii", d, off + i * 64)
+    if name.rstrip(b"\0") == b"maps/e1m1.bsp":
+        open(sys.argv[2], "wb").write(d[fo:fo + fs])
+        break
+PY
+    fi
+    build_exe
+    python3 "$ROOT/tools/mkassets.py" "$ROOT/data/e1m1.bsp" "$ROOT/data/base.dat" \
+        "$VBD_OUT/e1m1-assets" > /dev/null || { echo "FAIL  e1m1: mkassets"; exit 1; }
+    # the zip AND the flat atlases beside the exe: dm3ish's texr.raw under
+    # e1m1's offset table drew every texture as some other one
+    for f in assets.zip texr.raw texs.raw pal.raw; do cp "$VBD_OUT/e1m1-assets/$f" "$VBD_OUT/$f"; done
+    rc=0
+    for arm in "spawn:-yaw 270" "exit:-at 1312 660 -200 -yaw 90"; do
+        tag="${arm%%:*}"; flags="${arm#*:}"
+        run_frame "-lm -nostats $flags -bench 40 -ticks 60" "$VBD_OUT/e1m1-$tag.bmp" e1m1.bsp
+        out=$(python3 "$ROOT/tools/imgdiff.py" "$ROOT/tools/ref/e1m1-$tag.bmp" "$VBD_OUT/e1m1-$tag.bmp" | tail -1)
+        if [[ "$out" == IDENTICAL* ]]; then echo "PASS  e1m1 $tag: $out"; else echo "FAIL  e1m1 $tag: $out"; rc=1; fi
+    done
+    for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
+    exit $rc
 fi
 
 # --churn is a DETERMINISM check, not a reference-image one: it runs the

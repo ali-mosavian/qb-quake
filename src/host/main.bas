@@ -91,7 +91,6 @@ declare sub host_render ( _
     frustum() as DiskPlane, _
     bit_array() as integer, _
     mip_buff_inf() as MipTex, _
-    face_mdl() as integer, _
     cam_up as Vec3, _
     mdltri_buffer() as MdlTri, _
     vmtri_buffer() as MdlTri, _
@@ -162,7 +161,6 @@ declare sub host_init ( _
     frustum() as DiskPlane, _
     brush() as BrushModel, _
     tele() as Teleporter, _
-    face_mdl() as integer, _
     plat() as PlatEnt, _
     mdltri_buffer() as MdlTri, _
     vmtri_buffer() as MdlTri, _
@@ -187,7 +185,6 @@ declare sub host_main ( _
     frustum() as DiskPlane, _
     bit_array() as integer, _
     mip_buff_inf() as MipTex, _
-    face_mdl() as integer, _
     plat() as PlatEnt, _
     tele() as Teleporter, _
     mdltri_buffer() as MdlTri, _
@@ -216,6 +213,7 @@ declare sub vid_update ( _
     g as Game _
 )
 declare sub scr_pal_shift ( g as Game, byval dt as single )
+declare function qglMemAvail ( byval what as integer ) as long
 declare sub scr_draw_hud ( _
     g as Game, _
     h_dst_dc as long, _
@@ -288,7 +286,6 @@ declare sub mod_load_world ( _
     gv() as integer, _
     brush() as BrushModel, _
     tele() as Teleporter, _
-    face_mdl() as integer, _
     plat() as PlatEnt, _
     item() as ItemEnt _
 )
@@ -401,7 +398,6 @@ dim g as Game
 dim brush() as BrushModel
 dim tele() as Teleporter
 dim item() as ItemEnt
-dim face_mdl() as integer
 dim plat() as PlatEnt
 dim bit_array() as integer
 dim frustum() as DiskPlane
@@ -511,7 +507,7 @@ dim shared z_dc as long
     host_init g, tri_buffer(), tex_inf_buff(), pln_buffer(), nds_buffer(), _
               mdl_buffer(), order_list(), poly_flag(), gv_buf(), bit_array(), _
               cp_x(), cp_y(), cp_z(), mip_buff_inf(), _
-              frustum(), brush(), tele(), face_mdl(), plat(), _
+              frustum(), brush(), tele(), plat(), _
               mdltri_buffer(), vmtri_buffer(), kmtri_buffer(), mdl_ent(), item()
     if ( g.env.dump_tex ) then
         mod_tex_dump g
@@ -523,7 +519,7 @@ dim shared z_dc as long
                   tri_buffer(), tex_inf_buff(), pln_buffer(), nds_buffer(), _
                   mdl_buffer(), order_list(), poly_flag(), gv_buf(), brush(), _
                   frustum(), bit_array(), _
-                  mip_buff_inf(), face_mdl(), plat(), tele(), _
+                  mip_buff_inf(), plat(), tele(), _
                   mdltri_buffer(), vmtri_buffer(), kmtri_buffer(), mdl_ent(), item()
     end if
     host_shutdown
@@ -640,7 +636,6 @@ sub host_init ( _
     frustum() as DiskPlane, _
     brush() as BrushModel, _
     tele() as Teleporter, _
-    face_mdl() as integer, _
     plat() as PlatEnt, _
     mdltri_buffer() as MdlTri, _
     vmtri_buffer() as MdlTri, _
@@ -755,7 +750,7 @@ sub host_init ( _
     '' level lumps
     mod_load_world g, tri_buffer(), tex_inf_buff(), pln_buffer(), nds_buffer(), _
                     mdl_buffer(), order_list(), poly_flag(), gv_buf(), brush(), tele(), _
-                    face_mdl(), plat(), item()
+                    plat(), item()
     pl_items_drop g, item(), mdl_buffer(), brush(), pln_buffer()
 
     t_lump = timer
@@ -876,7 +871,6 @@ sub host_main ( _
     frustum() as DiskPlane, _
     bit_array() as integer, _
     mip_buff_inf() as MipTex, _
-    face_mdl() as integer, _
     plat() as PlatEnt, _
     tele() as Teleporter, _
     mdltri_buffer() as MdlTri, _
@@ -975,7 +969,11 @@ sub host_main ( _
     '' stays global: every depth buffer in the frame is in its units.
     z_dc = 0
     if ( g.env.no_z = 0 ) then
-        z_dc = qglSfZNew&( h_dst_dc, QGL_SURF_CMEM )
+        '' conventional only when DOS can give it: a refusal makes
+        '' qglMemAlloc shrink BASIC's heap, and e1m1 has none to spare
+        if ( qglMemAvail( QGL_MEM_LARGEST ) >= 2& * g.env.x_res * g.env.y_res + 1024 ) then
+            z_dc = qglSfZNew&( h_dst_dc, QGL_SURF_CMEM )
+        end if
         if ( z_dc = 0 ) then z_dc = qglSfZNew&( h_dst_dc, QGL_SURF_EMS )
         if ( z_dc = 0 ) then sys_error "0x0019, no qgl depth buffer"
         zz = qglZScale&( 65535.0 * g.env.z_near )
@@ -1063,7 +1061,7 @@ sub host_main ( _
         host_render g, h_dst_dc, mtx_prj, xresh, yresh, tri_buffer(), tex_inf_buff(), _
                      pln_buffer(), nds_buffer(), mdl_buffer(), order_list(), poly_flag(), _
                      gv_buf(), brush(), frustum(), bit_array(), _
-                     mip_buff_inf(), face_mdl(), cam_up, _
+                     mip_buff_inf(), cam_up, _
                      mdltri_buffer(), vmtri_buffer(), kmtri_buffer(), mdl_ent(), item()
 
 

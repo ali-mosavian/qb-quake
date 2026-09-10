@@ -258,7 +258,6 @@ void pascal far d_draw_faces(
     BASARRAY    *a_tri,
     BASARRAY    *a_texinf,
     BASARRAY    *a_gv,
-    BASARRAY    *a_facemdl,
     BASARRAY    *a_brush,
     BASARRAY    *a_planes,
     BASARRAY    *a_nodes,
@@ -268,7 +267,6 @@ void pascal far d_draw_faces(
 {
     Face       far *tri     = (Face       far *)a_tri->farptr;
     TexInfo    far *texinf  = (TexInfo    far *)a_texinf->farptr;
-    short      far *facemdl = (short      far *)a_facemdl->farptr;
     BrushModel far *brush   = (BrushModel far *)a_brush->farptr;
     Plane      far *planes  = (Plane      far *)a_planes->farptr;
     Node       far *nodes   = (Node       far *)a_nodes->farptr;
@@ -288,7 +286,6 @@ void pascal far d_draw_faces(
 #define D_ARRAYS_REFRESH() do { \
         tri     = (Face       far *)a_tri->farptr;     \
         texinf  = (TexInfo    far *)a_texinf->farptr;  \
-        facemdl = (short      far *)a_facemdl->farptr; \
         brush   = (BrushModel far *)a_brush->farptr;   \
         planes  = (Plane      far *)a_planes->farptr;  \
         nodes   = (Node       far *)a_nodes->farptr;   \
@@ -370,7 +367,7 @@ void pascal far d_draw_faces(
              */
             pl = &planes[ tri[i].plane_id ];
             dp_dist = cam_plane_dist( campos, pl );
-            if ( tri[i].side ) dp_dist = -dp_dist;
+            if ( tri[i].side & 1 ) dp_dist = -dp_dist;
             if ( dp->backface != 0 && dp_dist <= 0.01 ) continue;
 
             /* Counted HERE, not at the draw: BASIC incremented g.rdr.polys
@@ -428,7 +425,7 @@ void pascal far d_draw_faces(
             tex    = tri[i].tex_info_id;
             tex_id = texinf[tex].mip_tex;
             liquid = mipinf[tex_id].liquid;
-            zofs   = brush[ facemdl[i] ].zofs;
+            zofs   = brush[ tri[i].side >> 1 ].zofs;   /* the owning submodel */
 
             /*
              * NO early reject here. BASIC had no such guard: a face with a
@@ -463,7 +460,7 @@ void pascal far d_draw_faces(
              * qglSfZMode refuses and leaves the surface OFF, which is
              * exactly what -noz should draw.
              */
-            z_mode = ( facemdl[i] == 0 ) ? QGL_Z_SET : QGL_Z_TEST;
+            z_mode = ( tri[i].side >> 1 ) ? QGL_Z_TEST : QGL_Z_SET;
 
             tw = mipinf[tex_id].wdth;
             th = mipinf[tex_id].hght;
@@ -532,9 +529,14 @@ void pascal far d_draw_faces(
 
             /* Animation swaps which image is sampled; index arithmetic
                only, once per face. */
-            if ( mipinf[tex_id].anim_count > 1 )
-                tex_id = mipinf[tex_id].anim_base
-                       + ( ifloor( dp->anim_time * 5.0f ) % mipinf[tex_id].anim_count );
+            /* R_TextureAnimation: ten frames a second, walked round the ring
+               from this frame's own place in it */
+            if ( mipinf[tex_id].anim_count > 1 ) {
+                short steps = ( ifloor( dp->anim_time * 10.0f ) % mipinf[tex_id].anim_count
+                                - mipinf[tex_id].anim_pos + mipinf[tex_id].anim_count )
+                              % mipinf[tex_id].anim_count;
+                while ( steps-- > 0 ) tex_id = mipinf[tex_id].anim_next;
+            }
 
             for ( j = 0; j < vcnt; j++ ) {
                 v0 = j*3 + GEOM_VTX0;

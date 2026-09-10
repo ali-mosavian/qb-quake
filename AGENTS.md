@@ -1105,8 +1105,16 @@ The perturbation is per vertex, which is as fine as this renderer goes. Quake
 does it per span inside its own texture mapper, and uGL's mapper is not ours to
 change.
 
-dm3ish has two liquids and no `+N` textures at all, so the frame chains are
-implemented and unexercised.
+**A chain's frames sit anywhere in the lump.** e1m1 has `+0planet` at
+55 and `+1..+3planet` at 70..72, `+0slip` at 56 and `+1..+6slip` at
+73..78. `mod_link_anims` used to count the frames and link a contiguous
+run from the first, which made `slip1`, `sliptopsd` and the `trigger`
+texture frames of the planet and the button: the wall above the exit
+showed the Earth. It now does what `Mod_LoadTextures` does -- finds
+each frame by its digit, `+a..+j` as the alternate sequence, links a
+ring -- and `d_faces.c` steps round the ring at 10 fps from the face's
+own frame. dm3ish has no `+N` textures; the exit frame of
+`tools/check.sh --e1m1` is where the chains are exercised.
 
 **Brush entities are submodels 1 upward.** `r_draw_world 0` draws the world;
 `r_draw_brush_model` adds each other submodel to the same draw order without
@@ -2107,15 +2115,110 @@ the bench frame: 24 pixels at the centre.
 writes `sbar.raw` and `sbnum.raw` -- the bar, the digits, the shells
 icon and the five faces -- with the qpic's 255 kept transparent: the bar
 is textured differently under every slot, so nothing can be composited
-offline. `scr_sbar_load` finds each cell row's opaque spans once, and
-`scr_sbar_paint` copies them over a fresh copy of the bar only when
-health, shells or the face change; `scr_sbar_draw` then scales the
-320x24 bar into the bottom twelfth of the render target. Three traps:
-the wad's names are uppercase; a `const SBAR_FACE` and a `dim
-sbar_face` are the same name to BC; and the scaled blitter's 8.8 step
-was a 16-bit divide that truncated any source wider than 255, so the
-first 64 columns of the bar came out stretched across the frame with no
-digit anywhere -- `t15blit` case 7 is that source.
+offline. Everything lives in ONE EMS surface, 512 wide because an EMS
+row must divide 16K: the untouched bar in rows 0..23, the seventeen
+cells side by side in 24..47, the composed bar in 48..71, which a
+320-wide view aimed at row 48 hands to the blit. `scr_sbar_paint`
+copies the bar band over the working band and pokes each cell's opaque
+pixels through the read window (slot 0) and the write window (slot 1),
+only when health, shells or the face change; `scr_sbar_draw` scales the
+result into the bottom twelfth of the render target. The far-heap
+tables this replaced -- rows, cells, spans -- were 28K, which e1m1 does
+not have. Traps: the wad's names are uppercase; a `const SBAR_FACE` and
+a `dim sbar_face` are the same name to BC; the scaled blitter's 8.8 step
+was a 16-bit divide that truncated any source wider than 255
+(`t15blit` case 7); a `get` reads the whole fixed string, so a 576-byte
+cell buffer swallows 576 bytes of a 320-byte bar row; and `p \ 65536`
+on a far pointer truncates TOWARDS ZERO, so a window at E000h -- a
+negative long -- came out one paragraph high and every digit was read
+sixteen bytes off. `scr_seg_of` subtracts the low half first.
+
+## e1m1: the first id map
+
+`tools/check.sh --e1m1` pulls `maps/e1m1.bsp` out of the shareware PAK,
+builds its assets into `$VBD_OUT/e1m1-assets`, and compares two frames
+with `tools/ref/e1m1-spawn.bmp` and `e1m1-exit.bmp`: the hall from the
+spawn, and the exit slipgate from its approach. 5,516 faces, 2,750 nodes 62 deep, 1,531 leaves, a 40,843-byte
+PVS, a portal table past 64K. Five things stood between the loader and a
+frame, and the first is not e1m1's at all.
+
+**DOSBox-X's dynamic core gets BASIC's long compare wrong.** BC routes
+every `long` compare through the runtime's `B$CPI4`, which compares the
+high words and, when they agree, turns the low words' carry into a sign
+bit through `lahf`/`shr`/`shl`/`or`/`sahf`. On `core=dynamic` -- the
+pinned core -- that sequence answered `23760 >= 40843` true and
+`40843 > 32767` false; `core=normal` answered both right. Same binary.
+The loader took the conventional-memory branch it could not afford and
+the trace showed 41K leaving the far heap with every guard "passing";
+three spellings of the compare all agreed, which is the second rule's
+tell. `src/qgl/cpi4.asm` replaces the routine: the low words get their
+sign bits flipped and a plain signed `cmp`, no flag surgery. The runtime
+keeps `B$CPI4` in one module with `B$CMI4`, `B$MUI4`, `B$DVI4` and
+`B$RMI4`, so all five live there or LINK pulls the module and reports
+`L2025`; the three arithmetic ones are far jumps to the runtime's own
+`__aFl*`, which `tfw.asm` stubs with an `int 3` for the native suite.
+`t33cpi4` runs the six cases through BC's own calling sequence under
+run1.sh's dynamic core and failed on the two straddling ones with the
+original code in place. Every long compare in this program went through
+that routine, so any past oddity involving one is suspect.
+
+**BASIC links a 4K stack, and the C walk recursing 62 deep ran through
+it** into the string space above: `String space corrupt`, raised from
+`B$CompactSB` under `d_draw_faces` -- lazily, at the next compaction,
+nowhere near the write. `tools/link-qr.sh` passes `/STACK:8192`. dm3ish
+is 42 deep and never came close.
+
+**A map whose portal table does not load must still walk its PVS.**
+`pt_ref` is 6,624 x 7 x 2 bytes on e1m1, past a BASIC array's 64K, so
+`r_load_portals` bails and `pt_ok` stays 0 -- and the walk reads
+`pvs_now`, which only the flood writes. `pvs_count 78`, the offline
+decode's number, and `polys 0`. The copy from `pvs_buffer_b` now also
+runs when `pt_ok` is 0.
+
+**Decide a store's placement by `qglMemAvail`, never by a refusal.**
+`qglMemAlloc` answers a DOS refusal by shrinking BASIC's heap through
+`B$SETM` and retrying, so "DOS refused, go to EMS" never fires -- the
+allocation succeeds out of the memory the map needs. The PVS goes to EMS
+when DOS's largest block is smaller than it, read through `PAGE_SLOT` by
+`mod_pvs_page`, and `r_mark_leaves` steps its offset across the 16K
+seams. The depth buffer decides the same way.
+
+**Nodes, leaves and clipnodes cannot go to EMS.** `r_walk.c` and
+`pl_trace.c` index those stores through flat far pointers; an EMS store
+gives them one page and a cycle in `pl_hull_contents_c` that never
+returns. Tried, hung, reverted.
+
+**What the memory went on, and what was cut.** Conventional memory is
+BASIC's far heap (334K) plus the UMB pool (82K), and `qglMemAlloc` makes
+them one pool. The faces store takes 56K of UMB; the far heap goes
+bsp_arrays 79K, leaves 34K, marksurf 14K, nodes 60K, clipnodes 32K,
+textures 17K, surface cache 57K, models 12K. Cut so far: the status bar's
+28K into its EMS surface, `face_mdl` (11K) into the bits above
+`Face.side`'s one, written at load by `ent_load_teleports` and read back
+as `side >> 1` in `d_faces.c`, and `CacheSlot.cls` (11K), which only the
+selftest read and `sc_bord` already held per block. 45K of far heap is
+free after the depth buffer. Next on the list if it tightens: the node
+and leaf bounds at 6 bytes instead of 12 -- the C cull unpacks them for
+nothing, unlike the BASIC attempt this file records.
+
+**Four files make a map's assets, not one.** mkassets writes assets.zip
+and, beside it, texr.raw, texs.raw and pal.raw -- the atlases qgl reads
+with plain INT 21h. e1m1's zip staged over dm3ish's atlases drew every
+texture as some other one, since the offset table indexes whatever
+atlas is there: a yellow hazard floor at the spawn, the slipgate pad
+brown. `mod_load_textures` refuses an atlas shorter than its table
+(`0x0018`), and the gate copies all four in and all four back.
+
+**Every `trigger_*` brush is a volume.** Only `trigger_teleport` hid its
+submodel; e1m1's `trigger_changelevel` drew as a column of the
+`trigger` texture in front of the exit. `parse_entities` hides them all.
+
+**The spawn looks at a wall.** `angle 90` is +y in the map and `-yaw
+270` looks down +y here, so the spawn yaw wants `360 - angle`. Not
+applied: dm3ish's spawn is `angle 90` too and the monster ring in
+`main.bas` is seeded from it, so mirroring moves the knight the fight
+and model gates stand beside. Do it when e1m1 spawns its own monsters.
+The gate aims with `-yaw 270`.
 
 ## `-nostats` makes the picture deterministic
 

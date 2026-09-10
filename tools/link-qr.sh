@@ -55,9 +55,12 @@ CLIBS=""
 LDBG=""
 [[ "${DEBUGINFO:-0}" == "1" ]] && LDBG=" /CO"
 
+# /STACK:8192: BC links 4K, and r_walk_rec recursing 62 deep on e1m1 ran
+# through it into the string space above -- "String space corrupt" on the
+# first frame. dm3ish is 42 deep and never showed it.
 {
   printf '%s\r\n' \
-    "/NOE /MAP$LDBG /SEG:800 $OBJS" \
+    "/NOE /MAP$LDBG /SEG:800 /STACK:8192 $OBJS" \
     'qrender.exe' \
     'qrender.map' \
     "V:\\LIB\\VBDCL10E.LIB$CLIBS" \

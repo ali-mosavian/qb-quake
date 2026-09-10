@@ -23,6 +23,7 @@ option explicit
 '$include: 'qgl.bi'
 
 declare function rb_dbg_camleaf ( ) as integer
+declare function rb_dbg_pvscnt ( ) as integer
 
 declare function dbg_lm_want ( ) as integer
 declare function dbg_lm_fall ( ) as integer
@@ -204,6 +205,7 @@ sub host_bench_report ( _
     print #benchf, "qgl_faces " + ltrim$(str$( dbg_qgl_faces() ))
     print #benchf, "qgl_drop " + ltrim$(str$( dbg_qgl_drop() ))
     print #benchf, "cam_leaf " + ltrim$(str$( rb_dbg_camleaf ))
+    print #benchf, "pvs_count " + ltrim$(str$( rb_dbg_pvscnt ))
     print #benchf, "lm_want " + ltrim$(str$( dbg_lm_want ))
     print #benchf, "lm_fallback " + ltrim$(str$( dbg_lm_fall ))
     print #benchf, "k_mip " + ltrim$(str$( dbg_keys(0) ))
