@@ -92,6 +92,8 @@ ASSETS := data/assets/assets.zip
 # regenerated these. Only reachable with the PAK; wildcard-guarded so a
 # tree without it is not a build failure.
 MDL_ASSETS := $(if $(wildcard $(PAK)),data/assets/$(MDL).geo data/assets/v_shot.geo)
+# The status bar's pictures, out of the PAK's gfx.wad.
+GFX_ASSETS := $(if $(wildcard $(PAK)),data/assets/sbar.raw)
 # The A* flight path -bench -campath walks. Generated, untracked, and it
 # was a ZERO-BYTE file in every clean build: -campath then read nothing,
 # stood at the spawn for the whole run, and `check.sh --churn` -- whose
@@ -105,7 +107,7 @@ EXE  := $(BUILD)/qrender.exe
 
 all: build                      ## build the renderer (default)
 build: $(EXE)
-assets: $(ASSETS) $(MDL_ASSETS) $(CAM_ASSETS)   ## regenerate the preprocessed textures
+assets: $(ASSETS) $(MDL_ASSETS) $(GFX_ASSETS) $(CAM_ASSETS)   ## regenerate the preprocessed textures
 
 $(ASSETS): data/$(MAP) data/base.dat tools/mkassets.py tools/mkportals.py
 	@python3 tools/mkassets.py data/$(MAP) data/base.dat data/assets
@@ -118,6 +120,10 @@ data/assets/$(MDL).geo: $(PAK) tools/mkmdl.py
 # the view weapon: shot1..7, the fire animation
 data/assets/v_shot.geo: $(PAK) tools/mkmdl.py
 	@python3 tools/mkmdl.py $(PAK) v_shot data/assets shot
+
+# sbar.raw stands in for sbnum.raw too
+data/assets/sbar.raw: $(PAK) tools/mkgfx.py
+	@python3 tools/mkgfx.py $(PAK) data/assets
 
 data/assets/campath.bin: data/$(MAP) tools/campath.py
 	@python3 tools/campath.py data/$(MAP) data/assets

@@ -47,6 +47,7 @@ declare sub vid_init ( _
 '' table is finite, and it ran out when they all got everything.
 ''
 declare sub scr_pal_install ( )
+declare sub scr_sbar_load ( )
 
 ''
 '' qgl owns the mode now. qglVgaInit is called twice over a run -- the
@@ -199,6 +200,7 @@ sub vid_init ( _
     '' best-fitted against it. One call: the overlay cannot pick its
     '' colours before the palette they are picked from exists.
     scr_pal_install
+    scr_sbar_load
 
 end sub
 

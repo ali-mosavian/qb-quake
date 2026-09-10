@@ -2073,6 +2073,20 @@ beyond "any corner behind the near plane drops the box", which at ten
 units wide means the player is in it. A box far down the hall is in
 the bench frame: 24 pixels at the centre.
 
+**The status bar is Quake's own, out of gfx.wad.** `tools/mkgfx.py`
+writes `sbar.raw` and `sbnum.raw` -- the bar, the digits, the shells
+icon and the five faces -- with the qpic's 255 kept transparent: the bar
+is textured differently under every slot, so nothing can be composited
+offline. `scr_sbar_load` finds each cell row's opaque spans once, and
+`scr_sbar_paint` copies them over a fresh copy of the bar only when
+health, shells or the face change; `scr_sbar_draw` then scales the
+320x24 bar into the bottom twelfth of the render target. Three traps:
+the wad's names are uppercase; a `const SBAR_FACE` and a `dim
+sbar_face` are the same name to BC; and the scaled blitter's 8.8 step
+was a 16-bit divide that truncated any source wider than 255, so the
+first 64 columns of the bar came out stretched across the frame with no
+digit anywhere -- `t15blit` case 7 is that source.
+
 ## `-nostats` makes the picture deterministic
 
 With the HUD off the renderer is **byte-identical run to run** -- one

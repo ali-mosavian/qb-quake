@@ -24,6 +24,7 @@ option explicit
 '$include: 'q_ent.bi'
 '$include: 'q_mdl.bi'
 '$include: 'q_game.bi'
+'$include: 'qgl.bi'
 
 
 ''
@@ -165,6 +166,44 @@ declare sub scr_count_frame ( _
     g as Game _
 )
 declare sub scr_mip_tick ( percent as single )
+declare function qglSfNew ( _
+    byval wid as integer, _
+    byval hgt as integer, _
+    byval whr as integer _
+) as long
+declare function qglSfWrRow ( byval s as long, byval y as integer ) as long
+declare function qglFileOpenBas ( flname as string ) as integer
+declare function qglFileRead ( _
+    byval h as integer, _
+    byval dst as long, _
+    byval nbytes as long _
+) as long
+declare sub qglFileClose ( byval h as integer )
+declare sub qglMemCopy ( byval dst as long, byval src as long, byval nbytes as long )
+declare sub qglDrBlit ( _
+    byval d as long, _
+    byval x as integer, _
+    byval y as integer, _
+    byval s as long _
+)
+declare sub qglDrBlitScl ( _
+    byval d as long, _
+    byval x as integer, _
+    byval y as integer, _
+    byval w as integer, _
+    byval h as integer, _
+    byval s as long _
+)
+declare sub scr_sbar_load ( )
+declare sub scr_sbar_paint ( g as Game )
+declare sub scr_sbar_cell ( byval idx as integer, byval x as integer )
+declare sub scr_sbar_num ( byval x as integer, byval v as integer )
+declare sub scr_sbar_draw ( _
+    g as Game, _
+    byval dc as long, _
+    byval w as integer, _
+    byval h as integer _
+)
 declare sub scr_pal_install ( )
 declare sub scr_begin_loading ( _
     g as Game _
@@ -430,6 +469,25 @@ dim shared ldr_pal() as PalRgb
 '' back from the DAC.
 dim shared scr_pal() as PalRgb
 dim shared scr_pal_sh() as PalRgb  '' the shifted copy scr_pal_shift installs
+
+'' Quake's status bar, from gfx.wad by tools/mkgfx.py: the bar itself,
+'' a copy with the numbers on it, and the cells they are painted from.
+'' A cell's 255 is transparent, so a paint copies its opaque spans --
+'' found once at load -- over the bar, and only when a number changes.
+const SBARC_W      = 320
+const SBARC_H      = 24
+const SBARC_CELL   = 24
+const SBARC_CELLS  = 17
+const SBARC_MINUS  = 10
+const SBARC_ICON   = 11          '' SB_SHELLS
+const SBARC_FACE   = 12          '' FACE1, the healthy one; FACE5 is +4
+const SBARC_SPANS  = 6           '' opaque runs a cell row can have
+dim shared sbar_bar as long
+dim shared sbar_work as long
+dim shared sbar_cell() as string * 576
+dim shared sbar_sp() as integer   '' (cell*24 + row, span*2): x, then length
+dim shared sbar_spn() as integer  '' spans in that row
+dim shared sbar_health as integer, sbar_shells as integer, sbar_face as integer
 dim shared spx() as integer      '' projected wireframe vertices
 dim shared spy() as integer
 '' Ring buffers behind the overlay graphs. Builds-per-frame is the one that
@@ -1184,6 +1242,143 @@ sub scr_pal_install
 end sub
 
 ''::::::::::
+'' name: scr_sbar_load
+'' desc: sbar.raw into a conventional Surface, sbnum.raw into the cells,
+''       and each cell row's opaque spans.
+''::::::::::
+sub scr_sbar_load
+    dim u as integer, y as integer, i as integer, k as integer, n as integer
+    dim f as integer
+    dim rowp as long
+
+    sbar_bar = qglSfNew( SBARC_W, SBARC_H, QGL_SURF_CMEM )
+    sbar_work = qglSfNew( SBARC_W, SBARC_H, QGL_SURF_CMEM )
+    if ( sbar_bar = 0 or sbar_work = 0 ) then sys_error "0x3003, no memory for the status bar"
+    u = qglFileOpenBas( "sbar.raw" )
+    if ( u = 0 ) then sys_error "0x3004, sbar.raw is missing -- run make assets"
+    for y = 0 to SBARC_H - 1
+        rowp = qglSfWrRow( sbar_bar, y )
+        if ( qglFileRead( u, rowp, clng( SBARC_W ) ) <> SBARC_W ) then
+            sys_error "0x3005, sbar.raw is short"
+        end if
+    next y
+    qglFileClose u
+
+    redim sbar_cell( SBARC_CELLS - 1 ) as string * 576
+    redim sbar_sp( SBARC_CELLS * SBARC_CELL - 1, SBARC_SPANS * 2 - 1 ) as integer
+    redim sbar_spn( SBARC_CELLS * SBARC_CELL - 1 ) as integer
+    f = freefile
+    open "sbnum.raw" for binary as #f
+    if ( lof( f ) < SBARC_CELLS * 576 ) then
+        close #f
+        sys_error "0x3006, sbnum.raw is missing -- run make assets"
+    end if
+    for i = 0 to SBARC_CELLS - 1
+        get #f, , sbar_cell(i)
+        for y = 0 to SBARC_CELL - 1
+            n = 0
+            k = 0
+            do while ( k < SBARC_CELL )
+                if ( asc( mid$( sbar_cell(i), y * SBARC_CELL + k + 1, 1 ) ) = 255 ) then
+                    k = k + 1
+                elseif ( n < SBARC_SPANS ) then
+                    sbar_sp( i * SBARC_CELL + y, n * 2 ) = k
+                    do while ( k < SBARC_CELL )
+                        if ( asc( mid$( sbar_cell(i), y * SBARC_CELL + k + 1, 1 ) ) = 255 ) then exit do
+                        k = k + 1
+                    loop
+                    sbar_sp( i * SBARC_CELL + y, n * 2 + 1 ) = k - sbar_sp( i * SBARC_CELL + y, n * 2 )
+                    n = n + 1
+                else
+                    k = SBARC_CELL
+                end if
+            loop
+            sbar_spn( i * SBARC_CELL + y ) = n
+        next y
+    next i
+    close #f
+    sbar_health = -1
+end sub
+
+''::::::::::
+'' name: scr_sbar_cell
+'' desc: A cell's opaque spans over the working bar at column x.
+''::::::::::
+sub scr_sbar_cell ( byval idx as integer, byval x as integer )
+    dim y as integer, n as integer
+    dim rowp as long, src as long
+
+    for y = 0 to SBARC_CELL - 1
+        if ( sbar_spn( idx * SBARC_CELL + y ) > 0 ) then
+            rowp = qglSfWrRow( sbar_work, y ) + x
+            '' taken per row: the far heap moves under a call
+            src = clng( varseg( sbar_cell(idx) ) ) * 65536& + _
+                  ( clng( varptr( sbar_cell(idx) ) ) and 65535& ) + y * SBARC_CELL
+            for n = 0 to sbar_spn( idx * SBARC_CELL + y ) - 1
+                qglMemCopy rowp + sbar_sp( idx * SBARC_CELL + y, n * 2 ), _
+                           src + sbar_sp( idx * SBARC_CELL + y, n * 2 ), _
+                           clng( sbar_sp( idx * SBARC_CELL + y, n * 2 + 1 ) )
+            next n
+        end if
+    next y
+end sub
+
+''::::::::::
+'' name: scr_sbar_num
+'' desc: Sbar_DrawNum: three digits, right aligned, from column x.
+''::::::::::
+sub scr_sbar_num ( byval x as integer, byval v as integer )
+    dim t as string, i as integer
+
+    t = ltrim$( str$( v ) )
+    if ( len( t ) > 3 ) then t = right$( t, 3 )
+    x = x + ( 3 - len( t ) ) * SBARC_CELL
+    for i = 1 to len( t )
+        scr_sbar_cell val( mid$( t, i, 1 ) ), x + ( i - 1 ) * SBARC_CELL
+    next i
+end sub
+
+''::::::::::
+'' name: scr_sbar_paint
+'' desc: Sbar_DrawNormal: the face at 112, health at 136, the shells icon
+''       at 224 and the count at 248 -- painted only when one changes.
+''::::::::::
+sub scr_sbar_paint ( g as Game )
+    dim hp as integer, sh as integer, f as integer
+
+    hp = g.fight.health
+    if ( hp < 0 ) then hp = 0
+    sh = g.fight.shells
+    f = hp \ 20
+    if ( f > 4 ) then f = 4
+    if ( hp = sbar_health and sh = sbar_shells and f = sbar_face ) then exit sub
+    sbar_health = hp : sbar_shells = sh : sbar_face = f
+
+    qglDrBlit sbar_work, 0, 0, sbar_bar
+    scr_sbar_cell SBARC_FACE + ( 4 - f ), 112
+    scr_sbar_num 136, hp
+    scr_sbar_cell SBARC_ICON, 224
+    scr_sbar_num 248, sh
+end sub
+
+''::::::::::
+'' name: scr_sbar_draw
+'' desc: The bar along the bottom, scaled to the destination's width.
+''::::::::::
+sub scr_sbar_draw ( _
+    g as Game, _
+    byval dc as long, _
+    byval w as integer, _
+    byval h as integer _
+)
+    dim bh as integer
+
+    scr_sbar_paint g
+    bh = cint( SBARC_H * w / SBARC_W )
+    qglDrBlitScl dc, 0, h - bh, w, bh, sbar_work
+end sub
+
+''::::::::::
 '' name: scr_pal_shift
 '' desc: V_UpdatePalette: the DAC blended towards red by the damage
 ''       shift and towards gold by the bonus one, both fading with the
@@ -1446,8 +1641,10 @@ sub scr_draw_hud ( _
     dim dxv as single, dyv as single, ayv as single, yawd as single
     dim pstr as string, fstr as string, msg as string
 
-    fstr = "HP " + ltrim$(str$( g.fight.health )) + "  SHELLS " + ltrim$(str$( g.fight.shells )) + _
-           "  KILLS " + ltrim$(str$( g.fight.kills )) + "  DEATHS " + ltrim$(str$( g.fight.deaths ))
+    fstr = "KILLS " + ltrim$(str$( g.fight.kills )) + "  DEATHS " + ltrim$(str$( g.fight.deaths ))
+
+    '' Quake's own bar first; the stats overlay may cover its edge
+    scr_sbar_draw g, h_dst_dc, w, h
 
     cw = 146
     lx = 3
@@ -1574,13 +1771,6 @@ sub scr_draw_hud ( _
         qglDrFill h_dst_dc, 0, yy-2, w, h, hc_bg
         qglDrHline h_dst_dc, 0, yy-2, w, hc_slabhi
         draw_string h_dst_dc, 4, yy, ftr
-    else
-        '' the status line, red while a volley just landed
-        yy = h - 9
-        if ( g.rdr.anim_time < g.fight.hurt_until ) then
-            qglDrFill h_dst_dc, 0, yy-1, w, h, hc_bad
-        end if
-        draw_string h_dst_dc, 4, yy, fstr
     end if
 
     '' what the fight has to say, centred: the font is 4 wide
