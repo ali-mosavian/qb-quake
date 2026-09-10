@@ -16,14 +16,10 @@ option explicit
 '' needs to parse. Includes are read in file order and a type must be
 '' defined before the line naming it, so the order is not negotiable.
 '$include: 'u3d.bi'
-'$include: 'ugl.bi'
-'$include: 'pal.bi'
 '$include: 'in.bi'
+'$include: 'bspfile.bi'
 '$include: 'dos.bi'
 '$include: 'arch.bi'
-'$include: 'uglu.bi'
-'$include: 'font.bi'
-'$include: 'bspfile.bi'
 '$include: 'snd.bi'
 '$include: 'mod.bi'
 '$include: 'q_env.bi'

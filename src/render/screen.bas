@@ -14,9 +14,9 @@ option explicit
 ''
 '$include: 'u3d.bi'
 '$include: 'in.bi'
+'$include: 'bspfile.bi'
 '$include: 'dos.bi'
 '$include: 'arch.bi'
-'$include: 'bspfile.bi'
 '$include: 'snd.bi'
 '$include: 'mod.bi'
 '$include: 'q_env.bi'
@@ -30,12 +30,6 @@ option explicit
 '$include: 'q_snd.bi'
 '$include: 'q_mdl.bi'
 '$include: 'q_game.bi'
-
-type PalRgb
-    red   as string * 1
-    green as string * 1
-    blue  as string * 1
-end type
 
 
 ''

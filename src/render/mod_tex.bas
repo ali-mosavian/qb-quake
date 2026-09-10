@@ -14,14 +14,10 @@ option explicit
 '' attempt at this cut.
 ''
 '$include: 'u3d.bi'
-'$include: 'ugl.bi'
-'$include: 'pal.bi'
 '$include: 'in.bi'
+'$include: 'bspfile.bi'
 '$include: 'dos.bi'
 '$include: 'arch.bi'
-'$include: 'uglu.bi'
-'$include: 'font.bi'
-'$include: 'bspfile.bi'
 '$include: 'snd.bi'
 '$include: 'mod.bi'
 '$include: 'q_env.bi'
@@ -346,7 +342,7 @@ sub mod_tex_dump ( g as Game )
     dim sw as integer, sh as integer
     dim rowlen as integer
     dim imgsz as long, off_bits as long
-    dim palbuf(255) as tRGB
+    dim palbuf(255) as PalRgb
     dim row as string, buf as string
 
     sw       = 20 * 64

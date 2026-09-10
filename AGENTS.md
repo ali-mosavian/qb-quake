@@ -1977,8 +1977,12 @@ was link the upper memory blocks and set strategy 81h, which is
 `qglMemInit`/`qglMemShutdown` now, `t31meminit` reading both back
 through DOS's own 58h queries. `-qgldiff` brings mgl up and ends it
 itself, being a differential against mgl by design. Nothing of mgl's
-runs in a frame; what production still links from it is `u3d`, the
-music player and `ugluCubicBez3D`.
+runs in a frame; what production still links from it is `u3d` and the
+music player. `ugluCubicBez3D` is `v_bezier` in view.bas, the same
+forward differencing in BASIC, and `ugl.bi`, `uglu.bi`, `dos.bi`,
+`arch.bi`, `font.bi`, `pal.bi` and `ems.bi` are out of every module
+but the three oracles; `PalRgb` moved to bspfile.bi so mod_tex reads
+pal.raw through it instead of mgl's `tRGB`.
 
 **`sc_selftest` wrote its row through mgl and read it back through
 mgl, on a qgl Surface.** `uglRowWriteBuff`/`uglRowRead` take the

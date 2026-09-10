@@ -322,6 +322,13 @@ end type
 const FALSE = 0
 const TRUE  = -1
 
+'' pal.raw: 256 of these, r g b, 8 bits each
+type PalRgb
+    red   as string * 1
+    green as string * 1
+    blue  as string * 1
+end type
+
 type Env
     z_far       as single
     z_near      as single    
