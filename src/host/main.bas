@@ -250,7 +250,8 @@ declare sub sys_time_init ( )
 declare sub vid_init ( _
     g as Game _
 )
-declare sub vid_init_ugl ( )
+declare sub qglMemInit ()
+declare sub qglMemShutdown ()
 declare sub mod_load_texinfo ( _
     g as Game, _
     tex_info() as TexInfo, _
@@ -674,20 +675,19 @@ sub host_init ( _
     sys_init_tables g, bit_array(), frustum()
     sys_mem_mark "start"
     d_init_turb
-    vid_init_ugl
+    qglMemInit
 
-    '' qgl probes INT 67h itself rather than trusting uglInit, and
-    '' qglGemAlloc refuses until it has. Here, not at the first qgl
+    '' qgl probes INT 67h before the first qglGemAlloc, which refuses
+    '' until it has. Here, not at the first qgl
     '' allocation: mod_load_textures loads the atlas long before the
     '' surface cache opens, and sc_store_open's own call was too late
     '' -- the atlas load failed with 0x0016 and nothing said why.
     if ( qglSfInit() = 0 ) then sys_error "0x0017, qgl has no EMS"
     sys_mem_mark "ugl"
 
-    '' -qgldiff: qgl's rasteriser against mgl's. AFTER vid_init_ugl,
-    '' because it is mgl that needs initialising -- uglNew refuses
-    '' before uglInit has filled the DC-type table -- and before the map,
-    '' because nothing it draws comes from one.
+    '' -qgldiff: qgl's rasteriser against mgl's, which it brings up and
+    '' ends itself. Before the map, because nothing it draws comes from
+    '' one.
     if ( g.qgl_diff ) then
         dim qgldbad as integer
         qgldbad = qglDiffAll()
@@ -1092,14 +1092,13 @@ end sub
 sub host_shutdown
     
     ''
-    '' Unhook, give the PIT and the mode back, then end mgl. uglEnd
-    '' stays until uglInit does.
+    '' Unhook, give the PIT, the mode and DOS's memory settings back.
     ''
     qglKbdShutdown
     qglMouseShutdown
     qglTmrShutdown
     qglVgaShutdown
-    uglEnd
+    qglMemShutdown
     
     screen 0
     width 80, 25

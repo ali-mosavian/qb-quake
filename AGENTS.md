@@ -1971,8 +1971,14 @@ code failed too, which is how the loop above was found.
 `emsCheck` is `qglGemFrame`, and `-dumptex` reads its palette from
 `pal.raw` instead of the DAC. The timer is `qglTmrInit`/`qglTmrTicks`/
 `qglTmrShutdown`, `t29tmr` proving the BIOS chain and the restore, and
-`qglTmrCycles` is the RDTSC that came from the sound mixer. What mgl
-still holds is `uglInit`/`uglEnd`: nothing of its runs a frame.
+`qglTmrCycles` is the RDTSC that came from the sound mixer.
+`uglInit`/`uglEnd` are gone from production too: what they did for us
+was link the upper memory blocks and set strategy 81h, which is
+`qglMemInit`/`qglMemShutdown` now, `t31meminit` reading both back
+through DOS's own 58h queries. `-qgldiff` brings mgl up and ends it
+itself, being a differential against mgl by design. Nothing of mgl's
+runs in a frame; what production still links from it is `u3d`, the
+music player and `ugluCubicBez3D`.
 
 **`sc_selftest` wrote its row through mgl and read it back through
 mgl, on a qgl Surface.** `uglRowWriteBuff`/`uglRowRead` take the
@@ -2004,6 +2010,12 @@ DOSBox-X's `AUTOTYPE`, and the test spins on the table until scancode
 be moved headlessly, so `qglMouseEvent` is public and the test calls it
 the way the driver does, mickeys in `si:di` and buttons in `bx`. Mutated
 three ways: index by scancode instead of scancode*2, no word 0, no clip.
+
+`AUTOTYPE` feeds the keyboard buffer from a host thread with no lock
+against the emulation thread, and under load -- three gates and a
+windowed run at once -- it dropped one release: down seen, up never,
+the hook restored fine. The test types the key three times now, so a
+later pair still shows both transitions; the assertion is unchanged.
 
 **A multi-line mutation pattern misses a CRLF file.** The first clip
 mutation "passed": its pattern spanned two lines with `\n` between,

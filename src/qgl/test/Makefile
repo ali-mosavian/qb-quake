@@ -136,7 +136,7 @@ $(B)/%/fgeom.bin: $(ROOT)/data/assets/assets.zip
 $(B)/t30in/pass: $(B)/t30in/keys
 $(B)/t30in/keys:
 	@mkdir -p $(@D)
-	@echo a > $@
+	@echo a a a > $@
 
 $(B)/%/pass: $(B)/%/t.exe $(B)/%/$(FONT) $(B)/%/fgeom.bin $(B)/%/assets.zip $(B)/%/colmap.bin $(B)/%/sys.zip run1.sh
 	@sh run1.sh $(DOSBOX) $(@D)

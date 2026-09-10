@@ -47,7 +47,6 @@ declare function vid_present ( _
 declare function vid_qgl_shape ( _
     g as Game _
 ) as integer
-declare sub vid_init_ugl ( )
 declare sub vid_init ( _
     g as Game _
 )
@@ -135,7 +134,6 @@ function vid_qgl_shape ( _
 
     vid_qgl_shape = false
 
-    if ( g.env.c_fmt <> UGL.8BIT ) then exit function
     if ( g.env.scr_x_res <> 320 or g.env.scr_y_res <> 200 ) then exit function
 
     vid_qgl_shape = true
@@ -143,20 +141,6 @@ function vid_qgl_shape ( _
 end function
 
 
-
-''::::::::::
-'' name: vid_init_ugl
-'' desc: mgl's library init, and no longer its video mode. Nothing of
-''       mgl's runs a frame now; uglInit stays because it is what links
-''       the upper memory blocks and sets the allocation strategy every
-''       qglMemAlloc lands in them by.
-''::::::::::
-sub vid_init_ugl
-    if ( uglInit() = FALSE ) then 
-        sys_error "0x0000, Could not init UGL..."
-    end if
-
-end sub
 
 
 

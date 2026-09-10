@@ -355,7 +355,6 @@ type Env
                                 '' as a single, but it is computed and
                                 '' stored as a whole number so the truncation
                                 '' happens once, not once a frame
-    c_fmt       as integer
     clear_screen    as integer
     
     sound       as integer

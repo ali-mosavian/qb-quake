@@ -66,6 +66,7 @@ declare function qglTmrCycles () as long
 declare sub qglTmrShutdown ()
 declare sub qglKbdShutdown ()
 declare sub qglMouseShutdown ()
+declare sub qglMemShutdown ()
 
 ''
 '' Declared here, not in a header: this module is the only caller, and a
@@ -302,14 +303,13 @@ sub sys_error ( msg as string )
     close #errf
 
     ''
-    '' Unhook, give the PIT and the mode back, then end mgl. uglEnd
-    '' stays until uglInit does.
+    '' Unhook, give the PIT, the mode and DOS's memory settings back.
     ''
     qglKbdShutdown
     qglMouseShutdown
     qglTmrShutdown
     qglVgaShutdown
-    uglEnd
+    qglMemShutdown
     
     ''
     '' Print msg and quit program

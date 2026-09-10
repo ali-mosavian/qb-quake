@@ -1,7 +1,7 @@
 ;; mem.asm -- conventional memory: allocate, free, copy, and how much
 ;;            there actually is.
 ;;
-;; name: qglMemAlloc / qglMemFree / qglMemCopy / qglMemAvail
+;; name: qglMemInit / qglMemShutdown / qglMemAlloc / qglMemFree / qglMemCopy / qglMemAvail
 ;; desc: DOS blocks, straight from INT 21h. No pool and no sub-allocator
 ;;       -- every caller here wants one big block for the life of the
 ;;       program, and a free list would be bookkeeping nothing reads.
@@ -24,6 +24,10 @@
 ;;         64K allocation fails against 180K free if no single hole fits.
 ;;       - allocation is paragraph-granular, so a returned pointer always
 ;;         has offset 0 and a caller may do segment arithmetic on it.
+;;       - qglMemInit links the upper memory blocks into DOS's chain and
+;;         sets strategy 81h, upper memory first: that is where every
+;;         block here lands, and it was uglInit's doing until mgl left.
+;;         qglMemShutdown puts both back; DOS does not on exit.
 
                 .model  medium, pascal
                 .386
@@ -319,6 +323,54 @@ qglMemAvail   endp
 ;; INTERNAL, no arguments, dx:ax back. Asking for 0FFFFh paragraphs is
 ;; MEANT to fail; the answer is what DOS puts in bx on the way out.
 ;;::::::::::::::
+qgl$mem_umb     db      0               ;; DOS's UMB link before init
+qgl$mem_strat   dw      0               ;; and its strategy
+qgl$mem_on      dw      0
+
+;;::::::::::::::
+;; qglMemInit () -- UMBs linked, strategy 81h. A second call changes nothing.
+;;::::::::::::::
+qglMemInit    proc    public uses bx
+
+                cmp     cs:qgl$mem_on, 0
+                jne     @@done
+                mov     ax, 5802h               ;; UMB link state
+                int     21h
+                jc      @@done
+                mov     cs:qgl$mem_umb, al
+                mov     ax, 5800h               ;; strategy
+                int     21h
+                jc      @@done
+                mov     cs:qgl$mem_strat, ax
+                mov     ax, 5803h
+                mov     bx, 1
+                int     21h
+                mov     ax, 5801h
+                mov     bx, 81h
+                int     21h
+                mov     cs:qgl$mem_on, 1
+@@done:         ret
+qglMemInit    endp
+
+
+;;::::::::::::::
+;; qglMemShutdown () -- the link and the strategy as they were
+;;::::::::::::::
+qglMemShutdown proc   public uses ax bx
+
+                cmp     cs:qgl$mem_on, 0
+                je      @@done
+                mov     cs:qgl$mem_on, 0
+                mov     ax, 5801h
+                mov     bx, cs:qgl$mem_strat
+                int     21h
+                mov     ax, 5803h
+                movzx   bx, cs:qgl$mem_umb
+                int     21h
+@@done:         ret
+qglMemShutdown endp
+
+
 qgl$AvailLargest proc  near private uses bx cx es
                 mov     bx, 0FFFFh
                 mov     ah, 48h

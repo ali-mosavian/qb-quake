@@ -1,12 +1,14 @@
 ;; t30in -- the keyboard hook sees a real key, the mouse keeps the position
 ;;          it is given.
 ;;
-;; run1.sh types 'a' through the emulator's AUTOTYPE a second in, so the
-;; INT 9 hook is driven by the hardware path and not by a call: the table
-;; must show scancode 1Eh down, then up, and word 0 must have carried the
-;; code. Bounded by the BIOS tick so a hook that never fires fails here
-;; rather than hanging the suite. Afterwards the vector is the one that
-;; was there before.
+;; run1.sh types 'a' three times through the emulator's AUTOTYPE, a second
+;; in, so the INT 9 hook is driven by the hardware path and not by a call:
+;; the table must show scancode 1Eh down, then up, and word 0 must have
+;; carried the code. Three, because AUTOTYPE feeds the keyboard buffer
+;; from a host thread with no lock and dropped one release under load; a
+;; later pair still shows both transitions. Bounded by the BIOS tick so a
+;; hook that never fires fails here rather than hanging the suite.
+;; Afterwards the vector is the one that was there before.
 ;;
 ;; The mouse cannot be moved headlessly, so the driver's callback is
 ;; called the way the driver would: mickeys in si:di, buttons in bx.

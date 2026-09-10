@@ -192,8 +192,6 @@ sub com_parse_config ( _
     
     open filename for input as #file
     
-    g.env.c_fmt = UGL.8BIT    
-            
     do 
         line input #file, raw_line
         line_num = line_num + 1

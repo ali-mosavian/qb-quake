@@ -25,6 +25,10 @@ option explicit
 '' Both drew SOMETHING is asserted apart from both drew the SAME. Two
 '' empty destinations match perfectly.
 ''
+'' This is the one caller of uglInit and uglEnd left: mgl's DC table is
+'' filled by the first and uglNew refuses without it. Production runs
+'' none of mgl now.
+''
 
 defint a-z
 
@@ -480,6 +484,13 @@ function qglDiffAll () as integer
     fh = freefile
     open "qgldiff.log" for output as #fh
 
+    if ( uglInit() = 0 ) then
+        print #fh, "   FAIL uglInit"
+        print #fh, "RESULT FAIL"
+        close #fh
+        qglDiffAll = 1
+        exit function
+    end if
     mdst = uglNew( ugl.mem, ugl.8bit, DIFF_W, DIFF_H )
     mtex = uglNew( ugl.mem, ugl.8bit, DIFF_TW, DIFF_TW )
     if ( qglSfInit() = 0 ) then
@@ -526,6 +537,7 @@ function qglDiffAll () as integer
 
     qglSfFree qtex
     qglSfFree qdst
+    uglEnd
 
     if ( bad = 0 ) then
         print #fh, "RESULT PASS"
