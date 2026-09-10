@@ -56,6 +56,10 @@ type MdlState
     vtx_hnd     as integer     '' qglGemAlloc's handle -- see mdl_rotate_all
     scale       as Vec3 '' vertex byte -> model unit: unit = byte*scale + origin
     origin      as Vec3
+    radius      as single      '' the box any frame at any yaw fits in,
+    zlo         as single      '' from the header: horizontal reach about
+    zhi         as single      '' the origin, and the z span
+    drawn       as integer     '' models drawn this frame, after the cull
 end type
 
 '' One spawned instance's own state -- everything mdl_think (pl_move.bas)

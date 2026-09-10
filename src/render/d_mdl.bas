@@ -136,6 +136,7 @@ sub mdl_load ( _
     dim vtxseg as integer
     dim skin_w as integer, skin_h as integer
     dim skfh as integer, skrow as integer, skptr as long
+    dim ex as single, ey as single
 
     g.mdl.loaded = 0
     geopath = mdlname + ".geo"
@@ -164,6 +165,16 @@ sub mdl_load ( _
     g.mdl.origin.x = cvs( mid$( hdr, 27, 4 ) )
     g.mdl.origin.y = cvs( mid$( hdr, 31, 4 ) )
     g.mdl.origin.z = cvs( mid$( hdr, 35, 4 ) )
+    '' Vertex bytes span 0..255, so this is the box every frame fits in;
+    '' the yaw rotates about the origin, so the horizontal reach is a
+    '' radius. What r_mdl_visible tests instead of 170 vertices.
+    ex = abs( g.mdl.origin.x )
+    if ( abs( g.mdl.origin.x + 255.0 * g.mdl.scale.x ) > ex ) then ex = abs( g.mdl.origin.x + 255.0 * g.mdl.scale.x )
+    ey = abs( g.mdl.origin.y )
+    if ( abs( g.mdl.origin.y + 255.0 * g.mdl.scale.y ) > ey ) then ey = abs( g.mdl.origin.y + 255.0 * g.mdl.scale.y )
+    g.mdl.radius = sqr( ex*ex + ey*ey )
+    g.mdl.zlo = g.mdl.origin.z
+    g.mdl.zhi = g.mdl.origin.z + 255.0 * g.mdl.scale.z
     if ( g.mdl.nvert > MDL_MAXV + 1 ) then close #fh : exit sub
     if ( g.mdl.ntri < 1 or g.mdl.nvert < 1 or g.mdl.nframe < 1 ) then
         close #fh

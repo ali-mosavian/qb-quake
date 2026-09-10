@@ -163,11 +163,15 @@ if [[ "${1:-}" == "--model" ]]; then
                "near:-at 264 -40 40 -yaw 0 -bench 8 -ticks 2"; do
         tag="${arm%%:*}"; flags="${arm#*:}"
         run_frame "-nostats $flags"         "$VBD_OUT/mdl-$tag-on.bmp"
+        drawn=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="mdl_drawn"{print $2}')
         run_frame "-nostats $flags -nomdl"  "$VBD_OUT/mdl-$tag-off.bmp"
         out=$(python3 "$ROOT/tools/imgdiff.py" "$VBD_OUT/mdl-$tag-off.bmp" "$VBD_OUT/mdl-$tag-on.bmp" | tail -1)
         if [[ "$tag" == away ]]; then
-            if [[ "$out" == IDENTICAL* ]]; then
-                echo "PASS  away: the model adds nothing where it is not"
+            # And the cull must have rejected them, not the depth test: the
+            # eight spawned models are all out of view here, and a model
+            # drawn into nothing still cost its 170 vertices in BASIC.
+            if [[ "$out" == IDENTICAL* && "${drawn:-8}" == 0 ]]; then
+                echo "PASS  away: the model adds nothing where it is not, mdl_drawn 0"
             else
                 echo "FAIL  away: $out -- the model painted outside itself"
                 rc=1
@@ -177,7 +181,7 @@ if [[ "${1:-}" == "--model" ]]; then
                 echo "FAIL  near: the model drew nothing at all"
                 rc=1
             else
-                echo "PASS  near: $out -- the model still renders"
+                echo "PASS  near: $out -- the model still renders, mdl_drawn $drawn"
             fi
         fi
     done

@@ -610,6 +610,51 @@ function r_cull_box ( _
     r_cull_box = -1
 end function
 
+''::::::::::
+'' name: r_mdl_visible
+'' desc: Whether a model at org can show at all: its box against the
+''       frustum, then the leaves its box reaches against the PVS as the
+''       portal flood left it. Conservative both ways -- the box is the
+''       largest any frame at any yaw needs, and a leaf is tested at the
+''       box's corners and centre, so a model straddling into a visible
+''       leaf is drawn. Every rejection here is 170 vertices and 328
+''       triangles mdl_draw does not transform in BASIC.
+''::::::::::
+function r_mdl_visible ( _
+    org as Vec3, _
+    byval radius as single, _
+    byval zlo as single, _
+    byval zhi as single, _
+    nodes() as Node, _
+    planes() as Plane, _
+    frustum() as DiskPlane _
+) as integer
+    dim bb as Bounds
+    dim p as Vec3
+    dim i as integer, leaf as integer
+
+    r_mdl_visible = 0
+    bb.min.x = cint( org.x - radius ) : bb.max.x = cint( org.x + radius )
+    bb.min.y = cint( org.y - radius ) : bb.max.y = cint( org.y + radius )
+    bb.min.z = cint( org.z + zlo )    : bb.max.z = cint( org.z + zhi )
+    if ( r_cull_box( bb, frustum() ) = 0 ) then exit function
+
+    for i = 0 to 8
+        if ( i = 8 ) then
+            p = org
+            p.z = org.z + (zlo + zhi) * 0.5
+        else
+            if ( i and 1 ) then p.x = bb.max.x else p.x = bb.min.x
+            if ( i and 2 ) then p.y = bb.max.y else p.y = bb.min.y
+            if ( i and 4 ) then p.z = bb.max.z else p.z = bb.min.z
+        end if
+        leaf = r_point_leaf( p, nodes(), planes() )
+        if ( leaf > 0 ) then
+            if ( pvs_now( leaf ) ) then r_mdl_visible = -1 : exit function
+        end if
+    next i
+end function
+
 
 
 

@@ -169,6 +169,15 @@ declare sub scr_draw_hud ( _
     byval w as integer, _
     byval h as integer _
 )
+declare function r_mdl_visible ( _
+    org as Vec3, _
+    byval radius as single, _
+    byval zlo as single, _
+    byval zhi as single, _
+    nodes() as Node, _
+    planes() as Plane, _
+    frustum() as DiskPlane _
+) as integer
 declare sub r_portal_outline ( _
     g as Game, _
     byval dc as long, _
@@ -485,10 +494,15 @@ sub host_render ( _
     '' drawing reads them, same split host_tick/host_render already keep
     '' for the player.
     pt0 = sys_now()
+    g.mdl.drawn = 0
     if ( g.mdl.loaded and (g.env.no_mdl = 0) ) then
         for mdl_i = 0 to g.mdl_count - 1
-            mdl_draw g, mdltri_buffer(), mdl_ent( mdl_i ), _
-                     mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
+            if ( r_mdl_visible( mdl_ent( mdl_i ).pos, g.mdl.radius, g.mdl.zlo, g.mdl.zhi, _
+                                nds_buffer(), pln_buffer(), frustum() ) ) then
+                mdl_draw g, mdltri_buffer(), mdl_ent( mdl_i ), _
+                         mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
+                g.mdl.drawn = g.mdl.drawn + 1
+            end if
         next mdl_i
     end if
     if ( g.ft.n > 0 ) then
