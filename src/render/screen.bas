@@ -1172,6 +1172,9 @@ sub scr_pal_load
     dim i as integer
 
     redim scr_pal(255) as PalRgb
+    '' here, not on first use: a module-level dim never runs outside
+    '' main.bas, and ubound() of the unallocated array is error 9
+    redim scr_pal_sh(255) as PalRgb
     f = freefile
     open "pal.raw" for binary as #f
     if ( lof( f ) < 768 ) then
@@ -1395,7 +1398,6 @@ sub scr_pal_shift ( g as Game, byval dt as single )
         was = 0
         exit sub
     end if
-    if ( ubound( scr_pal_sh ) < 255 ) then redim scr_pal_sh(255) as PalRgb
     for i = 0 to 255
         r  = asc( scr_pal(i).red )
         gr = asc( scr_pal(i).green )

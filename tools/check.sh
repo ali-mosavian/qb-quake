@@ -22,6 +22,8 @@
 #   tools/check.sh --model      the alias model against -nomdl at two campath
 #                               ticks: one where it must draw nothing, one
 #                               where it must draw something.
+#   tools/check.sh --fight      ten seconds next to a knight: it must reach
+#                               the player and strike, and nothing may crash
 #
 # -nostats is not optional. The overlay prints live fps and frame time, so
 # two runs of the SAME build differ by ~28 pixels in the digits, and a
@@ -186,6 +188,23 @@ if [[ "${1:-}" == "--model" ]]; then
         fi
     done
     exit $rc
+fi
+
+# --fight is the first bench run in which the player is ever hurt. The
+# damage flash's palette copy was a module-level dynamic array screen.bas
+# never allocated -- the trap this repo already documents -- and every
+# other gate stands where no monster ever lands a hit. Spawn is
+# randomize 1, so the knight at (464,-40) is always there.
+if [[ "${1:-}" == "--fight" ]]; then
+    build_exe
+    run_frame "-lm -nostats -at 314 -40 48 -yaw 0 -bench 400 -ticks 600" "$VBD_OUT/fight.bmp"
+    hp=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_health"{print $2}')
+    deaths=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_deaths"{print $2}')
+    if [[ -f "$VBD_OUT/ERROR.LOG" ]]; then echo "FAIL  fight: $(cat "$VBD_OUT/ERROR.LOG")"; exit 1; fi
+    if [[ "${hp:-100}" -lt 100 || "${deaths:-0}" -gt 0 ]]; then
+        echo "PASS  fight: health $hp, deaths $deaths -- the knight struck"; exit 0
+    fi
+    echo "FAIL  fight: health ${hp:-none}, deaths ${deaths:-none} -- nothing hit the player"; exit 1
 fi
 
 # --churn is a DETERMINISM check, not a reference-image one: it runs the

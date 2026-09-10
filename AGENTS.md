@@ -2036,8 +2036,38 @@ and grows freely.
 model: 170 vertices x 3 bytes = 510 a frame, 32 frames = 16,320 of
 16,384. `stand,run,death,pain` fills it; the soldier's shoot set does
 not fit, so a volley has no animation. `mkmdl.py` emits the frameset in
-the order given and `d_mdl.bas` indexes the sets by position, so the
-Makefile's list IS the frame layout.
+the order given and writes each set's count into the `.geo` header --
+stand, run, death, pain, attack, by position -- so the Makefile's list
+IS the frame layout and `MdlState` carries it. The knight's 108
+vertices leave room for `attackb`, which is why it is the second
+monster: `MdlEnt.kind` picks `g.mdl` or `g.kmdl`, every other spawn
+is a knight, and `mdl_think` takes the `MdlState` it animates.
+
+**A monster that only looks while standing never sees anyone.** The
+port called FindTarget from `ai_stand` alone; id's `ai_walk` calls it
+every frame too, and a player who fired within the second is noticed
+from behind at RANGE_NEAR (`show_hostile`, W_Attack's `time + 1`;
+RANGE_MID has that term commented out in ai.qc and still wants
+infront). Before this, ten seconds beside a knight cost no health at
+all: all eight were wandering, and a wanderer never looked.
+
+**The first bench run in which anything hurt the player crashed with
+`runtime error 9 at line 0`.** `scr_pal_shift`'s shifted palette was a
+module-level `dim shared` under `'$DYNAMIC` in screen.bas, allocated on
+first use behind a `ubound()` test -- and `ubound` of an array that was
+never allocated is itself error 9. It is `redim`med in `scr_pal_load`
+now, and `tools/check.sh --fight` stands ten seconds beside the knight
+at (464,-40): health must drop and nothing may crash.
+
+**Finding a `runtime error 9 at line 0` with the debugger.** Line 0 is
+all BC says without line numbers, and `ON ERROR` swallows the address.
+What worked: a conf whose autoexec stops at `C:\>` and `core=normal`
+(breakpoints do not fire on the dynamic core), `dosbox_load_and_run_to`
+the program with `B$RUNERR` as the name -- it stops at the entry with
+symbols loaded -- then `bp_set B$RUNERR` and continue. At the stop
+`[SP+2]` is the far return address into the BASIC module; subtract
+`loadLinear` and the MAP's publics name the procedure. Ack the stale
+`process_exit` first or the shell command is refused.
 
 **`make assets` will not rebuild the model for a frameset change** --
 the rule depends on the pak and the tool, not the Makefile. Delete
