@@ -171,6 +171,7 @@ declare function qglSfNew ( _
     byval hgt as integer, _
     byval whr as integer _
 ) as long
+declare function qglSfRdRow ( byval s as long, byval y as integer ) as long
 declare function qglSfWrRow ( byval s as long, byval y as integer ) as long
 declare function qglFileOpenBas ( flname as string ) as integer
 declare function qglFileRead ( _
@@ -194,9 +195,20 @@ declare sub qglDrBlitScl ( _
     byval h as integer, _
     byval s as long _
 )
+declare function qglSfViewNew& ( _
+    byval parent as long, _
+    byval wide as integer, _
+    byval high as integer, _
+    byval bps as integer _
+)
+declare function qglSfViewAim% ( _
+    byval v as long, _
+    byval ofs as long _
+)
 declare sub scr_sbar_load ( )
 declare sub scr_sbar_paint ( g as Game )
 declare sub scr_sbar_cell ( byval idx as integer, byval x as integer )
+declare function scr_seg_of ( byval p as long ) as integer
 declare sub scr_sbar_num ( byval x as integer, byval v as integer )
 declare sub scr_sbar_draw ( _
     g as Game, _
@@ -476,17 +488,21 @@ dim shared scr_pal_sh() as PalRgb  '' the shifted copy scr_pal_shift installs
 '' found once at load -- over the bar, and only when a number changes.
 const SBARC_W      = 320
 const SBARC_H      = 24
+const SBARC_EMS_W  = 512
+const SBARC_CELL_Y = 24          '' band of the EMS surface holding the cells
+const SBARC_WORK_Y = 48          '' band the blit reads, composed per paint
+const SBARC_EMS_H  = 72
 const SBARC_CELL   = 24
 const SBARC_CELLS  = 17
 const SBARC_MINUS  = 10
 const SBARC_ICON   = 11          '' SB_SHELLS
 const SBARC_FACE   = 12          '' FACE1, the healthy one; FACE5 is +4
 const SBARC_SPANS  = 6           '' opaque runs a cell row can have
-dim shared sbar_bar as long
+'' One EMS surface, 512 wide because a row must divide 16K: the untouched
+'' bar in rows 0..23, the 17 cells side by side in 24..47, the composed
+'' bar in 48..71. Nothing of it in the far heap -- e1m1 has none spare.
 dim shared sbar_work as long
-dim shared sbar_cell() as string * 576
-dim shared sbar_sp() as integer   '' (cell*24 + row, span*2): x, then length
-dim shared sbar_spn() as integer  '' spans in that row
+dim shared sbar_view as long            '' the 320 of the composed band
 dim shared sbar_health as integer, sbar_shells as integer, sbar_face as integer
 dim shared spx() as integer      '' projected wireframe vertices
 dim shared spy() as integer
@@ -1246,30 +1262,38 @@ end sub
 
 ''::::::::::
 '' name: scr_sbar_load
-'' desc: sbar.raw into a conventional Surface, sbnum.raw into the cells,
-''       and each cell row's opaque spans.
+'' desc: sbar.raw into the surface's top band, sbnum.raw's cells into the
+''       middle one.
 ''::::::::::
 sub scr_sbar_load
-    dim u as integer, y as integer, i as integer, k as integer, n as integer
-    dim f as integer
-    dim rowp as long
+    dim y as integer, i as integer, f as integer
+    dim row as string * 320, cell as string * 576
+    dim rowp as long, cellp as long, dst as long
 
-    sbar_bar = qglSfNew( SBARC_W, SBARC_H, QGL_SURF_CMEM )
-    sbar_work = qglSfNew( SBARC_W, SBARC_H, QGL_SURF_CMEM )
-    if ( sbar_bar = 0 or sbar_work = 0 ) then sys_error "0x3003, no memory for the status bar"
-    u = qglFileOpenBas( "sbar.raw" )
-    if ( u = 0 ) then sys_error "0x3004, sbar.raw is missing -- run make assets"
+    rowp = clng( varseg( row ) ) * 65536& + ( clng( varptr( row ) ) and 65535& )
+    cellp = clng( varseg( cell ) ) * 65536& + ( clng( varptr( cell ) ) and 65535& )
+
+    sbar_work = qglSfNew( SBARC_EMS_W, SBARC_EMS_H, QGL_SURF_EMS )
+    if ( sbar_work = 0 ) then sys_error "0x3003, no memory for the status bar"
+    sbar_view = qglSfViewNew&( sbar_work, SBARC_W, SBARC_H, SBARC_EMS_W )
+    if ( sbar_view = 0 ) then sys_error "0x3007, no view for the status bar"
+    if ( qglSfViewAim%( sbar_view, clng( SBARC_WORK_Y ) * SBARC_EMS_W ) = 0 ) then
+        sys_error "0x3008, the status bar view would not aim"
+    end if
+
+    f = freefile
+    open "sbar.raw" for binary as #f
+    if ( lof( f ) < SBARC_W * SBARC_H ) then
+        close #f
+        sys_error "0x3004, sbar.raw is missing -- run make assets"
+    end if
     for y = 0 to SBARC_H - 1
-        rowp = qglSfWrRow( sbar_bar, y )
-        if ( qglFileRead( u, rowp, clng( SBARC_W ) ) <> SBARC_W ) then
-            sys_error "0x3005, sbar.raw is short"
-        end if
+        get #f, , row
+        dst = qglSfWrRow( sbar_work, y )
+        qglMemCopy dst, rowp, clng( SBARC_W )
     next y
-    qglFileClose u
+    close #f
 
-    redim sbar_cell( SBARC_CELLS - 1 ) as string * 576
-    redim sbar_sp( SBARC_CELLS * SBARC_CELL - 1, SBARC_SPANS * 2 - 1 ) as integer
-    redim sbar_spn( SBARC_CELLS * SBARC_CELL - 1 ) as integer
     f = freefile
     open "sbnum.raw" for binary as #f
     if ( lof( f ) < SBARC_CELLS * 576 ) then
@@ -1277,53 +1301,50 @@ sub scr_sbar_load
         sys_error "0x3006, sbnum.raw is missing -- run make assets"
     end if
     for i = 0 to SBARC_CELLS - 1
-        get #f, , sbar_cell(i)
+        get #f, , cell
         for y = 0 to SBARC_CELL - 1
-            n = 0
-            k = 0
-            do while ( k < SBARC_CELL )
-                if ( asc( mid$( sbar_cell(i), y * SBARC_CELL + k + 1, 1 ) ) = 255 ) then
-                    k = k + 1
-                elseif ( n < SBARC_SPANS ) then
-                    sbar_sp( i * SBARC_CELL + y, n * 2 ) = k
-                    do while ( k < SBARC_CELL )
-                        if ( asc( mid$( sbar_cell(i), y * SBARC_CELL + k + 1, 1 ) ) = 255 ) then exit do
-                        k = k + 1
-                    loop
-                    sbar_sp( i * SBARC_CELL + y, n * 2 + 1 ) = k - sbar_sp( i * SBARC_CELL + y, n * 2 )
-                    n = n + 1
-                else
-                    k = SBARC_CELL
-                end if
-            loop
-            sbar_spn( i * SBARC_CELL + y ) = n
+            dst = qglSfWrRow( sbar_work, SBARC_CELL_Y + y ) + i * SBARC_CELL
+            qglMemCopy dst, cellp + y * SBARC_CELL, clng( SBARC_CELL )
         next y
     next i
     close #f
+
     sbar_health = -1
 end sub
 
+'' the segment half of a far pointer, as the integer def seg takes. The
+'' low half comes off first: \ truncates towards zero, and a window at
+'' E000h is a negative long.
+function scr_seg_of ( byval p as long ) as integer
+    dim sg as long
+    sg = ( p - ( p and 65535& ) ) \ 65536
+    if ( sg > 32767 ) then sg = sg - 65536
+    scr_seg_of = sg
+end function
+
 ''::::::::::
 '' name: scr_sbar_cell
-'' desc: A cell's opaque spans over the working bar at column x.
+'' desc: A cell's opaque pixels over the working bar at column x. The
+''       read window is slot 0 and the write window slot 1, so both rows
+''       stay mapped across the copy.
 ''::::::::::
 sub scr_sbar_cell ( byval idx as integer, byval x as integer )
-    dim y as integer, n as integer
-    dim rowp as long, src as long
+    dim y as integer, k as integer, c as integer
+    dim src as long, dst as long
 
     for y = 0 to SBARC_CELL - 1
-        if ( sbar_spn( idx * SBARC_CELL + y ) > 0 ) then
-            rowp = qglSfWrRow( sbar_work, y ) + x
-            '' taken per row: the far heap moves under a call
-            src = clng( varseg( sbar_cell(idx) ) ) * 65536& + _
-                  ( clng( varptr( sbar_cell(idx) ) ) and 65535& ) + y * SBARC_CELL
-            for n = 0 to sbar_spn( idx * SBARC_CELL + y ) - 1
-                qglMemCopy rowp + sbar_sp( idx * SBARC_CELL + y, n * 2 ), _
-                           src + sbar_sp( idx * SBARC_CELL + y, n * 2 ), _
-                           clng( sbar_sp( idx * SBARC_CELL + y, n * 2 + 1 ) )
-            next n
-        end if
+        src = qglSfRdRow( sbar_work, SBARC_CELL_Y + y ) + idx * SBARC_CELL
+        dst = qglSfWrRow( sbar_work, SBARC_WORK_Y + y ) + x
+        for k = 0 to SBARC_CELL - 1
+            def seg = scr_seg_of( src )
+            c = peek( ( src and 65535& ) + k )
+            if ( c <> 255 ) then
+                def seg = scr_seg_of( dst )
+                poke ( dst and 65535& ) + k, c
+            end if
+        next k
     next y
+    def seg
 end sub
 
 ''::::::::::
@@ -1348,6 +1369,7 @@ end sub
 ''::::::::::
 sub scr_sbar_paint ( g as Game )
     dim hp as integer, sh as integer, f as integer
+    dim y as integer, src as long, dst as long
 
     hp = g.fight.health
     if ( hp < 0 ) then hp = 0
@@ -1357,7 +1379,11 @@ sub scr_sbar_paint ( g as Game )
     if ( hp = sbar_health and sh = sbar_shells and f = sbar_face ) then exit sub
     sbar_health = hp : sbar_shells = sh : sbar_face = f
 
-    qglDrBlit sbar_work, 0, 0, sbar_bar
+    for y = 0 to SBARC_H - 1
+        src = qglSfRdRow( sbar_work, y )
+        dst = qglSfWrRow( sbar_work, SBARC_WORK_Y + y )
+        qglMemCopy dst, src, clng( SBARC_W )
+    next y
     scr_sbar_cell SBARC_FACE + ( 4 - f ), 112
     scr_sbar_num 136, hp
     scr_sbar_cell SBARC_ICON, 224
@@ -1378,7 +1404,7 @@ sub scr_sbar_draw ( _
 
     scr_sbar_paint g
     bh = cint( SBARC_H * w / SBARC_W )
-    qglDrBlitScl dc, 0, h - bh, w, bh, sbar_work
+    qglDrBlitScl dc, 0, h - bh, w, bh, sbar_view
 end sub
 
 ''::::::::::
