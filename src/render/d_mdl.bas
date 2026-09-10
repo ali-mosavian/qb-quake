@@ -69,6 +69,7 @@ declare function qglRsPoly ( byval dst as long, _
                              byval mode as integer, _
                              byval src as long ) as integer
 declare function qglSfZMode ( byval surf as long, byval mode as integer ) as integer
+declare function sys_rdtsc ( ) as long
 declare function qglSfNew ( _
     byval wid as integer, _
     byval hgt as integer, _
@@ -347,6 +348,7 @@ sub mdl_draw ( _
     '' and MDL_CLIPV is nine. qglRsPoly scans any convex polygon.
     dim qv( MDL_CLIPV ) as QglVtx
     dim ia(2) as integer                            '' the triangle's corners
+    dim t0 as long, t1 as long, tr0 as long, tras as long
     dim cbx(1, MDL_CLIPV) as single                 '' the ping-pong rings,
     dim cby(1, MDL_CLIPV) as single                 '' clip space
     dim cbw(1, MDL_CLIPV) as single
@@ -372,7 +374,11 @@ sub mdl_draw ( _
     else
         frame = MDL_STAND_FRAMES% + ent.anim_frame
     end if
+    t0 = sys_rdtsc()
     mdl_rotate_all g, frame, ent.yaw, mdl_wxr(), mdl_wyr(), mdl_wzr()
+    t1 = sys_rdtsc()
+    g.pt.mrot_sum = g.pt.mrot_sum + (t1 - t0) / 1000000.0
+    t0 = t1
 
     for v = 0 to g.mdl.nvert - 1
         '' BSP space (Z up), model-local rotation already applied, now
@@ -395,6 +401,10 @@ sub mdl_draw ( _
         mdl_cy( v ) = rx * mtx_fin.m12 + ry * mtx_fin.m22 + rz * mtx_fin.m32 + mtx_fin.m42
         mdl_okv( v ) = ( mdl_cw( v ) >= z_near )
     next v
+    t1 = sys_rdtsc()
+    g.pt.mxf_sum = g.pt.mxf_sum + (t1 - t0) / 1000000.0
+    t0 = t1
+    tras = 0
 
     '' qgl from here: the destination and the skin are both Surfaces.
     '' The skin is EMS and is handed to every triangle, so its page is
@@ -516,8 +526,14 @@ sub mdl_draw ( _
             area = ( qv(1).x - qv(0).x ) * ( qv(2).y - qv(0).y ) _
                  - ( qv(2).x - qv(0).x ) * ( qv(1).y - qv(0).y )
             if ( area < 0.0 ) then
+                tr0 = sys_rdtsc()
                 qz = qglRsPoly%( qdst, qv(0), nout, QGL_M_TEX, qskin )
+                tras = tras + (sys_rdtsc() - tr0)
+                g.pt.mtri_n = g.pt.mtri_n + 1
             end if
         end if
     next j
+    t1 = sys_rdtsc()
+    g.pt.mras_sum = g.pt.mras_sum + tras / 1000000.0
+    g.pt.mclip_sum = g.pt.mclip_sum + (t1 - t0 - tras) / 1000000.0
 end sub
