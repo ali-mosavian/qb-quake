@@ -411,12 +411,21 @@ def parse_entities(text: str, nmodels: int) -> bytes:
     dests: dict[str, tuple[tuple[float, float, float], float]] = {}
     trigs: list[tuple[str, int]] = []
     plats: list[tuple[int, float, float]] = []
-    items: list[tuple[int, tuple[float, float, float]]] = []
+    items: list[tuple[int, int, tuple[float, float, float]]] = []
     item_kind = {'item_health': 0, 'item_shells': 1}
 
     def vec(v: str) -> tuple[float, float, float]:
         x, y, z = (float(t) for t in v.split())
         return (x, y, z)
+
+    def item_amount(classname: str, flags: int) -> int:
+        # items.qc: H_ROTTEN 15, H_MEGA 100, else 25; WEAPON_BIG2 40 shells, else 20
+        match classname, flags & 1, flags & 2:
+            case 'item_health', 1, _: return 15
+            case 'item_health', _, 2: return 100
+            case 'item_health', _, _: return 25
+            case _, 1, _: return 40
+            case _: return 20
 
     def model(v: str) -> int:
         m = int(v[1:]) if v.startswith('*') and v[1:].isdigit() else 0
@@ -438,7 +447,8 @@ def parse_entities(text: str, nmodels: int) -> bytes:
                               float(kv.get('speed', '0')),
                               float(kv.get('height', '0'))))
             case str(c) if c in item_kind:
-                items.append((item_kind[c], vec(kv.get('origin', '0 0 0'))))
+                items.append((item_kind[c], item_amount(c, int(kv.get('spawnflags', '0'))),
+                              vec(kv.get('origin', '0 0 0'))))
 
     # a trigger with no destination still hides its brush, exactly as the
     # BASIC pass 1 did before pass 2 paired them
@@ -453,8 +463,8 @@ def parse_entities(text: str, nmodels: int) -> bytes:
         buf += struct.pack('<hff', m, speed, height)
     for m in hides:
         buf += struct.pack('<h', m)
-    for kind, org in items:
-        buf += struct.pack('<h3f', kind, *org)
+    for kind, amount, org in items:
+        buf += struct.pack('<hh3f', kind, amount, *org)
     return bytes(buf)
 
 

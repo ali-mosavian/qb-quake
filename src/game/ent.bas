@@ -209,7 +209,8 @@ sub ent_load_teleports ( _
     redim face_mdl( g.wld.count.faces ) as integer
     redim tele( h.ntele ) as Teleporter
     redim plat( h.nplat ) as PlatEnt
-    redim item( h.nitem ) as ItemEnt
+    '' room after the map's items for one backpack a soldier
+    redim item( h.nitem + MDL_MAX_ENTS% ) as ItemEnt
 
     g.tele_count = 0
     g.plat_count = 0
@@ -286,10 +287,12 @@ sub ent_load_teleports ( _
     for  i = 1 to h.nitem
         ent_get u, clng( varseg( ir ) ) * 65536& + (clng( varptr( ir ) ) and 65535&), len( ir )
         item( g.item_count ).kind = ir.kind
+        item( g.item_count ).amount = ir.amount
         item( g.item_count ).pos  = ir.org
         item( g.item_count ).gone = 0
         g.item_count = g.item_count + 1
     next i
+    g.item_fixed = g.item_count
 
     qglFileClose u
 

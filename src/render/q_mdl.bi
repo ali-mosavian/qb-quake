@@ -26,16 +26,31 @@ const MDL_RUN_FRAMES%   = 8   '' army_run1..8
 const MDL_DEATH_FRAMES% = 10  '' army_death1..10, after the run set
 const MDL_PAIN_FRAMES%  = 6   '' army_pain1..6, after the death set: 32 frames fill the page
 const MDL_HEALTH%       = 30  '' monster_army's health
-const MDL_DAMAGE%       = 8   '' about half of army_fire's four pellets landing
-const MDL_HIT_CHANCE#   = 0.5
-const MDL_ATTACK_RATE#  = 1.0 '' seconds between volleys
+'' army_fire: FireBullets (4, dir, '0.1 0.1 0'), 4 damage a pellet, aimed
+'' 0.2 s behind the player's velocity
+const MDL_PELLETS%      = 4
+const MDL_PELLET_DMG%   = 4
+const MDL_SPREAD#       = 0.1
+const MDL_AIM_LAG#      = 0.2
+'' SoldierCheckAttack's chance per think, by range, then 1 + random()
+const MDL_ATK_MELEE#    = 0.9
+const MDL_ATK_NEAR#     = 0.4
+const MDL_ATK_MID#      = 0.05
+'' army_pain: pain_finished 0.6 for the short flinch, 1.1 for the others
+const MDL_PAIN_SHORT#   = 0.6
+const MDL_PAIN_LONG#    = 1.1
+const MDL_PAIN_SHORT_P# = 0.2
+'' monster_army's setsize: '-16 -16 -24' '16 16 40', what a pellet hits
+const MDL_HALF#         = 16.0
+const MDL_ZLO#          = -24.0
+const MDL_ZHI#          = 40.0
 const MDL_FLASH#        = 0.12 '' seconds the muzzle flash shows
 const MDL_GUN_FWD#      = 20.0 '' the muzzle, ahead of and above the origin
 const MDL_GUN_UP#       = 28.0
 const MDL_BACKPACK%     = 5   '' the shells a dead soldier's backpack carries
-const MDL_RESPAWN#      = 15.0 '' seconds a corpse lies before it is a soldier again
 const MDL_YAW_SPEED#    = 20.0   '' walkmonster_start_go's yaw_speed
 const MDL_RANGE_MELEE#  = 120.0  '' ai.qc range() -- visible() alone is enough here
+const MDL_RANGE_NEAR#   = 500.0  '' range(): < MELEE, < NEAR, < MID, else FAR
 const MDL_RANGE_MID#    = 1000.0 '' range() >= this is RANGE_FAR, never noticed
 const MDL_VIEW_OFS#     = 25.0   '' walkmonster_start_go's view_ofs
 
@@ -99,7 +114,7 @@ type MdlEnt
     hunting     as integer     '' has seen the player: RUN chases instead of wandering
     next_attack as single      '' anim_time of the next volley
     flash_until as single      '' the volley's muzzle flash shows until then
-    dead_at     as single      '' anim_time it died, for the respawn
+    pain_finished as single    '' army_pain: no new flinch before this
     spawn       as Vec3        '' where it respawns
 end type
 

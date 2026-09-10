@@ -26,7 +26,8 @@ type Game
     mdl         as MdlState       '' the one loaded model asset, shared by every spawned instance
     mdl_count   as integer        '' how many of mdl_ent() are actually spawned
     fight       as PlayerCombat   '' health, shells, kills, the shotgun's timers
-    item_count  as integer        '' pickups in item(), from ents.bin
+    item_count  as integer        '' pickups in item(): the map's, then dropped backpacks
+    item_fixed  as integer        '' how many of those are the map's
 
     '' LAST, deliberately. r_walk.c and sb_build.c reach g.vis and
     '' g.rdr.dlight by byte offset -- GAME_VIS_OFFSET 4970 and

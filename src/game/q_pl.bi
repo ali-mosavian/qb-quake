@@ -134,13 +134,24 @@ type PlayerCombat
     state       as integer     '' GS_*: what the tick and the overlay do
     state_until as single      '' when GS_DEAD ends
     fire_prev   as integer     '' last tick's fire, so a held button is one press
+    rot_at      as single      '' megahealth: the next point over 100 rots then
 end type
 
 const PL_HEALTH%       = 100
 const PL_SHELLS%       = 25     '' Quake's starting shells
 const PL_FIRE_RATE#    = 0.5    '' the shotgun's attack_finished
 const PL_SHOT_RANGE#   = 2048.0
-const PL_SHOT_DAMAGE%  = 15     '' six pellets of four, most of them landing
+'' W_FireShotgun: FireBullets (6, dir, '0.04 0.04 0'), TraceAttack (4, ...)
+const PL_PELLETS%      = 6
+const PL_PELLET_DMG%   = 4
+const PL_SPREAD#       = 0.04
+const PL_SHELLS_MAX%   = 100
+const PL_HEALTH_MEGA%  = 250    '' T_Heal ignoring the cap stops here
+const PL_ROT_DELAY#    = 5.0    '' item_megahealth_rot: 5 s, then a point a second
+'' the player's setsize, what a soldier's pellet hits
+const PL_HALF#         = 16.0
+const PL_ZLO#          = -24.0
+const PL_ZHI#          = 32.0
 const PL_DEATH_PAUSE#  = 1.5    '' seconds YOU DIED stays before the respawn
 
 const GS_TITLE% = 0             '' fire starts the fight

@@ -120,7 +120,8 @@ declare sub pl_fire ( _
     mdl_ent() as MdlEnt, _
     models() as Submodel, _
     brush() as BrushModel, _
-    planes() as Plane _
+    planes() as Plane, _
+    item() as ItemEnt _
 )
 declare sub pl_items_touch ( g as Game, item() as ItemEnt )
 declare sub pl_respawn ( g as Game )
@@ -324,7 +325,7 @@ sub host_tick ( _
     fire = ( g.env.mouse.left or g.env.keyboard.ctrl )
     select case g.fight.state
     case GS_PLAY%
-        if ( fire ) then pl_fire g, mdl_ent(), models(), brush(), planes()
+        if ( fire ) then pl_fire g, mdl_ent(), models(), brush(), planes(), item()
         pl_items_touch g, item()
         '' every soldier's own think -- Quake's 10 Hz, gated inside
         '' mdl_think against g.rdr.anim_time

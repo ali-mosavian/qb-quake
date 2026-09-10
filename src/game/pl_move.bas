@@ -60,15 +60,40 @@ declare function mdl_slab ( _
     tn as single, _
     tf as single _
 ) as integer
-declare function mdl_ray_hit ( _
-    ent as MdlEnt, _
-    byval radius as single, _
+declare function mdl_ray_box ( _
+    c as Vec3, _
+    byval hx as single, _
     byval zlo as single, _
     byval zhi as single, _
     org as Vec3, _
     dir as Vec3, _
     byval maxt as single _
 ) as single
+declare sub pl_spread_dir ( _
+    dir as Vec3, _
+    byval spread as single, _
+    outdir as Vec3 _
+)
+declare sub mdl_damage ( _
+    g as Game, _
+    ent as MdlEnt, _
+    byval dmg as integer, _
+    item() as ItemEnt _
+)
+declare sub mdl_fire ( _
+    g as Game, _
+    ent as MdlEnt, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+)
+declare sub pl_item_add ( _
+    g as Game, _
+    item() as ItemEnt, _
+    byval kind as integer, _
+    byval amount as integer, _
+    org as Vec3 _
+)
 declare sub pl_respawn ( g as Game )
 declare sub pl_reset_player ( g as Game )
 declare sub pl_game_reset ( _
@@ -1156,6 +1181,7 @@ sub mdl_spawn ( _
     ent.health = MDL_HEALTH%
     ent.hunting = 0
     ent.next_attack = 0.0
+    ent.pain_finished = 0.0
     '' staggered, not all-at-0: eight monsters spawned in the same tick
     '' otherwise all pick their first wander goal on the same think.
     ent.stand_until = rnd * MDL_STAND_MAX#
@@ -1644,6 +1670,7 @@ sub mdl_think ( _
     dim dist as single
     dim goal as Vec3
     dim dx as single, dy as single, d2 as single
+    dim chance as single
 
     if ( g.mdl.loaded = 0 ) then exit sub
     if ( g.rdr.anim_time < ent.next_think ) then exit sub
@@ -1685,16 +1712,25 @@ sub mdl_think ( _
 
     dist = mdl_run_dist( ent.anim_frame )
     if ( ent.hunting ) then
-        '' army_atk: a volley whenever the player is in sight, then the
-        '' chase goes on. The pellets land by chance, not by aim.
+        '' SoldierCheckAttack: a clear line, attack_finished passed, and a
+        '' chance by range each think; then army_fire and 1 + random().
         if ( g.rdr.anim_time >= ent.next_attack ) then
             if ( mdl_find_target( g, ent, models(), brush(), planes() ) ) then
-                ent.next_attack = g.rdr.anim_time + MDL_ATTACK_RATE#
-                ent.flash_until = g.rdr.anim_time + MDL_FLASH#
-                if ( rnd < MDL_HIT_CHANCE# ) then
-                    g.fight.health = g.fight.health - MDL_DAMAGE%
-                    g.fight.hurt_until = g.rdr.anim_time + 0.3
-                    if ( g.fight.health <= 0 ) then pl_respawn g
+                dx = g.pl.pos.x - ent.pos.x : dy = g.pl.pos.y - ent.pos.y
+                d2 = dx*dx + dy*dy + ( g.pl.pos.z - ent.pos.z ) * ( g.pl.pos.z - ent.pos.z )
+                if ( d2 < MDL_RANGE_MELEE# * MDL_RANGE_MELEE# ) then
+                    chance = MDL_ATK_MELEE#
+                elseif ( d2 < MDL_RANGE_NEAR# * MDL_RANGE_NEAR# ) then
+                    chance = MDL_ATK_NEAR#
+                elseif ( d2 < MDL_RANGE_MID# * MDL_RANGE_MID# ) then
+                    chance = MDL_ATK_MID#
+                else
+                    chance = 0.0
+                end if
+                if ( rnd < chance ) then
+                    ent.next_attack = g.rdr.anim_time + 1.0 + rnd
+                    ent.flash_until = g.rdr.anim_time + MDL_FLASH#
+                    mdl_fire g, ent, models(), brush(), planes()
                 end if
             end if
         end if
@@ -1751,14 +1787,14 @@ function mdl_slab ( _
 end function
 
 ''::::::::::::::
-'' name: mdl_ray_hit
+'' name: mdl_ray_box
 '' desc: Where a ray from org along dir enters the soldier's box, in
 ''       units along dir, or -1 past maxt or missing. The box is the one
 ''       r_mdl_visible culls with.
 ''::::::::::::::
-function mdl_ray_hit ( _
-    ent as MdlEnt, _
-    byval radius as single, _
+function mdl_ray_box ( _
+    c as Vec3, _
+    byval hx as single, _
     byval zlo as single, _
     byval zhi as single, _
     org as Vec3, _
@@ -1767,31 +1803,63 @@ function mdl_ray_hit ( _
 ) as single
     dim tn as single, tf as single
 
-    mdl_ray_hit = -1.0
+    mdl_ray_box = -1.0
     tn = 0.0 : tf = maxt
-    if ( mdl_slab( ent.pos.x - radius, ent.pos.x + radius, org.x, dir.x, tn, tf ) = 0 ) then exit function
-    if ( mdl_slab( ent.pos.y - radius, ent.pos.y + radius, org.y, dir.y, tn, tf ) = 0 ) then exit function
-    if ( mdl_slab( ent.pos.z + zlo, ent.pos.z + zhi, org.z, dir.z, tn, tf ) = 0 ) then exit function
-    mdl_ray_hit = tn
+    if ( mdl_slab( c.x - hx, c.x + hx, org.x, dir.x, tn, tf ) = 0 ) then exit function
+    if ( mdl_slab( c.y - hx, c.y + hx, org.y, dir.y, tn, tf ) = 0 ) then exit function
+    if ( mdl_slab( c.z + zlo, c.z + zhi, org.z, dir.z, tn, tf ) = 0 ) then exit function
+    mdl_ray_box = tn
 end function
 
 ''::::::::::::::
+'' name: pl_spread_dir
+'' desc: FireBullets' pellet: dir + crandom*spread*right + crandom*spread*up,
+''       right and up built from dir and the world's up.
+''::::::::::::::
+sub pl_spread_dir ( _
+    dir as Vec3, _
+    byval spread as single, _
+    outdir as Vec3 _
+)
+    dim rx as single, ry as single, rl as single
+    dim ux as single, uy as single, uz as single
+    dim a as single, b as single
+
+    rx = dir.y : ry = -dir.x
+    rl = sqr( rx*rx + ry*ry )
+    if ( rl < 0.001 ) then rx = 1.0 : ry = 0.0 : rl = 1.0
+    rx = rx / rl : ry = ry / rl
+    '' up = right x dir
+    ux = ry * dir.z
+    uy = -rx * dir.z
+    uz = rx * dir.y - ry * dir.x
+    a = ( 2.0 * rnd - 1.0 ) * spread
+    b = ( 2.0 * rnd - 1.0 ) * spread
+    outdir.x = dir.x + a * rx + b * ux
+    outdir.y = dir.y + a * ry + b * uy
+    outdir.z = dir.z + b * uz
+end sub
+
+''::::::::::::::
 '' name: pl_fire
-'' desc: The shotgun, as a single hitscan: the world first, then the
-''       nearest live soldier in front of it. A hit that does not kill
-''       makes the soldier hunt; a kill drops its backpack's shells.
+'' desc: W_FireShotgun: six pellets of four, spread 0.04, each traced
+''       through the world and then against every live soldier's box;
+''       the damage lands per soldier once all six are in, as
+''       ApplyMultiDamage does.
 ''::::::::::::::
 sub pl_fire ( _
     g as Game, _
     mdl_ent() as MdlEnt, _
     models() as Submodel, _
     brush() as BrushModel, _
-    planes() as Plane _
+    planes() as Plane, _
+    item() as ItemEnt _
 )
-    dim org as Vec3, fin as Vec3, dir as Vec3
+    dim org as Vec3, fin as Vec3, aim as Vec3, dir as Vec3
     dim tr as TraceResult
-    dim i as integer, best as integer
+    dim i as integer, p as integer, best as integer
     dim t as single, bt as single
+    dim hit( MDL_MAX_ENTS% - 1 ) as integer
 
     if ( g.rdr.anim_time < g.fight.next_fire ) then exit sub
     if ( g.fight.shells <= 0 ) then exit sub
@@ -1801,37 +1869,125 @@ sub pl_fire ( _
 
     '' cam.look_at is a unit direction in renderer space, Y up: BSP y is
     '' renderer z and BSP z is renderer y.
-    dir.x = g.cam.look_at.x : dir.y = g.cam.look_at.z : dir.z = g.cam.look_at.y
+    aim.x = g.cam.look_at.x : aim.y = g.cam.look_at.z : aim.z = g.cam.look_at.y
     org.x = g.pl.pos.x : org.y = g.pl.pos.y : org.z = g.pl.pos.z + PL_EYE#
-    fin.x = org.x + dir.x * PL_SHOT_RANGE#
-    fin.y = org.y + dir.y * PL_SHOT_RANGE#
-    fin.z = org.z + dir.z * PL_SHOT_RANGE#
-    pl_trace org, fin, tr, g.wld.count.models, models(), brush(), clp_buffer(), planes()
 
-    best = -1
-    bt = PL_SHOT_RANGE# * tr.frac
     for i = 0 to g.mdl_count - 1
-        if ( mdl_ent(i).state <> MDL_ST_DEAD% ) then
-            t = mdl_ray_hit( mdl_ent(i), g.mdl.radius, g.mdl.zlo, g.mdl.zhi, org, dir, bt )
-            if ( t >= 0.0 and t < bt ) then bt = t : best = i
-        end if
+        hit(i) = 0
     next i
-    if ( best < 0 ) then exit sub
+    for p = 1 to PL_PELLETS%
+        pl_spread_dir aim, PL_SPREAD#, dir
+        fin.x = org.x + dir.x * PL_SHOT_RANGE#
+        fin.y = org.y + dir.y * PL_SHOT_RANGE#
+        fin.z = org.z + dir.z * PL_SHOT_RANGE#
+        pl_trace org, fin, tr, g.wld.count.models, models(), brush(), clp_buffer(), planes()
+        best = -1
+        bt = PL_SHOT_RANGE# * tr.frac
+        for i = 0 to g.mdl_count - 1
+            if ( mdl_ent(i).state <> MDL_ST_DEAD% ) then
+                t = mdl_ray_box( mdl_ent(i).pos, MDL_HALF#, MDL_ZLO#, MDL_ZHI#, org, dir, bt )
+                if ( t >= 0.0 and t < bt ) then bt = t : best = i
+            end if
+        next i
+        if ( best >= 0 ) then hit(best) = hit(best) + PL_PELLET_DMG%
+    next p
+    for i = 0 to g.mdl_count - 1
+        if ( hit(i) > 0 ) then mdl_damage g, mdl_ent(i), hit(i), item()
+    next i
+end sub
 
-    mdl_ent(best).health = mdl_ent(best).health - PL_SHOT_DAMAGE%
-    if ( mdl_ent(best).health <= 0 ) then
-        mdl_ent(best).state = MDL_ST_DEAD%
-        mdl_ent(best).anim_frame = 0
-        mdl_ent(best).dead_at = g.rdr.anim_time
+''::::::::::::::
+'' name: mdl_damage
+'' desc: T_Damage on a soldier: army_die at 0 -- kills, the backpack --
+''       or army_pain, gated by pain_finished, and the attacker is now
+''       the enemy.
+''::::::::::::::
+sub mdl_damage ( _
+    g as Game, _
+    ent as MdlEnt, _
+    byval dmg as integer, _
+    item() as ItemEnt _
+)
+    ent.health = ent.health - dmg
+    if ( ent.health <= 0 ) then
+        ent.state = MDL_ST_DEAD%
+        ent.anim_frame = 0
         g.fight.kills = g.fight.kills + 1
-        g.fight.shells = g.fight.shells + MDL_BACKPACK%
-    else
-        mdl_ent(best).hunting = -1
-        mdl_ent(best).state = MDL_ST_PAIN%
-        mdl_ent(best).anim_frame = 0
-        mdl_ent(best).ideal_yaw = mdl_vectoyaw( g.pl.pos.x - mdl_ent(best).pos.x, _
-                                                g.pl.pos.y - mdl_ent(best).pos.y )
+        pl_item_add g, item(), ENT_ITEM_SHELLS, ENT_BACKPACK%, ent.pos
+        exit sub
     end if
+    ent.hunting = -1
+    ent.ideal_yaw = mdl_vectoyaw( g.pl.pos.x - ent.pos.x, g.pl.pos.y - ent.pos.y )
+    if ( g.rdr.anim_time < ent.pain_finished ) then exit sub
+    if ( rnd < MDL_PAIN_SHORT_P# ) then
+        ent.pain_finished = g.rdr.anim_time + MDL_PAIN_SHORT#
+    else
+        ent.pain_finished = g.rdr.anim_time + MDL_PAIN_LONG#
+    end if
+    ent.state = MDL_ST_PAIN%
+    ent.anim_frame = 0
+end sub
+
+''::::::::::::::
+'' name: mdl_fire
+'' desc: army_fire: four pellets of four, spread 0.1, aimed 0.2 s behind
+''       the player's velocity, from the gun's height; each traced through
+''       the world and then against the player's box.
+''::::::::::::::
+sub mdl_fire ( _
+    g as Game, _
+    ent as MdlEnt, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+)
+    dim org as Vec3, fin as Vec3, aim as Vec3, dir as Vec3
+    dim tr as TraceResult
+    dim p as integer, dmg as integer
+    dim l as single, t as single
+
+    aim.x = g.pl.pos.x - g.pl.vel.x * MDL_AIM_LAG# - ent.pos.x
+    aim.y = g.pl.pos.y - g.pl.vel.y * MDL_AIM_LAG# - ent.pos.y
+    aim.z = g.pl.pos.z - g.pl.vel.z * MDL_AIM_LAG# - ent.pos.z
+    l = sqr( aim.x*aim.x + aim.y*aim.y + aim.z*aim.z )
+    if ( l < 1.0 ) then exit sub
+    aim.x = aim.x / l : aim.y = aim.y / l : aim.z = aim.z / l
+    org.x = ent.pos.x + aim.x * 10.0
+    org.y = ent.pos.y + aim.y * 10.0
+    org.z = ent.pos.z + MDL_ZLO# + ( MDL_ZHI# - MDL_ZLO# ) * 0.7
+
+    dmg = 0
+    for p = 1 to MDL_PELLETS%
+        pl_spread_dir aim, MDL_SPREAD#, dir
+        fin.x = org.x + dir.x * PL_SHOT_RANGE#
+        fin.y = org.y + dir.y * PL_SHOT_RANGE#
+        fin.z = org.z + dir.z * PL_SHOT_RANGE#
+        pl_trace org, fin, tr, g.wld.count.models, models(), brush(), clp_buffer(), planes()
+        t = mdl_ray_box( g.pl.pos, PL_HALF#, PL_ZLO#, PL_ZHI#, org, dir, PL_SHOT_RANGE# * tr.frac )
+        if ( t >= 0.0 ) then dmg = dmg + MDL_PELLET_DMG%
+    next p
+    if ( dmg = 0 ) then exit sub
+    g.fight.health = g.fight.health - dmg
+    g.fight.hurt_until = g.rdr.anim_time + 0.3
+end sub
+
+''::::::::::::::
+'' name: pl_item_add
+'' desc: A dropped pickup, in the slots after the map's own.
+''::::::::::::::
+sub pl_item_add ( _
+    g as Game, _
+    item() as ItemEnt, _
+    byval kind as integer, _
+    byval amount as integer, _
+    org as Vec3 _
+)
+    if ( g.item_count > ubound( item ) ) then exit sub
+    item( g.item_count ).kind = kind
+    item( g.item_count ).amount = amount
+    item( g.item_count ).pos = org
+    item( g.item_count ).gone = 0
+    g.item_count = g.item_count + 1
 end sub
 
 ''::::::::::::::
@@ -1871,6 +2027,7 @@ sub pl_game_reset ( _
         org = mdl_ent(i).spawn
         mdl_spawn g, mdl_ent(i), org, models(), brush(), planes()
     next i
+    g.item_count = g.item_fixed
     for i = 0 to g.item_count - 1
         item(i).gone = 0
     next i
@@ -1903,29 +2060,42 @@ end sub
 ''::::::::::::::
 '' name: pl_items_touch
 '' desc: Picks up whatever the player's box overlaps, and puts back what
-''       was taken ENT_ITEM_RESPAWN ago. Health caps at PL_HEALTH.
+''       megahealth rots. ammo_touch and T_Heal's caps.
 ''::::::::::::::
 sub pl_items_touch ( g as Game, item() as ItemEnt )
     dim i as integer
-    dim dz as single
+    dim dz as single, cap as integer
+
+    '' item_megahealth_rot: over 100, a point a second after five
+    if ( g.fight.health > PL_HEALTH% and g.rdr.anim_time >= g.fight.rot_at ) then
+        g.fight.health = g.fight.health - 1
+        g.fight.rot_at = g.rdr.anim_time + 1.0
+    end if
 
     for i = 0 to g.item_count - 1
-        if ( item(i).gone ) then
-            if ( g.rdr.anim_time >= item(i).taken_at + ENT_ITEM_RESPAWN# ) then item(i).gone = 0
-        else
+        if ( item(i).gone = 0 ) then
             dz = g.pl.pos.z - item(i).pos.z
             if ( abs( g.pl.pos.x - item(i).pos.x ) < ENT_ITEM_REACH# and _
                  abs( g.pl.pos.y - item(i).pos.y ) < ENT_ITEM_REACH# and _
                  dz > -ENT_ITEM_TOP# - PL_FEET# and dz < ENT_ITEM_TOP# + PL_FEET# ) then
                 if ( item(i).kind = ENT_ITEM_SHELLS ) then
-                    g.fight.shells = g.fight.shells + ENT_SHELLS_GIVE%
-                    item(i).gone = -1
-                elseif ( g.fight.health < PL_HEALTH% ) then
-                    g.fight.health = g.fight.health + ENT_HEALTH_GIVE%
-                    if ( g.fight.health > PL_HEALTH% ) then g.fight.health = PL_HEALTH%
-                    item(i).gone = -1
+                    '' ammo_touch: refused at the cap, capped after
+                    if ( g.fight.shells < PL_SHELLS_MAX% ) then
+                        g.fight.shells = g.fight.shells + item(i).amount
+                        if ( g.fight.shells > PL_SHELLS_MAX% ) then g.fight.shells = PL_SHELLS_MAX%
+                        item(i).gone = -1
+                    end if
+                else
+                    '' T_Heal: the mega one ignores the 100 cap and stops at 250
+                    cap = PL_HEALTH%
+                    if ( item(i).amount = ENT_ITEM_MEGA% ) then cap = PL_HEALTH_MEGA%
+                    if ( g.fight.health < cap ) then
+                        g.fight.health = g.fight.health + item(i).amount
+                        if ( g.fight.health > cap ) then g.fight.health = cap
+                        if ( g.fight.health > PL_HEALTH% ) then g.fight.rot_at = g.rdr.anim_time + PL_ROT_DELAY#
+                        item(i).gone = -1
+                    end if
                 end if
-                if ( item(i).gone ) then item(i).taken_at = g.rdr.anim_time
             end if
         end if
     next i

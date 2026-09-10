@@ -52,26 +52,27 @@ end type
 
 type EntsItem
     kind        as integer
+    amount      as integer
     org         as Vec3
 end type
 
 '' A pickup: item_health or item_shells where the map put it, dropped
-'' to the floor at load. Taken, it is back ENT_ITEM_RESPAWN later.
+'' to the floor at load, or a dead soldier's backpack. Single player:
+'' taken is taken until pl_game_reset.
 type ItemEnt
     kind        as integer
+    amount      as integer     '' healamount or aflag
     pos         as Vec3         '' BSP space, on the floor
     gone        as integer
-    taken_at    as single
 end type
 
 const ENT_ITEM_HEALTH   = 0
 const ENT_ITEM_SHELLS   = 1
-const ENT_ITEM_RESPAWN# = 30.0   '' Quake's deathmatch ammo respawn
 const ENT_ITEM_HALF#    = 10.0   '' the box's half width
 const ENT_ITEM_TOP#     = 20.0   '' and its height
 const ENT_ITEM_REACH#   = 32.0   '' Quake's touch: item box against the player's
-const ENT_HEALTH_GIVE%  = 25
-const ENT_SHELLS_GIVE%  = 20
+const ENT_ITEM_MEGA%    = 100    '' item_health's healamount when it is the mega one
+const ENT_BACKPACK%     = 5      '' army_die3: ammo_shells = 5; DropBackpack
 '' pal.raw's nearest entries: white, red, yellow, brown
 const ENT_COL_WHITE%    = 254
 const ENT_COL_RED%      = 251
