@@ -1867,9 +1867,12 @@ sub pl_fire ( _
     g.fight.shells = g.fight.shells - 1
     g.fight.flash_until = g.rdr.anim_time + 0.1
 
-    '' cam.look_at is a unit direction in renderer space, Y up: BSP y is
-    '' renderer z and BSP z is renderer y.
-    aim.x = g.cam.look_at.x : aim.y = g.cam.look_at.z : aim.z = g.cam.look_at.y
+    '' cam.look_at is the POINT the eye looks at by now -- a direction
+    '' only inside v_update_camera -- one unit from cam.pos, in renderer
+    '' space, Y up: BSP y is renderer z and BSP z is renderer y.
+    aim.x = g.cam.look_at.x - g.cam.pos.x
+    aim.y = g.cam.look_at.z - g.cam.pos.z
+    aim.z = g.cam.look_at.y - g.cam.pos.y
     org.x = g.pl.pos.x : org.y = g.pl.pos.y : org.z = g.pl.pos.z + PL_EYE#
 
     for i = 0 to g.mdl_count - 1

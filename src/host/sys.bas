@@ -189,6 +189,9 @@ sub sys_parse_args ( _
         if ( lcase$(argv(i)) = "-nomdl" ) then
             g.env.no_mdl = true
         end if
+        if ( lcase$(argv(i)) = "-noview" ) then
+            g.env.no_view = true
+        end if
         if ( lcase$(argv(i)) = "-nostats" ) then
             g.env.no_stats = true
         end if

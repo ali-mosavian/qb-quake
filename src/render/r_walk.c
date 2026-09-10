@@ -52,7 +52,7 @@
  * instead of silently drifting, and the failure prints the offset it
  * measured -- which is the new number to put here.
  */
-#define GAME_VIS_OFFSET 4970
+#define GAME_VIS_OFFSET 4972
 
 /* ign here is BASIC's own "ign as integer" -- no byval in the original
    declare, so it is BYREF: r_emit_entities sets it true, walks the

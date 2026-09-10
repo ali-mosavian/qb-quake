@@ -13,7 +13,7 @@ option explicit
 '' vertex.
 ''
 '' Vertices are packed bytes (trivertx_t, one per axis), flat and
-'' frame-major, in ONE EMS page (raw qglGemAlloc/qglGemMap, g.mdl.vtx_hnd) --
+'' frame-major, in ONE EMS page (raw qglGemAlloc/qglGemMap, m.vtx_hnd) --
 '' read with PEEK. See q_mdl.bi's own note for the three designs tried
 '' before this one and exactly which measurement ruled each out: a
 '' space$()'d BASIC string (hit BASIC's own "string space" ceiling), a
@@ -100,6 +100,8 @@ declare function mdl_draw_tris ( _
     org as Vec3, _
     byval cyaw as single, _
     byval syaw as single, _
+    byval cpitch as single, _
+    byval spitch as single, _
     scale as Vec3, _
     origin as Vec3, _
     byval vtx_hnd as integer, _
@@ -108,7 +110,8 @@ declare function mdl_draw_tris ( _
     byval xresh as single, _
     byval yresh as single, _
     byval z_near as single, _
-    byval dst as long _
+    byval dst as long, _
+    byval zmode as integer _
 ) as integer
 
 ''::::::::::::::
@@ -121,6 +124,7 @@ declare function mdl_draw_tris ( _
 ''::::::::::::::
 sub mdl_load ( _
     g as Game, _
+    m as MdlState, _
     mdlname as string, _
     tri() as MdlTri _
 )
@@ -134,7 +138,7 @@ sub mdl_load ( _
     dim skfh as integer, skrow as integer, skptr as long
     dim ex as single, ey as single
 
-    g.mdl.loaded = 0
+    m.loaded = 0
     geopath = mdlname + ".geo"
     vtxpath = left$(mdlname, 5) + "vtx.bin"
     skinpath = left$(mdlname, 5) + "skn.raw"
@@ -150,42 +154,42 @@ sub mdl_load ( _
         sys_error "0x0044, " + geopath + " missing or truncated, run make assets"
     end if
     get #fh, 1, hdr
-    g.mdl.ntri     = cvi( mid$( hdr, 5, 2 ) )
-    g.mdl.nvert    = cvi( mid$( hdr, 7, 2 ) )
-    g.mdl.nframe   = cvi( mid$( hdr, 9, 2 ) )
+    m.ntri     = cvi( mid$( hdr, 5, 2 ) )
+    m.nvert    = cvi( mid$( hdr, 7, 2 ) )
+    m.nframe   = cvi( mid$( hdr, 9, 2 ) )
     skin_w         = cvi( mid$( hdr, 11, 2 ) )
     skin_h         = cvi( mid$( hdr, 13, 2 ) )
-    g.mdl.scale.x  = cvs( mid$( hdr, 15, 4 ) )
-    g.mdl.scale.y  = cvs( mid$( hdr, 19, 4 ) )
-    g.mdl.scale.z  = cvs( mid$( hdr, 23, 4 ) )
-    g.mdl.origin.x = cvs( mid$( hdr, 27, 4 ) )
-    g.mdl.origin.y = cvs( mid$( hdr, 31, 4 ) )
-    g.mdl.origin.z = cvs( mid$( hdr, 35, 4 ) )
+    m.scale.x  = cvs( mid$( hdr, 15, 4 ) )
+    m.scale.y  = cvs( mid$( hdr, 19, 4 ) )
+    m.scale.z  = cvs( mid$( hdr, 23, 4 ) )
+    m.origin.x = cvs( mid$( hdr, 27, 4 ) )
+    m.origin.y = cvs( mid$( hdr, 31, 4 ) )
+    m.origin.z = cvs( mid$( hdr, 35, 4 ) )
     '' Vertex bytes span 0..255, so this is the box every frame fits in;
     '' the yaw rotates about the origin, so the horizontal reach is a
     '' radius. What r_mdl_visible tests instead of 170 vertices.
-    ex = abs( g.mdl.origin.x )
-    if ( abs( g.mdl.origin.x + 255.0 * g.mdl.scale.x ) > ex ) then ex = abs( g.mdl.origin.x + 255.0 * g.mdl.scale.x )
-    ey = abs( g.mdl.origin.y )
-    if ( abs( g.mdl.origin.y + 255.0 * g.mdl.scale.y ) > ey ) then ey = abs( g.mdl.origin.y + 255.0 * g.mdl.scale.y )
-    g.mdl.radius = sqr( ex*ex + ey*ey )
-    g.mdl.zlo = g.mdl.origin.z
-    g.mdl.zhi = g.mdl.origin.z + 255.0 * g.mdl.scale.z
-    if ( g.mdl.nvert > MDL_MAXV + 1 ) then close #fh : exit sub
-    if ( g.mdl.ntri < 1 or g.mdl.nvert < 1 or g.mdl.nframe < 1 ) then
+    ex = abs( m.origin.x )
+    if ( abs( m.origin.x + 255.0 * m.scale.x ) > ex ) then ex = abs( m.origin.x + 255.0 * m.scale.x )
+    ey = abs( m.origin.y )
+    if ( abs( m.origin.y + 255.0 * m.scale.y ) > ey ) then ey = abs( m.origin.y + 255.0 * m.scale.y )
+    m.radius = sqr( ex*ex + ey*ey )
+    m.zlo = m.origin.z
+    m.zhi = m.origin.z + 255.0 * m.scale.z
+    if ( m.nvert > MDL_MAXV + 1 ) then close #fh : exit sub
+    if ( m.ntri < 1 or m.nvert < 1 or m.nframe < 1 ) then
         close #fh
         sys_error "0x0045, " + geopath + " header is empty, run make assets"
     end if
 
     sys_mem_mark "mdl_pre_redim"
-    redim tri( g.mdl.ntri - 1 ) as MdlTri
+    redim tri( m.ntri - 1 ) as MdlTri
     sys_mem_mark "mdl_post_tri_redim"
 
     '' whole-array Get silently left every element zero here (found in
     '' the standalone test, src/test/mdldiag.bas) -- ReDim's runtime size
     '' does not seem to reach it. Per-record Get is what every OTHER
     '' loader in this codebase already does.
-    for ti = 0 to g.mdl.ntri - 1
+    for ti = 0 to m.ntri - 1
         get #fh, , tri( ti )
     next ti
     close #fh
@@ -202,29 +206,34 @@ sub mdl_load ( _
     '' share safely, and this shares it the same way they do: mapped
     '' fresh immediately before each read, never held across another
     '' call.
-    vtxbytes = clng( g.mdl.nframe ) * clng( g.mdl.nvert ) * 3
-    g.mdl.vtx_hnd = qglGemAlloc( vtxbytes )
-    if ( g.mdl.vtx_hnd <> 0 ) then
-        vtxseg = qglGemMap( g.mdl.vtx_hnd, 0, PAGE_SLOT )
+    vtxbytes = clng( m.nframe ) * clng( m.nvert ) * 3
+    m.vtx_hnd = qglGemAlloc( vtxbytes )
+    if ( m.vtx_hnd <> 0 ) then
+        vtxseg = qglGemMap( m.vtx_hnd, 0, PAGE_SLOT )
         if ( vtxseg <> 0 ) then
             u = qglFileOpenBas( vtxpath )
             if ( u <> 0 ) then
                 if ( qglFileRead( u, clng( vtxseg ) * 65536&, vtxbytes ) <> vtxbytes ) then
-                    qglGemFree g.mdl.vtx_hnd
-                    g.mdl.vtx_hnd = 0
+                    sys_mem_mark "mdl_vtx_short_read"
+                    qglGemFree m.vtx_hnd
+                    m.vtx_hnd = 0
                 end if
                 qglFileClose u
             else
-                qglGemFree g.mdl.vtx_hnd
-                g.mdl.vtx_hnd = 0
+                sys_mem_mark "mdl_no_vtx_file"
+                qglGemFree m.vtx_hnd
+                m.vtx_hnd = 0
             end if
         else
-            qglGemFree g.mdl.vtx_hnd
-            g.mdl.vtx_hnd = 0
+            sys_mem_mark "mdl_no_vtx_map"
+            qglGemFree m.vtx_hnd
+            m.vtx_hnd = 0
         end if
+    else
+        sys_mem_mark "mdl_no_vtx_alloc"
     end if
     sys_mem_mark "mdl_post_vert_load"
-    if ( g.mdl.vtx_hnd = 0 ) then exit sub
+    if ( m.vtx_hnd = 0 ) then exit sub
 
     '' EMS, and <= 16,384 bytes: that is one page, and qglRsPoly refuses
     '' a texture crossing two because the texel base is a patched
@@ -235,28 +244,30 @@ sub mdl_load ( _
     '' Read a row at a time. The pointer qglSfWrRow hands back maps an
     '' EMS page, and the read that consumes it is the next statement --
     '' nothing maps in between, so the window cannot move under it.
-    g.mdl.skin = qglSfNew&( skin_w, skin_h, QGL_SURF_EMS )
-    if ( g.mdl.skin = 0 ) then exit sub
+    m.skin = qglSfNew&( skin_w, skin_h, QGL_SURF_EMS )
+    if ( m.skin = 0 ) then sys_mem_mark "mdl_no_skin_surface" : exit sub
 
     skfh = qglFileOpenBas%( skinpath )
     if ( skfh = 0 ) then
-        qglSfFree g.mdl.skin
-        g.mdl.skin = 0
+        sys_mem_mark "mdl_no_skin_file"
+        qglSfFree m.skin
+        m.skin = 0
         exit sub
     end if
     for skrow = 0 to skin_h - 1
-        skptr = qglSfWrRow&( g.mdl.skin, skrow )
+        skptr = qglSfWrRow&( m.skin, skrow )
         if ( qglFileRead&( skfh, skptr, clng( skin_w ) ) <> skin_w ) then
+            sys_mem_mark "mdl_skin_short_read"
             qglFileClose skfh
-            qglSfFree g.mdl.skin
-            g.mdl.skin = 0
+            qglSfFree m.skin
+            m.skin = 0
             exit sub
         end if
     next skrow
     qglFileClose skfh
     sys_mem_mark "mdl_post_skin"
 
-    g.mdl.loaded = -1
+    m.loaded = -1
 end sub
 
 ''::::::::::::::
@@ -273,6 +284,7 @@ end sub
 ''::::::::::::::
 sub mdl_draw ( _
     g as Game, _
+    m as MdlState, _
     tri() as MdlTri, _
     ent as MdlEnt, _
     mtx_fin as Mat4, _
@@ -284,7 +296,7 @@ sub mdl_draw ( _
     dim frame as integer
     dim rad as single
 
-    if ( g.mdl.loaded = 0 ) then exit sub
+    if ( m.loaded = 0 ) then exit sub
 
     '' ent.anim_frame is mdl_think's own state (pl_move.bas), 0..7
     '' within whichever cycle ent.state selects: the SAME tick that
@@ -302,9 +314,39 @@ sub mdl_draw ( _
     '' transform, the clip, the projection and the raster calls, once
     '' per model rather than 328 BASIC iterations.
     rad = ent.yaw * 0.017453293
-    g.pt.mtri_n = g.pt.mtri_n + mdl_draw_tris( tri(), g.mdl.ntri, g.mdl.nvert, frame, _
-                                               ent.pos, cos( rad ), sin( rad ), _
-                                               g.mdl.scale, g.mdl.origin, _
-                                               g.mdl.vtx_hnd, g.mdl.skin, mtx_fin, _
-                                               xresh, yresh, z_near, dst )
+    g.pt.mtri_n = g.pt.mtri_n + mdl_draw_tris( tri(), m.ntri, m.nvert, frame, _
+                                               ent.pos, cos( rad ), sin( rad ), 1.0, 0.0, _
+                                               m.scale, m.origin, _
+                                               m.vtx_hnd, m.skin, mtx_fin, _
+                                               xresh, yresh, z_near, dst, QGL_Z_TEST )
+end sub
+
+
+''::::::::::::::
+'' name: mdl_draw_view
+'' desc: The view weapon: one frame of m at org, turned by yaw and pitch,
+''       depth off -- Quake draws it last over everything.
+''::::::::::::::
+sub mdl_draw_view ( _
+    g as Game, _
+    m as MdlState, _
+    tri() as MdlTri, _
+    byval frame as integer, _
+    org as Vec3, _
+    byval cyaw as single, _
+    byval syaw as single, _
+    byval cpitch as single, _
+    byval spitch as single, _
+    mtx_fin as Mat4, _
+    byval xresh as single, _
+    byval yresh as single, _
+    byval z_near as single, _
+    byval dst as long _
+)
+    if ( m.loaded = 0 ) then exit sub
+    if ( frame >= m.nframe ) then frame = m.nframe - 1
+    g.pt.mtri_n = g.pt.mtri_n + mdl_draw_tris( tri(), m.ntri, m.nvert, frame, _
+                                               org, cyaw, syaw, cpitch, spitch, _
+                                               m.scale, m.origin, m.vtx_hnd, m.skin, mtx_fin, _
+                                               xresh, yresh, z_near, dst, QGL_Z_OFF )
 end sub

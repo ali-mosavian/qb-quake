@@ -93,6 +93,7 @@ declare sub host_render ( _
     face_mdl() as integer, _
     cam_up as Vec3, _
     mdltri_buffer() as MdlTri, _
+    vmtri_buffer() as MdlTri, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt _
 )
@@ -162,6 +163,7 @@ declare sub host_init ( _
     face_mdl() as integer, _
     plat() as PlatEnt, _
     mdltri_buffer() as MdlTri, _
+    vmtri_buffer() as MdlTri, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt _
 )
@@ -186,6 +188,7 @@ declare sub host_main ( _
     plat() as PlatEnt, _
     tele() as Teleporter, _
     mdltri_buffer() as MdlTri, _
+    vmtri_buffer() as MdlTri, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt _
 )
@@ -422,6 +425,7 @@ dim gv_buf() as integer
 '' BSP submodel array (doors, platforms), a different "model" entirely;
 '' these are named mdltri/mdlvert to not collide with it.
 dim mdltri_buffer() as MdlTri
+dim vmtri_buffer() as MdlTri
 
 '' One spawned instance per element -- the asset (mdltri_buffer, above,
 '' and g.mdl) is shared; only per-monster position/state lives here.
@@ -502,7 +506,7 @@ dim shared z_dc as long
               mdl_buffer(), order_list(), poly_flag(), gv_buf(), bit_array(), _
               cp_x(), cp_y(), cp_z(), mip_buff_inf(), _
               frustum(), brush(), tele(), face_mdl(), plat(), _
-              mdltri_buffer(), mdl_ent(), item()
+              mdltri_buffer(), vmtri_buffer(), mdl_ent(), item()
     if ( g.env.dump_tex ) then
         mod_tex_dump g
     elseif ( g.env.dump_set ) then
@@ -514,7 +518,7 @@ dim shared z_dc as long
                   mdl_buffer(), order_list(), poly_flag(), gv_buf(), brush(), _
                   frustum(), bit_array(), _
                   mip_buff_inf(), face_mdl(), plat(), tele(), _
-                  mdltri_buffer(), mdl_ent(), item()
+                  mdltri_buffer(), vmtri_buffer(), mdl_ent(), item()
     end if
     host_shutdown
     
@@ -633,6 +637,7 @@ sub host_init ( _
     face_mdl() as integer, _
     plat() as PlatEnt, _
     mdltri_buffer() as MdlTri, _
+    vmtri_buffer() as MdlTri, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt _
 )
@@ -782,7 +787,8 @@ sub host_init ( _
     '' vid_init, above) already applies -- the skin's indices come from
     '' the same Quake palette mkmdl.py baked them from, so nothing extra
     '' to install here.
-    mdl_load g, "soldier", mdltri_buffer()
+    mdl_load g, g.mdl, "soldier", mdltri_buffer()
+    mdl_load g, g.vmdl, "v_shot", vmtri_buffer()
     g.mdl_count = 0
     if ( g.mdl.loaded ) then
         '' mdl_pick_section places every model from rnd, so a clock
@@ -853,6 +859,7 @@ sub host_main ( _
     plat() as PlatEnt, _
     tele() as Teleporter, _
     mdltri_buffer() as MdlTri, _
+    vmtri_buffer() as MdlTri, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt _
 )
@@ -1035,7 +1042,7 @@ sub host_main ( _
                      pln_buffer(), nds_buffer(), mdl_buffer(), order_list(), poly_flag(), _
                      gv_buf(), brush(), frustum(), bit_array(), _
                      mip_buff_inf(), face_mdl(), cam_up, _
-                     mdltri_buffer(), mdl_ent(), item()
+                     mdltri_buffer(), vmtri_buffer(), mdl_ent(), item()
 
 
         ''

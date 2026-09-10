@@ -188,6 +188,7 @@ sub host_bench_report ( _
     end if
     print #benchf, "polys " + ltrim$(str$( g.rdr.polys ))
     print #benchf, "mdl_drawn " + ltrim$(str$( g.mdl.drawn ))
+    print #benchf, "vmdl_loaded " + ltrim$(str$( g.vmdl.loaded ))
     print #benchf, "tris " + ltrim$(str$( g.rdr.tris ))
     print #benchf, "qgl_faces " + ltrim$(str$( dbg_qgl_faces() ))
     print #benchf, "qgl_drop " + ltrim$(str$( dbg_qgl_drop() ))

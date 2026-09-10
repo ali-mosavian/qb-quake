@@ -411,12 +411,15 @@ sub host_render ( _
     face_mdl() as integer, _
     cam_up as Vec3, _
     mdltri_buffer() as MdlTri, _
+    vmtri_buffer() as MdlTri, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt _
 )
     dim mtx_mdl as Mat4
     dim bob as Vec3
     dim nbox as integer
+    dim vlen as single, vframe as integer
+    dim vdx as single, vdy as single, vdz as single
     dim mdl_i as integer
     dim mtx_fin as Mat4
     dim cam_pos_b as Vec3
@@ -566,7 +569,7 @@ sub host_render ( _
         for mdl_i = 0 to g.mdl_count - 1
             if ( r_mdl_visible( mdl_ent( mdl_i ).pos, g.mdl.radius, g.mdl.zlo, g.mdl.zhi, _
                                 nds_buffer(), pln_buffer(), frustum() ) ) then
-                mdl_draw g, mdltri_buffer(), mdl_ent( mdl_i ), _
+                mdl_draw g, g.mdl, mdltri_buffer(), mdl_ent( mdl_i ), _
                          mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
                 g.mdl.drawn = g.mdl.drawn + 1
                 '' the volley has no frames, so it has a flash: a small
@@ -602,6 +605,29 @@ sub host_render ( _
             end if
         end if
     next mdl_i
+    '' the view weapon: v_shot at the eye, turned with the view, last and
+    '' with depth off, as Quake draws it. The fire animation is shot2..6
+    '' at 10 Hz over the half second the shotgun takes to be ready again.
+    if ( g.vmdl.loaded and g.env.no_mdl = 0 and g.env.no_view = 0 ) then
+        bob.x = g.pl.pos.x : bob.y = g.pl.pos.y : bob.z = g.pl.pos.z + PL_EYE#
+        vdx = g.cam.look_at.x - g.cam.pos.x
+        vdy = g.cam.look_at.y - g.cam.pos.y
+        vdz = g.cam.look_at.z - g.cam.pos.z
+        vlen = sqr( vdx * vdx + vdz * vdz )
+        if ( vlen < 0.001 ) then vlen = 0.001
+        vframe = 0
+        if ( g.rdr.anim_time < g.fight.next_fire ) then
+            vframe = 1 + int( ( g.rdr.anim_time - ( g.fight.next_fire - PL_FIRE_RATE# ) ) * 10.0 )
+            if ( vframe > 5 ) then vframe = 5
+        end if
+        '' look_at is the point one unit from cam.pos the eye looks at,
+        '' renderer Y up: the yaw's cos and sin are the difference's x and z
+        '' over their length, the pitch's are that length and -y, positive
+        '' looking down
+        mdl_draw_view g, g.vmdl, vmtri_buffer(), vframe, bob, _
+                      vdx / vlen, vdz / vlen, vlen, -vdy, _
+                      mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
+    end if
     if ( g.ft.n > 0 ) then
         ptd = sys_now() - pt0
         g.pt.mdl_sum = g.pt.mdl_sum + ptd

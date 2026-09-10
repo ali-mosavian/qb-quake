@@ -2049,6 +2049,23 @@ rows and four centre pixels, checked with a bounding box each time.
 The state messages do not: a bench, ticks or campath run starts in
 `GS_PLAY`, where nothing is drawn but the crosshair.
 
+**`cam.look_at` is a POINT once `v_update_camera` returns**, one unit
+from `cam.pos` in the direction of the view; it is a direction only
+inside that routine. The first shotgun aimed along the point and every
+pellet flew from the origin; the view weapon built from it turned by a
+position and drew nothing -- 0 triangles, `vmdl_loaded -1`, and the
+memtrace's cap of 20 marks had hidden that the second `mdl_load` got
+through at all. Subtract `cam.pos` first. `MEM_MARKS` is 40 now and
+`mdl_load` names the step it stops at.
+
+**The view weapon is v_shot from the PAK**, `mdl_draw_view`: the model
+at the eye, turned by the view's yaw and pitch -- `mdl_draw_tris` takes
+the pitch as a cos/sin pair, applied in model space before the yaw --
+and drawn last with depth off, as Quake does. `shot2..6` play over the
+half second the shotgun takes to reload. `-noview` leaves it out, which
+the model gate needs: its away tick asks that the soldiers add nothing.
+Both references carry the gun now.
+
 **Pickups are the map's own `item_health`/`item_shells`**, shipped in
 `ents.bin` after the hides, dropped to the hull floor at load, and drawn
 as flat boxes by `mdl_draw_box` in `d_alias.c` -- six quads, no clip

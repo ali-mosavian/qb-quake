@@ -430,6 +430,8 @@ type Env
                                 '' that separated the wandering streaks
                                 '' from the world renderer -- 138 stray
                                 '' pixels with the model, 0 without.
+    no_view     as integer      '' -noview: no view weapon, so the model
+                                '' gate can still ask what the soldiers add
     cam_path     as integer      '' -campath: fly the A* route from
                                 '' campath.bin instead of standing still.
                                 '' The old bench rendered ONE viewpoint, so

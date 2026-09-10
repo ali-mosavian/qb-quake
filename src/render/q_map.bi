@@ -331,7 +331,7 @@ const GEOM_MAXREC = 18 + GEOM_MAXVTX * 6
 '' through sys_mem_count/tag/val/fre to format its two reports. Keeping the
 '' formatting there and the storage here is the split that matters; a shared
 '' array was never needed for it.
-const MEM_MARKS = 20
+const MEM_MARKS = 40
 
 '' The depth buffer is NOT here any more -- main.bas creates it and
 '' Depth is not asked about any more: it is attached to the destination

@@ -62,6 +62,8 @@ short pascal far mdl_draw_tris(
     Vec3     *org,              /* ent.pos, BSP space, Z up */
     float     cyaw,             /* cos and sin of the yaw, from BASIC */
     float     syaw,
+    float     cpitch,           /* and of the pitch, positive nose down */
+    float     spitch,
     Vec3     *scale,            /* vertex byte -> model unit */
     Vec3     *origin,
     short     vtx_hnd,
@@ -70,13 +72,14 @@ short pascal far mdl_draw_tris(
     float     xresh,
     float     yresh,
     float     z_near,
-    long      dst )
+    long      dst,
+    short     zmode )           /* QGL_Z_TEST for a soldier, OFF for the view weapon */
 {
     MdlTri far *tri = (MdlTri far *) a_tri->farptr;
     unsigned char far *vb;
     short v, j, k, k2, cp, nin, nout, sbuf, dbuf, drawn = 0;
     short ia[3], cn[2];
-    float rx, ry, rz, wx, wy, wz, rw, f, area;
+    float rx, ry, rz, wx, wy, wz, rw, f, area, px, pz;
 
     /* The frame's vertices: three bytes each, frames contiguous in the
        one EMS page. qglGemMap's own record makes this free when nobody
@@ -87,9 +90,13 @@ short pascal far mdl_draw_tris(
     for ( v = 0; v < nvert; v++ ) {
         rx = (float) vb[v*3]     * scale->x + origin->x;
         ry = (float) vb[v*3 + 1] * scale->y + origin->y;
-        wx = org->x + ( rx * cyaw - ry * syaw );
-        wy = org->y + ( rx * syaw + ry * cyaw );
-        wz = org->z + ( (float) vb[v*3 + 2] * scale->z + origin->z );
+        rz = (float) vb[v*3 + 2] * scale->z + origin->z;
+        /* pitch about the model's own y, then yaw about the world's z */
+        px = rx * cpitch + rz * spitch;
+        pz = rz * cpitch - rx * spitch;
+        wx = org->x + ( px * cyaw - ry * syaw );
+        wy = org->y + ( px * syaw + ry * cyaw );
+        wz = org->z + pz;
 
         /* Renderer space is Y up: x unchanged, z becomes y -- the same
            swap d_faces.c makes reading a raw BSP vertex. */
@@ -116,7 +123,7 @@ short pascal far mdl_draw_tris(
     /* A model tests depth, never merely writes it: it comes after the
        world, which the BSP order put in front of it where it belongs.
        Off for us by qglSfZMode itself when dst has no depth buffer. */
-    qglSfZMode( dst, QGL_Z_TEST );
+    qglSfZMode( dst, zmode );
 
     for ( j = 0; j < ntri; j++ ) {
         ia[0] = tri[j].a; ia[1] = tri[j].b; ia[2] = tri[j].c;

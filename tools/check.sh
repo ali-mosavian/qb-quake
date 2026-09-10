@@ -162,9 +162,9 @@ if [[ "${1:-}" == "--model" ]]; then
     for arm in "away:-campath -bench 4000 -ticks 360" \
                "near:-at 264 -40 40 -yaw 0 -bench 8 -ticks 2"; do
         tag="${arm%%:*}"; flags="${arm#*:}"
-        run_frame "-nostats $flags"         "$VBD_OUT/mdl-$tag-on.bmp"
+        run_frame "-nostats -noview $flags"         "$VBD_OUT/mdl-$tag-on.bmp"
         drawn=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="mdl_drawn"{print $2}')
-        run_frame "-nostats $flags -nomdl"  "$VBD_OUT/mdl-$tag-off.bmp"
+        run_frame "-nostats -noview $flags -nomdl"  "$VBD_OUT/mdl-$tag-off.bmp"
         out=$(python3 "$ROOT/tools/imgdiff.py" "$VBD_OUT/mdl-$tag-off.bmp" "$VBD_OUT/mdl-$tag-on.bmp" | tail -1)
         if [[ "$tag" == away ]]; then
             # And the cull must have rejected them, not the depth test: the

@@ -91,7 +91,7 @@ ASSETS := data/assets/assets.zip
 # how it went missing: data/assets is generated, not tracked, and nothing
 # regenerated these. Only reachable with the PAK; wildcard-guarded so a
 # tree without it is not a build failure.
-MDL_ASSETS := $(if $(wildcard $(PAK)),data/assets/$(MDL).geo)
+MDL_ASSETS := $(if $(wildcard $(PAK)),data/assets/$(MDL).geo data/assets/v_shot.geo)
 # The A* flight path -bench -campath walks. Generated, untracked, and it
 # was a ZERO-BYTE file in every clean build: -campath then read nothing,
 # stood at the spawn for the whole run, and `check.sh --churn` -- whose
@@ -114,6 +114,10 @@ $(ASSETS): data/$(MAP) data/base.dat tools/mkassets.py tools/mkportals.py
 # stands in for the texture set.
 data/assets/$(MDL).geo: $(PAK) tools/mkmdl.py
 	@python3 tools/mkmdl.py $(PAK) $(MDL) data/assets stand,run,death,pain
+
+# the view weapon: shot1..7, the fire animation
+data/assets/v_shot.geo: $(PAK) tools/mkmdl.py
+	@python3 tools/mkmdl.py $(PAK) v_shot data/assets shot
 
 data/assets/campath.bin: data/$(MAP) tools/campath.py
 	@python3 tools/campath.py data/$(MAP) data/assets
