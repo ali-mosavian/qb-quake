@@ -429,6 +429,7 @@ dim shared ldr_pal() as PalRgb
 '' its colours out of it and the screenshot writes it; nothing reads it
 '' back from the DAC.
 dim shared scr_pal() as PalRgb
+dim shared scr_pal_sh() as PalRgb  '' the shifted copy scr_pal_shift installs
 dim shared spx() as integer      '' projected wireframe vertices
 dim shared spy() as integer
 '' Ring buffers behind the overlay graphs. Builds-per-frame is the one that
@@ -1180,6 +1181,45 @@ sub scr_pal_install
     hud_flash = 0
     hud_pevict = 0
     hud_pflush = 0
+end sub
+
+''::::::::::
+'' name: scr_pal_shift
+'' desc: V_UpdatePalette: the DAC blended towards red by the damage
+''       shift and towards gold by the bonus one, both fading with the
+''       frame's time; the plain palette back once both are out.
+''::::::::::
+sub scr_pal_shift ( g as Game, byval dt as single )
+    static was as integer
+    dim i as integer
+    dim r as single, gr as single, b as single
+    dim a as single
+
+    if ( g.fight.dmg_pct <= 0.0 and g.fight.bonus_pct <= 0.0 ) then
+        if ( was ) then qglVgaPalette scr_pal(0)
+        was = 0
+        exit sub
+    end if
+    if ( ubound( scr_pal_sh ) < 255 ) then redim scr_pal_sh(255) as PalRgb
+    for i = 0 to 255
+        r  = asc( scr_pal(i).red )
+        gr = asc( scr_pal(i).green )
+        b  = asc( scr_pal(i).blue )
+        a = g.fight.dmg_pct / 255.0
+        r = r + ( 255.0 - r ) * a : gr = gr - gr * a : b = b - b * a
+        a = g.fight.bonus_pct / 255.0
+        r = r + ( 215.0 - r ) * a : gr = gr + ( 186.0 - gr ) * a : b = b + ( 69.0 - b ) * a
+        scr_pal_sh(i).red   = chr$( cint( r ) )
+        scr_pal_sh(i).green = chr$( cint( gr ) )
+        scr_pal_sh(i).blue  = chr$( cint( b ) )
+    next i
+    qglVgaPalette scr_pal_sh(0)
+    was = -1
+
+    g.fight.dmg_pct = g.fight.dmg_pct - dt * PL_DMG_FADE#
+    if ( g.fight.dmg_pct < 0.0 ) then g.fight.dmg_pct = 0.0
+    g.fight.bonus_pct = g.fight.bonus_pct - dt * PL_BONUS_FADE#
+    if ( g.fight.bonus_pct < 0.0 ) then g.fight.bonus_pct = 0.0
 end sub
 
 

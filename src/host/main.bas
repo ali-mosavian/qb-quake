@@ -211,6 +211,7 @@ declare sub in_screenshot_key ( _
 declare sub vid_update ( _
     g as Game _
 )
+declare sub scr_pal_shift ( g as Game, byval dt as single )
 declare sub scr_draw_hud ( _
     g as Game, _
     h_dst_dc as long, _
@@ -1091,6 +1092,7 @@ sub host_main ( _
         ''
         pr0 = sys_rdtsc()
         vid_update g
+        scr_pal_shift g, g.scr.frame_time
         ''
         '' -comp: vid_update scaled the view into the composite and left the
         '' screen alone, so the overlay goes on at the mode's own size and one

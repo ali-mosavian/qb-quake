@@ -1972,6 +1972,8 @@ sub mdl_fire ( _
     if ( dmg = 0 ) then exit sub
     g.fight.health = g.fight.health - dmg
     g.fight.hurt_until = g.rdr.anim_time + 0.3
+    g.fight.dmg_pct = g.fight.dmg_pct + dmg * PL_DMG_SHIFT#
+    if ( g.fight.dmg_pct > PL_DMG_SHIFT_MAX# ) then g.fight.dmg_pct = PL_DMG_SHIFT_MAX#
 end sub
 
 ''::::::::::::::
@@ -2099,6 +2101,7 @@ sub pl_items_touch ( g as Game, item() as ItemEnt )
                         item(i).gone = -1
                     end if
                 end if
+                if ( item(i).gone ) then g.fight.bonus_pct = PL_BONUS_SHIFT#
             end if
         end if
     next i

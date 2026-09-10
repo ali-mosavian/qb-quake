@@ -135,6 +135,8 @@ type PlayerCombat
     state_until as single      '' when GS_DEAD ends
     fire_prev   as integer     '' last tick's fire, so a held button is one press
     rot_at      as single      '' megahealth: the next point over 100 rots then
+    dmg_pct     as single      '' V_ParseDamage: the red shift, 0..150, fading 150/s
+    bonus_pct   as single      '' the pickup flash, 50, fading 100/s
 end type
 
 const PL_HEALTH%       = 100
@@ -148,6 +150,13 @@ const PL_SPREAD#       = 0.04
 const PL_SHELLS_MAX%   = 100
 const PL_HEALTH_MEGA%  = 250    '' T_Heal ignoring the cap stops here
 const PL_ROT_DELAY#    = 5.0    '' item_megahealth_rot: 5 s, then a point a second
+'' view.c: cshifts. Damage 3 a point capped at 150 and fading 150/s in
+'' red; a bonus 50 fading 100/s in 215,186,69.
+const PL_DMG_SHIFT#    = 3.0
+const PL_DMG_SHIFT_MAX# = 150.0
+const PL_DMG_FADE#     = 150.0
+const PL_BONUS_SHIFT#  = 50.0
+const PL_BONUS_FADE#   = 100.0
 '' the player's setsize, what a soldier's pellet hits
 const PL_HALF#         = 16.0
 const PL_ZLO#          = -24.0
