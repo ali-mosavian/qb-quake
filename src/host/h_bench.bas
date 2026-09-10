@@ -215,14 +215,12 @@ sub host_bench_report ( _
     print #benchf, "vz " + ltrim$(str$( g.pl.vel.z ))
     print #benchf, "dt " + ltrim$(str$( g.scr.frame_time ))
     print #benchf, "tick_hz " + ltrim$(str$( sys_tick_hz ))
-    print #benchf, "mem_avail " + ltrim$(str$( memAvail& ))
-    '' The same question asked of DOS instead of BASIC. memAvail
-    '' returns MAX(largest free block, BASIC's far-heap SIZE), so it
-    '' can report a heap's extent rather than its free space -- a
-    '' live MCB walk once found 9,312 bytes free where it said
+    '' Asked of DOS, not BASIC: mgl's memAvail returned MAX(largest free
+    '' block, BASIC's far-heap SIZE), a heap's extent rather than its free
+    '' space -- a live MCB walk once found 9,312 bytes free where it said
     '' ~260,000. qgl_avail is what an allocation can actually get;
-    '' qgl_free_sum is every free block added up, so the gap between
-    '' the two is the fragmentation.
+    '' qgl_free_sum is every free block added up, so the gap between the
+    '' two is the fragmentation.
     print #benchf, "qgl_avail " + ltrim$(str$( qglMemAvail&( QGL_MEM_LARGEST ) ))
     print #benchf, "qgl_free_sum " + ltrim$(str$( qglMemAvail&( QGL_MEM_TOTAL ) ))
     print #benchf, "lm_size " + ltrim$(str$( mod_lm_bytes( g ) ))

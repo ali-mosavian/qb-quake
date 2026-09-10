@@ -5,7 +5,7 @@
  * arrive as a near pointer to a BASARRAY descriptor (see BASARRAY
  * below), whose own farptr field is the far pointer to the actual data;
  * g as Game arrives as a near pointer too. ls_value/ls_scale_byte/
- * ls_add_dlight/sb_seg/sb_pot/mod_lm_map/mod_cm_map/memCopy are all
+ * ls_add_dlight/sb_seg/sb_pot/mod_lm_map/mod_cm_map/qglMemCopy are all
  * called back into unchanged -- every one of them takes only byval
  * scalars (or g byref, already proven), never a plain (non-SEG) byref
  * UDT or array, which is the specific thing that turned out not to be
@@ -49,7 +49,7 @@ extern long  pascal far mod_lm_map( void *g, short row );
 extern long  pascal far mod_cm_map( void *g );
 extern short pascal far sb_seg( long p );
 extern short pascal far sb_pot( short v );
-extern void  pascal far memCopy( long dst, long src, long bytes );
+extern void  pascal far qglMemCopy( long dst, long src, long bytes );
 extern short pascal far qglSbBuild( long dstDc, long texDc, long parm );
 extern void  pascal far sc_note_build( void );
 extern void  pascal far sc_note_dlit( void );
@@ -156,7 +156,7 @@ void pascal far sb_build(
             ls_far = (long) (void far *) ls_scratch_c;
             lrow = ls_far;
             for ( li = 0; li < lmh; li++ ) {
-                memCopy( lrow, srow, (long) lmw );
+                qglMemCopy( lrow, srow, (long) lmw );
                 srow += sb_pot( lmw );
                 lrow += lmw;
             }

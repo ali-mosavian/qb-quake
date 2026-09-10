@@ -41,6 +41,9 @@ declare function qglSfViewNew ( byval parent as long, byval wid as integer, _
 declare function qglSfViewAim ( byval v as long, byval ofs as long ) as integer
 declare function qglSfPget ( byval s as long, byval x as integer, _
                                byval y as integer ) as integer
+declare function qglSfWrRow ( byval s as long, byval y as integer ) as long
+declare function qglGemFrame () as integer
+declare sub qglMemCopy ( byval dst as long, byval src as long, byval nbytes as long )
 
 ''
 '' This module's own procedures.
@@ -907,7 +910,7 @@ sub sc_init ( _
     sc_next = 0
     sc_cap  = 0
 
-    if ( emsCheck% = 0 ) then
+    if ( qglGemFrame() = 0 ) then
         sc_ok = 0
         exit sub
     end if
@@ -1309,9 +1312,8 @@ function sc_selftest ( _
 ) as integer
     dim d0 as long, d1 as long, d2 as long
     dim i as integer, gen0 as integer, made0 as integer
-    dim wr(31) as integer, rd(31) as integer
     dim ofs0 as long, live0 as long, flush0 as long, next0 as long
-    dim fp as long
+    dim p as long, sg as long
 
     if ( sc_ok = 0 ) then
         sc_selftest = -1
@@ -1347,17 +1349,25 @@ function sc_selftest ( _
     if ( sc_find( 1, 0, 112, 96, 0 ) <> d1 ) then sc_selftest = -10 : exit function
     if ( sc_find( 1, 1, 112, 96, 0 ) <> 0 ) then sc_selftest = -11 : exit function
 
-    '' a write into the last row of the largest class, the 16K page edge
+    '' a write into the last row of the largest class, the 16K page edge,
+    '' through the write window, read back through the read window. This
+    '' went through mgl's uglRowWriteBuff/uglRowRead on a qgl Surface,
+    '' whose scanline table sits six bytes further on than a DC's: both
+    '' used an address read out of the depth fields, so the bytes came
+    '' back equal and the test passed while 32 of them landed somewhere
+    '' else on every run. Reading back through the surface's own pixel
+    '' path is what makes a write that missed the surface visible.
+    p = qglSfWrRow( d0, 127 )
+    if ( p = 0 ) then sc_selftest = -12 : exit function
+    sg = ( p and &H7FFF0000 ) \ 65536&
+    if ( p < 0 ) then sg = sg + 32768&
+    def seg = sg
     for i = 0 to 31
-        wr(i) = (i * 7 + 3) and 255
-        rd(i) = 0
+        poke ( p and 65535& ) + i, ( i * 7 + 3 ) and 255
     next i
-    uglRowWriteBuff d0, 0, 127, 32, UGL.8BIT, wr(0)
-    fp = clng( varseg( rd(0) ) ) * 65536& + (clng( varptr( rd(0) ) ) and 65535&)
-    uglRowRead d0, 0, 127, 32, UGL.8BIT, fp
-    '' 32 pixels is 32 bytes, the first 16 of a 2-byte-per-element array
-    for i = 0 to 15
-        if ( rd(i) <> wr(i) ) then sc_selftest = -12 : exit function
+    def seg
+    for i = 0 to 31
+        if ( qglSfPget( d0, i, 127 ) <> ( ( i * 7 + 3 ) and 255 ) ) then sc_selftest = -12 : exit function
     next i
 
     '' a flush must retire the slots and hand the DCs back, not make more
@@ -1707,7 +1717,7 @@ sub sb_fetch ( _
     gp = mod_geom_map ( g, tri_buffer(face).geom_row )
     dst = clng( varseg( gv_buf(0) ) ) * 65536& + _
           (clng( varptr( gv_buf(0) ) ) and 65535&)
-    memCopy dst, gp + clng( tri_buffer(face).geom_ofs ), clng( gn )
+    qglMemCopy dst, gp + clng( tri_buffer(face).geom_ofs ), clng( gn )
 end sub
 
 ''::::::::::

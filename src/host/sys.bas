@@ -31,6 +31,7 @@ option explicit
 '$include: 'q_snd.bi'
 '$include: 'q_mdl.bi'
 '$include: 'q_game.bi'
+'$include: 'qgl.bi'
 
 ''
 '' This module's own procedures.
@@ -58,6 +59,7 @@ declare function sys_mem_fre ( byval i as integer ) as long
 
 '' qgl restores the mode; mgl no longer sets one.
 declare sub qglVgaShutdown ()
+declare function qglMemAvail ( byval what as integer ) as long
 
 ''
 '' Declared here, not in a header: this module is the only caller, and a
@@ -530,7 +532,7 @@ sub sys_mem_mark ( tag as string )
     end if
     if ( mem_n > MEM_MARKS ) then exit sub
     mem_tag( mem_n ) = tag
-    mem_val( mem_n ) = memAvail&
+    mem_val( mem_n ) = qglMemAvail( QGL_MEM_LARGEST )
     mem_fre( mem_n ) = fre( -1 )
     mem_n = mem_n + 1
 

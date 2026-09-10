@@ -255,6 +255,14 @@ fi
 
 echo "== ticks (${PASSES} passes): ${ticks[*]}"
 
+# The surface cache's own selftest, which every bench runs and nothing
+# read. 1 is a pass; a negative number names the assertion. It read 1
+# while its row write went through mgl's uglRowWriteBuff on a qgl
+# Surface, because the read went through the same wrong address --
+# the readback is through the surface's own pixels now.
+sct=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="sc_test"{print $2}')
+[[ "$sct" == "1" ]] || { echo "sc_test $sct, want 1"; exit 1; }
+
 echo "== memory"
 tr -d '\r' < "$VBD_OUT/bench.txt" | awk '
     $1=="mem"  {printf "  %-11s heapfree %8d  cost %8d\n", $2, $5, $6}

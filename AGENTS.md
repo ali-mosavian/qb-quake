@@ -1959,6 +1959,29 @@ whatever the free had forgotten, and the forgetless mutant passed. The
 test now maps page 0 before the free -- and with that armed, the real
 code failed too, which is how the loop above was found.
 
+## Retiring mgl: memory and the selftest that could not fail
+
+`memCopy` is `qglMemCopy` (d_surf.bas, sb_build.c), `memAvail` is
+`qglMemAvail(QGL_MEM_LARGEST)` in the memtrace and gone from bench.txt
+-- `qgl_avail` had been beside it saying 64 bytes where it said
+246,848, and the difference is BASIC's heap, not free memory --
+`emsCheck` is `qglGemFrame`, and `-dumptex` reads its palette from
+`pal.raw` instead of the DAC. What mgl still holds is the timer, the
+keyboard and the mouse, and `uglInit`/`uglEnd` around them.
+
+**`sc_selftest` wrote its row through mgl and read it back through
+mgl, on a qgl Surface.** `uglRowWriteBuff`/`uglRowRead` take the
+scanline table at `DC_addrTB`, 32, where a Surface keeps it at 38, so
+both went through an address read out of the depth fields -- the same
+wrong address, so the bytes came back equal and the test said 1 while
+32 bytes landed somewhere else on every bench run. The write goes
+through `qglSfWrRow` now and the readback through `qglSfPget`, which is
+the surface's own pixel path and cannot agree with a write that missed
+it; `check.sh` reads `sc_test` and wants 1. Aiming the write at row
+126 reads -12 through that gate. Every other `-1..-55` was the same
+instrument reporting on itself, so treat a green selftest as one
+measurement, not fifty-five.
+
 ## `-nostats` makes the picture deterministic
 
 With the HUD off the renderer is **byte-identical run to run** -- one

@@ -357,7 +357,13 @@ sub mod_tex_dump ( g as Game )
     imgsz    = clng(rowlen) * clng(sh)
     off_bits = 14 + 40 + 1024
 
-    uglPalGetBuff 0, 256, palbuf(0)
+    '' the palette the screenshot carries too: pal.raw, r g b per entry
+    f = freefile
+    open "pal.raw" for binary as #f
+    for x = 0 to 255
+        get #f, , palbuf(x)
+    next x
+    close #f
 
     f = freefile
     open "texdump.bmp" for binary as #f
