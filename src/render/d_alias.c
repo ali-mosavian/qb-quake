@@ -23,6 +23,7 @@ extern short pascal far qglSfZMode ( long surf, short mode );
 extern short pascal far qglGemMap  ( short h, short pg, short slot );
 
 #define QGL_M_TEX    2
+#define QGL_M_FLAT  1
 #define QGL_Z_TEST   2
 #define PAGE_SLOT    2          /* q_map.bi: shared with nodes, leaves, lightmap */
 #define MDL_MAXV     191        /* q_mdl.bi */
@@ -216,4 +217,55 @@ short pascal far mdl_draw_tris(
         }
     }
     return drawn;
+}
+
+
+/* A pickup as a box: half wide either way, top high, spun by yaw, six
+   flat quads depth-tested like the model. Any corner behind the near
+   plane drops the whole box -- at ten units wide that means the player
+   is standing in it, which is the touch that takes it. */
+short pascal far mdl_draw_box(
+    Vec3  *org,
+    float  half,
+    float  top,
+    float  cyaw,
+    float  syaw,
+    float *m,
+    float  xresh,
+    float  yresh,
+    float  z_near,
+    long   dst,
+    short  side_col,
+    short  top_col )
+{
+    static short near face[6][4] = {
+        {0,1,2,3}, {7,6,5,4}, {0,4,5,1}, {1,5,6,2}, {2,6,7,3}, {3,7,4,0} };
+    float bx[8], by[8], bw[8];
+    float lx, ly, lz, rx, ry, rz, rw;
+    short i, k;
+
+    for ( i = 0; i < 8; i++ ) {
+        lx = ( (i & 3) == 1 || (i & 3) == 2 ) ? half : -half;
+        ly = ( (i & 3) >= 2 ) ? half : -half;
+        lz = ( i >= 4 ) ? top : 0.0f;
+        rx = org->x + ( lx * cyaw - ly * syaw );
+        rz = org->y + ( lx * syaw + ly * cyaw );
+        ry = org->z + lz;
+        bw[i] = rx*m[3] + ry*m[7] + rz*m[11] + m[15];
+        if ( bw[i] < z_near ) return 0;
+        bx[i] = rx*m[0] + ry*m[4] + rz*m[ 8] + m[12];
+        by[i] = rx*m[1] + ry*m[5] + rz*m[ 9] + m[13];
+    }
+    qglSfZMode( dst, QGL_Z_TEST );
+    for ( i = 0; i < 6; i++ ) {
+        for ( k = 0; k < 4; k++ ) {
+            rw = 1.0f / bw[face[i][k]];
+            qv[k].x = xresh + bx[face[i][k]] * rw * xresh;
+            qv[k].y = yresh - by[face[i][k]] * rw * yresh;
+            qv[k].z = rw;
+            qv[k].u = 0.0f; qv[k].v = 0.0f;
+        }
+        qglRsPoly( dst, (void far *) qv, 4, QGL_M_FLAT, (long) ( i == 1 ? top_col : side_col ) );
+    }
+    return 6;
 }

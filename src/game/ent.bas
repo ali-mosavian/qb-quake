@@ -84,7 +84,8 @@ declare sub ent_load_teleports ( _
     brush() as BrushModel, _
     tele() as Teleporter, _
     face_mdl() as integer, _
-    plat() as PlatEnt _
+    plat() as PlatEnt, _
+    item() as ItemEnt _
 )
 declare sub ent_check_teleport ( _
     g as Game, _
@@ -189,11 +190,13 @@ sub ent_load_teleports ( _
     brush() as BrushModel, _
     tele() as Teleporter, _
     face_mdl() as integer, _
-    plat() as PlatEnt _
+    plat() as PlatEnt, _
+    item() as ItemEnt _
 )
     dim u as integer
     dim h as EntsHead
     dim tr as EntsTele
+    dim ir as EntsItem
     dim pr as EntsPlat
     dim i as integer, j as integer, k as integer
     dim mdlnum as integer
@@ -206,9 +209,11 @@ sub ent_load_teleports ( _
     redim face_mdl( g.wld.count.faces ) as integer
     redim tele( h.ntele ) as Teleporter
     redim plat( h.nplat ) as PlatEnt
+    redim item( h.nitem ) as ItemEnt
 
     g.tele_count = 0
     g.plat_count = 0
+    g.item_count = 0
 
     '' every submodel draws and blocks unless something claims it as a trigger
     for  i = 0 to g.wld.count.models-1
@@ -276,6 +281,14 @@ sub ent_load_teleports ( _
             brush( mdlnum ).draw  = false
             brush( mdlnum ).solid = false
         end if
+    next i
+
+    for  i = 1 to h.nitem
+        ent_get u, clng( varseg( ir ) ) * 65536& + (clng( varptr( ir ) ) and 65535&), len( ir )
+        item( g.item_count ).kind = ir.kind
+        item( g.item_count ).pos  = ir.org
+        item( g.item_count ).gone = 0
+        g.item_count = g.item_count + 1
     next i
 
     qglFileClose u

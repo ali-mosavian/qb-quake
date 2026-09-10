@@ -70,7 +70,8 @@ declare sub host_tick ( _
     cp_z() as integer, _
     tele() as Teleporter, _
     plat() as PlatEnt, _
-    mdl_ent() as MdlEnt _
+    mdl_ent() as MdlEnt, _
+    item() as ItemEnt _
 )
 
 '' Declared here, not in a header: this module is the only caller of
@@ -121,6 +122,21 @@ declare sub pl_fire ( _
     brush() as BrushModel, _
     planes() as Plane _
 )
+declare sub pl_items_touch ( g as Game, item() as ItemEnt )
+declare function mdl_draw_box ( _
+    org as Vec3, _
+    byval half as single, _
+    byval top as single, _
+    byval cyaw as single, _
+    byval syaw as single, _
+    mtx_fin as Mat4, _
+    byval xresh as single, _
+    byval yresh as single, _
+    byval z_near as single, _
+    byval dst as long, _
+    byval side_col as integer, _
+    byval top_col as integer _
+) as integer
 declare sub ls_animate ( byval anim_time as single )
 declare sub r_set_frustum ( _
     frustum() as DiskPlane, _
@@ -221,7 +237,8 @@ sub host_advance ( _
     plat() as PlatEnt, _
     host_accum as single, _
     host_ticks as long, _
-    mdl_ent() as MdlEnt _
+    mdl_ent() as MdlEnt, _
+    item() as ItemEnt _
 )
     dim steps as integer
 
@@ -241,7 +258,7 @@ sub host_advance ( _
             exit do
         end if
         host_tick g, HOST_DT#, brush(), models(), planes(), nodes(), cp_x(), cp_y(), _
-                   cp_z(), tele(), plat(), mdl_ent()
+                   cp_z(), tele(), plat(), mdl_ent(), item()
         host_accum = host_accum - HOST_DT#
         host_ticks = host_ticks + 1
         steps = steps + 1
@@ -281,7 +298,8 @@ sub host_tick ( _
     cp_z() as integer, _
     tele() as Teleporter, _
     plat() as PlatEnt, _
-    mdl_ent() as MdlEnt _
+    mdl_ent() as MdlEnt, _
+    item() as ItemEnt _
 )
     dim mdl_i as integer
 
@@ -295,6 +313,7 @@ sub host_tick ( _
     if ( g.env.mouse.left or g.env.keyboard.ctrl ) then
         pl_fire g, mdl_ent(), models(), brush(), planes()
     end if
+    pl_items_touch g, item()
 
     '' every spawned model's own think -- Quake's real rate (10Hz), gated
     '' inside mdl_think against g.rdr.anim_time. A soldier that spots the
@@ -359,9 +378,12 @@ sub host_render ( _
     face_mdl() as integer, _
     cam_up as Vec3, _
     mdltri_buffer() as MdlTri, _
-    mdl_ent() as MdlEnt _
+    mdl_ent() as MdlEnt, _
+    item() as ItemEnt _
 )
     dim mtx_mdl as Mat4
+    dim bob as Vec3
+    dim nbox as integer
     dim mdl_i as integer
     dim mtx_fin as Mat4
     dim cam_pos_b as Vec3
@@ -517,6 +539,26 @@ sub host_render ( _
             end if
         next mdl_i
     end if
+    '' the pickups: a box each, spinning and bobbing on the same clock
+    '' as the liquids, flat colours the world's palette already has
+    for mdl_i = 0 to g.item_count - 1
+        if ( item( mdl_i ).gone = 0 ) then
+            if ( r_mdl_visible( item( mdl_i ).pos, ENT_ITEM_HALF# * 1.5, 0.0, ENT_ITEM_TOP# + 8.0, _
+                                nds_buffer(), pln_buffer(), frustum() ) ) then
+                bob = item( mdl_i ).pos
+                bob.z = bob.z + 4.0 + 4.0 * sin( g.rdr.anim_time * 3.0 )
+                if ( item( mdl_i ).kind = ENT_ITEM_HEALTH ) then
+                    nbox = mdl_draw_box( bob, ENT_ITEM_HALF#, ENT_ITEM_TOP#, cos( g.rdr.anim_time * 2.0 ), _
+                                         sin( g.rdr.anim_time * 2.0 ), mtx_fin, xresh, yresh, g.env.z_near, _
+                                         h_dst_dc, ENT_COL_RED%, ENT_COL_WHITE% )
+                else
+                    nbox = mdl_draw_box( bob, ENT_ITEM_HALF#, ENT_ITEM_TOP#, cos( g.rdr.anim_time * 2.0 ), _
+                                         sin( g.rdr.anim_time * 2.0 ), mtx_fin, xresh, yresh, g.env.z_near, _
+                                         h_dst_dc, ENT_COL_BROWN%, ENT_COL_YELLOW% )
+                end if
+            end if
+        end if
+    next mdl_i
     if ( g.ft.n > 0 ) then
         ptd = sys_now() - pt0
         g.pt.mdl_sum = g.pt.mdl_sum + ptd

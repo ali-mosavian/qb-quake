@@ -70,6 +70,14 @@ declare function mdl_ray_hit ( _
     byval maxt as single _
 ) as single
 declare sub pl_respawn ( g as Game )
+declare sub pl_items_drop ( _
+    g as Game, _
+    item() as ItemEnt, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+)
+declare sub pl_items_touch ( g as Game, item() as ItemEnt )
 declare function pl_point_contents ( _
     p as Vec3, _
     nodes() as Node, _
@@ -1821,4 +1829,58 @@ sub pl_respawn ( g as Game )
     g.fight.next_fire = 0.0
     g.pl.pos.x = g.fight.spawn.x : g.pl.pos.y = g.fight.spawn.y : g.pl.pos.z = g.fight.spawn.z
     g.pl.vel.x = 0.0 : g.pl.vel.y = 0.0 : g.pl.vel.z = 0.0
+end sub
+
+''::::::::::::::
+'' name: pl_items_drop
+'' desc: Quake's droptofloor: each item falls to the hull floor under it.
+''::::::::::::::
+sub pl_items_drop ( _
+    g as Game, _
+    item() as ItemEnt, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+)
+    dim i as integer
+    dim fin as Vec3
+    dim tr as TraceResult
+
+    for i = 0 to g.item_count - 1
+        fin = item(i).pos
+        fin.z = fin.z - 256.0
+        pl_trace item(i).pos, fin, tr, g.wld.count.models, models(), brush(), clp_buffer(), planes()
+        if ( tr.frac < 1.0 and tr.all_solid = 0 ) then item(i).pos = tr.end_pos
+    next i
+end sub
+
+''::::::::::::::
+'' name: pl_items_touch
+'' desc: Picks up whatever the player's box overlaps, and puts back what
+''       was taken ENT_ITEM_RESPAWN ago. Health caps at PL_HEALTH.
+''::::::::::::::
+sub pl_items_touch ( g as Game, item() as ItemEnt )
+    dim i as integer
+    dim dz as single
+
+    for i = 0 to g.item_count - 1
+        if ( item(i).gone ) then
+            if ( g.rdr.anim_time >= item(i).taken_at + ENT_ITEM_RESPAWN# ) then item(i).gone = 0
+        else
+            dz = g.pl.pos.z - item(i).pos.z
+            if ( abs( g.pl.pos.x - item(i).pos.x ) < ENT_ITEM_REACH# and _
+                 abs( g.pl.pos.y - item(i).pos.y ) < ENT_ITEM_REACH# and _
+                 dz > -ENT_ITEM_TOP# - PL_FEET# and dz < ENT_ITEM_TOP# + PL_FEET# ) then
+                if ( item(i).kind = ENT_ITEM_SHELLS ) then
+                    g.fight.shells = g.fight.shells + ENT_SHELLS_GIVE%
+                    item(i).gone = -1
+                elseif ( g.fight.health < PL_HEALTH% ) then
+                    g.fight.health = g.fight.health + ENT_HEALTH_GIVE%
+                    if ( g.fight.health > PL_HEALTH% ) then g.fight.health = PL_HEALTH%
+                    item(i).gone = -1
+                end if
+                if ( item(i).gone ) then item(i).taken_at = g.rdr.anim_time
+            end if
+        end if
+    next i
 end sub

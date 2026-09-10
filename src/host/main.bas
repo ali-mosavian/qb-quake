@@ -57,6 +57,13 @@ declare sub cp_load ( _
     cp_y() as integer, _
     cp_z() as integer _
 )
+declare sub pl_items_drop ( _
+    g as Game, _
+    item() as ItemEnt, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+)
 declare sub host_bench_report ( _
     g as Game, _
     frame_no as long, _
@@ -86,7 +93,8 @@ declare sub host_render ( _
     face_mdl() as integer, _
     cam_up as Vec3, _
     mdltri_buffer() as MdlTri, _
-    mdl_ent() as MdlEnt _
+    mdl_ent() as MdlEnt, _
+    item() as ItemEnt _
 )
 declare sub host_advance ( _
     g as Game, _
@@ -102,7 +110,8 @@ declare sub host_advance ( _
     plat() as PlatEnt, _
     host_accum as single, _
     host_ticks as long, _
-    mdl_ent() as MdlEnt _
+    mdl_ent() as MdlEnt, _
+    item() as ItemEnt _
 )
 declare function qglCheckAll () as integer
 declare function qglDiffAll () as integer
@@ -153,7 +162,8 @@ declare sub host_init ( _
     face_mdl() as integer, _
     plat() as PlatEnt, _
     mdltri_buffer() as MdlTri, _
-    mdl_ent() as MdlEnt _
+    mdl_ent() as MdlEnt, _
+    item() as ItemEnt _
 )
 declare sub host_main ( _
     g as Game, _
@@ -176,7 +186,8 @@ declare sub host_main ( _
     plat() as PlatEnt, _
     tele() as Teleporter, _
     mdltri_buffer() as MdlTri, _
-    mdl_ent() as MdlEnt _
+    mdl_ent() as MdlEnt, _
+    item() as ItemEnt _
 )
 
 ''
@@ -270,7 +281,8 @@ declare sub mod_load_world ( _
     brush() as BrushModel, _
     tele() as Teleporter, _
     face_mdl() as integer, _
-    plat() as PlatEnt _
+    plat() as PlatEnt, _
+    item() as ItemEnt _
 )
 declare sub mod_open ( _
     g as Game, _
@@ -380,6 +392,7 @@ dim g as Game
 ''
 dim brush() as BrushModel
 dim tele() as Teleporter
+dim item() as ItemEnt
 dim face_mdl() as integer
 dim plat() as PlatEnt
 dim bit_array() as integer
@@ -489,7 +502,7 @@ dim shared z_dc as long
               mdl_buffer(), order_list(), poly_flag(), gv_buf(), bit_array(), _
               cp_x(), cp_y(), cp_z(), mip_buff_inf(), _
               frustum(), brush(), tele(), face_mdl(), plat(), _
-              mdltri_buffer(), mdl_ent()
+              mdltri_buffer(), mdl_ent(), item()
     if ( g.env.dump_tex ) then
         mod_tex_dump g
     elseif ( g.env.dump_set ) then
@@ -501,7 +514,7 @@ dim shared z_dc as long
                   mdl_buffer(), order_list(), poly_flag(), gv_buf(), brush(), _
                   frustum(), bit_array(), _
                   mip_buff_inf(), face_mdl(), plat(), tele(), _
-                  mdltri_buffer(), mdl_ent()
+                  mdltri_buffer(), mdl_ent(), item()
     end if
     host_shutdown
     
@@ -620,7 +633,8 @@ sub host_init ( _
     face_mdl() as integer, _
     plat() as PlatEnt, _
     mdltri_buffer() as MdlTri, _
-    mdl_ent() as MdlEnt _
+    mdl_ent() as MdlEnt, _
+    item() as ItemEnt _
 )
     ''
     '' Load profiling. A 1 kHz AUTOINIT timer counts milliseconds, and the
@@ -726,7 +740,8 @@ sub host_init ( _
     '' level lumps
     mod_load_world g, tri_buffer(), tex_inf_buff(), pln_buffer(), nds_buffer(), _
                     mdl_buffer(), order_list(), poly_flag(), gv_buf(), brush(), tele(), _
-                    face_mdl(), plat()
+                    face_mdl(), plat(), item()
+    pl_items_drop g, item(), mdl_buffer(), brush(), pln_buffer()
 
     t_lump = timer
 
@@ -835,7 +850,8 @@ sub host_main ( _
     plat() as PlatEnt, _
     tele() as Teleporter, _
     mdltri_buffer() as MdlTri, _
-    mdl_ent() as MdlEnt _
+    mdl_ent() as MdlEnt, _
+    item() as ItemEnt _
 )
     dim mtx_prj as Mat4
     dim aspect as single
@@ -998,7 +1014,7 @@ sub host_main ( _
         pt0 = sys_now()
         host_advance g, g.scr.frame_time, brush(), mdl_buffer(), pln_buffer(), _
                       nds_buffer(), cp_x(), cp_y(), cp_z(), tele(), plat(), _
-                      host_accum, host_ticks, mdl_ent()
+                      host_accum, host_ticks, mdl_ent(), item()
         if ( g.ft.n > 0 ) then
             ptd = sys_now() - pt0
             g.pt.tick_sum = g.pt.tick_sum + ptd
@@ -1016,7 +1032,7 @@ sub host_main ( _
                      pln_buffer(), nds_buffer(), mdl_buffer(), order_list(), poly_flag(), _
                      gv_buf(), brush(), frustum(), bit_array(), _
                      mip_buff_inf(), face_mdl(), cam_up, _
-                     mdltri_buffer(), mdl_ent()
+                     mdltri_buffer(), mdl_ent(), item()
 
 
         ''

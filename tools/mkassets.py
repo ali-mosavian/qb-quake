@@ -411,6 +411,8 @@ def parse_entities(text: str, nmodels: int) -> bytes:
     dests: dict[str, tuple[tuple[float, float, float], float]] = {}
     trigs: list[tuple[str, int]] = []
     plats: list[tuple[int, float, float]] = []
+    items: list[tuple[int, tuple[float, float, float]]] = []
+    item_kind = {'item_health': 0, 'item_shells': 1}
 
     def vec(v: str) -> tuple[float, float, float]:
         x, y, z = (float(t) for t in v.split())
@@ -435,20 +437,24 @@ def parse_entities(text: str, nmodels: int) -> bytes:
                 plats.append((model(kv['model']),
                               float(kv.get('speed', '0')),
                               float(kv.get('height', '0'))))
+            case str(c) if c in item_kind:
+                items.append((item_kind[c], vec(kv.get('origin', '0 0 0'))))
 
     # a trigger with no destination still hides its brush, exactly as the
     # BASIC pass 1 did before pass 2 paired them
     teles = [(m, *dests[t]) for t, m in trigs if t in dests]
     hides = [m for _, m in trigs]
 
-    buf = bytearray(struct.pack('<4f4h', *spawn, angle, nmodels,
-                                len(teles), len(plats), len(hides)))
+    buf = bytearray(struct.pack('<4f5h', *spawn, angle, nmodels,
+                                len(teles), len(plats), len(hides), len(items)))
     for m, org, yaw in teles:
         buf += struct.pack('<h3ff', m, *org, yaw)
     for m, speed, height in plats:
         buf += struct.pack('<hff', m, speed, height)
     for m in hides:
         buf += struct.pack('<h', m)
+    for kind, org in items:
+        buf += struct.pack('<h3f', kind, *org)
     return bytes(buf)
 
 
