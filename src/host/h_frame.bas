@@ -37,6 +37,18 @@ option explicit
 '$include: 'q_mdl.bi'
 '$include: 'q_game.bi'
 
+declare sub qglM4LookAt ( _
+    seg m as u3dMtrx, _
+    seg eye as u3dVector3f, _
+    seg at as u3dVector3f, _
+    seg up as u3dVector3f _
+)
+declare sub qglM4Conc ( _
+    seg m as u3dMtrx, _
+    seg a as u3dMtrx, _
+    seg b as u3dMtrx _
+)
+
 dim shared lm_want_dbg as integer
 dim shared lm_fall_dbg as integer
 dim shared qgl_faces_dbg as integer
@@ -335,8 +347,8 @@ sub host_render ( _
     dim dparm as DrawParams
 
     pt0 = sys_now()
-    u3dMtrxLookAt mtx_mdl, g.cam.pos, g.cam.look_at, cam_up
-    u3dMtrxConc mtx_fin, mtx_mdl, mtx_prj
+    qglM4LookAt mtx_mdl, g.cam.pos, g.cam.look_at, cam_up
+    qglM4Conc mtx_fin, mtx_mdl, mtx_prj
     r_set_frustum frustum(), mtx_fin
     
 
@@ -365,8 +377,8 @@ sub host_render ( _
     end if
     
     '        
-    u3dMtrxLookAt mtx_mdl, cam_pos_b, g.cam.look_at, cam_up        
-    u3dMtrxConc mtx_fin, mtx_mdl, mtx_prj
+    qglM4LookAt mtx_mdl, cam_pos_b, g.cam.look_at, cam_up
+    qglM4Conc mtx_fin, mtx_mdl, mtx_prj
     
     
     ''

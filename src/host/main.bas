@@ -247,6 +247,13 @@ declare sub vid_init ( _
     g as Game _
 )
 declare sub qglMemInit ()
+declare sub qglM4Persp ( _
+    seg m as u3dMtrx, _
+    byval fov as single, _
+    byval asp as single, _
+    byval zn as single, _
+    byval zf as single _
+)
 declare sub qglMemShutdown ()
 declare sub mod_load_texinfo ( _
     g as Game, _
@@ -901,7 +908,7 @@ sub host_main ( _
     ''
     aspect = (g.env.view_w * g.env.scr_y_res * DISPLAY_W) / _
              (g.env.view_h * g.env.scr_x_res * DISPLAY_H)
-    u3dMtrxPersp mtx_prj, g.env.cam_fov, aspect, g.env.z_near, g.env.z_far
+    qglM4Persp mtx_prj, g.env.cam_fov, aspect, g.env.z_near, g.env.z_far
 
     ''
     '' Depth buffer, matching the destination. EMS: 320x200 of depth is
