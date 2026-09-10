@@ -652,14 +652,14 @@ qglDrBlitScl proc    public uses bx cx dx si di ds es,\
                         d:dword, x:word, y:word, w:word, h:word, s:dword
 
                 local   dy:word
-                local   ustep:word
-                local   vstep:word
-                local   vacc:word
+                local   ustep:dword
+                local   vstep:dword
+                local   vacc:dword
                 local   sseg:word
                 local   sofs:word
                 local   dcol:word
                 local   dlen:word
-                local   u0:word
+                local   u0:dword
                 local   srows2:word, swide:word
                 local   dsegc:word, dofsc:word
                 local   ssegc:word, sofsc:word
@@ -673,29 +673,28 @@ qglDrBlitScl proc    public uses bx cx dx si di ds es,\
                 test    ax, ax
                 jz      @@out
 
-                ;; 8.8 steps: source extent over destination extent. The
-                ;; shift is on eax while the divide is 16-bit, so a
-                ;; source wider than 255 truncates -- this is the present
-                ;; path, where it is 160.
+                ;; 8.8 steps: source extent over destination extent, in
+                ;; 32 bits -- a word holds 255 columns of 8.8, and the
+                ;; status bar is 320 (t15blit case 7).
                 les     bx, s
-                mov     ax, es:[bx].Surface.xRes
+                movzx   eax, es:[bx].Surface.xRes
                 mov     swide, ax
-                xor     dx, dx
                 shl     eax, 8
-                div     w
-                mov     ustep, ax
+                movzx   ecx, w
+                xor     edx, edx
+                div     ecx
+                mov     ustep, eax
 
                 les     bx, s
-                mov     ax, es:[bx].Surface.yRes
-                xor     dx, dx
+                movzx   eax, es:[bx].Surface.yRes
                 shl     eax, 8
-                div     h
-                mov     vstep, ax
+                movzx   ecx, h
+                xor     edx, edx
+                div     ecx
+                mov     vstep, eax
 
                 ;; the columns, once. u0 is where the accumulator starts
-                ;; when the left of the rectangle was cut off; the
-                ;; product stays inside a word for the same reason the
-                ;; divide above does.
+                ;; when the left of the rectangle was cut off.
                 les     bx, d
                 mov     cx, es:[bx].Surface.xRes
                 mov     ax, x
@@ -707,8 +706,9 @@ qglDrBlitScl proc    public uses bx cx dx si di ds es,\
                 mov     dcol, ax
                 mov     dlen, cx
                 sub     ax, x
+                movzx   eax, ax
                 mul     ustep
-                mov     u0, ax
+                mov     u0, eax
 
                 ;;
                 ;; THE WHOLE SURFACE, EXACTLY DOUBLED, BOTH CMEM.
@@ -838,16 +838,16 @@ qglDrBlitScl proc    public uses bx cx dx si di ds es,\
                 jmp     @@out
 
 @@generic:
-                xor     ax, ax
+                xor     eax, eax
                 mov     dy, ax
-                mov     vacc, ax
+                mov     vacc, eax
 
 @@row:          mov     ax, dy
                 cmp     ax, h
                 jae     @@out
 
-                mov     ax, vacc
-                shr     ax, 8                   ;; source row
+                mov     eax, vacc
+                shr     eax, 8                  ;; source row
                 invoke  qglSfRdRow, s, ax
                 mov     sseg, dx
                 mov     sofs, ax
@@ -866,19 +866,19 @@ qglDrBlitScl proc    public uses bx cx dx si di ds es,\
                 push    ds
                 mov     ds, sseg
                 mov     cx, dlen
-                mov     bx, u0                  ;; 8.8 u accumulator
-@@px:           mov     si, bx
-                shr     si, 8
+                mov     ebx, u0                 ;; 8.8 u accumulator
+@@px:           mov     esi, ebx
+                shr     esi, 8
                 add     si, sofs
                 mov     al, ds:[si]
                 mov     es:[di], al
                 inc     di
-                add     bx, ustep
+                add     ebx, ustep
                 loop    @@px
                 pop     ds
 
-@@next:         mov     ax, vstep
-                add     vacc, ax
+@@next:         mov     eax, vstep
+                add     vacc, eax
                 inc     dy
                 jmp     @@row
 

@@ -24,6 +24,13 @@
 ;; clip would have put there, so a small surface reports the left-hand
 ;; cases as PASSING. They were, in the first version of this file. Only
 ;; a surface long enough to contain the stray write can see it.
+;;
+;; Case 7 is the other blitter's own bug: its 8.8 step was a 16-bit
+;; divide of the source width shifted left eight, and its accumulator
+;; a word, so any source wider than 255 -- the 320-wide status bar --
+;; stepped at a fraction of the true rate and drew its first columns
+;; stretched across the whole rectangle. A 320-wide ramp halved into
+;; 160 columns, expected source column dx << 1.
 
                 .model  medium, pascal
                 .386
@@ -43,6 +50,7 @@ SRCH            equ     4
 FILLB           equ     011h
 GUARDB          equ     0A5h
 SRC0            equ     040h    ;; source column c holds SRC0 + c
+WIDEW           equ     320     ;; wider than a byte's worth of columns
 
 .data
 n_in            db      'blit inside            $'
@@ -55,11 +63,13 @@ n_sin           db      'blit_scl inside        $'
 n_sleft         db      'blit_scl off the left  $'
 n_sright        db      'blit_scl off the right $'
 n_sall          db      'blit_scl entirely left $'
+n_swide         db      'blit_scl 320 wide, 1:2 $'
 n_guard         db      'guard survives it all  $'
 
 sf              dd      0
 guard           dd      0
 src             dd      0
+wide            dd      0
 bad             dw      0
 
 .code
@@ -69,8 +79,8 @@ bad             dw      0
 ;; not have left there.
 ;;
 ;; INTERNAL. x is signed. sh is the source-column shift: 0 for the 1:1
-;; blit, 1 for the 2x scaled one, so the expected column is arithmetic
-;; the code under test does not share.
+;; blit, 1 for the 2x scaled one, -1 for the halved one, so the
+;; expected column is arithmetic the code under test does not share.
 ;;::::::::::::::
 vrfy            proc    near private uses bx cx dx si di es,\
                         x:word, y:word, w:word, h:word, sh:word
@@ -104,8 +114,13 @@ vrfy            proc    near private uses bx cx dx si di es,\
 
                 push    cx
                 mov     cx, sh
-                shr     ax, cl                  ;; source column
-                pop     cx
+                test    cx, cx
+                jns     @@right
+                neg     cx
+                shl     ax, cl                  ;; source column, magnified
+                jmp     @@col
+@@right:        shr     ax, cl                  ;; source column
+@@col:          pop     cx
                 add     al, SRC0
                 mov     bl, al
 
@@ -163,6 +178,8 @@ tmain           proc    far public uses bx cx dx si di es
                 SAVEP   guard
                 invoke  qglSfNew, SRCW, SRCH, SURF_CMEM
                 SAVEP   src
+                invoke  qglSfNew, WIDEW, 2, SURF_CMEM
+                SAVEP   wide
 
                 ;; the ramp: column c holds SRC0 + c
                 xor     si, si
@@ -174,6 +191,16 @@ tmain           proc    far public uses bx cx dx si di es
                 inc     si
                 jmp     @@col
 @@ramped:
+                xor     si, si
+@@wcol:         cmp     si, WIDEW
+                jae     @@wramped
+                mov     ax, si
+                add     ax, SRC0
+                and     ax, 0FFh
+                invoke  qglDrFill, wide, si, 0, si, 1, ax
+                inc     si
+                jmp     @@wcol
+@@wramped:
 
                 ;;
                 ;; 1. wholly inside, so the oracle itself is checked
@@ -249,9 +276,18 @@ tmain           proc    far public uses bx cx dx si di es
                 invoke  vrfy, -SRCW*2, 4, SRCW*2, SRCH*2, 1
                 CHK     n_sall, ax, 0
 
+                ;;
+                ;; 7. a source wider than 255, halved
+                ;;
+                invoke  reset
+                invoke  qglDrBlitScl, sf, 0, 8, WIDEW/2, 1, wide
+                invoke  vrfy, 0, 8, WIDEW/2, 1, -1
+                CHK     n_swide, ax, 0
+
                 invoke  gchk
                 CHK     n_guard, ax, 0
 
+                invoke  qglSfFree, wide
                 invoke  qglSfFree, src
                 invoke  qglSfFree, guard
                 invoke  qglSfFree, sf
