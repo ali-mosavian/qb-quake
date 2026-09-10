@@ -1650,6 +1650,16 @@ sub mdl_think ( _
         exit sub
     end if
 
+    '' Hit: the flinch, standing, then the hunt.
+    if ( ent.state = MDL_ST_PAIN% ) then
+        ent.anim_frame = ent.anim_frame + 1
+        if ( ent.anim_frame >= MDL_PAIN_FRAMES% ) then
+            ent.state = MDL_ST_RUN%
+            ent.anim_frame = 0
+        end if
+        exit sub
+    end if
+
     if ( ent.state = MDL_ST_STAND% ) then
         if ( can_chase and mdl_find_target( g, ent, models(), brush(), planes() ) ) then
             ent.hunting = -1
@@ -1811,7 +1821,7 @@ sub pl_fire ( _
         g.fight.shells = g.fight.shells + MDL_BACKPACK%
     else
         mdl_ent(best).hunting = -1
-        mdl_ent(best).state = MDL_ST_RUN%
+        mdl_ent(best).state = MDL_ST_PAIN%
         mdl_ent(best).anim_frame = 0
         mdl_ent(best).ideal_yaw = mdl_vectoyaw( g.pl.pos.x - mdl_ent(best).pos.x, _
                                                 g.pl.pos.y - mdl_ent(best).pos.y )

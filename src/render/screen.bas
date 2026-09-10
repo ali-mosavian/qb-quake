@@ -1543,6 +1543,12 @@ sub scr_draw_hud ( _
         draw_string h_dst_dc, 4, yy, fstr
     end if
 
+    '' the crosshair: four dots, the centre left open to see through
+    qglSfPset h_dst_dc, w \ 2 - 2, h \ 2, hc_slabhi
+    qglSfPset h_dst_dc, w \ 2 + 2, h \ 2, hc_slabhi
+    qglSfPset h_dst_dc, w \ 2, h \ 2 - 2, hc_slabhi
+    qglSfPset h_dst_dc, w \ 2, h \ 2 + 2, hc_slabhi
+
     ''
     '' Where the camera is, always -- with or without the stats panel,
     '' drawn last so the panel cannot cover it, and printed as the flags

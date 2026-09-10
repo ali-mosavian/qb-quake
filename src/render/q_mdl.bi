@@ -20,9 +20,11 @@
 const MDL_ST_STAND%    = 0
 const MDL_ST_RUN%      = 1
 const MDL_ST_DEAD%     = 2    '' plays the death frames once, then lies there
+const MDL_ST_PAIN%     = 3    '' the flinch a hit that does not kill plays, standing
 const MDL_STAND_FRAMES% = 8   '' army_stand1..8
 const MDL_RUN_FRAMES%   = 8   '' army_run1..8
 const MDL_DEATH_FRAMES% = 10  '' army_death1..10, after the run set
+const MDL_PAIN_FRAMES%  = 6   '' army_pain1..6, after the death set: 32 frames fill the page
 const MDL_HEALTH%       = 30  '' monster_army's health
 const MDL_DAMAGE%       = 8   '' about half of army_fire's four pellets landing
 const MDL_HIT_CHANCE#   = 0.5
