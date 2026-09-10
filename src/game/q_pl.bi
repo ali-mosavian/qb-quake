@@ -128,6 +128,7 @@ type PlayerCombat
     kills       as integer
     deaths      as integer
     next_fire   as single      '' anim_time the shotgun is ready again
+    show_hostile as single     '' W_Attack: time + 1, monsters notice a shot from behind
     flash_until as single      '' the muzzle flash widens the dlight until then
     hurt_until  as single      '' the status line reads red until then
     spawn       as Vec3        '' where dying puts the player back

@@ -110,6 +110,7 @@ declare sub v_update_camera ( _
 declare sub mdl_think ( _
     g as Game, _
     ent as MdlEnt, _
+    m as MdlState, _
     byval can_chase as integer, _
     models() as Submodel, _
     brush() as BrushModel, _
@@ -331,7 +332,11 @@ sub host_tick ( _
         '' mdl_think against g.rdr.anim_time
         ndead = 0
         for mdl_i = 0 to g.mdl_count - 1
-            mdl_think g, mdl_ent( mdl_i ), -1, models(), brush(), planes()
+            if ( mdl_ent( mdl_i ).kind = MDL_KIND_KNIGHT% ) then
+                mdl_think g, mdl_ent( mdl_i ), g.kmdl, -1, models(), brush(), planes()
+            else
+                mdl_think g, mdl_ent( mdl_i ), g.mdl, -1, models(), brush(), planes()
+            end if
             if ( mdl_ent( mdl_i ).state = MDL_ST_DEAD% ) then ndead = ndead + 1
         next mdl_i
         if ( g.fight.health <= 0 ) then
@@ -412,6 +417,7 @@ sub host_render ( _
     cam_up as Vec3, _
     mdltri_buffer() as MdlTri, _
     vmtri_buffer() as MdlTri, _
+    kmtri_buffer() as MdlTri, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt _
 )
@@ -567,7 +573,14 @@ sub host_render ( _
     g.mdl.drawn = 0
     if ( g.mdl.loaded and (g.env.no_mdl = 0) ) then
         for mdl_i = 0 to g.mdl_count - 1
-            if ( r_mdl_visible( mdl_ent( mdl_i ).pos, g.mdl.radius, g.mdl.zlo, g.mdl.zhi, _
+            if ( mdl_ent( mdl_i ).kind = MDL_KIND_KNIGHT% ) then
+                if ( r_mdl_visible( mdl_ent( mdl_i ).pos, g.kmdl.radius, g.kmdl.zlo, g.kmdl.zhi, _
+                                    nds_buffer(), pln_buffer(), frustum() ) ) then
+                    mdl_draw g, g.kmdl, kmtri_buffer(), mdl_ent( mdl_i ), _
+                             mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
+                    g.mdl.drawn = g.mdl.drawn + 1
+                end if
+            elseif ( r_mdl_visible( mdl_ent( mdl_i ).pos, g.mdl.radius, g.mdl.zlo, g.mdl.zhi, _
                                 nds_buffer(), pln_buffer(), frustum() ) ) then
                 mdl_draw g, g.mdl, mdltri_buffer(), mdl_ent( mdl_i ), _
                          mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc

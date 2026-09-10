@@ -76,6 +76,7 @@ sub host_bench_report ( _
     h_dst_dc as long, _
     brush() as BrushModel, _
     plat() as PlatEnt, _
+    mdl_ent() as MdlEnt, _
     byval host_ticks as long _
 )
     dim scs as CacheStats
@@ -189,6 +190,16 @@ sub host_bench_report ( _
     print #benchf, "polys " + ltrim$(str$( g.rdr.polys ))
     print #benchf, "mdl_drawn " + ltrim$(str$( g.mdl.drawn ))
     print #benchf, "vmdl_loaded " + ltrim$(str$( g.vmdl.loaded ))
+    print #benchf, "kmdl_loaded " + ltrim$(str$( g.kmdl.loaded ))
+    print #benchf, "pl_health " + ltrim$(str$( g.fight.health ))
+    print #benchf, "pl_kills " + ltrim$(str$( g.fight.kills ))
+    print #benchf, "pl_deaths " + ltrim$(str$( g.fight.deaths ))
+    '' the crowd, one line each: kind state hunting frame x y z
+    for mi = 0 to g.mdl_count - 1
+        print #benchf, "ent" + ltrim$(str$( mi )) + " " + ltrim$(str$( mdl_ent(mi).kind )) + " " + ltrim$(str$( mdl_ent(mi).state )) + " " + _
+            ltrim$(str$( mdl_ent(mi).hunting )) + " " + ltrim$(str$( mdl_ent(mi).anim_frame )) + " " + _
+            ltrim$(str$( mdl_ent(mi).pos.x )) + " " + ltrim$(str$( mdl_ent(mi).pos.y )) + " " + ltrim$(str$( mdl_ent(mi).pos.z ))
+    next mi
     print #benchf, "tris " + ltrim$(str$( g.rdr.tris ))
     print #benchf, "qgl_faces " + ltrim$(str$( dbg_qgl_faces() ))
     print #benchf, "qgl_drop " + ltrim$(str$( dbg_qgl_drop() ))

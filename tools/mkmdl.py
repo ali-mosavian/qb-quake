@@ -11,6 +11,8 @@ against real geometry.
 Emits (DOS 8.3 names, since the loader opens them by name):
 
     <name>.geo   header (incl. a per-model vertex scale/origin, fitted to
+                 the frames, and the frameset's counts by position:
+                 stand, run, death, pain, attack -- d_mdl.bas's layout),
                  the frames actually kept), triangles with per-corner UV
                  as fixed-point Integers, then one vertex array per
                  animation frame as raw BYTES -- the same trivertx_t
@@ -126,6 +128,8 @@ def main() -> int:
     out = bytearray(struct.pack("<4sHHHHH", b"QMDL", len(m.tris), len(m.st),
                                 len(frames), sw, sh))
     out += struct.pack("<6f", *vscale.tolist(), *vmin.tolist())
+    counts = [sum(1 for f in m.frames if re.sub(r"\d+$", "", f.name) == n) for n in frameset]
+    out += struct.pack("<5H", *(counts + [0] * 5)[:5])
     for t, (_ff, a, b, c) in enumerate(m.tris):
         out += struct.pack("<3h", a, b, c)
         for k in range(3):

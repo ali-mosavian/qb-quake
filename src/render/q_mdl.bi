@@ -21,10 +21,13 @@ const MDL_ST_STAND%    = 0
 const MDL_ST_RUN%      = 1
 const MDL_ST_DEAD%     = 2    '' plays the death frames once, then lies there
 const MDL_ST_PAIN%     = 3    '' the flinch a hit that does not kill plays, standing
-const MDL_STAND_FRAMES% = 8   '' army_stand1..8
-const MDL_RUN_FRAMES%   = 8   '' army_run1..8
-const MDL_DEATH_FRAMES% = 10  '' army_death1..10, after the run set
-const MDL_PAIN_FRAMES%  = 6   '' army_pain1..6, after the death set: 32 frames fill the page
+const MDL_ST_ATTACK%   = 4    '' the knight's sword, charging
+'' The frame sets -- stand, run, death, pain, attack -- are contiguous
+'' in that order and their counts come from the .geo header, so the
+'' Makefile's frameset IS the layout: soldier stand,run,death,pain fills
+'' the page at 32 frames of 170 vertices; the knight's 108 fit attackb.
+const MDL_KIND_ARMY%   = 0
+const MDL_KIND_KNIGHT% = 1
 const MDL_HEALTH%       = 30  '' monster_army's health
 '' army_fire: FireBullets (4, dir, '0.1 0.1 0'), 4 damage a pellet, aimed
 '' 0.2 s behind the player's velocity
@@ -53,6 +56,16 @@ const MDL_RANGE_MELEE#  = 120.0  '' ai.qc range() -- visible() alone is enough h
 const MDL_RANGE_NEAR#   = 500.0  '' range(): < MELEE, < NEAR, < MID, else FAR
 const MDL_RANGE_MID#    = 1000.0 '' range() >= this is RANGE_FAR, never noticed
 const MDL_VIEW_OFS#     = 25.0   '' walkmonster_start_go's view_ofs
+'' monster_knight: the same box, 75 health, no gun. In RANGE_MELEE it
+'' charges through attackb1..10 (ai_charge by the frame's distance) and
+'' ai_melee on 6, 7 and 8: (random()+random()+random())*3 within 60.
+'' knight_pain's short flinch, pain_finished 1 s; painb does not fit.
+const KNIGHT_HEALTH%     = 75
+const KNIGHT_MELEE_RANGE# = 60.0
+const KNIGHT_MELEE_DMG#  = 3.0
+const KNIGHT_PAIN#       = 1.0
+const KNIGHT_ATK_FIRST%  = 5     '' the frames that strike, 0-based
+const KNIGHT_ATK_LAST%   = 7
 
 '' NOT in stock Quake: a walkmonster with no path_corner target just
 '' stands forever (see the note above) -- there is no explore state to
@@ -88,6 +101,11 @@ type MdlState
     zlo         as single      '' from the header: horizontal reach about
     zhi         as single      '' the origin, and the z span
     drawn       as integer     '' models drawn this frame, after the cull
+    nstand      as integer     '' the frame sets, in this order
+    nrun        as integer
+    ndeath      as integer
+    npain       as integer
+    natk        as integer
 end type
 
 '' One spawned instance's own state -- everything mdl_think (pl_move.bas)
@@ -116,6 +134,7 @@ type MdlEnt
     flash_until as single      '' the volley's muzzle flash shows until then
     pain_finished as single    '' army_pain: no new flinch before this
     spawn       as Vec3        '' where it respawns
+    kind        as integer     '' MDL_KIND_ARMY% or MDL_KIND_KNIGHT%
 end type
 
 '' UV as fixed-point Integer (0..32767 = 0.0..1.0), not Single -- halves

@@ -70,6 +70,7 @@ declare sub host_bench_report ( _
     h_dst_dc as long, _
     brush() as BrushModel, _
     plat() as PlatEnt, _
+    mdl_ent() as MdlEnt, _
     byval host_ticks as long _
 )
 declare sub host_render ( _
@@ -94,6 +95,7 @@ declare sub host_render ( _
     cam_up as Vec3, _
     mdltri_buffer() as MdlTri, _
     vmtri_buffer() as MdlTri, _
+    kmtri_buffer() as MdlTri, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt _
 )
@@ -164,6 +166,7 @@ declare sub host_init ( _
     plat() as PlatEnt, _
     mdltri_buffer() as MdlTri, _
     vmtri_buffer() as MdlTri, _
+    kmtri_buffer() as MdlTri, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt _
 )
@@ -189,6 +192,7 @@ declare sub host_main ( _
     tele() as Teleporter, _
     mdltri_buffer() as MdlTri, _
     vmtri_buffer() as MdlTri, _
+    kmtri_buffer() as MdlTri, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt _
 )
@@ -427,6 +431,7 @@ dim gv_buf() as integer
 '' these are named mdltri/mdlvert to not collide with it.
 dim mdltri_buffer() as MdlTri
 dim vmtri_buffer() as MdlTri
+dim kmtri_buffer() as MdlTri
 
 '' One spawned instance per element -- the asset (mdltri_buffer, above,
 '' and g.mdl) is shared; only per-monster position/state lives here.
@@ -507,7 +512,7 @@ dim shared z_dc as long
               mdl_buffer(), order_list(), poly_flag(), gv_buf(), bit_array(), _
               cp_x(), cp_y(), cp_z(), mip_buff_inf(), _
               frustum(), brush(), tele(), face_mdl(), plat(), _
-              mdltri_buffer(), vmtri_buffer(), mdl_ent(), item()
+              mdltri_buffer(), vmtri_buffer(), kmtri_buffer(), mdl_ent(), item()
     if ( g.env.dump_tex ) then
         mod_tex_dump g
     elseif ( g.env.dump_set ) then
@@ -519,7 +524,7 @@ dim shared z_dc as long
                   mdl_buffer(), order_list(), poly_flag(), gv_buf(), brush(), _
                   frustum(), bit_array(), _
                   mip_buff_inf(), face_mdl(), plat(), tele(), _
-                  mdltri_buffer(), vmtri_buffer(), mdl_ent(), item()
+                  mdltri_buffer(), vmtri_buffer(), kmtri_buffer(), mdl_ent(), item()
     end if
     host_shutdown
     
@@ -639,6 +644,7 @@ sub host_init ( _
     plat() as PlatEnt, _
     mdltri_buffer() as MdlTri, _
     vmtri_buffer() as MdlTri, _
+    kmtri_buffer() as MdlTri, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt _
 )
@@ -790,6 +796,7 @@ sub host_init ( _
     '' to install here.
     mdl_load g, g.mdl, "soldier", mdltri_buffer()
     mdl_load g, g.vmdl, "v_shot", vmtri_buffer()
+    mdl_load g, g.kmdl, "knight", kmtri_buffer()
     g.mdl_count = 0
     if ( g.mdl.loaded ) then
         '' mdl_pick_section places every model from rnd, so a clock
@@ -812,10 +819,23 @@ sub host_init ( _
             mdl_spawn_fallback.y = g.pl.pos.y + 96.0 * sin( mdl_spawn_rad )
             mdl_spawn_fallback.z = g.pl.pos.z
 
+            '' every other one a knight, when its model loaded
+            mdl_ent( mdl_i ).kind = MDL_KIND_ARMY%
+            if ( g.kmdl.loaded and ( mdl_i and 1 ) ) then mdl_ent( mdl_i ).kind = MDL_KIND_KNIGHT%
             mdl_pick_section g, mdl_ent(), mdl_i, mdl_spawn_fallback, mdl_spawn_org
             mdl_spawn g, mdl_ent( mdl_i ), mdl_spawn_org, mdl_buffer(), brush(), pln_buffer()
         next mdl_i
         g.mdl_count = MDL_MAX_ENTS%
+        '' where they stood: a bench run is aimed at one with -at
+        if ( g.env.bench_frames > 0 or g.env.bench_ticks > 0 ) then
+            dim mdl_sf as integer
+            mdl_sf = freefile
+            open "spawn.txt" for output as #mdl_sf
+            for mdl_i = 0 to g.mdl_count - 1
+                print #mdl_sf, mdl_ent( mdl_i ).kind; mdl_ent( mdl_i ).pos.x; mdl_ent( mdl_i ).pos.y; mdl_ent( mdl_i ).pos.z
+            next mdl_i
+            close #mdl_sf
+        end if
     end if
 
     t_vid = timer
@@ -861,6 +881,7 @@ sub host_main ( _
     tele() as Teleporter, _
     mdltri_buffer() as MdlTri, _
     vmtri_buffer() as MdlTri, _
+    kmtri_buffer() as MdlTri, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt _
 )
@@ -1043,7 +1064,7 @@ sub host_main ( _
                      pln_buffer(), nds_buffer(), mdl_buffer(), order_list(), poly_flag(), _
                      gv_buf(), brush(), frustum(), bit_array(), _
                      mip_buff_inf(), face_mdl(), cam_up, _
-                     mdltri_buffer(), vmtri_buffer(), mdl_ent(), item()
+                     mdltri_buffer(), vmtri_buffer(), kmtri_buffer(), mdl_ent(), item()
 
 
         ''
@@ -1067,15 +1088,15 @@ sub host_main ( _
         end if
         '' -campath ends when the route does, whatever -bench says
         if ( g.env.cam_path and g.cp.done ) then
-            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), host_ticks
+            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), mdl_ent(), host_ticks
             exit do
         end if
         if ( g.env.bench_ticks > 0 and host_ticks >= g.env.bench_ticks ) then
-            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), host_ticks
+            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), mdl_ent(), host_ticks
             exit do
         end if
         if ( g.env.bench_frames > 0 and frame_no >= g.env.bench_frames ) then
-            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), host_ticks
+            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), mdl_ent(), host_ticks
             exit do
         end if
 
@@ -1130,7 +1151,7 @@ sub host_main ( _
         '' scr_count_frame just above, so this must run after it.
         ''
         if ( g.env.bench_secs > 0 and g.scr.bench_secs >= g.env.bench_secs ) then
-            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), host_ticks
+            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), mdl_ent(), host_ticks
             exit do
         end if
 

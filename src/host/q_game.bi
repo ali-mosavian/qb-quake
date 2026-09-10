@@ -29,6 +29,7 @@ type Game
     item_count  as integer        '' pickups in item(): the map's, then dropped backpacks
     item_fixed  as integer        '' how many of those are the map's
     vmdl        as MdlState       '' the view weapon, v_shot
+    kmdl        as MdlState       '' the knight
 
     '' LAST, deliberately. r_walk.c and sb_build.c reach g.vis and
     '' g.rdr.dlight by byte offset -- GAME_VIS_OFFSET 4970 and

@@ -91,7 +91,7 @@ ASSETS := data/assets/assets.zip
 # how it went missing: data/assets is generated, not tracked, and nothing
 # regenerated these. Only reachable with the PAK; wildcard-guarded so a
 # tree without it is not a build failure.
-MDL_ASSETS := $(if $(wildcard $(PAK)),data/assets/$(MDL).geo data/assets/v_shot.geo)
+MDL_ASSETS := $(if $(wildcard $(PAK)),data/assets/$(MDL).geo data/assets/knight.geo data/assets/v_shot.geo)
 # The status bar's pictures, out of the PAK's gfx.wad.
 GFX_ASSETS := $(if $(wildcard $(PAK)),data/assets/sbar.raw)
 # The A* flight path -bench -campath walks. Generated, untracked, and it
@@ -116,6 +116,10 @@ $(ASSETS): data/$(MAP) data/base.dat tools/mkassets.py tools/mkportals.py
 # stands in for the texture set.
 data/assets/$(MDL).geo: $(PAK) tools/mkmdl.py
 	@python3 tools/mkmdl.py $(PAK) $(MDL) data/assets stand,run,death,pain
+
+# the knight: 108 vertices, so its sword attack fits the page too
+data/assets/knight.geo: $(PAK) tools/mkmdl.py
+	@python3 tools/mkmdl.py $(PAK) knight data/assets stand,runb,death,pain,attackb
 
 # the view weapon: shot1..7, the fire animation
 data/assets/v_shot.geo: $(PAK) tools/mkmdl.py

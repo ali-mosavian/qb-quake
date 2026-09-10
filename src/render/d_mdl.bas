@@ -129,7 +129,7 @@ sub mdl_load ( _
     tri() as MdlTri _
 )
     dim fh as integer, ti as integer
-    dim hdr as string * 38
+    dim hdr as string * 48
     dim geopath as string, skinpath as string, vtxpath as string
     dim u as integer
     dim vtxbytes as long
@@ -165,6 +165,11 @@ sub mdl_load ( _
     m.origin.x = cvs( mid$( hdr, 27, 4 ) )
     m.origin.y = cvs( mid$( hdr, 31, 4 ) )
     m.origin.z = cvs( mid$( hdr, 35, 4 ) )
+    m.nstand   = cvi( mid$( hdr, 39, 2 ) )
+    m.nrun     = cvi( mid$( hdr, 41, 2 ) )
+    m.ndeath   = cvi( mid$( hdr, 43, 2 ) )
+    m.npain    = cvi( mid$( hdr, 45, 2 ) )
+    m.natk     = cvi( mid$( hdr, 47, 2 ) )
     '' Vertex bytes span 0..255, so this is the box every frame fits in;
     '' the yaw rotates about the origin, so the horizontal reach is a
     '' radius. What r_mdl_visible tests instead of 170 vertices.
@@ -298,17 +303,19 @@ sub mdl_draw ( _
 
     if ( m.loaded = 0 ) then exit sub
 
-    '' ent.anim_frame is mdl_think's own state (pl_move.bas), 0..7
-    '' within whichever cycle ent.state selects: the SAME tick that
-    '' picks the movement distance picks the displayed frame. Stand
-    '' frames then run frames, contiguous in the one EMS-page vertex
-    '' block (mkmdl.py's own order): frame 8 is run1.
+    '' ent.anim_frame is mdl_think's own state (pl_move.bas), within
+    '' whichever set ent.state selects: the SAME tick that picks the
+    '' movement distance picks the displayed frame. The sets are
+    '' contiguous in the one EMS-page vertex block, in the header's
+    '' order: stand, run, death, pain, attack.
     select case ent.state
-    case MDL_ST_STAND% : frame = ent.anim_frame
-    case MDL_ST_RUN%   : frame = MDL_STAND_FRAMES% + ent.anim_frame
-    case MDL_ST_DEAD%  : frame = MDL_STAND_FRAMES% + MDL_RUN_FRAMES% + ent.anim_frame
-    case else          : frame = MDL_STAND_FRAMES% + MDL_RUN_FRAMES% + MDL_DEATH_FRAMES% + ent.anim_frame
+    case MDL_ST_STAND%  : frame = ent.anim_frame
+    case MDL_ST_RUN%    : frame = m.nstand + ent.anim_frame
+    case MDL_ST_DEAD%   : frame = m.nstand + m.nrun + ent.anim_frame
+    case MDL_ST_PAIN%   : frame = m.nstand + m.nrun + m.ndeath + ent.anim_frame
+    case else           : frame = m.nstand + m.nrun + m.ndeath + m.npain + ent.anim_frame
     end select
+    if ( frame >= m.nframe ) then frame = m.nframe - 1
 
     '' Everything from here is d_alias.c: the vertex rotation and
     '' transform, the clip, the projection and the raster calls, once

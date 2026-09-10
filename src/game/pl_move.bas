@@ -74,6 +74,8 @@ declare sub pl_spread_dir ( _
     byval spread as single, _
     outdir as Vec3 _
 )
+declare sub pl_damage ( g as Game, byval dmg as integer )
+declare sub mdl_melee ( g as Game, ent as MdlEnt )
 declare sub mdl_damage ( _
     g as Game, _
     ent as MdlEnt, _
@@ -237,6 +239,7 @@ declare sub pl_load_hulls ( _
 declare sub mdl_think ( _
     g as Game, _
     ent as MdlEnt, _
+    m as MdlState, _
     byval can_chase as integer, _
     models() as Submodel, _
     brush() as BrushModel, _
@@ -332,6 +335,8 @@ dim shared clp_buffer() as ClipNode
 '' filled once by mdl_spawn, a SUB, since a bare module-level fixed-bound
 '' dim in a non-main module is the ls_tab trap (AGENTS.md): it never runs.
 dim shared mdl_run_dist() as integer
+dim shared knight_run_dist() as integer  '' knight_run1..8's ai_run
+dim shared knight_atk_dist() as integer  '' knight_atk1..10's ai_charge
 
 '' sv_move.c's own STEPSIZE -- see mdl_movestep.
 const MDL_STEPSIZE# = 18.0
@@ -1178,7 +1183,11 @@ sub mdl_spawn ( _
     ent.anim_frame = 0
     ent.goal.x = org.x : ent.goal.y = org.y : ent.goal.z = org.z
     ent.wander_ticks = 0
-    ent.health = MDL_HEALTH%
+    if ( ent.kind = MDL_KIND_KNIGHT% ) then
+        ent.health = KNIGHT_HEALTH%
+    else
+        ent.health = MDL_HEALTH%
+    end if
     ent.hunting = 0
     ent.next_attack = 0.0
     ent.pain_finished = 0.0
@@ -1205,9 +1214,16 @@ sub mdl_spawn ( _
     end if
     ent.spawn.x = ent.pos.x : ent.spawn.y = ent.pos.y : ent.spawn.z = ent.pos.z
 
-    redim mdl_run_dist( MDL_RUN_FRAMES% - 1 ) as integer
+    redim mdl_run_dist( 7 ) as integer
     mdl_run_dist(0) = 11 : mdl_run_dist(1) = 15 : mdl_run_dist(2) = 10 : mdl_run_dist(3) = 10
     mdl_run_dist(4) =  8 : mdl_run_dist(5) = 15 : mdl_run_dist(6) = 10 : mdl_run_dist(7) =  8
+    redim knight_run_dist( 7 ) as integer
+    knight_run_dist(0) = 16 : knight_run_dist(1) = 20 : knight_run_dist(2) = 13 : knight_run_dist(3) =  7
+    knight_run_dist(4) = 16 : knight_run_dist(5) = 20 : knight_run_dist(6) = 14 : knight_run_dist(7) =  6
+    redim knight_atk_dist( 9 ) as integer
+    knight_atk_dist(0) = 0 : knight_atk_dist(1) = 7 : knight_atk_dist(2) = 4 : knight_atk_dist(3) = 0
+    knight_atk_dist(4) = 3 : knight_atk_dist(5) = 4 : knight_atk_dist(6) = 1 : knight_atk_dist(7) = 3
+    knight_atk_dist(8) = 1 : knight_atk_dist(9) = 5
 end sub
 
 ''::::::::::::::
@@ -1551,12 +1567,11 @@ end sub
 ''::::::::::::::
 '' name: mdl_find_target
 '' desc: FindTarget (ai.qc), collapsed to the one enemy this world can
-''       ever have -- the player. RANGE_NEAR and RANGE_MID both end up
-''       requiring infront() here (client.show_hostile is a monster-only
-''       field, never set on a player, so client.show_hostile < time is
-''       always true for a real player and the two ranges behave alike).
-''       RANGE_MELEE skips infront -- "will become hostile even if back
-''       is turned" (ai.qc's own comment).
+''       ever have -- the player. RANGE_NEAR needs infront() unless the
+''       player fired within the second (W_Attack's show_hostile);
+''       RANGE_MID needs it regardless -- ai.qc has the show_hostile
+''       term commented out there. RANGE_MELEE skips infront -- "will
+''       become hostile even if back is turned" (ai.qc's own comment).
 ''
 ''       visible() is approximated through hull 1 (the player-sized
 ''       clipnodes pl_trace already walks), not the true hull-0 point
@@ -1590,7 +1605,8 @@ function mdl_find_target ( _
     pl_trace eye, peye, tr, g.wld.count.models, models(), brush(), clp_buffer(), planes()
     if ( tr.frac <= 0.999 or tr.all_solid ) then exit function   '' not visible
 
-    if ( r >= MDL_RANGE_MELEE# ) then
+    if ( r >= MDL_RANGE_NEAR# or g.fight.show_hostile < g.rdr.anim_time ) then
+      if ( r >= MDL_RANGE_MELEE# ) then
         yaw_rad = ent.yaw * 0.017453293
         fwd_x = cos( yaw_rad ) : fwd_y = sin( yaw_rad )
         dlen = sqr( dx*dx + dy*dy )
@@ -1600,6 +1616,7 @@ function mdl_find_target ( _
             dot = 1.0
         end if
         if ( dot <= 0.3 ) then exit function   '' not infront
+      end if
     end if
 
     '' found -- HuntTarget's own side effect: face the enemy immediately
@@ -1662,6 +1679,7 @@ end sub
 sub mdl_think ( _
     g as Game, _
     ent as MdlEnt, _
+    m as MdlState, _
     byval can_chase as integer, _
     models() as Submodel, _
     brush() as BrushModel, _
@@ -1671,21 +1689,44 @@ sub mdl_think ( _
     dim goal as Vec3
     dim dx as single, dy as single, d2 as single
     dim chance as single
+    dim knight as integer, stepped as integer
 
-    if ( g.mdl.loaded = 0 ) then exit sub
+    if ( m.loaded = 0 ) then exit sub
+    knight = ( ent.kind = MDL_KIND_KNIGHT% )
     if ( g.rdr.anim_time < ent.next_think ) then exit sub
     ent.next_think = g.rdr.anim_time + 0.1
 
     '' Dead: the death frames once, then a corpse until pl_game_reset.
     if ( ent.state = MDL_ST_DEAD% ) then
-        if ( ent.anim_frame < MDL_DEATH_FRAMES% - 1 ) then ent.anim_frame = ent.anim_frame + 1
+        if ( ent.anim_frame < m.ndeath - 1 ) then ent.anim_frame = ent.anim_frame + 1
         exit sub
     end if
 
     '' Hit: the flinch, standing, then the hunt.
     if ( ent.state = MDL_ST_PAIN% ) then
         ent.anim_frame = ent.anim_frame + 1
-        if ( ent.anim_frame >= MDL_PAIN_FRAMES% ) then
+        if ( ent.anim_frame >= m.npain ) then
+            ent.state = MDL_ST_RUN%
+            ent.anim_frame = 0
+        end if
+        exit sub
+    end if
+
+    '' knight_atk1..10: ai_charge -- face the player and walk the
+    '' frame's distance straight ahead -- and the sword on 6, 7, 8.
+    if ( ent.state = MDL_ST_ATTACK% ) then
+        ent.ideal_yaw = mdl_vectoyaw( g.pl.pos.x - ent.pos.x, g.pl.pos.y - ent.pos.y )
+        mdl_change_yaw ent
+        dist = knight_atk_dist( ent.anim_frame )
+        if ( dist > 0.0 ) then
+            dx = cos( ent.yaw * 0.017453293 ) * dist
+            dy = sin( ent.yaw * 0.017453293 ) * dist
+            stepped = mdl_movestep( g, ent, dx, dy, g.wld.count.models, models(), brush(), planes() )
+        end if
+        if ( ent.anim_frame >= KNIGHT_ATK_FIRST% and ent.anim_frame <= KNIGHT_ATK_LAST% ) then mdl_melee g, ent
+        ent.anim_frame = ent.anim_frame + 1
+        '' knight_atk10 is the last frame id uses; attackb11 is in the file
+        if ( ent.anim_frame > ubound( knight_atk_dist ) or ent.anim_frame >= m.natk ) then
             ent.state = MDL_ST_RUN%
             ent.anim_frame = 0
         end if
@@ -1705,13 +1746,30 @@ sub mdl_think ( _
             ent.anim_frame = 0
             ent.wander_ticks = 0
         else
-            ent.anim_frame = ( ent.anim_frame + 1 ) mod MDL_STAND_FRAMES%
+            ent.anim_frame = ( ent.anim_frame + 1 ) mod m.nstand
         end if
         exit sub
     end if
 
-    dist = mdl_run_dist( ent.anim_frame )
-    if ( ent.hunting ) then
+    if ( knight ) then
+        dist = knight_run_dist( ent.anim_frame )
+    else
+        dist = mdl_run_dist( ent.anim_frame )
+    end if
+    if ( ent.hunting and knight ) then
+        '' CheckAttack for a monster with th_melee only: in RANGE_MELEE
+        '' with a clear line, the sword instead of a step.
+        if ( mdl_find_target( g, ent, models(), brush(), planes() ) ) then
+            dx = g.pl.pos.x - ent.pos.x : dy = g.pl.pos.y - ent.pos.y
+            d2 = dx*dx + dy*dy + ( g.pl.pos.z - ent.pos.z ) * ( g.pl.pos.z - ent.pos.z )
+            if ( d2 < MDL_RANGE_MELEE# * MDL_RANGE_MELEE# ) then
+                ent.state = MDL_ST_ATTACK%
+                ent.anim_frame = 0
+                exit sub
+            end if
+        end if
+        goal.x = g.pl.pos.x : goal.y = g.pl.pos.y : goal.z = g.pl.pos.z
+    elseif ( ent.hunting ) then
         '' SoldierCheckAttack: a clear line, attack_finished passed, and a
         '' chance by range each think; then army_fire and 1 + random().
         if ( g.rdr.anim_time >= ent.next_attack ) then
@@ -1736,10 +1794,17 @@ sub mdl_think ( _
         end if
         goal.x = g.pl.pos.x : goal.y = g.pl.pos.y : goal.z = g.pl.pos.z
     else
+        '' ai_walk: FindTarget every frame of the walk too; HuntTarget
+        '' then starts the run cycle and the step is skipped
+        if ( can_chase and mdl_find_target( g, ent, models(), brush(), planes() ) ) then
+            ent.hunting = -1
+            ent.anim_frame = 0
+            exit sub
+        end if
         goal.x = ent.goal.x : goal.y = ent.goal.y : goal.z = ent.goal.z
     end if
     mdl_move_to_goal g, ent, goal, dist, g.wld.count.models, models(), brush(), planes()
-    ent.anim_frame = ( ent.anim_frame + 1 ) mod MDL_RUN_FRAMES%
+    ent.anim_frame = ( ent.anim_frame + 1 ) mod m.nrun
 
     '' Own-goal wandering rests on arrival (or gives up after a timeout,
     '' the same compass search a real chase can also fail to route
@@ -1864,6 +1929,7 @@ sub pl_fire ( _
     if ( g.rdr.anim_time < g.fight.next_fire ) then exit sub
     if ( g.fight.shells <= 0 ) then exit sub
     g.fight.next_fire = g.rdr.anim_time + PL_FIRE_RATE#
+    g.fight.show_hostile = g.rdr.anim_time + 1.0
     g.fight.shells = g.fight.shells - 1
     g.fight.flash_until = g.rdr.anim_time + 0.1
 
@@ -1916,13 +1982,15 @@ sub mdl_damage ( _
         ent.state = MDL_ST_DEAD%
         ent.anim_frame = 0
         g.fight.kills = g.fight.kills + 1
-        pl_item_add g, item(), ENT_ITEM_SHELLS, ENT_BACKPACK%, ent.pos
+        if ( ent.kind = MDL_KIND_ARMY% ) then pl_item_add g, item(), ENT_ITEM_SHELLS, ENT_BACKPACK%, ent.pos
         exit sub
     end if
     ent.hunting = -1
     ent.ideal_yaw = mdl_vectoyaw( g.pl.pos.x - ent.pos.x, g.pl.pos.y - ent.pos.y )
     if ( g.rdr.anim_time < ent.pain_finished ) then exit sub
-    if ( rnd < MDL_PAIN_SHORT_P# ) then
+    if ( ent.kind = MDL_KIND_KNIGHT% ) then
+        ent.pain_finished = g.rdr.anim_time + KNIGHT_PAIN#
+    elseif ( rnd < MDL_PAIN_SHORT_P# ) then
         ent.pain_finished = g.rdr.anim_time + MDL_PAIN_SHORT#
     else
         ent.pain_finished = g.rdr.anim_time + MDL_PAIN_LONG#
@@ -1969,11 +2037,33 @@ sub mdl_fire ( _
         t = mdl_ray_box( g.pl.pos, PL_HALF#, PL_ZLO#, PL_ZHI#, org, dir, PL_SHOT_RANGE# * tr.frac )
         if ( t >= 0.0 ) then dmg = dmg + MDL_PELLET_DMG%
     next p
-    if ( dmg = 0 ) then exit sub
+    if ( dmg > 0 ) then pl_damage g, dmg
+end sub
+
+''::::::::::::::
+'' name: pl_damage
+'' desc: T_Damage on the player: the health, the red status line and
+''       V_ParseDamage's shift.
+''::::::::::::::
+sub pl_damage ( g as Game, byval dmg as integer )
     g.fight.health = g.fight.health - dmg
     g.fight.hurt_until = g.rdr.anim_time + 0.3
     g.fight.dmg_pct = g.fight.dmg_pct + dmg * PL_DMG_SHIFT#
     if ( g.fight.dmg_pct > PL_DMG_SHIFT_MAX# ) then g.fight.dmg_pct = PL_DMG_SHIFT_MAX#
+end sub
+
+''::::::::::::::
+'' name: mdl_melee
+'' desc: ai_melee: within 60 units, (random()+random()+random())*3.
+''::::::::::::::
+sub mdl_melee ( g as Game, ent as MdlEnt )
+    dim dx as single, dy as single, dz as single
+    dim dmg as integer
+
+    dx = g.pl.pos.x - ent.pos.x : dy = g.pl.pos.y - ent.pos.y : dz = g.pl.pos.z - ent.pos.z
+    if ( dx*dx + dy*dy + dz*dz > KNIGHT_MELEE_RANGE# * KNIGHT_MELEE_RANGE# ) then exit sub
+    dmg = int( ( rnd + rnd + rnd ) * KNIGHT_MELEE_DMG# )
+    if ( dmg > 0 ) then pl_damage g, dmg
 end sub
 
 ''::::::::::::::
@@ -2008,6 +2098,7 @@ sub pl_reset_player ( g as Game )
     g.fight.health = PL_HEALTH%
     g.fight.shells = PL_SHELLS%
     g.fight.next_fire = 0.0
+    g.fight.show_hostile = 0.0
     g.pl.pos.x = g.fight.spawn.x : g.pl.pos.y = g.fight.spawn.y : g.pl.pos.z = g.fight.spawn.z
     g.pl.vel.x = 0.0 : g.pl.vel.y = 0.0 : g.pl.vel.z = 0.0
 end sub
