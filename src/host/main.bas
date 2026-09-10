@@ -37,10 +37,6 @@ option explicit
 '$include: 'qgl.bi'
 '$include: 'in.bi'
 '$include: 'bspfile.bi'
-'$include: 'dos.bi'
-'$include: 'arch.bi'
-'$include: 'snd.bi'
-'$include: 'mod.bi'
 '$include: 'q_env.bi'
 '$include: 'q_map.bi'
 '$include: 'q_vis.bi'
@@ -49,7 +45,6 @@ option explicit
 '$include: 'q_cam.bi'
 '$include: 'q_pl.bi'
 '$include: 'q_ent.bi'
-'$include: 'q_snd.bi'
 '$include: 'q_mdl.bi'
 '$include: 'q_game.bi'
 
@@ -219,15 +214,6 @@ declare function d_faces_layout_ok ( _
 ) as integer
 declare sub d_init_turb ( )
 declare sub in_init ( _
-    g as Game _
-)
-declare sub s_init ( _
-    g as Game _
-)
-declare sub s_start_music ( _
-    g as Game _
-)
-declare sub s_stop_music ( _
     g as Game _
 )
 declare sub scr_begin_loading ( _
@@ -708,8 +694,6 @@ sub host_init ( _
         system
     end if
 
-    s_init g
-    s_start_music g
     draw_init_font
     sys_mem_mark "font"
 
@@ -750,7 +734,6 @@ sub host_init ( _
     sys_mem_mark "backbuf"
 
     in_init g
-    s_stop_music g
 
     '' After the mode switch, deliberately. vid_init needs a sizeable
     '' block for the video DC, and holding the colormap's 16K across it
@@ -952,11 +935,6 @@ sub host_main ( _
     if ( g.env.cam_path ) then cp_load g, cp_x(), cp_y(), cp_z()
     g.vis.bad_order = g.env.bad_order
     g.vis.no_ents   = g.env.no_ents
-    
-    if ( g.env.sound = true ) then
-        modPlay g.mymod
-    end if
-    
     
     ''
     ''

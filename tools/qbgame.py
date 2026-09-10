@@ -8,10 +8,10 @@ player in pl_move and a Plane in r_plane_dist.
 import io, re, glob, sys
 
 FIELDS = ['wld','env','pl','cam','rdr','vis','scr','cp','ft','pal',
-          'mymod','tele_count','plat_count']
+          'tele_count','plat_count']
 TYPES  = {'wld':'World','env':'Env','pl':'PlayerState','cam':'CamState',
           'rdr':'RenderState','vis':'VisState','scr':'ScreenState',
-          'cp':'CamPath','ft':'FrameTimes','pal':'long','mymod':'UGMMOD',
+          'cp':'CamPath','ft':'FrameTimes','pal':'long',
           'tele_count':'integer','plat_count':'integer'}
 
 

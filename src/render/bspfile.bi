@@ -384,7 +384,6 @@ type Env
                                 '' happens once, not once a frame
     clear_screen    as integer
     
-    sound       as integer
     cam_fov      as single
     cam_mode     as integer
     cam_interp   as integer   

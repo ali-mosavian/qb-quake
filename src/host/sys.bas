@@ -4,15 +4,11 @@ option explicit
 ''            lookup tables, and the fatal-error path.
 ''
 ''            This was sys_init.bas and held five subsystems' worth of
-''            initialisation. Sound went to snd.bas, input to
+''            initialisation. Input went to
 ''            in_main.bas, the font and loading screen to screen.bas.
 ''
 '$include: 'in.bi'
 '$include: 'bspfile.bi'
-'$include: 'dos.bi'
-'$include: 'arch.bi'
-'$include: 'snd.bi'
-'$include: 'mod.bi'
 '$include: 'q_env.bi'
 '$include: 'q_map.bi'
 '$include: 'q_vis.bi'
@@ -21,7 +17,6 @@ option explicit
 '$include: 'q_cam.bi'
 '$include: 'q_pl.bi'
 '$include: 'q_ent.bi'
-'$include: 'q_snd.bi'
 '$include: 'q_mdl.bi'
 '$include: 'q_game.bi'
 '$include: 'qgl.bi'

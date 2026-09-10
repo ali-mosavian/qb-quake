@@ -366,7 +366,7 @@ type a declare names; the single-caller ones do not go in a header at all.
 **Includes have a canonical order.** A declare may only name types the
 including module has already seen, so `q_*.bi` go in dependency order:
 
-    bspfile.bi  q_env  q_map  q_vis  q_draw  q_scr  q_cam  q_pl  q_ent  q_snd
+    bspfile.bi  q_env  q_map  q_vis  q_draw  q_scr  q_cam  q_pl  q_ent
 
 `World` lives in `q_map.bi`, so a declare naming it cannot sit in
 `bspfile.bi`. BC reports the mismatch as `TYPE not defined` pointing at the
@@ -408,7 +408,6 @@ wraps the body. Keep procedures tight and small enough to read whole.
     src/d_turb.bas    the liquid turbulence table, all that is left of d_poly
     src/view.bas      where the camera is and looks            (Quake view.c)
     src/in_main.bas   keyboard, mouse, the toggles             (Quake in_*.c)
-    src/snd.bas       sound device and loading music           (Quake snd_*.c)
     src/screen.bas    overlay, font, screenshot        (Quake draw.c/screen.c)
     src/vid.bas       video mode, back buffer, present         (Quake vid_*.c)
     src/common.bas    tokeniser + config                       (Quake common.c)
@@ -1416,8 +1415,6 @@ reading:
 Member offsets are compile-time constants, so this is free even in
 `bspDrawFaces` -- measured, no change in frames/seconds/fps.
 
-`pal` and `mymod` stay loose: a struct of one member is ceremony.
-
 **Named COMMON blocks, one per subsystem, in one header each.**
 `COMMON SHARED /map_s/ ...` is the FORTRAN style QuickBASIC inherited: each
 named block is shared independently, so a module declares only the blocks it
@@ -1432,7 +1429,6 @@ That is only worth anything if the headers are split, which is the point:
     q_draw.bi   rdr + texture handles     6/10
     q_scr.bi    scr                       4/10
     q_cam.bi    cam                       5/10
-    q_snd.bi    mymod pal                 4/10
 
 38 block declarations instead of the 70 a single shared header forces.
 `common.bas` parses stuff.ini and now sees `env` alone, where before it saw
@@ -1976,9 +1972,11 @@ code failed too, which is how the loop above was found.
 was link the upper memory blocks and set strategy 81h, which is
 `qglMemInit`/`qglMemShutdown` now, `t31meminit` reading both back
 through DOS's own 58h queries. `-qgldiff` brings mgl up and ends it
-itself, being a differential against mgl by design. Nothing of mgl's
-runs in a frame; what production still links from it is the music
-player. The camera's matrices are `qglM4Persp`/`qglM4LookAt`/
+itself, being a differential against mgl by design. The music player
+-- snd.bas, `sound.enabled`, `mymod`, the HUD's VU meters -- is deleted
+rather than ported, and with it the last mgl call in production; the
+hang its init had is gone with it. `Env.sound` sat ahead of `vis`, so
+both C offsets moved by two. The camera's matrices are `qglM4Persp`/`qglM4LookAt`/
 `qglM4Conc` in `src/qgl/m4.asm`, mgl's `mdu3d.asm` FPU sequence kept
 instruction for instruction because `tools/ref/bench.bmp` is a
 byte-for-byte reference and a rounding that moves by an ulp moves it;
@@ -2146,8 +2144,6 @@ see the note there.
   publics and the same address resolves to `B$FCompactMove`.
 
 
-- **`sound.enabled = true` hangs at init.** Root cause still unknown; the
-  setting now ships disabled so the hang cannot be armed by accident.
 - ~~`clpBuffer` in `model.bas`~~ hardened to `'$STATIC`.
 - ~~Remaining cuts~~ done — `main.bas` is 427 lines: `doInit`, `doMain`,
   `doEnd`, `ExitError`. All ten modules carry `OPTION EXPLICIT`.

@@ -17,10 +17,6 @@ option explicit
 '' defined before the line naming it, so the order is not negotiable.
 '$include: 'in.bi'
 '$include: 'bspfile.bi'
-'$include: 'dos.bi'
-'$include: 'arch.bi'
-'$include: 'snd.bi'
-'$include: 'mod.bi'
 '$include: 'q_env.bi'
 '$include: 'q_map.bi'
 '$include: 'q_vis.bi'

@@ -7,10 +7,6 @@ option explicit
 ''
 '$include: 'in.bi'
 '$include: 'bspfile.bi'
-'$include: 'dos.bi'
-'$include: 'arch.bi'
-'$include: 'snd.bi'
-'$include: 'mod.bi'
 '$include: 'q_env.bi'
 '$include: 'q_map.bi'
 '$include: 'q_vis.bi'
@@ -19,7 +15,6 @@ option explicit
 '$include: 'q_cam.bi'
 '$include: 'q_pl.bi'
 '$include: 'q_ent.bi'
-'$include: 'q_snd.bi'
 '$include: 'q_mdl.bi'
 '$include: 'q_game.bi'
 
@@ -169,10 +164,9 @@ sub com_parse_config ( _
     const cminp_flag= 512
     const cmmde_flag= 1024
     const fov_flag  = 2048
-    const sound_flag= 4096
     const all_flag = xres_flag or yres_flag or zn_flag or zf_flag or cmscr_flag or _
                       clear_flag or cminp_flag or cmmde_flag or _
-                      fov_flag or sound_flag
+                      fov_flag
     
     dim flags as integer
     dim vscale as integer   
@@ -251,11 +245,7 @@ sub com_parse_config ( _
                 case "world.camera.fov"
                     g.env.cam_fov = val( com_arg( strm(), strm_cnt, line_num ) )
                     flags = flags or fov_flag
-                    
-                case "sound.enabled"
-                    g.env.sound = com_yesno( strm(), strm_cnt, line_num )
-                    flags = flags or sound_flag
-                case else
+                                    case else
                     sys_error "Unknown command, " + raw_line
                     
             end select                                    

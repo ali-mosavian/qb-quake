@@ -14,10 +14,6 @@ option explicit
 ''
 '$include: 'in.bi'
 '$include: 'bspfile.bi'
-'$include: 'dos.bi'
-'$include: 'arch.bi'
-'$include: 'snd.bi'
-'$include: 'mod.bi'
 '$include: 'q_env.bi'
 '$include: 'q_map.bi'
 '$include: 'q_vis.bi'
@@ -26,7 +22,6 @@ option explicit
 '$include: 'q_cam.bi'
 '$include: 'q_pl.bi'
 '$include: 'q_ent.bi'
-'$include: 'q_snd.bi'
 '$include: 'q_mdl.bi'
 '$include: 'q_game.bi'
 
@@ -140,15 +135,6 @@ declare sub hud_row ( _
     y as integer, _
     label as string, _
     value as string _
-)
-declare sub hud_vu ( _
-    dc as long, _
-    x as integer, _
-    y as integer, _
-    w as integer, _
-    h as integer, _
-    percent as single, _
-    ch as integer _
 )
 declare sub rivet ( _
     x as integer, _
@@ -399,7 +385,6 @@ dim shared hc_warn as integer
 dim shared hc_bad as integer
 
 '' peak-hold ticks on the VU meters, and the cache panel's warning flash
-dim shared vu_pk(1) as integer
 dim shared hud_flash as integer
 dim shared hud_pevict as long
 dim shared hud_pflush as long
@@ -1193,8 +1178,6 @@ sub scr_pal_install
     hc_warn   = scr_pal_fit( scr_pal(), 224, 164,  48 )
     hc_bad    = scr_pal_fit( scr_pal(), 216,  52,  36 )
 
-    vu_pk(0) = 0
-    vu_pk(1) = 0
     hud_flash = 0
     hud_pevict = 0
     hud_pflush = 0
@@ -1322,40 +1305,6 @@ hn_next_row:
 end sub
 
 
-''::::::::::
-'' name: hud_vu
-'' desc: A VU meter with a peak-hold tick: the tick jumps to any new peak
-''       and falls back slowly, which is what makes a meter read as an
-''       instrument rather than a flickering bar. ch picks which channel's
-''       peak this meter remembers.
-''::::::::::
-sub hud_vu ( _
-    dc as long, _
-    x as integer, _
-    y as integer, _
-    w as integer, _
-    h as integer, _
-    percent as single, _
-    ch as integer _
-)
-    dim f as integer
-
-    if ( percent < 0 ) then percent = 0
-    if ( percent > 100 ) then percent = 100
-    f = (w * percent) / 100.0
-
-    if ( f > vu_pk(ch) ) then
-        vu_pk(ch) = f
-    elseif ( vu_pk(ch) > 0 ) then
-        vu_pk(ch) = vu_pk(ch) - 1
-    end if
-
-    qglDrFill dc, x, y, x+w, y+h, hc_bg
-    qglDrRect  dc, x, y, x+w, y+h, hc_slablo
-    if ( f > 1 ) then qglDrFill dc, x+1, y+1, x+f-1, y+h-1, hc_meter
-    if ( vu_pk(ch) > 1 ) then qglDrVline dc, x+vu_pk(ch), y+1, y+h-1, hc_peak
-end sub
-
 sub hud_row ( _
     dc as long, _
     x as integer, _
@@ -1447,7 +1396,6 @@ sub scr_draw_hud ( _
     h_dst_dc as long _
 )
     dim scs as CacheStats
-    dim l as integer, r as integer
     dim lx as integer, rx as integer, cw as integer
     dim yy as integer, ftr as string
     dim fcol as integer
@@ -1580,14 +1528,7 @@ sub scr_draw_hud ( _
         draw_string h_dst_dc, 4, yy, "F12 stats"
     end if
 
-    ''
-    '' VU meters, bottom right, above the footer rule
-    ''
     if ( wide ) then
-        sndMasterGetVU l, r
-        hud_vu h_dst_dc, g.env.x_res-76, g.env.y_res-24, 70, 4, l*100/255, 0
-        hud_vu h_dst_dc, g.env.x_res-76, g.env.y_res-18, 70, 4, r*100/255, 1
-
         draw_string_r h_dst_dc, g.env.x_res-4, g.env.y_res-9, "powered by uGL"
     end if
 
