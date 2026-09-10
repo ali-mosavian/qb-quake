@@ -424,8 +424,8 @@ type Env
     no_mip      as integer      '' -nomip: mip 0 for every face, whatever
                                 '' the distance. The A/B for anything that
                                 '' looks like it tracks a texture's size.
-    affine      as integer      '' -affine: rend_mode 1, the linear mapper,
-                                '' instead of the perspective one.
+    affine      as integer      '' the starting rend_mode: -affine 1, the
+                                '' linear mapper; -wire 2, the wireframe
     no_mdl      as integer      '' -nomdl: draw no alias models. The A/B
                                 '' that separated the wandering streaks
                                 '' from the world renderer -- 138 stray

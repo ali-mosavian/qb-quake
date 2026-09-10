@@ -76,8 +76,6 @@
 /* The wireframe fan's own triangle, in floats. No mgl call reads it any
    more, so the three unused colour fields mgl's vector3f carried are
    gone with them. */
-typedef struct { float x, y, z, u, v; } UglVtx;
-typedef struct { UglVtx v1, v2, v3; } UglTri;
 
 /* qgl. A Surface is never spelled here -- the destination arrives as an
    mgl DC, which is the same struct; the vertex is spelled here because
@@ -88,6 +86,7 @@ typedef struct { UglVtx v1, v2, v3; } UglTri;
    BASIC and there is no C equivalent yet. That is exactly the drift
    that made QGL_SURF_EMS mean 10 on one side and 2 on the other, so it
    is written down here rather than left as a bare 2 and 3. */
+#define QGL_M_WIRE  0
 #define QGL_M_FLAT  1
 #define QGL_M_TEX   2
 #define QGL_M_PTEX  3
@@ -158,7 +157,6 @@ static float near px[MAXV], py[MAXV], pw[MAXV], pu[MAXV], pv[MAXV];
    cnt <= 12 gate with a little slack, but a lit face's qgl draw is now
    mandatory (see the polygon-draw dispatch below) and must never
    truncate a real, larger convex face. */
-static UglTri near tri1;
 static QglVtx near qvtx[MAXV];
 
 /* TEMPORARY, -qglface. One real post-clip face, frozen so the same
@@ -308,7 +306,7 @@ void pascal far d_draw_faces(
     short q_gate = 0;
     short lm_tms, lm_tmt, lm_extw, lm_exth, lm_stag;
     short lm_mip, lm_floor, lm_sw, lm_sh, lm_fw, lm_fh, lm_cm;
-    short leaf_indx, leaf_end, p2, p3;
+    short leaf_indx, leaf_end;
     long  gp, lm_dc, src_dc, tex_dc, texofs;
     long  bt0, bface, build_cyc = 0;
     float su0, su1, su2, su3, sv0, sv1, sv2, sv3;
@@ -799,41 +797,27 @@ void pascal far d_draw_faces(
             }
 
             /*
-             * Wireframe: a flat fill and three edges, fanned because the
-             * triangles are the point. No texture, so nothing here cares
-             * which layer owns the atlas.
+             * Wireframe: the polygon flat-filled, then its outline --
+             * QGL_M_WIRE paints the two ends of every span, which for a
+             * convex face is its edge, depth-tested like the fill. One
+             * call each per POLYGON, the same unit the textured path
+             * draws in; it used to fan into triangles and draw each
+             * edge through qglDrLine, which cost a call per edge and
+             * showed the fan's diagonals, not the face.
              */
-            for ( j = 0; j <= cnt - 3; j++ ) {
-                p2 = j + 1;
-                p3 = j + 2;
-
-                tri1.v1.z = pw[0];  tri1.v2.z = pw[p2]; tri1.v3.z = pw[p3];
-                tri1.v1.x = px[0];  tri1.v1.y = py[0];
-                tri1.v2.x = px[p2]; tri1.v2.y = py[p2];
-                tri1.v3.x = px[p3]; tri1.v3.y = py[p3];
-
-                if ( !q_dst ) { dp->qgl_drop++; continue; }
-                /* u and v zeroed, not left: a flat fill samples no
-                   texture but its gradients are still computed, and the
-                   overflow gate can refuse a polygon on a number that
-                   came from whichever textured face last wrote here. */
-                qvtx[0].x = tri1.v1.x; qvtx[0].y = tri1.v1.y; qvtx[0].z = tri1.v1.z;
-                qvtx[1].x = tri1.v2.x; qvtx[1].y = tri1.v2.y; qvtx[1].z = tri1.v2.z;
-                qvtx[2].x = tri1.v3.x; qvtx[2].y = tri1.v3.y; qvtx[2].z = tri1.v3.z;
-                qvtx[0].u = 0.0f; qvtx[0].v = 0.0f;
-                qvtx[1].u = 0.0f; qvtx[1].v = 0.0f;
-                qvtx[2].u = 0.0f; qvtx[2].v = 0.0f;
-                qglSfZMode( q_dst, z_mode );
-                qglRsPoly( q_dst, (void far *)qvtx, 3,
-                           QGL_M_FLAT, 200L );
-                qglDrLine( q_dst, (short)tri1.v1.x, (short)tri1.v1.y,
-                                  (short)tri1.v2.x, (short)tri1.v2.y, 0 );
-                qglDrLine( q_dst, (short)tri1.v2.x, (short)tri1.v2.y,
-                                  (short)tri1.v3.x, (short)tri1.v3.y, 0 );
-                qglDrLine( q_dst, (short)tri1.v3.x, (short)tri1.v3.y,
-                                  (short)tri1.v1.x, (short)tri1.v1.y, 0 );
-                dp->tris++;
+            if ( !q_dst ) { dp->qgl_drop++; continue; }
+            /* u and v zeroed, not left: a flat fill samples no texture
+               but its gradients are still computed, and the overflow
+               gate can refuse a polygon on a number that came from
+               whichever textured face last wrote here. */
+            for ( j = 0; j < cnt; j++ ) {
+                qvtx[j].x = px[j]; qvtx[j].y = py[j]; qvtx[j].z = pw[j];
+                qvtx[j].u = 0.0f;  qvtx[j].v = 0.0f;
             }
+            qglSfZMode( q_dst, z_mode );
+            qglRsPoly( q_dst, (void far *)qvtx, cnt, QGL_M_FLAT, 200L );
+            qglRsPoly( q_dst, (void far *)qvtx, cnt, QGL_M_WIRE, 0L );
+            dp->tris += cnt - 2;
 
         }
     }

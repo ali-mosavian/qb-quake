@@ -120,6 +120,7 @@ sub sys_parse_args ( _
         print "Usage: qrender mapname.bsp [-bench N]"
         print "  -nomip        mip 0 everywhere, for A/B"
         print "  -affine       the linear mapper instead of the perspective one"
+        print "  -wire         wireframe"
         print "  -nomdl        draw no alias models, for A/B"
         print "  -bench N      render N frames, write bench.bmp and bench.txt, exit"
         print "  -benchsecs N  run for N real seconds, then report, exit"
@@ -180,7 +181,10 @@ sub sys_parse_args ( _
             g.env.no_mip = true
         end if
         if ( lcase$(argv(i)) = "-affine" ) then
-            g.env.affine = true
+            g.env.affine = 1
+        end if
+        if ( lcase$(argv(i)) = "-wire" ) then
+            g.env.affine = 2
         end if
         if ( lcase$(argv(i)) = "-nomdl" ) then
             g.env.no_mdl = true

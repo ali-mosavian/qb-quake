@@ -933,7 +933,7 @@ sub host_main ( _
     g.rdr.use_mips = (g.env.no_mip = 0)
     '' follows -lm: with no lightmap data loaded there is nothing to toggle
     g.rdr.lightmap = g.env.use_lm
-    g.rdr.rend_mode = -(g.env.affine <> 0)
+    g.rdr.rend_mode = g.env.affine
     g.cam.fps_view = -1
     ''
     '' On by default. The cull is a single sign test against the face's own
