@@ -70,7 +70,9 @@ C_HDRS := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.h))
 # so have no business living in mgl's tree. Assembled on the host: jwasm
 # needs no DOS, unlike BC and BCC.
 ASM_SRC  := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.asm))
-ASM_MODS := $(basename $(notdir $(ASM_SRC)))
+# file first: a VFS driver's row lands in a segment file.asm brackets,
+# and LINK lays the class out in the order it meets the modules
+ASM_MODS := file $(filter-out file,$(basename $(notdir $(ASM_SRC))))
 ASM_INC  := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.inc))
 JWASM    := $(TOOLCHAINS)/native/bin/jwasm
 

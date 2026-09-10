@@ -21,11 +21,8 @@
                 include qgl.inc
                 include tfw.inc
 
-qglZipOpen    proto   far :dword
-qglZipSize    proto   far :word
-qglZipRead    proto   far :word, :dword, :dword
-qglZipClose   proto   far :word
 qglFileOpen   proto   far :dword
+qglFileSize   proto   far :word
 qglFileRead   proto   far :word, :dword, :dword
 qglFileClose  proto   far :word
 
@@ -118,15 +115,15 @@ tmain           proc    far public uses bx cx dx si di es
                 ;;
                 ;; 1. a member of the archive, by name
                 ;;
-                invoke  qglZipOpen, cmapp
+                invoke  qglFileOpen, cmapp
                 mov     zh, ax
                 NZ      ax
                 CHK     n_open, ax, 1
 
-                invoke  qglZipSize, zh
+                invoke  qglFileSize, zh
                 CHK     n_size, ax, CMAP_LEN
 
-                invoke  qglZipRead, zh, bufp, CHUNK
+                invoke  qglFileRead, zh, bufp, CHUNK
                 CHK     n_read, ax, CHUNK
 
                 ;;
@@ -143,9 +140,9 @@ tmain           proc    far public uses bx cx dx si di es
                 ;; 3. the last member, and a read that asks for more than
                 ;;    it holds
                 ;;
-                invoke  qglZipOpen, tofsp
+                invoke  qglFileOpen, tofsp
                 mov     zh2, ax
-                invoke  qglZipSize, zh2
+                invoke  qglFileSize, zh2
                 CHK     n_last, ax, TOFS_LEN
 
                 NZ      zh                      ;; both still open
@@ -154,45 +151,45 @@ tmain           proc    far public uses bx cx dx si di es
                 add     ax, bx
                 CHK     n_two, ax, 2
 
-                invoke  qglZipRead, zh2, bufp, 4096
+                invoke  qglFileRead, zh2, bufp, 4096
                 CHK     n_clamp, ax, TOFS_LEN
 
-                invoke  qglZipClose, zh2
-                invoke  qglZipClose, zh
+                invoke  qglFileClose, zh2
+                invoke  qglFileClose, zh
 
                 ;;
                 ;; 4. the system zip's archive of the same member: its
                 ;;    local headers carry an extra field, ours do not
                 ;;
-                invoke  qglZipOpen, sysp
+                invoke  qglFileOpen, sysp
                 mov     zh, ax
                 NZ      ax
                 CHK     n_sysopen, ax, 1
-                invoke  qglZipSize, zh
+                invoke  qglFileSize, zh
                 CHK     n_syssize, ax, CMAP_LEN
-                invoke  qglZipRead, zh, bufp, CHUNK
+                invoke  qglFileRead, zh, bufp, CHUNK
                 CHK     n_sysread, ax, CHUNK
-                invoke  qglZipClose, zh
+                invoke  qglFileClose, zh
                 invoke  cmpbuf
                 CHK     n_sys, ax, 0
 
                 ;;
                 ;; 5. a name the archive does not carry
                 ;;
-                invoke  qglZipOpen, missp
+                invoke  qglFileOpen, missp
                 NZ      ax
                 CHK     n_miss, ax, 0
 
                 ;;
                 ;; 6. and no "::" at all is the file itself
                 ;;
-                invoke  qglZipOpen, plainp
+                invoke  qglFileOpen, plainp
                 mov     zh, ax
                 NZ      ax
                 CHK     n_plain, ax, 1
-                invoke  qglZipSize, zh
+                invoke  qglFileSize, zh
                 CHK     n_psize, ax, 2068
-                invoke  qglZipClose, zh
+                invoke  qglFileClose, zh
 
                 ret
 tmain           endp

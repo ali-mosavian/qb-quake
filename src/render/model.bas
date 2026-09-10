@@ -80,22 +80,22 @@ declare function qglArMap ( _
     byval idx as long _
 ) as long
 ''
-'' The archive reader, qgl's. mgl's uar carried an inflate and a UAR the
-'' caller had to declare and then only pass back; every member is stored
-'' now, and a handle is enough.
+'' The file layer, qgl's: a plain name or "archive::member", one handle
+'' either way. mgl's uar wanted a UAR the caller declared only to pass
+'' back.
 ''
 '' flname is NOT byval: VBDOS passes a plain "as string" parameter as a
 '' near pointer to its descriptor, which is what the assembly's s:word
 '' wants.
 ''
-declare function qglZipOpenBas ( flname as string ) as integer
-declare function qglZipSize ( byval h as integer ) as long
-declare function qglZipRead ( _
+declare function qglFileOpenBas ( flname as string ) as integer
+declare function qglFileSize ( byval h as integer ) as long
+declare function qglFileRead ( _
     byval h as integer, _
     byval dst as long, _
     byval nbytes as long _
 ) as long
-declare sub qglZipClose ( byval h as integer )
+declare sub qglFileClose ( byval h as integer )
 
 declare sub mod_load_clipnodes ( _
     g as Game _
@@ -351,15 +351,15 @@ sub mod_load_faces ( _
     '' The block, then the bytes.
     p = qglArWin( g.wld.store.faces, 0 )
     if ( p = 0 ) then sys_error "0x0039, qgl faces store would not map"
-    u = qglZipOpenBas( "assets.zip::faces.pag" )
+    u = qglFileOpenBas( "assets.zip::faces.pag" )
     if ( u = 0 ) then
         sys_error "0x0039, faces.pag would not open"
     end if
-    if ( qglZipRead( u, p, nbytes ) <> nbytes ) then
-        qglZipClose u
+    if ( qglFileRead( u, p, nbytes ) <> nbytes ) then
+        qglFileClose u
         sys_error "0x0039, faces.pag came up short"
     end if
-    qglZipClose u
+    qglFileClose u
 
     '' Hands the descriptor over. NOT ceremony: this is what takes
     '' it out of the far heap's chain, and only BASIC can do that
@@ -404,9 +404,9 @@ sub mod_load_colormap ( _
     g.wld.cmap.size = 0
 
     '' a missing table is not an error -- hud_shade draws opaque instead
-    u = qglZipOpenBas( "assets.zip::colmap.bin" )
+    u = qglFileOpenBas( "assets.zip::colmap.bin" )
     if ( u = 0 ) then exit sub
-    qglZipClose u
+    qglFileClose u
 
     g.wld.cmap.store = qglArLoadBas&( "assets.zip::colmap.bin", QGL_AR_EMS, 16384, 1&, CM_SLOT )
     if ( g.wld.cmap.store = 0 ) then sys_error "0x0015, colormap would not load"
@@ -444,10 +444,10 @@ sub mod_load_lightmaps ( _
     '' It costs no conventional memory at all. The packed blob it replaces
     '' cost 40K on dm3ish and more on the bigger maps.
     ''
-    u = qglZipOpenBas( "assets.zip::lm.bin" )
+    u = qglFileOpenBas( "assets.zip::lm.bin" )
     if ( u = 0 ) then exit sub
-    g.wld.light.size = qglZipSize( u )
-    qglZipClose u
+    g.wld.light.size = qglFileSize( u )
+    qglFileClose u
 
     g.wld.light.atlas = qglArLoadBas&( "assets.zip::lm.bin", QGL_AR_EMS, LM_ATLAS_W, _
                                        g.wld.light.size \ LM_ATLAS_W, PAGE_SLOT )
@@ -479,12 +479,12 @@ sub mod_load_facevtx ( _
 
     scr_load_stage "face vertices"
 
-    u = qglZipOpenBas( "assets.zip::fgeom.bin" )
+    u = qglFileOpenBas( "assets.zip::fgeom.bin" )
     if ( u = 0 ) then
         sys_error "0x0011, fgeom.bin missing"
     end if
-    g.wld.geom.rows = cint( qglZipSize( u ) \ GEOM_W )
-    qglZipClose u
+    g.wld.geom.rows = cint( qglFileSize( u ) \ GEOM_W )
+    qglFileClose u
 
     '' 108 as a literal, not GEOM_MAXREC \ 2: an expression bound makes the
     '' array dynamic and therefore zero length until a REDIM, and the copy
@@ -608,15 +608,15 @@ sub mod_load_flat ( _
     dim u as integer
     dim n as long
 
-    u = qglZipOpenBas( flname )
+    u = qglFileOpenBas( flname )
     if ( u = 0 ) then
         sys_error "0x0016, " + flname + " missing"
     end if
-    n = qglZipSize( u )
-    if ( qglZipRead( u, dst, n ) <> n ) then
+    n = qglFileSize( u )
+    if ( qglFileRead( u, dst, n ) <> n ) then
         sys_error "0x0017, " + flname + " short read"
     end if
-    qglZipClose u
+    qglFileClose u
 end sub
 
 
@@ -688,13 +688,13 @@ sub mod_load_visibility ( _
     g.wld.pvs.ptr = 0
     g.wld.pvs.size = 0
 
-    u = qglZipOpenBas( "assets.zip::pvs.bin" )
+    u = qglFileOpenBas( "assets.zip::pvs.bin" )
     if ( u <> 0 ) then
-        g.wld.pvs.size = qglZipSize( u )
+        g.wld.pvs.size = qglFileSize( u )
         if ( g.wld.pvs.size > 0 ) then
             g.wld.pvs.ptr = qglMemAlloc( g.wld.pvs.size )
             if ( g.wld.pvs.ptr <> 0 ) then
-                if ( qglZipRead( u, g.wld.pvs.ptr, g.wld.pvs.size ) <> g.wld.pvs.size ) then
+                if ( qglFileRead( u, g.wld.pvs.ptr, g.wld.pvs.size ) <> g.wld.pvs.size ) then
                     qglMemFree g.wld.pvs.ptr
                     g.wld.pvs.ptr = 0
                     g.wld.pvs.size = 0
@@ -703,7 +703,7 @@ sub mod_load_visibility ( _
                 g.wld.pvs.size = 0
             end if
         end if
-        qglZipClose u
+        qglFileClose u
     end if
 
     if ( g.wld.pvs.ptr = 0 ) then sys_error "0x0014, visibility lump would not load"

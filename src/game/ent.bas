@@ -56,16 +56,33 @@ declare function ent_plat_touched ( _
 ) as integer
 
 ''
+'' The file layer, qgl's: a plain name or "archive::member", one handle
+'' either way. mgl's uar wanted a UAR the caller declared only to pass
+'' back.
+''
+'' flname is NOT byval: VBDOS passes a plain "as string" parameter as a
+'' near pointer to its descriptor, which is what the assembly's s:word
+'' wants.
+''
+declare function qglFileOpenBas ( flname as string ) as integer
+declare function qglFileRead ( _
+    byval h as integer, _
+    byval dst as long, _
+    byval nbytes as long _
+) as long
+declare sub qglFileClose ( byval h as integer )
+
+''
 '' This module's own procedures.
 ''
 declare sub ent_get ( _
-    u as UAR, _
+    byval u as integer, _
     byval dst as long, _
     byval n as integer _
 )
 declare sub ent_open_bin ( _
     g as Game, _
-    u as UAR, _
+    u as integer, _
     h as EntsHead _
 )
 declare sub ent_load_spawn ( _
@@ -107,11 +124,11 @@ declare sub ent_place_models ( _
 ''       all ents.bin ever needed.
 ''::::::::::
 sub ent_get ( _
-    u as UAR, _
+    byval u as integer, _
     byval dst as long, _
     byval n as integer _
 )
-    if ( uarRead( u, dst, clng(n) ) <> clng(n) ) then
+    if ( qglFileRead( u, dst, clng(n) ) <> clng(n) ) then
         sys_error "0x0043, ents.bin short read"
     end if
 end sub
@@ -123,15 +140,16 @@ end sub
 ''::::::::::
 sub ent_open_bin ( _
     g as Game, _
-    u as UAR, _
+    u as integer, _
     h as EntsHead _
 )
-    if ( uarOpen( u, "assets.zip::ents.bin", F4READ ) = 0 ) then
+    u = qglFileOpenBas( "assets.zip::ents.bin" )
+    if ( u = 0 ) then
         sys_error "0x0043, ents.bin missing"
     end if
     ent_get u, clng( varseg( h ) ) * 65536& + (clng( varptr( h ) ) and 65535&), len( h )
     if ( h.nmodels <> g.wld.count.models ) then
-        uarClose u
+        qglFileClose u
         sys_error "0x0045, ents.bin is from another map"
     end if
 end sub
@@ -148,11 +166,11 @@ end sub
 sub ent_load_spawn ( _
     g as Game _
 )
-    dim u as UAR
+    dim u as integer
     dim h as EntsHead
 
     ent_open_bin g, u, h
-    uarClose u
+    qglFileClose u
 
     '' BSP is Z-up and the camera is Y-up, so y and z swap here
     g.cam.pos.x = h.spawn.x
@@ -183,7 +201,7 @@ sub ent_load_teleports ( _
     face_mdl() as integer, _
     plat() as PlatEnt _
 )
-    dim u as UAR
+    dim u as integer
     dim h as EntsHead
     dim tr as EntsTele
     dim pr as EntsPlat
@@ -270,7 +288,7 @@ sub ent_load_teleports ( _
         end if
     next i
 
-    uarClose u
+    qglFileClose u
 
 end sub
 

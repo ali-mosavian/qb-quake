@@ -27,9 +27,9 @@ qglArWin        proto   far :dword, :dword
 qglArPerpg      proto   far :dword
 qglArFree       proto   far :dword
 qglArNew        proto   far :word, :word, :dword, :word
-qglZipOpen      proto   far :dword
-qglZipRead      proto   far :word, :dword, :dword
-qglZipClose     proto   far :word
+qglFileOpen     proto   far :dword
+qglFileRead     proto   far :word, :dword, :dword
+qglFileClose    proto   far :word
 
 REC             equ     6
 CNT             equ     3821            ;; faces.pag: 22,926 bytes
@@ -132,7 +132,7 @@ tmain           proc    far public uses bx cx dx si di es
                 ;; match.
                 ;;
                 mov     acc, 0
-                invoke  qglZipOpen, memberp
+                invoke  qglFileOpen, memberp
                 mov     bx, ax
                 xor     si, si                  ;; chunk index
                 mov     left, NBYTES
@@ -142,7 +142,7 @@ tmain           proc    far public uses bx cx dx si di es
                 mov     ecx, left
 @@:             jecxz   @@refdone
                 mov     ask, ecx
-                invoke  qglZipRead, bx, bufp, ask
+                invoke  qglFileRead, bx, bufp, ask
                 test    ax, ax
                 jz      @@refdone
                 sub     left, eax
@@ -160,7 +160,7 @@ tmain           proc    far public uses bx cx dx si di es
                 call    sumrun
                 inc     si
                 jmp     @@ref
-@@refdone:      invoke  qglZipClose, bx
+@@refdone:      invoke  qglFileClose, bx
                 mov     eax, acc
                 mov     refsum, eax
                 invoke  tshow, offset s_ref, refsum

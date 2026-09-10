@@ -1753,14 +1753,32 @@ pixel over (48% of the bench frame) and is a fourth deviation from mgl.
 scattered over textured walls, no geometry. A reference regenerated for
 a sampling change is the fix, not a regression, but say so each time.
 
-## The archive reader: stored members only, and mkassets stores
+## The file layer: one name space, drivers that register by linking
 
-`src/qgl/zip.asm` replaces the slice of mgl's `uar*` this renderer used
--- `uarOpen`, `uarSize`, `uarRead`, `uarReadH`, `uarClose`, on
-`"assets.zip::member"` and on plain names. `qglZipOpen` /
-`qglZipOpenBas` / `qglZipSize` / `qglZipRead` / `qglZipClose`, and a
-handle indexes a table here rather than the caller declaring a `UAR` it
-only ever passes back.
+`src/qgl/file.asm` is what mgl's `uar*` was: `qglFileOpen` /
+`qglFileOpenBas` / `qglFileSize` / `qglFileRead` / `qglFileWrite` /
+`qglFileClose` on `"assets.zip::member"` and on plain names, and a
+handle indexes a table there rather than the caller declaring a `UAR`
+it only ever passes back. Which containers exist is the drivers'
+business: a row of `FsDrv` -- check claims an open file by its header,
+find turns a member name into a position and a size, write is 0 where
+the format cannot, which is why a zip member refuses `qglFileWrite`
+and a plain file takes it.
+
+**A driver registers by being linked.** `QGL_FSDRV` puts its row in
+segment `QGLFS$M`; file.asm brackets that segment with `QGLFS$A` and
+`QGLFS$Z` and every open walks the bracket -- the trick DOS C runtimes
+use for their initialiser tables, since nothing else runs before
+BASIC's `main`. The one contract is link order: MS LINK lays a class
+out in the order it meets its segments, so file.obj has to come before
+every driver or the row lands in front of the bracket, unseen --
+`QRENDER.MAP` with zip.obj first shows `QGLFS$M` at 47E26 and `QGLFS$A`
+at 47E32. jwlink sorts the class by name, which is why the native
+suite cannot demonstrate it. Both Makefiles list `file` first,
+`qglFileDrivers` reports what the walk finds, and `t05file` asserts the
+count.
+
+`src/qgl/zip.asm` is the first driver, and the only one.
 
 **Stored only, and `tools/mkassets.py` now writes stored.** mgl's reader
 carries an inflate and a window table to drive it; deleting that is most

@@ -639,7 +639,7 @@ def convert_lumps(d, lumps, outdir):
                 # page-padded: read a page at a time into an EMS window
                 total += write_paged(path, payload, PAGED_ELEM[name])
         elif name.endswith('.bin'):
-            # raw: read through qglZipRead into a block or straight into
+            # raw: read through qglFileRead into a block or straight into
             # a mapped EMS window, so none of them is bound by BLOAD's
             # 64K cap or by BASIC's far heap
             OUT[name] = bytes(payload)

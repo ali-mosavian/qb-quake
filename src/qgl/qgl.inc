@@ -411,9 +411,31 @@ QGL_AR_WIN      equ     16384           ;; one EMS page, and MEM's unit too
 QGL_AR_MEM      equ     0
 QGL_AR_EMS      equ     1
 
-;; Archive members open at once. One, everywhere: every caller opens,
-;; reads the whole member and closes before the next.
-QGL_ZIP_MAX     equ     4
+;; Files open at once. Every caller opens, reads the whole file or
+;; member and closes before the next; four is headroom.
+QGL_FILE_MAX    equ     4
+
+;; A container driver for file.asm, one row per format. check claims an
+;; open DOS file by its header and leaves it rewound; find leaves it at
+;; the named member's data with the length stored through sizep; write
+;; is 0 where the format cannot. All far pascal:
+;;   check ( fh:word ) -> ax
+;;   find  ( fh:word, name:far ASCIIZ, sizep:far dword ) -> ax
+;;   write ( fh:word, src:far ptr, nbytes:dword ) -> dx:ax
+FsDrv           struc
+                fs_check        dd      ?
+                fs_find         dd      ?
+                fs_write        dd      ?
+FsDrv           ends
+
+;; A driver registers by being linked in: its row lands in QGLFS$M,
+;; which file.asm brackets and walks. file.obj must link before every
+;; driver -- see file.asm's header.
+QGL_FSDRV       macro   check, find, write
+QGLFS$M         segment word public 'QGLFS'
+                FsDrv   <check, find, write>
+QGLFS$M         ends
+                endm
 
 QGL_M_WIRE      equ     0
 QGL_M_FLAT      equ     1

@@ -33,8 +33,12 @@ QGLCORE := $(QGL)/sf.asm $(QGL)/mem.asm $(QGL)/gem.asm \
            $(QGL)/qglrow.asm \
            $(QGL)/dct/dctmem.asm $(QGL)/dct/dctems.asm
 
-QGLSRC := $(QGL)/vga.asm $(QGLCORE) \
-          $(QGL)/txt.asm $(QGL)/file.asm $(QGL)/dr.asm \
+# file.asm FIRST, as the renderer's Makefile has it: a VFS driver
+# registers by placing a row in a segment file.asm brackets. jwlink
+# sorts the class by name and would not mind; MS LINK lays it out in
+# the order it meets the modules, and the two builds should agree.
+QGLSRC := $(QGL)/file.asm $(QGL)/vga.asm $(QGLCORE) \
+          $(QGL)/txt.asm $(QGL)/dr.asm \
           $(QGL)/z.asm $(QGL)/clip.asm $(QGL)/rs.asm $(QGL)/sb.asm \
           $(QGL)/zip.asm $(QGL)/ar.asm \
           $(QGL)/log.asm \

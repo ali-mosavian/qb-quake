@@ -92,25 +92,9 @@ declare function qglGemAlloc ( byval nbytes as long ) as integer
 declare function qglGemMap ( byval h as integer, byval pg as integer, _
                              byval slot as integer ) as integer
 declare sub qglGemFree ( byval h as integer )
-''
-'' The archive reader, qgl's. mgl's uar carried an inflate and a UAR the
-'' caller had to declare and then only pass back; every member is stored
-'' now, and a handle is enough.
-''
-'' flname is NOT byval: VBDOS passes a plain "as string" parameter as a
-'' near pointer to its descriptor, which is what the assembly's s:word
-'' wants.
-''
-declare function qglZipOpenBas ( flname as string ) as integer
-declare function qglZipSize ( byval h as integer ) as long
-declare function qglZipRead ( _
-    byval h as integer, _
-    byval dst as long, _
-    byval nbytes as long _
-) as long
-declare sub qglZipClose ( byval h as integer )
 declare sub qglSfFree ( byval s as long )
 declare function qglFileOpenBas ( flname as string ) as integer
+declare function qglFileSize ( byval h as integer ) as long
 declare function qglFileRead ( _
     byval h as integer, _
     byval dst as long, _
@@ -229,13 +213,13 @@ sub mdl_load ( _
     if ( g.mdl.vtx_hnd <> 0 ) then
         vtxseg = qglGemMap( g.mdl.vtx_hnd, 0, PAGE_SLOT )
         if ( vtxseg <> 0 ) then
-            u = qglZipOpenBas( vtxpath )
+            u = qglFileOpenBas( vtxpath )
             if ( u <> 0 ) then
-                if ( qglZipRead( u, clng( vtxseg ) * 65536&, vtxbytes ) <> vtxbytes ) then
+                if ( qglFileRead( u, clng( vtxseg ) * 65536&, vtxbytes ) <> vtxbytes ) then
                     qglGemFree g.mdl.vtx_hnd
                     g.mdl.vtx_hnd = 0
                 end if
-                qglZipClose u
+                qglFileClose u
             else
                 qglGemFree g.mdl.vtx_hnd
                 g.mdl.vtx_hnd = 0

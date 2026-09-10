@@ -66,22 +66,22 @@ declare function qglArLoadBas ( _
     byval slot as integer _
 ) as long
 ''
-'' The archive reader, qgl's. mgl's uar carried an inflate and a UAR the
-'' caller had to declare and then only pass back; every member is stored
-'' now, and a handle is enough.
+'' The file layer, qgl's: a plain name or "archive::member", one handle
+'' either way. mgl's uar wanted a UAR the caller declared only to pass
+'' back.
 ''
 '' flname is NOT byval: VBDOS passes a plain "as string" parameter as a
 '' near pointer to its descriptor, which is what the assembly's s:word
 '' wants.
 ''
-declare function qglZipOpenBas ( flname as string ) as integer
-declare function qglZipSize ( byval h as integer ) as long
-declare function qglZipRead ( _
+declare function qglFileOpenBas ( flname as string ) as integer
+declare function qglFileSize ( byval h as integer ) as long
+declare function qglFileRead ( _
     byval h as integer, _
     byval dst as long, _
     byval nbytes as long _
 ) as long
-declare sub qglZipClose ( byval h as integer )
+declare sub qglFileClose ( byval h as integer )
 
 declare function qglArrAll () as integer
 declare function qgl_arr_count ( n as long ) as integer
@@ -96,10 +96,10 @@ function qgl_arr_count ( n as long ) as integer
 
     qgl_arr_count = 0
     n = 0
-    u = qglZipOpenBas( "assets.zip::faces.pag" )
+    u = qglFileOpenBas( "assets.zip::faces.pag" )
     if ( u = 0 ) then exit function
-    sz = qglZipSize( u )
-    qglZipClose u
+    sz = qglFileSize( u )
+    qglFileClose u
     if ( sz <= 0 ) then exit function
     n = sz \ ARR_REC
     qgl_arr_count = -1
@@ -136,7 +136,7 @@ function qgl_arr_fill ( byval h as long, byval cnt as long ) as integer
     payload = perpg * ARR_REC
     remain = cnt * ARR_REC
 
-    u = qglZipOpenBas( "assets.zip::faces.pag" )
+    u = qglFileOpenBas( "assets.zip::faces.pag" )
     if ( u = 0 ) then exit function
 
     for pg = 0 to npg - 1
@@ -151,20 +151,20 @@ function qgl_arr_fill ( byval h as long, byval cnt as long ) as integer
         ''
         sg = emsMapEx( hnd, pg, ARR_SLOT )
         if ( sg = 0 ) then
-            qglZipClose u
+            qglFileClose u
             exit function
         end if
         p = clng( sg ) * 65536
         want = payload
         if ( want > remain ) then want = remain
-        if ( qglZipRead( u, p, want ) <> want ) then
-            qglZipClose u
+        if ( qglFileRead( u, p, want ) <> want ) then
+            qglFileClose u
             exit function
         end if
         remain = remain - want
     next pg
 
-    qglZipClose u
+    qglFileClose u
     if ( remain <> 0 ) then exit function
     qgl_arr_fill = -1
 end function

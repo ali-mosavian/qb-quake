@@ -80,9 +80,9 @@ ENDIF
                 qglGemAlloc     proto   far pascal :dword
                 qglGemFree      proto   far pascal :word
                 qglGemMap       proto   far pascal :word, :word, :word
-                qglZipOpen      proto   far pascal :dword
-                qglZipRead      proto   far pascal :word, :dword, :dword
-                qglZipClose     proto   far pascal :word
+                qglFileOpen     proto   far pascal :dword
+                qglFileRead     proto   far pascal :word, :dword, :dword
+                qglFileClose    proto   far pascal :word
 IFDEF __BASIC__
                 qglFileNameBas  proto   far pascal :word, :dword, :word
 ENDIF
@@ -473,7 +473,7 @@ qglArLoad     proc    public uses bx cx si di,\
                 or      ax, dx
                 jz      @@no
 
-                invoke  qglZipOpen, path
+                invoke  qglFileOpen, path
                 mov     u, ax
                 test    ax, ax
                 jz      @@kill
@@ -510,7 +510,7 @@ qglArLoad     proc    public uses bx cx si di,\
                 mov     eax, remain
 @@:             mov     want, eax
 
-                invoke  qglZipRead, u, p, want
+                invoke  qglFileRead, u, p, want
                 cmp     ax, W want+0
                 jne     @@shut
                 cmp     dx, W want+2
@@ -525,12 +525,12 @@ qglArLoad     proc    public uses bx cx si di,\
                 mov     idx, eax
                 jmp     @@page
 
-@@done:         invoke  qglZipClose, u
+@@done:         invoke  qglFileClose, u
                 mov     ax, W h+0
                 mov     dx, W h+2
                 ret
 
-@@shut:         invoke  qglZipClose, u
+@@shut:         invoke  qglFileClose, u
 @@kill:         invoke  qglArFree, h
 @@no:           xor     ax, ax
                 xor     dx, dx
