@@ -568,6 +568,16 @@ sub host_render ( _
                 mdl_draw g, mdltri_buffer(), mdl_ent( mdl_i ), _
                          mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
                 g.mdl.drawn = g.mdl.drawn + 1
+                '' the volley has no frames, so it has a flash: a small
+                '' box at the muzzle, the frame it fires
+                if ( g.rdr.anim_time < mdl_ent( mdl_i ).flash_until ) then
+                    bob = mdl_ent( mdl_i ).pos
+                    bob.x = bob.x + cos( mdl_ent( mdl_i ).yaw * 0.017453293 ) * MDL_GUN_FWD#
+                    bob.y = bob.y + sin( mdl_ent( mdl_i ).yaw * 0.017453293 ) * MDL_GUN_FWD#
+                    bob.z = bob.z + MDL_GUN_UP#
+                    nbox = mdl_draw_box( bob, 3.0, 6.0, 1.0, 0.0, mtx_fin, xresh, yresh, g.env.z_near, _
+                                         h_dst_dc, ENT_COL_YELLOW%, ENT_COL_WHITE% )
+                end if
             end if
         next mdl_i
     end if

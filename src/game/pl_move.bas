@@ -1690,6 +1690,7 @@ sub mdl_think ( _
         if ( g.rdr.anim_time >= ent.next_attack ) then
             if ( mdl_find_target( g, ent, models(), brush(), planes() ) ) then
                 ent.next_attack = g.rdr.anim_time + MDL_ATTACK_RATE#
+                ent.flash_until = g.rdr.anim_time + MDL_FLASH#
                 if ( rnd < MDL_HIT_CHANCE# ) then
                     g.fight.health = g.fight.health - MDL_DAMAGE%
                     g.fight.hurt_until = g.rdr.anim_time + 0.3

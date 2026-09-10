@@ -29,6 +29,9 @@ const MDL_HEALTH%       = 30  '' monster_army's health
 const MDL_DAMAGE%       = 8   '' about half of army_fire's four pellets landing
 const MDL_HIT_CHANCE#   = 0.5
 const MDL_ATTACK_RATE#  = 1.0 '' seconds between volleys
+const MDL_FLASH#        = 0.12 '' seconds the muzzle flash shows
+const MDL_GUN_FWD#      = 20.0 '' the muzzle, ahead of and above the origin
+const MDL_GUN_UP#       = 28.0
 const MDL_BACKPACK%     = 5   '' the shells a dead soldier's backpack carries
 const MDL_RESPAWN#      = 15.0 '' seconds a corpse lies before it is a soldier again
 const MDL_YAW_SPEED#    = 20.0   '' walkmonster_start_go's yaw_speed
@@ -95,6 +98,7 @@ type MdlEnt
     health      as integer
     hunting     as integer     '' has seen the player: RUN chases instead of wandering
     next_attack as single      '' anim_time of the next volley
+    flash_until as single      '' the volley's muzzle flash shows until then
     dead_at     as single      '' anim_time it died, for the respawn
     spawn       as Vec3        '' where it respawns
 end type
