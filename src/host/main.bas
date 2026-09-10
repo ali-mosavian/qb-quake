@@ -734,6 +734,9 @@ sub host_init ( _
     g.fight.health = PL_HEALTH%
     g.fight.shells = PL_SHELLS%
     g.fight.spawn.x = g.pl.pos.x : g.fight.spawn.y = g.pl.pos.y : g.fight.spawn.z = g.pl.pos.z
+    '' a headless run has no one to press fire, and its frame is a reference
+    g.fight.state = GS_TITLE%
+    if ( g.env.bench_frames > 0 or g.env.bench_ticks > 0 or g.env.cam_path ) then g.fight.state = GS_PLAY%
 
     t_map = timer
 

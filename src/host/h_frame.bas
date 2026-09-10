@@ -123,6 +123,15 @@ declare sub pl_fire ( _
     planes() as Plane _
 )
 declare sub pl_items_touch ( g as Game, item() as ItemEnt )
+declare sub pl_respawn ( g as Game )
+declare sub pl_game_reset ( _
+    g as Game, _
+    mdl_ent() as MdlEnt, _
+    item() as ItemEnt, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+)
 declare function mdl_draw_box ( _
     org as Vec3, _
     byval half as single, _
@@ -302,6 +311,7 @@ sub host_tick ( _
     item() as ItemEnt _
 )
     dim mdl_i as integer
+    dim fire as integer, ndead as integer
 
     '' what the player asked for
     in_handle_toggles g
@@ -309,18 +319,40 @@ sub host_tick ( _
     '' and what the world does about it: camera, and the physics under it
     v_update_camera g, dt, cp_x(), cp_y(), cp_z(), brush(), models(), planes(), nodes()
 
-    '' the shotgun: mouse 1 or ctrl, rate-limited inside
-    if ( g.env.mouse.left or g.env.keyboard.ctrl ) then
-        pl_fire g, mdl_ent(), models(), brush(), planes()
-    end if
-    pl_items_touch g, item()
-
-    '' every spawned model's own think -- Quake's real rate (10Hz), gated
-    '' inside mdl_think against g.rdr.anim_time. A soldier that spots the
-    '' player hunts; the rest wander.
-    for mdl_i = 0 to g.mdl_count - 1
-        mdl_think g, mdl_ent( mdl_i ), -1, models(), brush(), planes()
-    next mdl_i
+    '' the fight. Fire is mouse 1 or ctrl; outside GS_PLAY a fresh press
+    '' is the only input that matters, and the world stands still.
+    fire = ( g.env.mouse.left or g.env.keyboard.ctrl )
+    select case g.fight.state
+    case GS_PLAY%
+        if ( fire ) then pl_fire g, mdl_ent(), models(), brush(), planes()
+        pl_items_touch g, item()
+        '' every soldier's own think -- Quake's 10 Hz, gated inside
+        '' mdl_think against g.rdr.anim_time
+        ndead = 0
+        for mdl_i = 0 to g.mdl_count - 1
+            mdl_think g, mdl_ent( mdl_i ), -1, models(), brush(), planes()
+            if ( mdl_ent( mdl_i ).state = MDL_ST_DEAD% ) then ndead = ndead + 1
+        next mdl_i
+        if ( g.fight.health <= 0 ) then
+            g.fight.state = GS_DEAD%
+            g.fight.state_until = g.rdr.anim_time + PL_DEATH_PAUSE#
+        elseif ( g.mdl_count > 0 and ndead = g.mdl_count ) then
+            g.fight.state = GS_WON%
+        end if
+    case GS_DEAD%
+        if ( g.rdr.anim_time >= g.fight.state_until ) then
+            pl_respawn g
+            g.fight.state = GS_PLAY%
+        end if
+    case else
+        if ( fire and g.fight.fire_prev = 0 ) then
+            if ( g.fight.state = GS_WON% ) then
+                pl_game_reset g, mdl_ent(), item(), models(), brush(), planes()
+            end if
+            g.fight.state = GS_PLAY%
+        end if
+    end select
+    g.fight.fire_prev = fire
 
     '' and anything the world does to the player as a result of moving
     ent_check_teleport g, tele()

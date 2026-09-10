@@ -70,6 +70,15 @@ declare function mdl_ray_hit ( _
     byval maxt as single _
 ) as single
 declare sub pl_respawn ( g as Game )
+declare sub pl_reset_player ( g as Game )
+declare sub pl_game_reset ( _
+    g as Game, _
+    mdl_ent() as MdlEnt, _
+    item() as ItemEnt, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+)
 declare sub pl_items_drop ( _
     g as Game, _
     item() as ItemEnt, _
@@ -1640,13 +1649,9 @@ sub mdl_think ( _
     if ( g.rdr.anim_time < ent.next_think ) then exit sub
     ent.next_think = g.rdr.anim_time + 0.1
 
-    '' Dead: the death frames once, then a corpse until the respawn.
+    '' Dead: the death frames once, then a corpse until pl_game_reset.
     if ( ent.state = MDL_ST_DEAD% ) then
         if ( ent.anim_frame < MDL_DEATH_FRAMES% - 1 ) then ent.anim_frame = ent.anim_frame + 1
-        if ( g.rdr.anim_time >= ent.dead_at + MDL_RESPAWN# ) then
-            goal.x = ent.spawn.x : goal.y = ent.spawn.y : goal.z = ent.spawn.z
-            mdl_spawn g, ent, goal, models(), brush(), planes()
-        end if
         exit sub
     end if
 
@@ -1834,11 +1839,41 @@ end sub
 ''::::::::::::::
 sub pl_respawn ( g as Game )
     g.fight.deaths = g.fight.deaths + 1
+    pl_reset_player g
+end sub
+
+sub pl_reset_player ( g as Game )
     g.fight.health = PL_HEALTH%
     g.fight.shells = PL_SHELLS%
     g.fight.next_fire = 0.0
     g.pl.pos.x = g.fight.spawn.x : g.pl.pos.y = g.fight.spawn.y : g.pl.pos.z = g.fight.spawn.z
     g.pl.vel.x = 0.0 : g.pl.vel.y = 0.0 : g.pl.vel.z = 0.0
+end sub
+
+''::::::::::::::
+'' name: pl_game_reset
+'' desc: The fight again: every soldier back at its spawn, every pickup
+''       back, the player at the start. Kills and deaths keep counting.
+''::::::::::::::
+sub pl_game_reset ( _
+    g as Game, _
+    mdl_ent() as MdlEnt, _
+    item() as ItemEnt, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+)
+    dim i as integer
+    dim org as Vec3
+
+    for i = 0 to g.mdl_count - 1
+        org = mdl_ent(i).spawn
+        mdl_spawn g, mdl_ent(i), org, models(), brush(), planes()
+    next i
+    for i = 0 to g.item_count - 1
+        item(i).gone = 0
+    next i
+    pl_reset_player g
 end sub
 
 ''::::::::::::::

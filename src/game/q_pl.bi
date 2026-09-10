@@ -131,6 +131,9 @@ type PlayerCombat
     flash_until as single      '' the muzzle flash widens the dlight until then
     hurt_until  as single      '' the status line reads red until then
     spawn       as Vec3        '' where dying puts the player back
+    state       as integer     '' GS_*: what the tick and the overlay do
+    state_until as single      '' when GS_DEAD ends
+    fire_prev   as integer     '' last tick's fire, so a held button is one press
 end type
 
 const PL_HEALTH%       = 100
@@ -138,6 +141,12 @@ const PL_SHELLS%       = 25     '' Quake's starting shells
 const PL_FIRE_RATE#    = 0.5    '' the shotgun's attack_finished
 const PL_SHOT_RANGE#   = 2048.0
 const PL_SHOT_DAMAGE%  = 15     '' six pellets of four, most of them landing
+const PL_DEATH_PAUSE#  = 1.5    '' seconds YOU DIED stays before the respawn
+
+const GS_TITLE% = 0             '' fire starts the fight
+const GS_PLAY%  = 1
+const GS_DEAD%  = 2             '' the pause, then pl_respawn
+const GS_WON%   = 3             '' every soldier down; fire resets them all
 
 
 ''

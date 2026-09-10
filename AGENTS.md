@@ -2023,6 +2023,39 @@ carries no overlay; the HUD gate runs without `-comp` for that reason.
 4970/4954 here for `h_comp_dc`, three flags and `rdr.portal`. The
 startup assertion says so, with the number to paste in.
 
+## The game layer
+
+The fight lives in `pl_move.bas` because it traces, and `pl_trace`'s
+clip buffer is that module's `dim shared`: the shotgun (`pl_fire`), the
+soldiers' think (`mdl_think`, 10 Hz on `anim_time`), the pickups and the
+reset. The player's side of it is `Game.fight`, a `PlayerCombat` placed
+AFTER `vis` so the C offsets stayed put; `MdlEnt` is an array element
+and grows freely.
+
+**The vertex page is the frame budget.** One EMS page holds the whole
+model: 170 vertices x 3 bytes = 510 a frame, 32 frames = 16,320 of
+16,384. `stand,run,death,pain` fills it; the soldier's shoot set does
+not fit, so a volley has no animation. `mkmdl.py` emits the frameset in
+the order given and `d_mdl.bas` indexes the sets by position, so the
+Makefile's list IS the frame layout.
+
+**`make assets` will not rebuild the model for a frameset change** --
+the rule depends on the pak and the tool, not the Makefile. Delete
+`data/assets/soldier.geo` first, and check `nframe` in the header.
+
+**The HUD's footer draws under `-nostats` too**, so the status line and
+the crosshair moved `tools/ref/bench.bmp` and `hud.bmp` -- by the text
+rows and four centre pixels, checked with a bounding box each time.
+The state messages do not: a bench, ticks or campath run starts in
+`GS_PLAY`, where nothing is drawn but the crosshair.
+
+**Pickups are the map's own `item_health`/`item_shells`**, shipped in
+`ents.bin` after the hides, dropped to the hull floor at load, and drawn
+as flat boxes by `mdl_draw_box` in `d_alias.c` -- six quads, no clip
+beyond "any corner behind the near plane drops the box", which at ten
+units wide means the player is in it. A box far down the hall is in
+the bench frame: 24 pixels at the centre.
+
 ## `-nostats` makes the picture deterministic
 
 With the HUD off the renderer is **byte-identical run to run** -- one

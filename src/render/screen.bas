@@ -1404,7 +1404,7 @@ sub scr_draw_hud ( _
     dim fcol as integer
     dim wide as integer
     dim dxv as single, dyv as single, ayv as single, yawd as single
-    dim pstr as string, fstr as string
+    dim pstr as string, fstr as string, msg as string
 
     fstr = "HP " + ltrim$(str$( g.fight.health )) + "  SHELLS " + ltrim$(str$( g.fight.shells )) + _
            "  KILLS " + ltrim$(str$( g.fight.kills )) + "  DEATHS " + ltrim$(str$( g.fight.deaths ))
@@ -1541,6 +1541,18 @@ sub scr_draw_hud ( _
             qglDrFill h_dst_dc, 0, yy-1, w, h, hc_bad
         end if
         draw_string h_dst_dc, 4, yy, fstr
+    end if
+
+    '' what the fight has to say, centred: the font is 4 wide
+    select case g.fight.state
+    case GS_TITLE% : msg = "FIRE TO START"
+    case GS_DEAD%  : msg = "YOU DIED"
+    case GS_WON%   : msg = "AREA CLEARED - FIRE TO GO AGAIN"
+    case else      : msg = ""
+    end select
+    if ( len( msg ) > 0 ) then
+        if ( g.fight.state = GS_DEAD% ) then qglDrFill h_dst_dc, 0, h \ 2 - 8, w, h \ 2 + 8, hc_bad
+        draw_string h_dst_dc, w \ 2 - len( msg ) * 2, h \ 2 - 3, msg
     end if
 
     '' the crosshair: four dots, the centre left open to see through
