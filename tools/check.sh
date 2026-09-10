@@ -210,10 +210,9 @@ grep -qiE "^ *[1-9][0-9]* Severe" /tmp/check-build.log && {
     echo "COMPILE ERRORS"; grep -iB4 -E "^ *[1-9][0-9]* Severe" /tmp/check-build.log | grep -E "\^|Severe"; exit 1; }
 
 # The three BASIC-side qgl gates, before any timing. They run in the
-# built EXE against the same UGLV.LIB the renderer links, which is the
-# only place any of them can say anything: the ABI is BASIC's to get
-# wrong, and the differential and the store both need an mgl that is
-# initialised the way the renderer initialises it.
+# built EXE, which is the only place any of them can say anything: the
+# ABI is BASIC's to get wrong, and the store test wants the EMS state
+# the renderer starts with.
 #
 # -qglarr was written as a gate and then never run by one, which is how
 # it kept a 25-second hold on the end for a human to look at.

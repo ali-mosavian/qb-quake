@@ -3,22 +3,14 @@
 ##
 ## The compiler and linker are DOS programs, so every module compile shells
 ## out to tools/bc.sh (BASIC) or tools/bcc-qr.sh (this project's own C
-## ports), each launching its OWN isolated DOSBox-X -- same idea as
-## tools/native/Makefile's C/asm side, so that `make -jN` actually
-## parallelises instead of serialising through one shared build.bat session
-## the way tools/dosbox.sh's own build target still does. LINK is the one
-## step that stays single: it needs every object at once, via
-## tools/link-qr.sh.
+## ports), each launching its OWN isolated DOSBox-X, so that `make -jN`
+## actually parallelises. LINK is the one step that stays single: it
+## needs every object at once, via tools/link-qr.sh.
 ##
 ## vbd only, on purpose -- see tools/bc.sh's own note on why pds/qb45 (kept
 ## below only as documented failure evidence) do not need this treatment.
 ##
-## NATIVE_UGL must already exist (build it first: make -f tools/native/Makefile).
-## This Makefile only reads it, the same restraint tools/native/Makefile
-## takes with the mgl source tree itself.
-##
 
-MGL        ?= $(HOME)/work/badlogic/mgl
 TOOLCHAINS ?= $(HOME)/work/other/d32x/toolchains
 DOSBOX_BIN ?=
 MAP        ?= dm3ish.bsp
@@ -29,7 +21,6 @@ PAK        ?= $(HOME)/dos/QUAKE_SW/ID1/PAK0.PAK
 MDL        ?= soldier
 TIMEOUT    ?= 600
 BUILD      ?= $(CURDIR)/build/vbd
-NATIVE_UGL ?= $(CURDIR)/build/native-mgl/UGLV.LIB
 
 # Symbols, on by default. The debug records go in the OBJs and then in
 # the tail of the EXE; nothing is loaded at run time, so this costs disk
@@ -39,7 +30,7 @@ NATIVE_UGL ?= $(CURDIR)/build/native-mgl/UGLV.LIB
 # DEBUGINFO=0 for a lean EXE.
 DEBUGINFO  ?= 1
 
-export MGL TOOLCHAINS DOSBOX_BIN TIMEOUT DEBUGINFO
+export TOOLCHAINS DOSBOX_BIN TIMEOUT DEBUGINFO
 
 BC     := $(CURDIR)/tools/bc.sh
 BCC_QR := $(CURDIR)/tools/bcc-qr.sh
@@ -166,9 +157,6 @@ $(BUILD)/base.dat: data/base.dat | $(BUILD)
 $(BUILD)/FONT.FNT: data/base.dat tools/mkfont.py | $(BUILD)
 	@python3 tools/mkfont.py data/base.dat font/4x6.fnt $@
 
-$(BUILD)/UGLV.LIB: $(NATIVE_UGL) | $(BUILD)
-	cp $< $@
-
 # Copy the whole directory rather than naming extensions, which is how
 # the .bld lumps silently failed to stage the first time this was
 # written by hand.
@@ -178,7 +166,7 @@ $(BUILD)/.assets-stamp: $(ASSET_FILES) | $(BUILD)
 
 $(BUILD)/.assets-stamp: $(MDL_ASSETS) $(CAM_ASSETS)
 
-$(EXE): $(BAS_OBJS) $(C_OBJS) $(ASM_OBJS) $(BUILD)/stuff.ini $(BUILD)/base.dat $(BUILD)/FONT.FNT $(BUILD)/UGLV.LIB $(BUILD)/.assets-stamp
+$(EXE): $(BAS_OBJS) $(C_OBJS) $(ASM_OBJS) $(BUILD)/stuff.ini $(BUILD)/base.dat $(BUILD)/FONT.FNT $(BUILD)/.assets-stamp
 	@python3 tools/qblint.py
 	$(LINKQR) $(BUILD) "$(BAS_MODS)" "$(C_MODS) $(ASM_MODS)"
 
@@ -196,16 +184,6 @@ run: $(EXE)                     ## headless run; 's' screenshots to build/vbd/
 
 viz: $(EXE)                     ## windowed run, to watch it live
 	@echo "launch: dosbox-x -conf $$(VBD_OUT=$(BUILD) tools/dosbox.sh viz $(MAP))"
-
-## The two failing toolchains are kept as reproducible evidence for the
-## README's claim that VBDOS is required rather than merely preferred.
-## Unrelated to the parallel path above -- these still go through
-## tools/dosbox.sh's own single-session build, which is all they are for.
-qb45:                           ## reproduce the QB 4.5 failure
-	@tools/dosbox.sh build qb45
-pds:                            ## reproduce the PDS 7.1 failure
-	@tools/dosbox.sh build pds
-evidence: qb45 pds
 
 clean:                          ## drop all build output
 	rm -rf build

@@ -1,38 +1,31 @@
 option explicit
 ''
-'' qgldiff.bas -- qgl's rasteriser against mgl's, on the same triangle.
+'' qgldiff.bas -- qgl's rasteriser against the exact answer.
 ''
 '' -qgldiff runs this and exits.
 ''
 '' t10ref already draws every polygon twice, but both times through qgl's
 '' own scanner and its own gradients: it proves the patched fillers agree
 '' with the reference filler and cannot say a word about the scan
-'' conversion above them. A wrong edge walk, a wrong half-pixel
-'' convention or a wrong gradient is identical in both of its arms.
+'' conversion above them. This arm can: the texture is a ramp, so a pixel
+'' IS the texel column or row it sampled, and the exact texel at any
+'' pixel is three planes and a divide in floating point, owing nothing to
+'' the rasteriser.
 ''
-'' mgl is a genuinely independent implementation -- its own scanner, its
-'' own gradients, its own fillers -- so this is the arm that can see
-'' those. It runs here, in BASIC inside qrender.exe, rather than in the
-'' qgl suite, because UGLV.LIB is a __CMP__=VBD build: mgl's cold paths
-'' call into the BASIC runtime, and a free-standing test that stubs them
-'' is testing a different program. This one is the shipping build.
+'' Until ba52cdd this was a differential against mgl, an independent
+'' scanner drawing the same triangles. The coverage and the texel bounds
+'' asserted below are the figures from that run: every affine case
+'' matched mgl pixel for pixel, and the perspective cases were 8 and 4
+'' texels off the exact answer, mgl's own distance. A change that moves
+'' a count moves the edge walk; one that widens a bound loses accuracy
+'' mgl had.
 ''
-'' The library is the PATCHED one. Stock mgl scales normalised UVs to
-'' texels by xRes-1 instead of xRes, so one repeat advances 63 texels
-'' across a 64-wide texture; ugl-patch/README.md is that fix, and a
-'' differential against the stock library would be measuring the bug.
-''
-'' Both drew SOMETHING is asserted apart from both drew the SAME. Two
-'' empty destinations match perfectly.
-''
-'' This is the one caller of uglInit and uglEnd left: mgl's DC table is
-'' filled by the first and uglNew refuses without it. Production runs
-'' none of mgl now.
+'' Both drew SOMETHING is asserted apart from where they drew it. An
+'' empty destination is a perfect match for nothing.
 ''
 
 defint a-z
 
-'$include: 'ugl.bi'
 '$include: 'qgl.bi'
 
 const DIFF_W = 128
@@ -40,8 +33,7 @@ const DIFF_H = 96
 const DIFF_TW = 64
 
 '' qgl's vertex. x and y are screen, z is 1/z, u and v are normalised
-'' over the texture -- the same five mgl's vector3f carries in its first
-'' five fields, which is why one set of numbers fills both.
+'' over the texture -- or u/z and v/z when the perspective path is fed.
 type QVertB
     x as single
     y as single
@@ -71,28 +63,23 @@ declare sub qglDrFill ( byval d as long, byval x0 as integer, _
 
 declare function qgl_diff_texel ( byval x as integer, byval y as integer, _
                                   byval kind as integer ) as integer
-declare sub qgl_diff_fill_tex ( byval mtex as long, byval qtex as long, _
-                                byval kind as integer )
-declare function qgl_diff_delta ( byval dc as long, byval s as long, _
-                                  byval lo as integer ) as integer
+declare sub qgl_diff_fill_tex ( byval qtex as long, byval kind as integer )
 declare function qgl_diff_plane ( byval f0 as single, byval f1 as single, _
                                   byval f2 as single, v() as QVertB, _
                                   byval x as single, byval y as single ) as single
 declare function qgl_diff_want ( v() as QVertB, byval kind as integer, _
+                                 byval persp as integer, _
                                  byval px as integer, byval py as integer ) as integer
-declare function qgl_diff_dev ( byval dc as long, byval s as long, _
-                                v() as QVertB, byval kind as integer, _
-                                byval mine as integer ) as integer
-declare sub qgl_diff_probe ( byval dc as long, byval s as long, _
-                             byval shape as integer, byval fh as integer )
-declare sub qgl_diff_tri ( v() as QVertB, t() as TriType, byval shape as integer )
-declare function qgl_diff_mgl_drew ( byval dc as long ) as integer
-declare function qgl_diff_qgl_drew ( byval s as long ) as integer
-declare function qgl_diff_pixels ( byval dc as long, byval s as long ) as integer
-declare function qgl_diff_case ( byval mode as integer, byval mdst as long, _
-                                 byval mtex as long, byval qdst as long, _
+declare function qgl_diff_dev ( byval s as long, v() as QVertB, _
+                                byval kind as integer, byval persp as integer ) as integer
+declare sub qgl_diff_probe ( byval s as long, byval shape as integer, _
+                             byval fh as integer )
+declare sub qgl_diff_tri ( v() as QVertB, byval shape as integer )
+declare function qgl_diff_drew ( byval s as long ) as integer
+declare function qgl_diff_case ( byval mode as integer, byval qdst as long, _
                                  byval qtex as long, byval kind as integer, _
                                  byval shape as integer, nm as string, _
+                                 byval want_n as integer, byval bound as integer, _
                                  byval fh as integer ) as integer
 declare function qglDiffAll () as integer
 
@@ -100,11 +87,10 @@ declare function qglDiffAll () as integer
 '' The texture, and it is an INSTRUMENT rather than a pattern.
 ''
 '' kind 0 is a ramp in u alone and kind 1 a ramp in v alone, so a pixel's
-'' value IS the texel column or row that was sampled and the difference
-'' between two renderers reads directly as a sampling offset. kind 2 is
+'' value IS the texel column or row that was sampled and its distance
+'' from the exact answer reads directly as a sampling offset. kind 2 is
 '' the usual no-two-alike pattern, which catches an error in either axis
-'' but cannot say which axis or by how much -- and, wrapping at 255, it
-'' turns a one-texel offset into a difference of 255 as readily as 1.
+'' but cannot say which axis or by how much.
 ''
 function qgl_diff_texel ( byval x as integer, byval y as integer, _
                           byval kind as integer ) as integer
@@ -118,8 +104,7 @@ function qgl_diff_texel ( byval x as integer, byval y as integer, _
     end select
 end function
 
-sub qgl_diff_fill_tex ( byval mtex as long, byval qtex as long, _
-                        byval kind as integer )
+sub qgl_diff_fill_tex ( byval qtex as long, byval kind as integer )
     dim x as integer
     dim y as integer
     dim c as integer
@@ -130,61 +115,17 @@ sub qgl_diff_fill_tex ( byval mtex as long, byval qtex as long, _
     for y = 0 to DIFF_TW - 1
         for x = 0 to DIFF_TW - 1
             c = qgl_diff_texel( x, y, kind )
-            uglPSet mtex, x, y, c
             qglSfPset qtex, x, y, c
         next x
     next y
 end sub
 
 ''
-'' The extreme of (mgl - qgl) over the pixels BOTH drew: lo nonzero for
-'' the smallest, zero for the largest. Both, against a ramp texture, say
-'' how far apart the two samplings are and whether the gap is constant.
+'' One triangle. Not axis aligned, and 1/z differs at every vertex, so
+'' u, v and 1/z all vary along both edges and across every span -- which
+'' is what makes the perspective arm differ from the affine one at all.
 ''
-'' 1 and 0 rather than TRUE and FALSE: this module includes only ugl.bi
-'' and qgl.bi, and neither declares them.
-''
-'' Only where both drew: a pixel one of them left blank is a coverage
-'' difference, which the drawn counts already report, and letting it into
-'' this figure would swamp the number it exists to show.
-''
-function qgl_diff_delta ( byval dc as long, byval s as long, _
-                          byval lo as integer ) as integer
-    dim x as integer
-    dim y as integer
-    dim m as integer
-    dim q as integer
-    dim e as integer
-    dim best as integer
-    dim seen as integer
-
-    for y = 0 to DIFF_H - 1
-        for x = 0 to DIFF_W - 1
-            m = uglPGet( dc, x, y )
-            q = qglSfPget( s, x, y )
-            if ( m <> 0 and q <> 0 ) then
-                e = m - q
-                if ( seen = 0 ) then
-                    best = e
-                    seen = 1
-                elseif ( lo <> 0 ) then
-                    if ( e < best ) then best = e
-                else
-                    if ( e > best ) then best = e
-                end if
-            end if
-        next x
-    next y
-    qgl_diff_delta = best
-end function
-
-''
-'' One triangle, in both spellings, from one set of numbers. Not axis
-'' aligned, and 1/z differs at every vertex, so u, v and 1/z all vary
-'' along both edges and across every span -- which is what makes the
-'' perspective arm differ from the affine one at all.
-''
-sub qgl_diff_tri ( v() as QVertB, t() as TriType, byval shape as integer )
+sub qgl_diff_tri ( v() as QVertB, byval shape as integer )
     if ( shape = 0 ) then
         '' A RIGHT TRIANGLE ON THE AXES, 64 pixels on a side against a
         '' 64 texel texture and 1/z flat. Every gradient is then exactly
@@ -225,29 +166,9 @@ sub qgl_diff_tri ( v() as QVertB, t() as TriType, byval shape as integer )
         v(2).x = 52.0  : v(2).y = 80.0 : v(2).z = 0.5
         v(2).u = 0.0   : v(2).v = 0.5
     end if
-
-    t(0).v1.x = v(0).x : t(0).v1.y = v(0).y : t(0).v1.z = v(0).z
-    t(0).v1.u = v(0).u : t(0).v1.v = v(0).v
-    t(0).v2.x = v(1).x : t(0).v2.y = v(1).y : t(0).v2.z = v(1).z
-    t(0).v2.u = v(1).u : t(0).v2.v = v(1).v
-    t(0).v3.x = v(2).x : t(0).v3.y = v(2).y : t(0).v3.z = v(2).z
-    t(0).v3.u = v(2).u : t(0).v3.v = v(2).v
 end sub
 
-function qgl_diff_mgl_drew ( byval dc as long ) as integer
-    dim x as integer
-    dim y as integer
-    dim n as integer
-
-    for y = 0 to DIFF_H - 1
-        for x = 0 to DIFF_W - 1
-            if ( uglPGet( dc, x, y ) <> 0 ) then n = n + 1
-        next x
-    next y
-    qgl_diff_mgl_drew = n
-end function
-
-function qgl_diff_qgl_drew ( byval s as long ) as integer
+function qgl_diff_drew ( byval s as long ) as integer
     dim x as integer
     dim y as integer
     dim n as integer
@@ -257,20 +178,7 @@ function qgl_diff_qgl_drew ( byval s as long ) as integer
             if ( qglSfPget( s, x, y ) <> 0 ) then n = n + 1
         next x
     next y
-    qgl_diff_qgl_drew = n
-end function
-
-function qgl_diff_pixels ( byval dc as long, byval s as long ) as integer
-    dim x as integer
-    dim y as integer
-    dim n as integer
-
-    for y = 0 to DIFF_H - 1
-        for x = 0 to DIFF_W - 1
-            if ( uglPGet( dc, x, y ) <> qglSfPget( s, x, y ) ) then n = n + 1
-        next x
-    next y
-    qgl_diff_pixels = n
+    qgl_diff_drew = n
 end function
 
 ''
@@ -296,55 +204,52 @@ function qgl_diff_plane ( byval f0 as single, byval f1 as single, _
 end function
 
 ''
-'' THE EXACT ANSWER, in floating point, owing nothing to either
-'' rasteriser: interpolate u/z, v/z and 1/z over the plane, divide, and
-'' that is the texel.
+'' THE EXACT ANSWER, in floating point. persp: interpolate u/z, v/z and
+'' 1/z over the plane, divide, and that is the texel. Otherwise the
+'' vertices carry plain u and v, which an affine caller passes, and the
+'' plane of u itself is the answer; a reference that divided would be
+'' answering a different question and read 32, the furthest two texels
+'' can be apart.
 ''
-'' Both renderers approximate it -- mgl divides every 16 pixels and so
-'' does qgl -- so neither is the other's reference, and asserting they
-'' agree byte for byte would assert that qgl reproduces mgl's error
-'' rather than that it is right. Measured: with qgl dividing at every
-'' pixel it moved AWAY from mgl, which is what says the remaining
-'' difference is two approximations and not a fault.
+'' The rasteriser approximates it -- it divides every 16 pixels -- so
+'' the perspective bound is a distance and not an identity.
 ''
 function qgl_diff_want ( v() as QVertB, byval kind as integer, _
+                         byval persp as integer, _
                          byval px as integer, byval py as integer ) as integer
     dim zp as single
     dim f as single
 
-    zp = qgl_diff_plane( v(0).z, v(1).z, v(2).z, v(), px, py )
     if ( kind = 0 ) then
         f = qgl_diff_plane( v(0).u, v(1).u, v(2).u, v(), px, py )
     else
         f = qgl_diff_plane( v(0).v, v(1).v, v(2).v, v(), px, py )
     end if
-    qgl_diff_want = ( int( ( f / zp ) * DIFF_TW + 0.5 ) and (DIFF_TW - 1) )
+    if ( persp <> 0 ) then
+        zp = qgl_diff_plane( v(0).z, v(1).z, v(2).z, v(), px, py )
+        f = f / zp
+    end if
+    qgl_diff_want = ( int( f * DIFF_TW + 0.5 ) and (DIFF_TW - 1) )
 end function
 
 ''
-'' How far one renderer strays from that, at worst, over the pixels both
+'' How far the rasteriser strays from that, at worst, over the pixels it
 '' drew. The distance is taken the short way round the texture: an
 '' overshoot of one texel past the last column reads as 63 otherwise,
 '' and a wrap is not a large error.
 ''
-function qgl_diff_dev ( byval dc as long, byval s as long, _
-                        v() as QVertB, byval kind as integer, _
-                        byval mine as integer ) as integer
+function qgl_diff_dev ( byval s as long, v() as QVertB, _
+                        byval kind as integer, byval persp as integer ) as integer
     dim x as integer
     dim y as integer
-    dim got as integer
     dim e as integer
     dim worst as integer
 
     for y = 0 to DIFF_H - 1
         for x = 0 to DIFF_W - 1
-            if ( uglPGet( dc, x, y ) <> 0 and qglSfPget( s, x, y ) <> 0 ) then
-                if ( mine <> 0 ) then
-                    got = qglSfPget( s, x, y )
-                else
-                    got = uglPGet( dc, x, y )
-                end if
-                e = ( got - qgl_diff_want( v(), kind, x, y ) ) and (DIFF_TW - 1)
+            if ( qglSfPget( s, x, y ) <> 0 ) then
+                e = ( qglSfPget( s, x, y ) - qgl_diff_want( v(), kind, persp, x, y ) ) _
+                    and (DIFF_TW - 1)
                 if ( e > DIFF_TW \ 2 ) then e = DIFF_TW - e
                 if ( e > worst ) then worst = e
             end if
@@ -354,13 +259,13 @@ function qgl_diff_dev ( byval dc as long, byval s as long, _
 end function
 
 ''
-'' What each renderer put at four points inside the triangle. A range
-'' says how far apart two samplings are; only the values themselves say
-'' in which direction, which is the difference between a half-pixel
-'' convention and a mapping that is turned around.
+'' What the rasteriser put at four points inside the triangle. A bound
+'' says how far the sampling is out; only the values say in which
+'' direction, which is the difference between a half-pixel convention
+'' and a mapping that is turned around.
 ''
-sub qgl_diff_probe ( byval dc as long, byval s as long, _
-                     byval shape as integer, byval fh as integer )
+sub qgl_diff_probe ( byval s as long, byval shape as integer, _
+                     byval fh as integer )
     dim x as integer
     dim y as integer
 
@@ -372,111 +277,61 @@ sub qgl_diff_probe ( byval dc as long, byval s as long, _
         y = 40
     end if
     for x = 30 to 80 step 10
-        print #fh, "        y="; y; " x="; x; " mgl"; uglPGet( dc, x, y ); _
-                   " qgl"; qglSfPget( s, x, y )
+        print #fh, "        y="; y; " x="; x; " qgl"; qglSfPget( s, x, y )
     next x
     y = y + 20
     for x = 30 to 80 step 10
-        print #fh, "        y="; y; " x="; x; " mgl"; uglPGet( dc, x, y ); _
-                   " qgl"; qglSfPget( s, x, y )
+        print #fh, "        y="; y; " x="; x; " qgl"; qglSfPget( s, x, y )
     next x
 end sub
 
 ''
-'' One drawing mode through both rasterisers. Returns the failure count.
+'' One drawing mode. want_n is the coverage and bound the texel distance
+'' the case may not exceed; bound applies to the ramp textures only.
+'' Returns the failure count.
 ''
-function qgl_diff_case ( byval mode as integer, byval mdst as long, _
-                         byval mtex as long, byval qdst as long, _
+function qgl_diff_case ( byval mode as integer, byval qdst as long, _
                          byval qtex as long, byval kind as integer, _
                          byval shape as integer, nm as string, _
+                         byval want_n as integer, byval bound as integer, _
                          byval fh as integer ) as integer
     dim v(2) as QVertB
-    dim t(0) as TriType
     dim bad as integer
-    dim mn as integer
     dim qn as integer
-    dim df as integer
-    dim dlo as integer
-    dim dhi as integer
-    dim em as integer
     dim eq as integer
+    dim persp as integer
 
-    qgl_diff_tri v(), t(), shape
-    qgl_diff_fill_tex mtex, qtex, kind
-
-    uglClear mdst, 0
-    if ( mode = QGL_M_PTEX ) then
-        uglTriTP mdst, t(0), 0, mtex
-    else
-        uglTriT mdst, t(0), 0, mtex
-    end if
+    qgl_diff_tri v(), shape
+    qgl_diff_fill_tex qtex, kind
 
     qglDrFill qdst, 0, 0, DIFF_W - 1, DIFF_H - 1, 0
     qglClRect 0, 0, DIFF_W - 1, DIFF_H - 1
     qglRsPoly qdst, v(0), 3, mode, qtex
 
-    mn = qgl_diff_mgl_drew( mdst )
-    qn = qgl_diff_qgl_drew( qdst )
-    df = qgl_diff_pixels( mdst, qdst )
-
-    if ( mn = 0 ) then bad = bad + 1
+    qn = qgl_diff_drew( qdst )
     if ( qn = 0 ) then bad = bad + 1
+    if ( qn <> want_n ) then bad = bad + 1
 
-    if ( mode = QGL_M_PTEX ) then
-        '' Two approximations of the same exact answer, so the test is
-        '' which one is further from it -- not whether they agree.
-        '' Bounded by mgl rather than by a number picked here, because a
-        '' fixed tolerance is a number nobody can defend and this one
-        '' says exactly what it is for: replacing mgl must not lose
-        '' accuracy.
-        em = qgl_diff_dev( mdst, qdst, v(), kind, 0 )
-        eq = qgl_diff_dev( mdst, qdst, v(), kind, 1 )
-        if ( eq > em ) then bad = bad + 1
-        print #fh, "   "; nm; " mgl"; mn; " qgl"; qn; " differ"; df; _
-                   "   off-exact mgl"; em; " qgl"; eq
+    if ( kind < 2 ) then
+        if ( mode = QGL_M_PTEX ) then persp = 1
+        eq = qgl_diff_dev( qdst, v(), kind, persp )
+        if ( eq > bound ) then bad = bad + 1
+        print #fh, "   "; nm; " drew"; qn; " want"; want_n; _
+                   "   off-exact"; eq; " bound"; bound
+        qgl_diff_probe qdst, shape, fh
     else
-        '' Affine is exact in both, so anything but identity is a fault.
-        if ( df <> 0 ) then bad = bad + 1
-        dlo = qgl_diff_delta( mdst, qdst, 1 )
-        dhi = qgl_diff_delta( mdst, qdst, 0 )
-
-        '' AND THE ORACLE IS CALIBRATED HERE. Shape 0 holds 1/z flat at
-        '' 1, so an affine renderer is exact on it and the reference
-        '' must agree with both -- a reference with the sample point,
-        '' the rounding or the wrap wrong shows up as a deviation right
-        '' here, and the perspective verdict below would be worth
-        '' nothing without it.
-        ''
-        '' Only shape 0. Shape 1's vertices carry PLAIN u and v, which
-        '' is what an affine caller passes, so a reference that divides
-        '' by z is answering a different question; it reads 32, the
-        '' furthest two texels can be apart, and means nothing. Only
-        '' data in the perspective convention can be held to it.
-        if ( kind < 2 and shape = 0 ) then
-            em = qgl_diff_dev( mdst, qdst, v(), kind, 0 )
-            eq = qgl_diff_dev( mdst, qdst, v(), kind, 1 )
-            if ( em > 1 or eq > 1 ) then bad = bad + 1
-            print #fh, "   "; nm; " mgl"; mn; " qgl"; qn; " differ"; df; _
-                       " delta"; dlo; ".."; dhi; " off-exact"; em; eq
-        else
-            print #fh, "   "; nm; " mgl"; mn; " qgl"; qn; " differ"; df; _
-                       " delta"; dlo; ".."; dhi
-        end if
+        print #fh, "   "; nm; " drew"; qn; " want"; want_n
     end if
-    if ( kind < 2 ) then qgl_diff_probe mdst, qdst, shape, fh
     qgl_diff_case = bad
 end function
 
 ''
 '' Every case, and the total. Printing is here rather than in the caller
 '' so the flag's handler stays one line.
-
 ''
 function qglDiffAll () as integer
     dim fh as integer
     dim bad as integer
-    dim mdst as long
-    dim mtex as long
     dim qdst as long
     dim qtex as long
     '' A FILE, not PRINT and a redirect: BASIC's PRINT goes to the
@@ -484,60 +339,51 @@ function qglDiffAll () as integer
     fh = freefile
     open "qgldiff.log" for output as #fh
 
-    if ( uglInit() = 0 ) then
-        print #fh, "   FAIL uglInit"
-        print #fh, "RESULT FAIL"
-        close #fh
-        qglDiffAll = 1
-        exit function
-    end if
-    mdst = uglNew( ugl.mem, ugl.8bit, DIFF_W, DIFF_H )
-    mtex = uglNew( ugl.mem, ugl.8bit, DIFF_TW, DIFF_TW )
     if ( qglSfInit() = 0 ) then
         print #fh, "   note EMS unavailable; the surfaces here are conventional"
     end if
     qdst = qglSfNew( DIFF_W, DIFF_H, QGL_SURF_CMEM )
     qtex = qglSfNew( DIFF_TW, DIFF_TW, QGL_SURF_CMEM )
 
-    if ( mdst = 0 or mtex = 0 or qdst = 0 or qtex = 0 ) then
-        print #fh, "   FAIL a store is missing: mdst"; mdst; " mtex"; mtex; _
-                   " qdst"; qdst; " qtex"; qtex
+    if ( qdst = 0 or qtex = 0 ) then
+        print #fh, "   FAIL a store is missing: qdst"; qdst; " qtex"; qtex
         print #fh, "RESULT FAIL"
         close #fh
         qglDiffAll = 1
         exit function
     end if
 
-    '' `c` first: BC reads a parenthesised function call inside a call
-    '' statement's argument list as that statement's own argument list
-    '' and reports an argument-count mismatch.
-    bad = bad + qgl_diff_case( QGL_M_TEX,  mdst, mtex, qdst, qtex, 0, 0, _
-                               "flat-z  u  ", fh )
-    bad = bad + qgl_diff_case( QGL_M_TEX,  mdst, mtex, qdst, qtex, 1, 0, _
-                               "flat-z  v  ", fh )
-    bad = bad + qgl_diff_case( QGL_M_TEX,  mdst, mtex, qdst, qtex, 2, 0, _
-                               "flat-z     ", fh )
-    bad = bad + qgl_diff_case( QGL_M_TEX,  mdst, mtex, qdst, qtex, 0, 1, _
-                               "affine  u  ", fh )
-    bad = bad + qgl_diff_case( QGL_M_TEX,  mdst, mtex, qdst, qtex, 1, 1, _
-                               "affine  v  ", fh )
-    bad = bad + qgl_diff_case( QGL_M_TEX,  mdst, mtex, qdst, qtex, 2, 1, _
-                               "affine     ", fh )
+    '' Shape 0 holds 1/z flat at 1, so an affine renderer is exact on it
+    '' and THE ORACLE IS CALIBRATED HERE: a reference with the sample
+    '' point, the rounding or the wrap wrong shows up as a deviation on
+    '' these two, and the perspective verdict below would be worth
+    '' nothing without them.
+    bad = bad + qgl_diff_case( QGL_M_TEX,  qdst, qtex, 0, 0, _
+                               "flat-z  u  ", 2079, 1, fh )
+    bad = bad + qgl_diff_case( QGL_M_TEX,  qdst, qtex, 1, 0, _
+                               "flat-z  v  ", 2079, 1, fh )
+    bad = bad + qgl_diff_case( QGL_M_TEX,  qdst, qtex, 2, 0, _
+                               "flat-z     ", 2076, 0, fh )
+    bad = bad + qgl_diff_case( QGL_M_TEX,  qdst, qtex, 0, 1, _
+                               "affine  u  ", 2528, 1, fh )
+    bad = bad + qgl_diff_case( QGL_M_TEX,  qdst, qtex, 1, 1, _
+                               "affine  v  ", 2526, 1, fh )
+    bad = bad + qgl_diff_case( QGL_M_TEX,  qdst, qtex, 2, 1, _
+                               "affine     ", 2560, 0, fh )
 
-    '' The same vertices through the affine path FIRST. If that matches
-    '' and the perspective one does not, the data reaches both
-    '' rasterisers identically and only the correction differs -- which
-    '' is what stops a perspective failure being read as a bad fixture.
-    bad = bad + qgl_diff_case( QGL_M_TEX,  mdst, mtex, qdst, qtex, 2, 2, _
-                               "persp-in af", fh )
-    bad = bad + qgl_diff_case( QGL_M_PTEX, mdst, mtex, qdst, qtex, 0, 2, _
-                               "persp   u  ", fh )
-    bad = bad + qgl_diff_case( QGL_M_PTEX, mdst, mtex, qdst, qtex, 1, 2, _
-                               "persp   v  ", fh )
+    '' The same vertices through the affine path FIRST. If that holds
+    '' and the perspective one does not, the data reaches the rasteriser
+    '' identically and only the correction differs -- which is what
+    '' stops a perspective failure being read as a bad fixture.
+    bad = bad + qgl_diff_case( QGL_M_TEX,  qdst, qtex, 2, 2, _
+                               "persp-in af", 2565, 0, fh )
+    bad = bad + qgl_diff_case( QGL_M_PTEX, qdst, qtex, 0, 2, _
+                               "persp   u  ", 2462, 8, fh )
+    bad = bad + qgl_diff_case( QGL_M_PTEX, qdst, qtex, 1, 2, _
+                               "persp   v  ", 2507, 4, fh )
 
     qglSfFree qtex
     qglSfFree qdst
-    uglEnd
 
     if ( bad = 0 ) then
         print #fh, "RESULT PASS"

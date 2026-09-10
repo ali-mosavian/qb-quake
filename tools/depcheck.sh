@@ -22,20 +22,16 @@ trap 'rm -rf "$TMP"' EXIT
 OUT="$TMP/o"
 mkdir -p "$OUT"
 
-# NATIVE_UGL is an input to the build, not part of it: point it at a file
-# of our own so a missing or stale library cannot decide this result.
-: > "$TMP/UGLV.LIB"
-
-mods=$(make BUILD="$OUT" NATIVE_UGL="$TMP/UGLV.LIB" -p -n 2>/dev/null |
+mods=$(make BUILD="$OUT" -p -n 2>/dev/null |
        sed -n 's/^ASM_MODS := //p;s/^BAS_MODS := //p;s/^C_MODS := //p' | tr ' ' '\n')
 [[ -n "$mods" ]] || { echo "depcheck: cannot read the module lists"; exit 1; }
 
 for m in $mods; do : > "$OUT/$m.obj"; done
-: > "$OUT/stuff.ini"; : > "$OUT/base.dat"; : > "$OUT/UGLV.LIB"
+: > "$OUT/stuff.ini"; : > "$OUT/base.dat"
 : > "$OUT/FONT.FNT"
 : > "$OUT/.assets-stamp"; : > "$OUT/qrender.exe"
 
-uptodate () { make -q BUILD="$OUT" NATIVE_UGL="$TMP/UGLV.LIB" build 2>/dev/null; }
+uptodate () { make -q BUILD="$OUT" build 2>/dev/null; }
 
 fail=0
 say () { printf '   %-4s %s\n' "$1" "$2"; }

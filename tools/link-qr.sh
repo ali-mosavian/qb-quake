@@ -13,7 +13,6 @@ OUT="${1:?usage: link-qr.sh <build-dir> <bas-mods> <c-mods>}"
 BAS_MODS="${2:?usage: link-qr.sh <build-dir> <bas-mods> <c-mods>}"
 C_MODS="${3:-}"
 TOOLCHAINS="${TOOLCHAINS:-$HOME/work/other/d32x/toolchains}"
-MGL="${MGL:-$HOME/work/badlogic/mgl}"
 
 DOSBOX_BIN="${DOSBOX_BIN:-}"
 if [[ -z "$DOSBOX_BIN" ]]; then
@@ -38,7 +37,9 @@ for m in $C_MODS; do
     OBJS="$OBJS$up.OBJ+"; n=$((n+1))
     [[ $((n % 4)) -eq 0 ]] && OBJS="$OBJS"$'\r\n'
 done
-OBJS="${OBJS}M:\\LIB\\ADDONS\\U3D.OBJ"
+# The last object carries no '+': LINK reads one as a continuation and
+# takes the next line, the EXE name, for an object.
+OBJS="${OBJS%$'\r\n'}"; OBJS="${OBJS%+}"
 
 # MATHC.LIB/CL.LIB supply bcc's own codegen support (F_FTOL@, F_SCOPY@)
 # for a float-to-long cast or a whole-struct assignment -- not app-level
@@ -59,7 +60,7 @@ LDBG=""
     "/NOE /MAP$LDBG /SEG:800 $OBJS" \
     'qrender.exe' \
     'qrender.map' \
-    "V:\\LIB\\VBDCL10E.LIB+C:\\UGLV.LIB$CLIBS" \
+    "V:\\LIB\\VBDCL10E.LIB$CLIBS" \
     ';'
 } > "$OUT/link.rsp"
 
@@ -68,7 +69,6 @@ LDBG=""
   echo "@echo off"
   echo "mount c $OUT"
   echo "mount v $TOOLCHAINS/vbdos"
-  echo "mount m $MGL"
   echo "mount b $TOOLCHAINS/bcpp31"
   echo "c:"
   echo "if exist qrender.exe del qrender.exe"

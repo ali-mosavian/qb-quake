@@ -1,8 +1,8 @@
-# Native macOS assembler/linker for µGL
+# Native macOS assembler/linker
 
 `jwasm` + `jwlink` + `jwlib`, built as native ARM64 Mach-O binaries, replace
-`ml.exe`/`link16`/`lib16` under DOSBox-X for assembling and archiving µGL's
-16-bit real-mode DOS object code. No DOS emulation is involved in the
+`ml.exe`/`link16`/`lib16` under DOSBox-X for assembling qgl's 16-bit
+real-mode DOS object code, and for linking its native test suite. No DOS emulation is involved in the
 assemble/archive/link step; DOSBox-X is still how the resulting binaries get
 *run* and tested.
 
@@ -123,30 +123,3 @@ clang -o GccUnixR/jwlib GccUnixR/*.o ../orl/GccUnixR/orl.a
 ```
 
 Installed binaries: `~/work/other/d32x/toolchains/native/bin/{jwasm,jwlink,jwlib}`.
-
-## The C sub-libraries
-
-`music/`, `xsnd/` and `xsnd/snddrv/` are 15 C files, not assembler, so jwasm
-cannot build them. They are compiled by `tools/bcc.sh` with Borland C++ 3.1
-under DOSBox-X -- the compiler they were written for, which is what makes the
-`far pascal` ABI match by construction rather than by hope. One DOSBox process
-per file, so `make -j` still parallelises them; a single shared session would
-serialise the whole set.
-
-Three things that are easy to get wrong there:
-
-- **Compile from inside the source directory.** These sources use quoted
-  includes relative to their own dir (`#include "inc/modcmn.h"`), which bcc
-  resolves against the current directory, not the source file's.
-- **mgl's `inc/` must precede Borland's.** They do `#include "dos.h"` meaning
-  *mgl's* `inc/dos.h`; `C:\INCLUDE\DOS.H` otherwise shadows it and `DOSFILE`
-  and `BFILE` come out undefined in `arch.h`.
-- **Compile as C, not C++ (no `-P`).** The exports are `far pascal`; C++ would
-  mangle them to `@MODINIT$QV` and the BASIC side would never find `MODINIT`.
-
-Compiling as C then requires one source fix: `music/inc/modload.h` had an
-*anonymous* union, which is a C++ feature bcc rejects in C mode. It is now
-named (`u`), with the 12 accesses in `modmem.c`/`modload.c` updated. Four other
-files needed a stray `const` dropped or an explicit cast added, all
-semantically neutral -- that tree had drifted into a state where it compiled
-under neither mode.

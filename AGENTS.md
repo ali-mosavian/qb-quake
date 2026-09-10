@@ -26,7 +26,7 @@ it where it earns its keep, not everywhere reflexively.
 
 **`snake_case`, and this is a deliberate divergence.** The sibling BASIC
 project bans underscores because two of its three compilers reject them;
-we build with VBDOS alone, on evidence (`make evidence`), so the
+we build with VBDOS alone, on evidence (see **Toolchain**), so the
 constraint does not reach us and every procedure here is already
 `r_draw_world`, `pl_trace`, `mod_find_spawn`. `PascalCase` for UDTs. Do
 not "fix" one convention into the other -- see **Names** under House
@@ -435,19 +435,13 @@ bare names for standalone units (`model.c`, `common.c`, `screen.c`, `host.c`).
   (`Formal parameter specification illegal`) and cascades to 113 errors.
   Underscore continuation is a VBDOS extension.
 
-`make evidence` reproduces both on demand.
+Both were reproduced through the mgl-era serial build, which is gone
+with the library; the evidence is this note.
 
-**µGL must be the patched library in `ugl-patch/`**, not the stock one. See
-`ugl-patch/README.md` — µGL scaled normalised UVs to texels by `xRes-1`
-instead of `xRes`, so one repeat advanced 63 texels across a 64-wide texture
-and every face drifted in proportion to its own UV magnitude.
-
-**To rebuild µGL, build from the 0.23b source drop, not from `mgl/src`.** The
-shipped `uglv.lib` is byte-identical to 0.23b's, while `mgl/src` has diverged
-from its own binary. Modules assembled from the newer tree link without error
-and then render a **black screen**. Assembler is **MASM 6.11d** — plain 6.11
-fails on the `misc/` clippers with a macro forward-reference error, and 6.14
-is Windows-only so it will not run under DOSBox.
+**mgl is not linked, mounted or included any more.** `src/qgl/` is the
+whole graphics layer, and nothing under `tools/` reaches for a `$MGL`
+tree. The notes below that name `uglv.lib` are history, kept where the
+lesson outlives the library.
 
 **`defint a-z` means an undeclared name is a silent integer zero, not an
 error.** This is the single most productive bug family in this codebase. Real
@@ -707,94 +701,28 @@ directly and prints to **stdout**, so always capture `> run.out` too.
 - The built exe's mtime comes from the DOS guest's clock. `make` stamps it
   afterwards or its bookkeeping goes wrong in whichever direction the skew runs.
 
-## Rebuilding uGL
-
-**`tools/native/Makefile` cannot rebuild uGL from a clean checkout.** It
-sources from `$(MGL)/src`, but `uglspan.asm` lives only in
-`ugl-patch/src/ugl/`, so the build stops at "No rule to make target
-.../UGL/uglspan.obj". `build/native-mgl/UGLV.LIB` is also stale and links
-with 23 unresolved externals -- while still emitting an EXE that appears
-to build and then does nothing. Use `build/native-mgl-span/UGLV.LIB` and
-check `grep -c L2029 <builddir>/LINK.OUT` is 0 before believing any run.
-
-`tools/mglbuild.sh uglplxtg` rebuilds a module and swaps it into `uglv.lib`;
-`--all` does all 151, `--list` prints the module-to-directory map it reads out
-of the `.mk` ASMLIST declarations.
-
-- **The shipped `uglv.lib` is stale against `src/`.** `uglTriTG`, `uglTriTPG`,
-  `uglSetLUT` and `uglBlit` are all in the sources and in the module lists, and
-  in none of the built libraries. A missing symbol means the library is old,
-  not that the feature was never written -- the texture atlas design was
-  abandoned on exactly the opposite assumption about `uglBlit`.
-- **There is no dmake here.** mgl's makefiles are dmake's dialect (`.IF`, `:=`,
-  `{list}.obj`, `$(mktmp ...)`); NMAKE and Borland MAKE cannot parse it and
-  neither the toolchains nor mgl ship it. The recipes it would run are two
-  commands, which is what the script issues.
-- **The script updates the library module by module rather than rebuilding it**,
-  which leaves the three C sub-libraries -- music, xsnd, snddrv, built with
-  Borland `bcc` -- alone, so MASM is the only toolchain involved. The shipped
-  library is preserved as `uglv.lib.orig`.
-- **`ml` has no `/omf`** (MASM 6.11), and an invalid option aborts parsing of
-  every option after it. `/omf /D__CMP__=VBD` therefore assembles with
-  `__CMP__` undefined, and the error surfaces inside `lang.inc`, nowhere near
-  the cause.
-- `lib16` blocks on a prompt without a trailing `;`, the same as LINK.
-
 ## Build directories: never share one
 
 **Always point a build at a path unique to your worktree/session.** More
-than one agent works in these trees at once, and every library rule is
+than one agent works in these trees at once. Two processes writing one
+`BUILD` interleave their objects, and LINK still emits an EXE around an
+unresolved external -- `int 3` at the call site -- so the symptom is a
+run that "compiles clean and prints nothing", not a build error. Hours
+went into that when the library rules did it.
 
-    rm -f X.LIB && jwlib X.LIB +objs...
-
-so two processes building the same `BUILD` produce a library that is
-missing whatever the other was mid-write on. It does NOT fail as a build
-error. It surfaces later as
-
-    error L2029: 'SOMESYMBOL' : unresolved external
-
-naming a DIFFERENT module each time -- `uglarr`, then `emsmapex`, then
-`uglz`. And because LINK still emits an EXE with `int 3` at the
-unresolved call site, a test then "compiles clean and prints nothing",
-which reads like a hang in the code under test. Hours went into that.
-
-Three knobs, all defaulting to the old shared paths so nothing breaks:
-
-    BUILD=$PWD/build/native-mgl-<tag>     uGL libraries (tools/native/Makefile)
-    VBD_OUT=$PWD/build/vbd-<tag>          renderer objs, BENCH.BMP, bench.txt
-    BUILD_TAG=<tag>                       mgl test dirs (src/test/runtest.sh)
-
-`BUILD_TAG` defaults to a hash of `(mgl checkout, UGLLIB path)`, so a
-unique `BUILD` gives unique test directories for free. Pick a tag once
-per session and keep using it -- a tag containing `$$` changes every
-command and forces a full rebuild each time.
+    BUILD=$PWD/build/vbd-<tag>       renderer objs, the EXE   (make)
+    VBD_OUT=$PWD/build/vbd-<tag>     BENCH.BMP, bench.txt     (check.sh)
 
 `VBD_OUT` matters for a subtler reason: `check.sh` compares `BENCH.BMP`
 against the reference and reads ticks from `bench.txt`. Two runs sharing
 that directory can have the picture from one run and the timing from the
 other, and the comparison still "passes".
 
-## Building and testing in parallel
-
-Both parallelise well once the output trees are separate:
-
-    make -f tools/native/Makefile -j8 BUILD="$BUILD"     # ~11s from clean
-    UGLLIB="$BUILD/UGLV.LIB" JOBS=8 src/test/runall.sh   # ~7s, 12 tests
-
-`-j8` is safe: `UGLV.LIB` depends on the component libraries and each of
-those on its objects, so make orders them. The unsafe thing is two
-separate `make` PROCESSES, not one parallel make.
-
-Tests parallelise because each gets its own `build/test/<tag>/<name>` and
-only reads the shared library. `JOBS` defaults to half the cores -- every
-test is a DOSBox at `cycles=max`, so oversubscribing makes each slower
-rather than the set faster.
-
-**Use the dynamic core.** `runtest.sh` and `runall.sh` default to
-`CORE=dynamic`; `uarrtst` runs in ~2s under it against ~10min on
-`core=normal`. Anything reporting TIMINGS must set `CORE=normal`
-explicitly, because the recompiler throws away translations when mgl
-patches immediates into its own inner loops.
+`make -j8` is safe: one parallel make orders its own rules. The unsafe
+thing is two separate `make` PROCESSES in one directory. Anything
+reporting TIMINGS sets `CORE=normal` explicitly: the recompiler throws
+its translations away when a filler patches immediates into its own
+inner loop.
 
 ## Drive DOSBox hands-on, do not wait on files
 
@@ -888,10 +816,8 @@ five-to-fifteen minute round trip on the interpreter.
 the SAME build differ. Every mode inherits `dosbox/template.conf`'s
 75000/dynamic for exactly this reason -- override both sides or neither.
 
-A before/after is only a measurement if the map, the flags, the cycles,
-the core AND the linked `UGLV.LIB` all match. Rebuilding uGL mid-session
-silently makes the two sides different programs; `cmp` the two staged
-`UGLV.LIB`s before quoting a number. State them when quoting one.
+A before/after is only a measurement if the map, the flags, the cycles
+and the core all match. State them when quoting one.
 
 ### One run per side is not a measurement
 
@@ -905,20 +831,17 @@ are identical.
 of one then six of the other: the host drifts, and a block design loads
 that drift onto whichever arm ran second.
 
-Build the other side in a worktree so both trees stay intact, and point
-both at the SAME library:
+Build the other side in a worktree so both trees stay intact:
 
     git worktree add -q --detach /tmp/base <commit>
     cp -r data/assets /tmp/base/data/
-    NATIVE_UGL=$PWD/build/native-mgl/UGLV.LIB \
-      VBD_OUT=/tmp/base/build/o /tmp/base/tools/dosbox.sh build
+    make -C /tmp/base BUILD=/tmp/base/build/o
     cp build/vbd-x/campath.bin /tmp/base/build/o/
 
     for r in 1 2 3 4 5 6; do
       for a in "base:/tmp/base:/tmp/base/build/o" "head:$PWD:$PWD/build/vbd-x"; do
         IFS=: read t rt out <<< "$a"
-        NATIVE_UGL=$PWD/build/native-mgl/UGLV.LIB VBD_OUT=$out \
-          QFLAGS="-lm -campath" $rt/tools/dosbox.sh run > /dev/null 2>&1
+        VBD_OUT=$out QFLAGS="-lm -campath" $rt/tools/dosbox.sh run > /dev/null 2>&1
         echo "$t $(grep '^ft_mean ' $out/bench.txt | cut -d' ' -f2)"
       done
     done
@@ -1740,8 +1663,10 @@ sub-span divide is back (`b8span.asm`, `PDIV`), and `t09rs` case 14 --
 u constant while 1/z falls 4x across the span, every pixel must read the
 same texel -- fails on mgl's arrangement and passes on this one.
 
-`-qgldiff` now reads 8 and 4: mgl parity, not the 6 and 2, and the
-assertion holds on equality. The remaining two texels are WHERE the span
+`-qgldiff` read 8 and 4 against mgl: parity, not the 6 and 2, and the
+assertion held on equality. mgl's arm is gone with the library, so 8
+and 4 are now the bounds it asserts, with the coverage every case drew
+when the two still agreed pixel for pixel. The remaining two texels are WHERE the span
 is sampled: `65536 - frac` puts the first sample on the pixel's right
 edge in the perspective path, whose converter adds no half pixel
 (F2FX_tp2d). Sampling at the centre (`32768 - frac`) reads 7 and 3 --
@@ -1988,6 +1913,15 @@ forward differencing in BASIC, and `ugl.bi`, `uglu.bi`, `dos.bi`,
 `arch.bi`, `font.bi`, `pal.bi` and `ems.bi` are out of every module
 but the three oracles; `PalRgb` moved to bspfile.bi so mod_tex reads
 pal.raw through it instead of mgl's `tRGB`.
+
+**And then the oracles' mgl halves and the library itself.** `-qgldiff`
+keeps the exact-answer oracle and pins coverage and texel distance to
+the figures of the last differential run; `-qglarr`'s reference is the
+fixture read straight into a BASIC array, and its hand-fill maps pages
+through `qglGemMap`. `UGLV.LIB` is off the LINK line with mgl's `U3D.OBJ`,
+no tool mounts the mgl tree, `ugl-patch/` and the native mgl build are
+deleted, and the qgl benches that raced mgl went with them. The bench
+stayed IDENTICAL through every step.
 
 **`sc_selftest` wrote its row through mgl and read it back through
 mgl, on a qgl Surface.** `uglRowWriteBuff`/`uglRowRead` take the

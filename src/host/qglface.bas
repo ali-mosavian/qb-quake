@@ -23,8 +23,6 @@ option explicit
 
 defint a-z
 
-'$include: 'u3d.bi'
-'$include: 'ugl.bi'
 '$include: 'qgl.bi'
 
 const OFSW = 3

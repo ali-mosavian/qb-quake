@@ -1,12 +1,11 @@
 #!/bin/bash
-# Build or run bsp_pvs under DOSBox-X on the host, no DOS machine needed.
+# Run qrender under DOSBox-X on the host, no DOS machine needed. The
+# build is the Makefile's.
 #
-#   tools/dosbox.sh build [qb45|pds|vbd]   compile + link  (default vbd)
 #   tools/dosbox.sh run   [map.bsp]        headless run, screenshots via the 's' key
 #   tools/dosbox.sh viz   [map.bsp]        emit a windowed config to watch it live
 #
 # Env overrides:
-#   MGL          uGL tree            (default ~/work/badlogic/mgl)
 #   TOOLCHAINS   compiler collection (default ~/work/other/d32x/toolchains)
 #   DOSBOX_BIN   dosbox-x binary     (default: first found on PATH)
 #   TIMEOUT      seconds             (default 300 build / 900 run)
@@ -16,16 +15,11 @@
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-MGL="${MGL:-$HOME/work/badlogic/mgl}"
 TOOLCHAINS="${TOOLCHAINS:-$HOME/work/other/d32x/toolchains}"
 
-cmd="${1:-build}"; arg="${2:-}"
+cmd="${1:-run}"; arg="${2:-}"
 # extra qrender arguments for the run/viz recipes, e.g. QFLAGS=-lm
 QFLAGS="${QFLAGS:-}"
-
-for d in "$MGL/inc" "$MGL/lib"; do
-    [[ -d "$d" ]] || { echo "not found: $d  (set MGL)" >&2; exit 1; }
-done
 
 DOSBOX_BIN="${DOSBOX_BIN:-}"
 if [[ -z "$DOSBOX_BIN" ]]; then
@@ -52,182 +46,10 @@ launch () {   # $1 = conf file, $2 = timeout
 }
 
 case "$cmd" in
-build)
-    tc="${arg:-vbd}"
-    case "$tc" in
-      vbd)  cdir=vbdos;  bc='V:\BIN\BC.EXE /O /FPi /R /G3 /E';         lnk='V:\BIN\LINK.EXE';  rt='V:\LIB\VBDCL10E.LIB';   ugl='C:\UGLV.LIB' ;;
-      pds)  cdir=pds71;  bc='V:\BINB\BC.EXE /O /FPi /R /G2 /FS /LR /ES'; lnk='V:\BINB\LINK.EXE'; rt='V:\LIB\BCL71EFR.LIB'; ugl='M:\LIB\RELEASE\PDS\UGLP.LIB' ;;
-      qb45) cdir=qb45;   bc='V:\BC.EXE /O /FPi /R';                    lnk='V:\LINK.EXE';      rt='V:\LIB\BCOM45.LIB';    ugl='M:\LIB\RELEASE\QB\UGL.LIB' ;;
-      *) echo "unknown target: $tc (want vbd, pds or qb45)" >&2; exit 1 ;;
-    esac
-    out="$ROOT/build/$tc"
-    ## VBD_OUT relocates the vbd tree only -- it is what check.sh isolates
-    ## so two sessions do not share BENCH.BMP and bench.txt.
-    [ "$tc" = vbd ] && out="${VBD_OUT:-$out}"
-    mkdir -p "$out"
-    cp "$ROOT"/src/*.bas "$ROOT"/src/*.bi "$ROOT"/data/stuff.ini "$ROOT"/data/base.dat "$out/"
-
-    ##
-    ## qrender's own non-BASIC (C) modules -- everything else external is
-    ## uGL -- compiled with bcc -3 -mm -Ox, same flags tools/bcc.sh uses
-    ## for mgl's own C. Each has to compile in THIS session, interleaved
-    ## into build.bat between the "del *.obj" cleanup and the link -- a
-    ## separate, earlier bcc session tried first, and its object file sat
-    ## in $out for exactly as long as it took build.bat's own "del *.obj"
-    ## to delete it. B: (bcpp31) rides along on the same @PRE@ hook that
-    ## mounts nothing for every other target.
-    ##
-    CMODS="$(cd "$ROOT/src" && ls *.c 2>/dev/null | sed 's/\.c$//')"
-    ## .asm hot modules (qr_prof stubs, r_sweep): assembled on the HOST
-    ## with jwasm, same flags as the Makefile -- this flow has no guest
-    ## assembler. Assembled to *.OB_ -- an extension del *.obj cannot match --
-    ## then copied to the link name by the bat, after its del.
-    AMODS="$(cd "$ROOT/src" && ls *.asm 2>/dev/null | sed 's/\.asm$//')"
-    for m in $AMODS; do
-        "$TOOLCHAINS/native/bin/jwasm" -c -Cp -Zg -omf \
-            -Fo"$out/$(echo "$m" | tr 'a-z' 'A-Z').OB_" \
-            "$ROOT/src/$m.asm" > /dev/null || {
-                echo "jwasm failed on $m.asm" >&2; exit 1; }
-    done
-    cp "$ROOT"/src/*.c "$out/" 2>/dev/null || true
-    cp "$ROOT"/src/*.h "$out/" 2>/dev/null || true
-    BCPP31="$TOOLCHAINS/bcpp31"
-    ##
-    ## uGL comes from the NATIVE build (tools/native/Makefile), not from a
-    ## prebuilt lib in the mgl tree: uglBuildSurf and the view API only exist
-    ## in the one we assemble ourselves, and mixing a stale shipped lib with
-    ## current headers is the trap mgl-lib-stale-vs-headers describes.
-    ##
-    ## NATIVE_UGL can point elsewhere. Two sessions building mgl into the
-    ## same build/native-mgl overwrite each other's objects mid-archive,
-    ## which shows up as symbols missing from a library whose sources
-    ## plainly define them -- and as tests that pass and fail from
-    ## identical source minutes apart.
-    NATIVE_UGL="${NATIVE_UGL:-$ROOT/build/native-mgl/UGLV.LIB}"
-    [[ -f "$NATIVE_UGL" ]] || {
-        echo "no $NATIVE_UGL -- run: make -f tools/native/Makefile" >&2; exit 1; }
-    cp "$NATIVE_UGL" "$out/UGLV.LIB"
-    # Preprocessed assets (tools/mkassets.py): the .bmp textures texLoadAll
-    # hands to uglNewBMPEx, and the .bld lumps model.bas BLOADs straight into
-    # its arrays. Copy the whole directory -- naming the extensions here is
-    # how the .bld files silently failed to stage the first time.
-    cp "$ROOT"/data/assets/. "$out/" -R 2>/dev/null || \
-        cp -R "$ROOT"/data/assets/* "$out/" 2>/dev/null || true
-    # every .bas except the superseded rewrite is a module of the program
-    # main must come first: it carries the module-level main code
-    MODS="main $(cd "$ROOT/src" && ls *.bas | sed 's/\.bas$//' | grep -vx main | tr '\n' ' ')"
-    ##
-    ## Four objects per line, not one giant line: LINK's response file
-    ## has its own line-length limit distinct from the DOS 127-char
-    ## command-line cap the response file itself exists to route around
-    ## -- adding h_bench.bas/h_frame.bas pushed a one-line OBJS list past
-    ## it ("LINK : fatal error L1022: response line too long"). A '+' at
-    ## the end of a line continues the object list onto the next one,
-    ## same as it already separates names on one line.
-    ##
-    OBJS=""; n=0
-    for m in $MODS; do
-        OBJS="$OBJS$m.obj+"
-        n=$((n+1))
-        [[ $((n % 4)) -eq 0 ]] && OBJS="$OBJS"$'\r\n'
-    done
-    for m in $CMODS; do
-        OBJS="$OBJS$(echo "$m" | tr 'a-z' 'A-Z').OBJ+"
-        n=$((n+1))
-        [[ $((n % 4)) -eq 0 ]] && OBJS="$OBJS"$'\r\n'
-    done
-    for m in $AMODS; do
-        OBJS="$OBJS$(echo "$m" | tr 'a-z' 'A-Z').OBJ+"
-        n=$((n+1))
-        [[ $((n % 4)) -eq 0 ]] && OBJS="$OBJS"$'\r\n'
-    done
-    OBJS="${OBJS}M:\\LIB\\ADDONS\\U3D.OBJ"
-
-    # one BC line per module, then one LINK line naming every object.
-    # u3d is a uGL addon and is not inside the uglX.lib -- link it explicitly.
-    {
-        printf '%s\r\n' '@echo off' 'if exist result.txt del result.txt' \
-                          'if exist bc.out del bc.out' \
-                          'if exist cc_*.out del cc_*.out' \
-                          'if exist *.obj del *.obj' 'if exist qrender.exe del qrender.exe'
-        for m in $CMODS; do
-            printf '%s\r\n' "B:\\BIN\\BCC.EXE -c -B -3 -mm -Ox -IW:\\ -IB:\\INCLUDE $m.c > cc_$m.out"
-        done
-        for m in $AMODS; do
-            printf '%s\r\n' "copy $(echo "$m" | tr 'a-z' 'A-Z').OB_ $(echo "$m" | tr 'a-z' 'A-Z').OBJ > nul"
-        done
-        for m in $MODS; do printf '%s\r\n' "$bc $m.bas, $m.obj; >> bc.out"; done
-        printf '%s\r\n' 'if not exist main.obj goto bcfail'
-        for m in $CMODS; do
-            printf '%s\r\n' "if not exist $(echo "$m" | tr 'a-z' 'A-Z').OBJ goto ccfail"
-        done
-        printf '%s\r\n' \
-          "$lnk @link.rsp > link.out" \
-          'if not exist qrender.exe goto linkfail' \
-          'echo PASS > result.txt' \
-          'goto end' \
-          ':bcfail' \
-          'echo BCFAIL > result.txt' \
-          'goto end' \
-          ':ccfail' \
-          'echo CCFAIL > result.txt' \
-          'goto end' \
-          ':linkfail' \
-          'echo LINKFAIL > result.txt' \
-          ':end'
-    } > "$out/build.bat"
-
-    # LINK's command line would blow past the DOS 127-char limit once there
-    # are several modules -- and a truncated line loses the trailing ';' that
-    # suppresses its prompts, so it just sits there waiting. Response file.
-    #
-    # /MAP writes the PUBLICS into qrender.map. Without it the map carries
-    # segments only, and a debugger can say "LMEM+0x943" but not which
-    # routine that is.
-    #
-    # MATHC.LIB/CL.LIB (bcpp31, B:) supply F_FTOL@/F_SCOPY@ and their kin --
-    # bcc's own codegen support for a float-to-long cast or a whole-struct
-    # assignment, emitted as calls rather than inlined regardless of what
-    # the C source does. Not the app-level stdlib (fopen et al, deliberately
-    # avoided elsewhere): a C module that casts a float to long or copies a
-    # struct by value needs these on this compiler, full stop. Only pulled
-    # in when a C module is actually part of the build.
-    CLIBS=""
-    [[ -n "$CMODS" ]] && CLIBS="+B:\\LIB\\MATHC.LIB+B:\\LIB\\CL.LIB"
-    printf '%s\r\n' \
-      "/NOE /MAP /SEG:800 $OBJS" \
-      'qrender.exe' \
-      'qrender.map' \
-      "$rt+$ugl$CLIBS" \
-      ';' > "$out/link.rsp"
-
-    conf="$out/dosbox.conf"
-    sed -e "s|@CDRIVE@|$out|" -e "s|@VDRIVE@|$TOOLCHAINS/$cdir|" -e "s|@MDRIVE@|$MGL|" \
-        -e "s|@BAT@|build.bat|" -e "s|@PRE@|mount b $BCPP31|" \
-        -e "/^mount b /a\\
-mount t $TOOLCHAINS/tasm50/TASM/BIN\\
-path b:\\\\bin;t:" \
-        "$ROOT/dosbox/template.conf" > "$conf"
-
-    launch "$conf" "${TIMEOUT:-300}"
-
-    # LINK emits an EXE even when a symbol is unresolved -- the call site is
-    # patched to an int 3 and the program dies the moment it reaches it. The
-    # batch file's "did an exe appear" test therefore reported PASS for a
-    # build that could not run, so the authoritative check happens here.
-    if grep -qiE "unresolved external|error L[0-9]" "$out/link.out" 2>/dev/null; then
-        echo "LINKERR" > "$out/result.txt"
-    fi
-
-    echo "== $tc: $(cat "$out/result.txt" 2>/dev/null || echo NO-RESULT)"
-    [[ -s "$out/bc.out"   ]] && sed -n '4,40p' "$out/bc.out"
-    [[ -s "$out/link.out" ]] && grep -i error "$out/link.out" || true
-    [[ -f "$out/qrender.exe" ]] && ls -l "$out/qrender.exe"
-    ;;
 run)
     map="${arg:-dm3ish.bsp}"
     out="${VBD_OUT:-$ROOT/build/vbd}"
-    [[ -f "$out/qrender.exe" ]] || { echo "no exe; run: tools/dosbox.sh build" >&2; exit 1; }
+    [[ -f "$out/qrender.exe" ]] || { echo "no exe; run: make" >&2; exit 1; }
     cp "$ROOT/data/$map" "$out/"
     ## Screenshot names only -- scrn*.bmp from the 's' key, bench.bmp from
     ## the benchmark. A blanket *.bmp takes the staged texture assets with
@@ -256,7 +78,7 @@ run)
     ## dynamic core, 40000 cycles (about a Pentium 75). A before/after is
     ## meaningless if the emulated CPU differs between the runs, and
     ## cycles=max makes it differ with host load.
-    sed -e "s|@CDRIVE@|$out|" -e "s|@VDRIVE@|$out|" -e "s|@MDRIVE@|$out|" \
+    sed -e "s|@CDRIVE@|$out|" -e "s|@VDRIVE@|$out|" \
         -e "s|@BAT@|run.bat|" -e "s|@PRE@|autotype -w 150 -p 20.0 s s s s s s s s s s s s|" \
         -e "s|^cycles=75000$|cycles=${CYCLES:-75000}|" \
         -e "s|^core=dynamic$|core=${CORE:-dynamic}|" \
@@ -281,13 +103,13 @@ viz)
     # that exit; watching does not.
     map="${arg:-dm3ish.bsp}"
     out="${VBD_OUT:-$ROOT/build/vbd}"
-    [[ -f "$out/qrender.exe" ]] || { echo "no exe; run: tools/dosbox.sh build" >&2; exit 1; }
+    [[ -f "$out/qrender.exe" ]] || { echo "no exe; run: make" >&2; exit 1; }
     cp "$ROOT/data/$map" "$out/"
     conf="$out/dosbox-viz.conf"
     ## Every -e must precede the file operand: BSD sed (macOS) does not
     ## permute options after it, so the trailing -e's were being opened as
     ## filenames and none of the viz-specific edits applied.
-    sed -e "s|@CDRIVE@|$out|" -e "s|@VDRIVE@|$out|" -e "s|@MDRIVE@|$out|" \
+    sed -e "s|@CDRIVE@|$out|" -e "s|@VDRIVE@|$out|" \
         -e "s|@BAT@|qrender.exe $map $QFLAGS|" -e "s|@PRE@||" \
         -e "s|^cycles=75000$|cycles=${CYCLES:-75000}|" \
         -e "s|^core=dynamic$|core=${CORE:-dynamic}|" \

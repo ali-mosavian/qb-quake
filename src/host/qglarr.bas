@@ -18,24 +18,18 @@ option explicit
 '' tests the STORE, and a round trip only needs both sides to read the
 '' same file the same way.
 ''
-'' mgl's MEM store is the reference. It is the path production takes and
-'' the one whose flatness is established, and using it rather than a
-'' second qgl store means a fault common to both cannot pass.
+'' The FILE is the reference, read whole into a BASIC array with no store
+'' in the way. Until ba52cdd it was mgl's MEM store; a second qgl store
+'' would let a fault common to both pass.
 ''
 
 defint a-z
 
-'' dos.bi FIRST: arch.bi says so in its own header.
-'$include: 'u3d.bi'
-'$include: 'ugl.bi'
-'$include: 'dos.bi'
-'$include: 'arch.bi'
-'$include: 'ems.bi'
 '$include: 'qgl.bi'
 
 const ARR_WIN = 16384
 const ARR_REC = 6
-const ARR_SLOT = 2              '' mgl reads through 0, writes 1, depth 3
+const ARR_SLOT = 2              '' free: -qglarr runs before mod_open
 
 const NPROBE = 16
 const NFIX = 3                  '' the three that must be named, not sampled
@@ -58,6 +52,8 @@ declare function qglArHandle ( byval h as long ) as integer
 declare function qglArPerpg ( byval h as long ) as integer
 declare function qglArPages ( byval h as long ) as integer
 declare sub qglArFree ( byval h as long )
+declare function qglGemMap ( byval h as integer, byval pg as integer, _
+                             byval slot as integer ) as integer
 declare function qglArLoadBas ( _
     flname as string, _
     byval typ as integer, _
@@ -106,9 +102,9 @@ function qgl_arr_count ( n as long ) as integer
 end function
 
 ''
-'' Streams the fixture into a store one window at a time, through the
-'' accessor. This is uglArrLoad's job done by the caller: the archive
-'' reader is mgl's and proven, and what qgl owns is where the bytes land.
+'' Streams the fixture into a store one window at a time, by explicit
+'' page: qglArLoad's job done by the caller, so that where the bytes land
+'' is the only thing the store gets to decide.
 ''
 '' A page carries perpg * ARR_REC bytes, NOT ARR_WIN. 16384 \ 6 is 2730
 '' records = 16,380, and the remaining 4 bytes are padding the store
@@ -141,7 +137,7 @@ function qgl_arr_fill ( byval h as long, byval cnt as long ) as integer
 
     for pg = 0 to npg - 1
         ''
-        '' emsMapEx DIRECTLY, by explicit page index, at offset 0. NOT
+        '' qglGemMap DIRECTLY, by explicit page index, at offset 0. NOT
         '' qglArMap: a test whose write path and read path share the
         '' mapping arithmetic cannot see a fault in it. Pinning the page
         '' to 0 moved the loader and the reader together -- the file was
@@ -149,7 +145,7 @@ function qgl_arr_fill ( byval h as long, byval cnt as long ) as integer
         '' the same addresses -- and the round trip still agreed, so a
         '' mutation that broke paging outright stayed green.
         ''
-        sg = emsMapEx( hnd, pg, ARR_SLOT )
+        sg = qglGemMap( hnd, pg, ARR_SLOT )
         if ( sg = 0 ) then
             qglFileClose u
             exit function
@@ -171,12 +167,11 @@ end function
 
 function qglArrAll () as integer
     dim lg as integer
+    dim u as integer
     dim i as integer
     dim cnt as long
     dim perpg as long
-    dim h as long
     dim hq as long
-    dim mapped as long
     dim p as long
     dim idx(NPROBE) as long
     dim ref(NPROBE) as long
@@ -190,6 +185,7 @@ function qglArrAll () as integer
     dim ptr(NFIX) as long
     dim a(0) as ArrRec
     dim b(0) as ArrRec
+    dim raw(0) as ArrRec
     dim hl as long
     dim got2(NPROBE) as long
     dim ldlo as integer
@@ -240,23 +236,33 @@ function qglArrAll () as integer
     next i
 
     ''
-    '' the reference: mgl, MEM, flat, one window
+    '' the reference: the file, flat, in a BASIC array. The address is
+    '' taken right before the read -- a far-heap array moves on the next
+    '' allocation, and nothing allocates between these two lines.
     ''
-    redim a(0) as ArrRec
-    h = uglArrLoad( "assets.zip::faces.pag", UGL.MEM, ARR_REC, cnt, 0 )
-    if ( h = 0 ) then
-        print #lg, "   FAIL no mgl MEM store for the reference"
+    redim raw( cnt - 1 ) as ArrRec
+    u = qglFileOpenBas( "assets.zip::faces.pag" )
+    if ( u = 0 ) then
+        print #lg, "   FAIL faces.pag would not open for the reference"
         print #lg, "RESULT FAIL"
         close #lg
         qglArrAll = 1
         exit function
     end if
-    erase a
-    mapped = uglArrMap( h, a(), 0 )
+    p = clng( varseg( raw(0) ) ) * 65536 + ( clng( varptr( raw(0) ) ) and 65535 )
+    if ( qglFileRead( u, p, cnt * ARR_REC ) <> cnt * ARR_REC ) then
+        print #lg, "   FAIL faces.pag read short for the reference"
+        print #lg, "RESULT FAIL"
+        qglFileClose u
+        close #lg
+        qglArrAll = 1
+        exit function
+    end if
+    qglFileClose u
     for i = 0 to NPROBE - 1
-        ref(i) = clng( a( idx(i) ).a ) * 65536 + ( clng( a( idx(i) ).b ) and 65535 )
+        ref(i) = clng( raw( idx(i) ).a ) * 65536 + ( clng( raw( idx(i) ).b ) and 65535 )
     next i
-    uglArrFree h
+    erase raw
 
     ''
     '' the subject: qgl, EMS, windowed, read through the accessor -- one
@@ -380,9 +386,9 @@ function qglArrAll () as integer
         end if
     next i
     print #lg, "   probes"; nlo; "below the window,"; nhi; "at or above"
-    print #lg, "   mismatch vs mgl MEM: below"; badlo; " above"; badhi
+    print #lg, "   mismatch vs the file: below"; badlo; " above"; badhi
     if ( firstbad >= 0 ) then print #lg, "   first at element"; firstbad
-    print #lg, "   qglArLoad vs mgl MEM: below"; ldlo; " above"; ldhi
+    print #lg, "   qglArLoad vs the file: below"; ldlo; " above"; ldhi
 
     ''
     '' The verdict is the LAST line, always. check.sh reads tail -1 and
@@ -405,7 +411,7 @@ function qglArrAll () as integer
         print #lg, "RESULT FAIL"
         bad = 1
     else
-        print #lg, "   qgl EMS matches mgl MEM across the window boundary,"
+        print #lg, "   qgl EMS matches the file across the window boundary,"
         print #lg, "   on both sides and at the last record, hand-filled"
         print #lg, "   and through qglArLoad"
         print #lg, "RESULT PASS"
