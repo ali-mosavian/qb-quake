@@ -29,7 +29,7 @@
  *
  * Two costs this removes outright, both found by measurement and
  * neither addressed by the earlier port:
- *   - the per-face rdtsc brackets. sys_rdtsc is sndDebugStat&(6) divided
+ *   - the per-face rdtsc brackets. sys_rdtsc is qglTmrCycles divided
  *     by cyc_per_us: a far call plus a 32-bit divide, 4 to 6 times per
  *     face, purely to measure. Only the BUILD bracket survives here,
  *     because a build is rare (a cache miss) and its cost is worth

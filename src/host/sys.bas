@@ -63,6 +63,7 @@ declare function qglMemAvail ( byval what as integer ) as long
 '' on both exits.
 declare sub qglTmrInit ( byval hz as integer )
 declare function qglTmrTicks () as long
+declare function qglTmrCycles () as long
 declare sub qglTmrShutdown ()
 
 ''
@@ -355,19 +356,17 @@ sub sys_time_init
 
     t0 = timer
     c0 = qglTmrTicks()
-    r0 = sndDebugStat&( 6 )
+    r0 = qglTmrCycles()
 
     do
     loop until ( timer - t0 >= 0.5 )
 
     elapsed = timer - t0
     c1 = qglTmrTicks()
-    r1 = sndDebugStat&( 6 )
+    r1 = qglTmrCycles()
 
     ''
-    '' sndDebugStat(6) is __snd_tsc -- RDTSC, already declared in snd.bi
-    '' and already linked (the mixer profiles itself with it), so this
-    '' costs nothing new to the library. Calibrated in the SAME window as
+    '' qglTmrCycles is RDTSC. Calibrated in the SAME window as
     '' tick_hz, against the SAME TIMER-aligned reference, for the same
     '' reason: DOSBox ties RDTSC to cycles actually executed under the
     '' pinned `cycles=` setting, not wall-clock time, which is far more
@@ -478,7 +477,7 @@ end function
 
 ''::::::::::
 '' name: sys_rdtsc
-'' desc: Microseconds on the RDTSC clock, via sndDebugStat(6) -- NOT raw
+'' desc: Microseconds on the RDTSC clock, via qglTmrCycles -- NOT raw
 ''       cycles. The raw counter measured at ~76 million a second on this
 ''       machine, not "a few million" as first assumed, which wraps a
 ''       signed 32-bit long in about 28 seconds; a run that long or
@@ -505,7 +504,7 @@ end function
 ''       clamp in sys_time_init exists specifically to keep off zero.
 ''::::::::::
 function sys_rdtsc ( ) as long
-    sys_rdtsc = sndDebugStat&( 6 ) \ cyc_per_us
+    sys_rdtsc = qglTmrCycles() \ cyc_per_us
 end function
 
 ''::::::::::

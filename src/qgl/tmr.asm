@@ -1,6 +1,6 @@
 ;; tmr.asm -- the tick: the PIT at a rate of our choosing, counted.
 ;;
-;; name: qglTmrInit / qglTmrTicks / qglTmrHz / qglTmrShutdown
+;; name: qglTmrInit / qglTmrTicks / qglTmrHz / qglTmrShutdown / qglTmrCycles
 ;; desc: Hooks INT 8, runs channel 0 in rate mode at the rate asked for
 ;;       and counts every interrupt into a dword the caller reads. The
 ;;       BIOS handler keeps its 18.2 Hz: the divisor accumulates per tick
@@ -19,6 +19,9 @@
 ;;       - qglTmrShutdown puts the PIT back to the BIOS setting, mode 3
 ;;         with a divisor of 0, and the vector back. Idempotent: the
 ;;         error exit and the normal one both call it.
+;;       - qglTmrCycles is the low half of RDTSC, which DOSBox ties to
+;;         cycles executed rather than to the wall clock. It came from
+;;         mgl's mixer, sndDebugStat(6), before this.
 
                 .model  medium, pascal
                 .386
@@ -141,6 +144,17 @@ qglTmrHz      proc    public
                 mov     dx, W cs:qgl$tmr_hz+2
                 ret
 qglTmrHz      endp
+
+
+;;::::::::::
+;; qglTmrCycles () -> dx:ax = RDTSC, low 32 bits
+;;::::::::::
+qglTmrCycles  proc    public
+                db      0Fh, 31h                ;; rdtsc: .386 has no mnemonic
+                mov     edx, eax
+                shr     edx, 16
+                ret
+qglTmrCycles  endp
 
 
 ;;::::::::::::::

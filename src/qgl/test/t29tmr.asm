@@ -20,6 +20,7 @@ qglTmrInit      proto   far :word
 qglTmrTicks     proto   far
 qglTmrHz        proto   far
 qglTmrShutdown  proto   far
+qglTmrCycles    proto   far
 
 BIOS_TICK       equ     6Ch             ;; 0040:006C, dword
 
@@ -30,6 +31,7 @@ n_ticks         db      'reached 1000 ticks     $'
 n_bios          db      'BIOS advanced 16..20   $'
 n_back          db      'vector restored        $'
 n_stop          db      'counter stopped        $'
+n_tsc           db      'cycles advance         $'
 
 old_ofs         dw      0
 old_seg         dw      0
@@ -145,6 +147,20 @@ tmain           proc    far public uses bx cx dx si di es
                 sub     eax, t2
                 mov     got, ax
                 CHK     n_stop, got, 0
+
+                ;; two reads a BIOS tick apart: cycles ran, so the later is larger
+                invoke  qglTmrCycles
+                SAVEP   t2
+                invoke  bios_wait, 1
+                invoke  qglTmrCycles
+                SAVEP   t3
+                mov     eax, t3
+                sub     eax, t2
+                mov     got, 0
+                cmp     eax, 1000
+                jbe     @F
+                mov     got, 1
+@@:             CHK     n_tsc, got, 1
 
                 ret
 tmain           endp
