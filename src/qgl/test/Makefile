@@ -41,7 +41,7 @@ QGLSRC := $(QGL)/file.asm $(QGL)/vga.asm $(QGLCORE) \
           $(QGL)/txt.asm $(QGL)/dr.asm \
           $(QGL)/z.asm $(QGL)/clip.asm $(QGL)/rs.asm $(QGL)/sb.asm \
           $(QGL)/zip.asm $(QGL)/ar.asm \
-          $(QGL)/log.asm $(QGL)/tmr.asm \
+          $(QGL)/log.asm $(QGL)/tmr.asm $(QGL)/kbd.asm $(QGL)/mouse.asm \
           $(QGL)/b8/b8fill.asm $(QGL)/b8/b8span.asm
 # Objects are DERIVED from QGLSRC, never listed again. Hand-listing them
 # meant every new module had to be added in three places, and twice a
@@ -131,6 +131,12 @@ $(B)/%/sys.zip: $(B)/%/colmap.bin
 $(B)/%/fgeom.bin: $(ROOT)/data/assets/assets.zip
 	@mkdir -p $(@D)
 	@unzip -p $< fgeom.bin > $@
+
+# t30in wants a key typed at it; run1.sh reads the file.
+$(B)/t30in/pass: $(B)/t30in/keys
+$(B)/t30in/keys:
+	@mkdir -p $(@D)
+	@echo a > $@
 
 $(B)/%/pass: $(B)/%/t.exe $(B)/%/$(FONT) $(B)/%/fgeom.bin $(B)/%/assets.zip $(B)/%/colmap.bin $(B)/%/sys.zip run1.sh
 	@sh run1.sh $(DOSBOX) $(@D)

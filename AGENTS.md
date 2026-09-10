@@ -1970,9 +1970,9 @@ code failed too, which is how the loop above was found.
 246,848, and the difference is BASIC's heap, not free memory --
 `emsCheck` is `qglGemFrame`, and `-dumptex` reads its palette from
 `pal.raw` instead of the DAC. The timer is `qglTmrInit`/`qglTmrTicks`/
-`qglTmrShutdown`, `t29tmr` proving the BIOS chain and the restore. What
-mgl still holds is the keyboard and the mouse, and `uglInit`/`uglEnd`
-around them.
+`qglTmrShutdown`, `t29tmr` proving the BIOS chain and the restore, and
+`qglTmrCycles` is the RDTSC that came from the sound mixer. What mgl
+still holds is `uglInit`/`uglEnd`: nothing of its runs a frame.
 
 **`sc_selftest` wrote its row through mgl and read it back through
 mgl, on a qgl Surface.** `uglRowWriteBuff`/`uglRowRead` take the
@@ -1986,6 +1986,30 @@ it; `check.sh` reads `sc_test` and wants 1. Aiming the write at row
 126 reads -12 through that gate. Every other `-1..-55` was the same
 instrument reporting on itself, so treat a green selftest as one
 measurement, not fifty-five.
+
+## Retiring mgl: the keyboard and the mouse
+
+`src/qgl/kbd.asm` is mgl's INT 9 hook with the same table -- a word per
+scancode, -1 down, word 0 the last code, `Keys` in `in.bi` keeping
+TKBD's names so `g.env.keyboard.w` reads as before. `src/qgl/mouse.asm`
+keeps its own cursor from the driver's mickeys, one pixel each, clipped
+to the mode, and `qglMousePos` places it -- which is how the spawn yaw
+and a teleport's facing are applied, so the clip range is part of the
+picture. Both unhook on either exit; mgl did it from `uglEnd`'s queue.
+
+**`t30in` drives the keyboard hook through the emulator, not a call.**
+`run1.sh` types whatever a test's `keys` file says a second in, via
+DOSBox-X's `AUTOTYPE`, and the test spins on the table until scancode
+1Eh comes down and goes up, bounded by the BIOS tick. The mouse cannot
+be moved headlessly, so `qglMouseEvent` is public and the test calls it
+the way the driver does, mickeys in `si:di` and buttons in `bx`. Mutated
+three ways: index by scancode instead of scancode*2, no word 0, no clip.
+
+**A multi-line mutation pattern misses a CRLF file.** The first clip
+mutation "passed": its pattern spanned two lines with `\n` between,
+matched nothing in a `\r\n` file, the assert failed inside a helper
+the script did not stop on, and the unmutated source ran green. One
+line per pattern, or match the line ending.
 
 ## `-nostats` makes the picture deterministic
 

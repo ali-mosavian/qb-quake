@@ -14,12 +14,11 @@ option explicit
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
 '$include: 'pal.bi'
-'$include: 'kbd.bi'
+'$include: 'in.bi'
 '$include: 'dos.bi'
 '$include: 'arch.bi'
 '$include: 'uglu.bi'
 '$include: 'font.bi'
-'$include: 'mouse.bi'
 '$include: 'bspfile.bi'
 '$include: 'snd.bi'
 '$include: 'mod.bi'
@@ -147,10 +146,10 @@ end function
 
 ''::::::::::
 '' name: vid_init_ugl
-'' desc: mgl's library init, and no longer its video mode. mgl still holds
-''       the timer, the keyboard and the mouse -- and uglInit is what
-''       links the upper memory blocks and sets the allocation strategy
-''       every qglMemAlloc lands in them by.
+'' desc: mgl's library init, and no longer its video mode. Nothing of
+''       mgl's runs a frame now; uglInit stays because it is what links
+''       the upper memory blocks and sets the allocation strategy every
+''       qglMemAlloc lands in them by.
 ''::::::::::
 sub vid_init_ugl
     if ( uglInit() = FALSE ) then 

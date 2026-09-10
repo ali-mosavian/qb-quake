@@ -13,11 +13,9 @@ option explicit
 '' one allocator, nothing to bridge.
 ''
 '$include: 'u3d.bi'
-'$include: 'ugl.bi'         '' RECT, for mouse.bi below; no call goes through it
-'$include: 'kbd.bi'
+'$include: 'in.bi'
 '$include: 'dos.bi'
 '$include: 'arch.bi'
-'$include: 'mouse.bi'       '' MOUSEINF, which q_env.bi names
 '$include: 'bspfile.bi'
 '$include: 'snd.bi'
 '$include: 'mod.bi'

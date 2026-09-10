@@ -329,8 +329,8 @@ type Env
     h_font      as long
     h_back_bdc  as long
     
-    mouse       as MOUSEINF
-    keyboard    as TKBD
+    mouse       as MouseInf
+    keyboard    as Keys
     
     sec_mark    as long                     '' tick of the last fps roll
     

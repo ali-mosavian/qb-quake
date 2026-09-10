@@ -11,12 +11,11 @@ option explicit
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
 '$include: 'pal.bi'
-'$include: 'kbd.bi'
+'$include: 'in.bi'
 '$include: 'dos.bi'
 '$include: 'arch.bi'
 '$include: 'uglu.bi'
 '$include: 'font.bi'
-'$include: 'mouse.bi'
 '$include: 'bspfile.bi'
 '$include: 'snd.bi'
 '$include: 'mod.bi'
@@ -31,6 +30,8 @@ option explicit
 '$include: 'q_snd.bi'
 '$include: 'q_mdl.bi'
 '$include: 'q_game.bi'
+
+declare sub qglMousePos ( byval x as integer, byval y as integer )
 
 ''
 '' This module's own procedures.
@@ -333,7 +334,7 @@ sub ent_check_teleport ( _
             '' from the mouse, so the mouse is what has to move -- the same
             '' trick host_main uses to apply the spawn angle.
             ''
-            mousePos (g.env.scr_x_res-1) * tele(i).yaw/360.0, 110
+            qglMousePos (g.env.scr_x_res-1) * tele(i).yaw/360.0, 110
 
             exit sub
         end if

@@ -10,12 +10,11 @@ option explicit
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
 '$include: 'pal.bi'
-'$include: 'kbd.bi'
+'$include: 'in.bi'
 '$include: 'dos.bi'
 '$include: 'arch.bi'
 '$include: 'uglu.bi'
 '$include: 'font.bi'
-'$include: 'mouse.bi'
 '$include: 'bspfile.bi'
 '$include: 'snd.bi'
 '$include: 'mod.bi'
@@ -65,6 +64,8 @@ declare sub qglTmrInit ( byval hz as integer )
 declare function qglTmrTicks () as long
 declare function qglTmrCycles () as long
 declare sub qglTmrShutdown ()
+declare sub qglKbdShutdown ()
+declare sub qglMouseShutdown ()
 
 ''
 '' Declared here, not in a header: this module is the only caller, and a
@@ -301,9 +302,11 @@ sub sys_error ( msg as string )
     close #errf
 
     ''
-    '' Give the PIT and the mode back, then end mgl. uglEnd stays until
-    '' mgl does: it still holds the keyboard and the mouse.
+    '' Unhook, give the PIT and the mode back, then end mgl. uglEnd
+    '' stays until uglInit does.
     ''
+    qglKbdShutdown
+    qglMouseShutdown
     qglTmrShutdown
     qglVgaShutdown
     uglEnd

@@ -6,6 +6,10 @@
 # into, and a test that silently skipped the EMS path would be worse than
 # no test at all.
 db="$1"; d="$2"
+# A test with a "keys" file gets them typed a second in, through the
+# emulator's own keyboard path, so an INT 9 hook is driven by hardware.
+keys=""
+[ -f "$d/keys" ] && keys="autotype -w 1 -p 0.3 $(cat "$d/keys")"
 cat > "$d/run.conf" <<EOF
 [sdl]
 autolock=false
@@ -23,6 +27,7 @@ xms=true
 @echo off
 mount w "$d"
 w:
+$keys
 t.exe
 exit
 EOF

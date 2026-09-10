@@ -8,12 +8,11 @@ option explicit
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
 '$include: 'pal.bi'
-'$include: 'kbd.bi'
+'$include: 'in.bi'
 '$include: 'dos.bi'
 '$include: 'arch.bi'
 '$include: 'uglu.bi'
 '$include: 'font.bi'
-'$include: 'mouse.bi'
 '$include: 'bspfile.bi'
 '$include: 'snd.bi'
 '$include: 'mod.bi'
@@ -33,6 +32,12 @@ option explicit
 '' This module's own procedures.
 ''
 declare function in_keystroke ( key_down as integer ) as integer
+declare function qglMouseInit ( _
+    seg m as MouseInf, _
+    byval xmax as integer, _
+    byval ymax as integer _
+) as integer
+declare sub qglKbdInit ( seg keys as Keys )
 
 ''
 '' This module's own procedures.
@@ -62,27 +67,17 @@ dim shared screenie as integer
 
 ''::::::::::
 '' name: in_init
-'' desc: Mouse, keyboard and the one second timer.
+'' desc: Mouse and keyboard. The mouse spans the MODE, not the view: the
+''       look is read from where it sits.
 ''::::::::::
 sub in_init ( _
     g as Game _
 )
-    ''
-    '' A qgl Surface where mgl wants a DC, and safe for exactly two
-    '' reasons. mouseReset reads only xMin/yMin/xMax/yMax, which sit at
-    '' the same offsets in both structs -- they diverge at the scanline
-    '' table, 38 against 32. And every routine that would DRAW through
-    '' the handle returns early while the cursor is hidden, which it is
-    '' from mouseInit onwards: nothing here ever calls mouseShow.
-    ''
-    if ( mouseInit( qglVgaScreen(), g.env.mouse ) = FALSE ) then
+    if ( qglMouseInit( g.env.mouse, g.env.scr_x_res - 1, g.env.scr_y_res - 1 ) = FALSE ) then
         sys_error "0x0006, Could not init mouse..."
-    end if  
-    
-    ''
-    '' Init keyboard
-    ''
-    kbdInit g.env.keyboard
+    end if
+
+    qglKbdInit g.env.keyboard
 
 end sub
 

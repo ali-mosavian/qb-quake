@@ -8,12 +8,11 @@ option explicit
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'
 '$include: 'pal.bi'
-'$include: 'kbd.bi'
+'$include: 'in.bi'
 '$include: 'dos.bi'
 '$include: 'arch.bi'
 '$include: 'uglu.bi'
 '$include: 'font.bi'
-'$include: 'mouse.bi'
 '$include: 'bspfile.bi'
 '$include: 'snd.bi'
 '$include: 'mod.bi'
@@ -28,6 +27,8 @@ option explicit
 '$include: 'q_snd.bi'
 '$include: 'q_mdl.bi'
 '$include: 'q_game.bi'
+
+declare sub qglMousePos ( byval x as integer, byval y as integer )
 
 ''
 '' cp_advance lives in main.bas; this is its only caller.
@@ -176,11 +177,11 @@ sub v_update_camera ( _
     if ( g.env.cam_mode = 0 or g.env.cam_mode = 2 ) then            
         '' screen coordinates throughout: the mouse spans the MODE, not
         '' the view, so a smaller view must not shrink the look range
-        if g.env.mouse.x < 1 then  mousepos g.env.scr_x_res-4, g.env.mouse.y
-        if g.env.mouse.x > g.env.scr_x_res-3 then  mousepos 1, g.env.mouse.y
+        if g.env.mouse.x < 1 then  qglMousePos g.env.scr_x_res-4, g.env.mouse.y
+        if g.env.mouse.x > g.env.scr_x_res-3 then  qglMousePos 1, g.env.mouse.y
         
-        if g.env.mouse.y < 0        then  mousepos g.env.mouse.x, 0
-        if g.env.mouse.y > g.env.scr_y_res then  mousepos g.env.mouse.x, g.env.scr_y_res-1
+        if g.env.mouse.y < 0        then  qglMousePos g.env.mouse.x, 0
+        if g.env.mouse.y > g.env.scr_y_res then  qglMousePos g.env.mouse.x, g.env.scr_y_res-1
         
         tmx = g.env.mouse.x + 1
         tmy = g.env.mouse.y + 2

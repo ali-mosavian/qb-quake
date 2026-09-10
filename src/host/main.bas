@@ -38,12 +38,11 @@ option explicit
 '$include: 'ugl.bi'
 '$include: 'qgl.bi'
 '$include: 'pal.bi'
-'$include: 'kbd.bi'
+'$include: 'in.bi'
 '$include: 'dos.bi'
 '$include: 'arch.bi'
 '$include: 'uglu.bi'
 '$include: 'font.bi'
-'$include: 'mouse.bi'
 '$include: 'bspfile.bi'
 '$include: 'snd.bi'
 '$include: 'mod.bi'
@@ -127,6 +126,9 @@ declare sub qglVgaShutdown ()
 declare function qglVgaScreen () as long
 declare sub qglTmrShutdown ()
 declare function qglTmrTicks () as long
+declare sub qglKbdShutdown ()
+declare sub qglMouseShutdown ()
+declare sub qglMousePos ( byval x as integer, byval y as integer )
 declare function qglSfZNew ( byval surf as long, byval kind as integer ) as long
 declare sub qglDrFill ( byval d as long, _
                         byval x0 as integer, _
@@ -868,7 +870,7 @@ sub host_main ( _
     ''
     qglDrFill qglVgaScreen(), 0, 0, g.env.scr_x_res-1, g.env.scr_y_res-1, 0
 
-    mousePos 0, 0
+    qglMousePos 0, 0
 
 
     cam_up.x = 0.0
@@ -876,7 +878,7 @@ sub host_main ( _
     cam_up.z = 0.0   
     
     if ( g.env.yaw_set ) then g.cam.start_angle = g.env.start_yaw
-    mousePos (g.env.scr_x_res-1) * g.cam.start_angle/360.0, 110
+    qglMousePos (g.env.scr_x_res-1) * g.cam.start_angle/360.0, 110
     
     
 
@@ -1090,9 +1092,11 @@ end sub
 sub host_shutdown
     
     ''
-    '' Give the PIT and the mode back, then end mgl. uglEnd stays until
-    '' mgl does: it still holds the keyboard and the mouse.
+    '' Unhook, give the PIT and the mode back, then end mgl. uglEnd
+    '' stays until uglInit does.
     ''
+    qglKbdShutdown
+    qglMouseShutdown
     qglTmrShutdown
     qglVgaShutdown
     uglEnd
