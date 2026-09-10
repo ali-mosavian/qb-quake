@@ -846,6 +846,7 @@ sub host_main ( _
     dim pt0 as single, ptd as single
     dim pr0 as long, prd as long
     dim ht0 as single, htd as single
+    dim lp0 as single, lpd as single
     dim benchf as integer
     
     ''
@@ -975,6 +976,7 @@ sub host_main ( _
         '' same whether it runs at 15 fps or 60.
         ''
         g.scr.frame_time = sys_frame_time( g )
+        lp0 = sys_now()
 
         '' Skip the first few frames: they carry the tail of loading and
         '' the first surface builds, which no later frame repeats.
@@ -1083,6 +1085,11 @@ sub host_main ( _
                 g.pt.present_sum = g.pt.present_sum + ptd
                 if ( ptd > g.pt.present_max ) then g.pt.present_max = ptd
             end if
+        end if
+        if ( g.ft.n > 0 ) then
+            lpd = sys_now() - lp0
+            g.pt.loop_sum = g.pt.loop_sum + lpd
+            if ( lpd > g.pt.loop_max ) then g.pt.loop_max = lpd
         end if
         scr_count_frame g
 

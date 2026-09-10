@@ -180,6 +180,10 @@ sub host_bench_report ( _
         print #benchf, "portal_culled " + ltrim$(str$( g.vis.pt_culled ))
         print #benchf, "pt_walk_mean " + ltrim$(str$( (g.pt.walk_sum / g.ft.n) * 1000.0 ))
         print #benchf, "pt_walk_max " + ltrim$(str$( g.pt.walk_max * 1000.0 ))
+        print #benchf, "pt_mdl_mean " + ltrim$(str$( (g.pt.mdl_sum / g.ft.n) * 1000.0 ))
+        print #benchf, "pt_mdl_max " + ltrim$(str$( g.pt.mdl_max * 1000.0 ))
+        print #benchf, "pt_loop_mean " + ltrim$(str$( (g.pt.loop_sum / g.ft.n) * 1000.0 ))
+        print #benchf, "pt_loop_max " + ltrim$(str$( g.pt.loop_max * 1000.0 ))
     end if
     print #benchf, "polys " + ltrim$(str$( g.rdr.polys ))
     print #benchf, "tris " + ltrim$(str$( g.rdr.tris ))

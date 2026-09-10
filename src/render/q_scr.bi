@@ -163,6 +163,10 @@ type PhaseTimes
     draw_max    as single     '' raster together -- see raster_sum below
     hud_sum     as single     '' scr_draw_hud: the stats overlay
     hud_max     as single
+    mdl_sum     as single     '' mdl_draw, every spawned model
+    mdl_max     as single
+    loop_sum    as single     '' the loop body, frame clock to frame count;
+    loop_max    as single     '' ft minus this is what the loop's own edges cost
     present_sum as single     '' vid_update: blit to the screen
     present_max as single
 

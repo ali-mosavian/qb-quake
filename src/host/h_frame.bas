@@ -484,11 +484,17 @@ sub host_render ( _
     '' mdl_think's own state (pl_move.bas), updated once per tick --
     '' drawing reads them, same split host_tick/host_render already keep
     '' for the player.
+    pt0 = sys_now()
     if ( g.mdl.loaded and (g.env.no_mdl = 0) ) then
         for mdl_i = 0 to g.mdl_count - 1
             mdl_draw g, mdltri_buffer(), mdl_ent( mdl_i ), _
                      mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
         next mdl_i
+    end if
+    if ( g.ft.n > 0 ) then
+        ptd = sys_now() - pt0
+        g.pt.mdl_sum = g.pt.mdl_sum + ptd
+        if ( ptd > g.pt.mdl_max ) then g.pt.mdl_max = ptd
     end if
 
     if ( g.scr.portal_wire ) then
