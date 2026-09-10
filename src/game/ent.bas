@@ -85,7 +85,8 @@ declare sub ent_load_teleports ( _
     tele() as Teleporter, _
     faces() as Face, _
     plat() as PlatEnt, _
-    item() as ItemEnt _
+    item() as ItemEnt, _
+    door() as DoorEnt _
 )
 declare sub ent_check_teleport ( _
     g as Game, _
@@ -97,6 +98,37 @@ declare sub ent_move_plats ( _
     brush() as BrushModel, _
     plat() as PlatEnt _
 )
+declare sub ent_move_doors ( _
+    g as Game, _
+    byval dt as single, _
+    brush() as BrushModel, _
+    door() as DoorEnt _
+)
+declare sub ent_door_init ( _
+    g as Game, _
+    dr as EntsDoor, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    door() as DoorEnt _
+)
+declare sub ent_link_doors ( _
+    g as Game, _
+    door() as DoorEnt _
+)
+declare sub ent_door_fire ( _
+    g as Game, _
+    byval grp as integer, _
+    door() as DoorEnt _
+)
+declare function ent_door_touched ( _
+    g as Game, _
+    d as DoorEnt _
+) as integer
+declare function ent_door_step ( _
+    p as Vec3, _
+    goal as Vec3, _
+    byval by as single _
+) as integer
 declare sub ent_place_models ( _
     byval model_count as integer, _
     models() as Submodel, _
@@ -191,13 +223,15 @@ sub ent_load_teleports ( _
     tele() as Teleporter, _
     faces() as Face, _
     plat() as PlatEnt, _
-    item() as ItemEnt _
+    item() as ItemEnt, _
+    door() as DoorEnt _
 )
     dim u as integer
     dim h as EntsHead
     dim tr as EntsTele
     dim ir as EntsItem
     dim pr as EntsPlat
+    dim dr as EntsDoor
     dim i as integer, j as integer, k as integer
     dim mdlnum as integer
 
@@ -208,18 +242,22 @@ sub ent_load_teleports ( _
     redim brush( g.wld.count.models-1 ) as BrushModel
     redim tele( h.ntele ) as Teleporter
     redim plat( h.nplat ) as PlatEnt
+    redim door( h.ndoor ) as DoorEnt
     '' room after the map's items for one backpack a soldier
     redim item( h.nitem + MDL_MAX_ENTS% ) as ItemEnt
 
     g.tele_count = 0
     g.plat_count = 0
+    g.door_count = 0
     g.item_count = 0
 
     '' every submodel draws and blocks unless something claims it as a trigger
     for  i = 0 to g.wld.count.models-1
         brush(i).draw  = true
         brush(i).solid = true
-        brush(i).zofs  = 0.0
+        brush(i).ofs.x = 0.0
+        brush(i).ofs.y = 0.0
+        brush(i).ofs.z = 0.0
     next i
 
     ''
@@ -268,7 +306,7 @@ sub ent_load_teleports ( _
             '' Quake positions the brush raised, so a lift at rest
             '' is one full travel below where the map drew it.
             plat( g.plat_count ).state = ENT_PLAT_DOWN
-            brush( mdlnum ).zofs = -plat( g.plat_count ).travel
+            brush( mdlnum ).ofs.z = -plat( g.plat_count ).travel
 
             g.plat_count = g.plat_count + 1
         end if
@@ -292,8 +330,203 @@ sub ent_load_teleports ( _
     next i
     g.item_fixed = g.item_count
 
+    for  i = 1 to h.ndoor
+        ent_get u, clng( varseg( dr ) ) * 65536& + (clng( varptr( dr ) ) and 65535&), len( dr )
+        if ( dr.model > 0 and dr.model <= g.wld.count.models-1 ) then
+            ent_door_init g, dr, models(), brush(), door()
+        end if
+    next i
+    ent_link_doors g, door()
+
     qglFileClose u
 
+end sub
+
+
+sub ent_door_init ( _
+    g as Game, _
+    dr as EntsDoor, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    door() as DoorEnt _
+)
+    dim k as integer, m as integer
+    dim d as DoorEnt
+
+    '' Filled in a local and stored whole. BC miscompiles the first single
+    '' stored into a member of an indexed element after another store to
+    '' it: the element offset is cached in ax, the value is loaded into
+    '' ax:dx, and the member offset is added to ax -- so the value lands at
+    '' base + low word of itself. 400.0 has a low word of 0, and every
+    '' door's speed went into door(0). Listing: ent.obj.lst, ENT_DOOR_INIT.
+    k = g.door_count
+    m = dr.model
+    d.model     = m
+    d.speed     = dr.speed
+    d.hold      = dr.hold
+    d.hold_left = 0.0
+    d.nolink    = dr.nolink
+    d.targeted  = dr.targeted
+    d.state     = ENT_DOOR_SHUT
+    d.link      = k
+
+    '' DOOR_START_OPEN: lit shut, spawned at the far end of its travel
+    d.ofs_shut.x = 0.0
+    d.ofs_shut.y = 0.0
+    d.ofs_shut.z = 0.0
+    d.ofs_open = dr.travel
+    if ( dr.start_open ) then
+        d.ofs_shut = dr.travel
+        d.ofs_open.x = 0.0
+        d.ofs_open.y = 0.0
+        d.ofs_open.z = 0.0
+    end if
+    brush(m).ofs = d.ofs_shut
+
+    '' spawn_field: the brush's box where it sits, grown 60 in x and y, 8 in z
+    d.mins.x = models(m).mins.x + d.ofs_shut.x - ENT_DOOR_FIELD#
+    d.mins.y = models(m).mins.y + d.ofs_shut.y - ENT_DOOR_FIELD#
+    d.mins.z = models(m).mins.z + d.ofs_shut.z - ENT_DOOR_FIELDZ#
+    d.maxs.x = models(m).maxs.x + d.ofs_shut.x + ENT_DOOR_FIELD#
+    d.maxs.y = models(m).maxs.y + d.ofs_shut.y + ENT_DOOR_FIELD#
+    d.maxs.z = models(m).maxs.z + d.ofs_shut.z + ENT_DOOR_FIELDZ#
+
+    door(k) = d
+    g.door_count = g.door_count + 1
+end sub
+
+
+'' LinkDoors: doors whose brushes touch open as one, unless DOOR_DONT_LINK.
+'' The fields are the brushes grown by the field margin, so shrink them
+'' back for the touch test.
+sub ent_link_doors ( _
+    g as Game, _
+    door() as DoorEnt _
+)
+    dim i as integer, j as integer, k as integer, was as integer
+    dim touch as integer
+
+    for  i = 0 to g.door_count-1
+        for  j = i+1 to g.door_count-1
+            touch = ( door(i).nolink = 0 and door(j).nolink = 0 )
+            if ( door(i).mins.x + ENT_DOOR_FIELD#  > door(j).maxs.x - ENT_DOOR_FIELD#  ) then touch = false
+            if ( door(i).mins.y + ENT_DOOR_FIELD#  > door(j).maxs.y - ENT_DOOR_FIELD#  ) then touch = false
+            if ( door(i).mins.z + ENT_DOOR_FIELDZ# > door(j).maxs.z - ENT_DOOR_FIELDZ# ) then touch = false
+            if ( door(i).maxs.x - ENT_DOOR_FIELD#  < door(j).mins.x + ENT_DOOR_FIELD#  ) then touch = false
+            if ( door(i).maxs.y - ENT_DOOR_FIELD#  < door(j).mins.y + ENT_DOOR_FIELD#  ) then touch = false
+            if ( door(i).maxs.z - ENT_DOOR_FIELDZ# < door(j).mins.z + ENT_DOOR_FIELDZ# ) then touch = false
+            if ( touch ) then
+                was = door(j).link
+                for  k = 0 to g.door_count-1
+                    if ( door(k).link = was ) then door(k).link = door(i).link
+                next k
+            end if
+        next j
+    next i
+end sub
+
+
+'' door_trigger_touch: the player's box against the field. Quake's box is
+'' 16 either side and runs from 24 below the origin to 32 above it.
+function ent_door_touched ( _
+    g as Game, _
+    d as DoorEnt _
+) as integer
+    ent_door_touched = false
+    if ( g.pl.pos.x + 16.0 < d.mins.x ) then exit function
+    if ( g.pl.pos.x - 16.0 > d.maxs.x ) then exit function
+    if ( g.pl.pos.y + 16.0 < d.mins.y ) then exit function
+    if ( g.pl.pos.y - 16.0 > d.maxs.y ) then exit function
+    if ( g.pl.pos.z + 32.0 < d.mins.z ) then exit function
+    if ( g.pl.pos.z - PL_FEET# > d.maxs.z ) then exit function
+    ent_door_touched = true
+end function
+
+
+'' door_go_up for a whole linked group: a shut or closing door sets out,
+'' an open one restarts its hold.
+sub ent_door_fire ( _
+    g as Game, _
+    byval grp as integer, _
+    door() as DoorEnt _
+)
+    dim k as integer
+
+    for  k = 0 to g.door_count-1
+        if ( door(k).link = grp ) then
+            select case door(k).state
+                case ENT_DOOR_SHUT, ENT_DOOR_CLOSING
+                    door(k).state = ENT_DOOR_OPENING
+                case ENT_DOOR_OPEN
+                    door(k).hold_left = door(k).hold
+            end select
+        end if
+    next k
+end sub
+
+
+'' Moves p toward goal by at most `by`; true once it is there.
+function ent_door_step ( _
+    p as Vec3, _
+    goal as Vec3, _
+    byval by as single _
+) as integer
+    dim dx as single, dy as single, dz as single, d as single
+
+    dx = goal.x - p.x
+    dy = goal.y - p.y
+    dz = goal.z - p.z
+    d = sqr( dx*dx + dy*dy + dz*dz )
+    ent_door_step = false
+    if ( d <= by ) then
+        p = goal
+        ent_door_step = true
+        exit function
+    end if
+    p.x = p.x + dx * ( by / d )
+    p.y = p.y + dy * ( by / d )
+    p.z = p.z + dz * ( by / d )
+end function
+
+
+''::::::::::
+'' name: ent_move_doors
+'' desc: The touch fields, then every door's state machine. A door with a
+''       targetname waits for a trigger nothing here fires yet.
+''::::::::::
+sub ent_move_doors ( _
+    g as Game, _
+    byval dt as single, _
+    brush() as BrushModel, _
+    door() as DoorEnt _
+)
+    dim k as integer, m as integer
+
+    for  k = 0 to g.door_count-1
+        if ( door(k).targeted = 0 ) then
+            if ( ent_door_touched( g, door(k) ) ) then ent_door_fire g, door(k).link, door()
+        end if
+    next k
+
+    for  k = 0 to g.door_count-1
+        m = door(k).model
+        select case door(k).state
+            case ENT_DOOR_OPENING
+                if ( ent_door_step( brush(m).ofs, door(k).ofs_open, door(k).speed * dt ) ) then
+                    door(k).state = ENT_DOOR_OPEN
+                    door(k).hold_left = door(k).hold
+                end if
+            case ENT_DOOR_OPEN
+                if ( door(k).hold >= 0.0 ) then
+                    door(k).hold_left = door(k).hold_left - dt
+                    if ( door(k).hold_left <= 0.0 ) then door(k).state = ENT_DOOR_CLOSING
+                end if
+            case ENT_DOOR_CLOSING
+                if ( ent_door_step( brush(m).ofs, door(k).ofs_shut, door(k).speed * dt ) ) then
+                    door(k).state = ENT_DOOR_SHUT
+                end if
+        end select
+    next k
 end sub
 
 
@@ -373,7 +606,7 @@ function ent_plat_touched ( _
     '' Above its surface and within a body's height of it. Anything higher is
     '' someone on a walkway over the shaft, not a passenger.
     ''
-    top = plat(p).maxs.z + brush( plat(p).model ).zofs
+    top = plat(p).maxs.z + brush( plat(p).model ).ofs.z
 
     if ( g.pl.pos.z - PL_FEET# < top - 8.0  ) then exit function
     if ( g.pl.pos.z - PL_FEET# > top + 64.0 ) then exit function
@@ -425,19 +658,19 @@ sub ent_move_plats ( _
             goal = -plat(p).travel
         end if
 
-        was = brush(m).zofs
+        was = brush(m).ofs.z
 
-        if ( brush(m).zofs < goal ) then
+        if ( brush(m).ofs.z < goal ) then
             step_z = plat(p).speed * dt
-            brush(m).zofs = brush(m).zofs + step_z
-            if ( brush(m).zofs > goal ) then brush(m).zofs = goal
-        elseif ( brush(m).zofs > goal ) then
+            brush(m).ofs.z = brush(m).ofs.z + step_z
+            if ( brush(m).ofs.z > goal ) then brush(m).ofs.z = goal
+        elseif ( brush(m).ofs.z > goal ) then
             step_z = plat(p).speed * dt
-            brush(m).zofs = brush(m).zofs - step_z
-            if ( brush(m).zofs < goal ) then brush(m).zofs = goal
+            brush(m).ofs.z = brush(m).ofs.z - step_z
+            if ( brush(m).ofs.z < goal ) then brush(m).ofs.z = goal
         end if
 
-        moved = brush(m).zofs - was
+        moved = brush(m).ofs.z - was
 
         ''
         '' Carry the rider. Only upward: a descending plat drops out from under
@@ -526,12 +759,12 @@ function ent_find_node ( _
     dim y0 as single, y1 as single
     dim z0 as single, z1 as single
 
-    x0 = models(m).mins.x
-    x1 = models(m).maxs.x
-    y0 = models(m).mins.y
-    y1 = models(m).maxs.y
-    z0 = models(m).mins.z + brush(m).zofs
-    z1 = models(m).maxs.z + brush(m).zofs
+    x0 = models(m).mins.x + brush(m).ofs.x
+    x1 = models(m).maxs.x + brush(m).ofs.x
+    y0 = models(m).mins.y + brush(m).ofs.y
+    y1 = models(m).maxs.y + brush(m).ofs.y
+    z0 = models(m).mins.z + brush(m).ofs.z
+    z1 = models(m).maxs.z + brush(m).ofs.z
 
     nodenr = 0
 

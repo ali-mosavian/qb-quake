@@ -2220,6 +2220,45 @@ applied: dm3ish's spawn is `angle 90` too and the monster ring in
 and model gates stand beside. Do it when e1m1 spawns its own monsters.
 The gate aims with `-yaw 270`.
 
+## Doors
+
+`func_door` is doors.qc without sounds, keys and damage. mkassets
+resolves each one offline -- `travel` is `movedir * (size along it -
+lip)`, SetMovedir's -1 up and -2 down, speed 100, wait 3, lip 8 unless
+the map says -- and `ent_door_init` puts the brush at the shut end, or
+the open end for DOOR_START_OPEN. A door with a targetname waits for a
+trigger nothing fires yet; the rest open by touch: `spawn_field` is the
+brush grown 60 in x and y and 8 in z, and the player's box in it sends
+the door's whole linked group out. `ent_link_doors` is LinkDoors, brushes
+that touch unless DOOR_DONT_LINK, so both halves of e1m1's first double
+door go when one is reached. Open, the door holds `wait` seconds and
+comes back; a touch while closing sends it out again, which is also what
+keeps it off a player standing in the way. 14 doors on e1m1, four by
+touch.
+
+**The brush offset is a `Vec3` now, not a z.** Doors slide along any
+axis, so `BrushModel.ofs` carries all three: `d_faces.c` adds it to every
+vertex, `pl_trace.c` subtracts it from both ends of the sweep, and
+`ent_find_node` sorts the box where it is. Plats use `.ofs.z`.
+
+**BC miscompiles a store of a single into a member of an indexed
+element when it is the second such store in a row.** `door(k).model = m`
+then `door(k).speed = dr.speed`: the second keeps `k*70` cached in AX,
+loads the value into AX:DX, then adds the member offset to AX and stores
+through it -- the value lands at `base + low word of the value + 26`. A
+speed of 400.0 has a low word of 0, so every door's speed was written
+into door 0 and the others read 0: the second half of the double door
+sat "opening" for ever at offset zero. The third store reloads the
+cached offset from `[bp-1Ah]` and is right, which is why `hold` beside
+it was. The listing is what showed it (`bclst.sh`, `ENT_DOOR_INIT`);
+`ent_door_init` fills a local `DoorEnt` and stores the element whole.
+Any load that fills a record member by member into an indexed element
+is suspect; check the listing for `add ax,` right after a load into AX.
+
+`tools/check.sh --e1m1`'s third frame is the test: `-walk` from
+(330,576) at the first double door must carry the player through it,
+px below 190; a door that does not open stops them at 272.03.
+
 ## `-nostats` makes the picture deterministic
 
 With the HUD off the renderer is **byte-identical run to run** -- one

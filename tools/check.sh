@@ -216,7 +216,9 @@ fi
 # mirrored) and the exit slipgate, whose walls the old frame linking
 # painted with the "trigger" texture -- it assumed a chain's frames sit
 # side by side in the lump -- and whose changelevel volume drew as a
-# column. Needs the shareware PAK; skips without it.
+# column. Then the first double door: -walk from its approach side must
+# carry the player through it, where a door that does not open stops
+# them at x 271. Needs the shareware PAK; skips without it.
 if [[ "${1:-}" == "--e1m1" ]]; then
     PAK="${PAK:-$HOME/dos/QUAKE_SW/ID1/PAK0.PAK}"
     if [[ ! -f "$ROOT/data/e1m1.bsp" ]]; then
@@ -245,6 +247,13 @@ PY
         out=$(python3 "$ROOT/tools/imgdiff.py" "$ROOT/tools/ref/e1m1-$tag.bmp" "$VBD_OUT/e1m1-$tag.bmp" | tail -1)
         if [[ "$out" == IDENTICAL* ]]; then echo "PASS  e1m1 $tag: $out"; else echo "FAIL  e1m1 $tag: $out"; rc=1; fi
     done
+    run_frame "-lm -nostats -at 330 576 40 -yaw 180 -walk -bench 400 -ticks 240" "$VBD_OUT/e1m1-door.bmp" e1m1.bsp
+    px=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="px"{print $2}')
+    if awk -v x="${px:-999}" 'BEGIN{exit !(x < 190)}'; then
+        echo "PASS  e1m1 door: px $px, through the door"
+    else
+        echo "FAIL  e1m1 door: px ${px:-none}, the door did not open"; rc=1
+    fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc
 fi

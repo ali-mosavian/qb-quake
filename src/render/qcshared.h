@@ -93,7 +93,7 @@ typedef struct {
 typedef struct {
     short draw;
     short solid;
-    float zofs;
+    Vec3 ofs;
     short node;
 } BrushModel;
 

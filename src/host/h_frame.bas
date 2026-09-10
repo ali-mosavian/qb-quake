@@ -70,6 +70,7 @@ declare sub host_tick ( _
     cp_z() as integer, _
     tele() as Teleporter, _
     plat() as PlatEnt, _
+    door() as DoorEnt, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt _
 )
@@ -92,6 +93,12 @@ declare sub ent_move_plats ( _
     byval dt as single, _
     brush() as BrushModel, _
     plat() as PlatEnt _
+)
+declare sub ent_move_doors ( _
+    g as Game, _
+    byval dt as single, _
+    brush() as BrushModel, _
+    door() as DoorEnt _
 )
 declare sub in_handle_toggles ( _
     g as Game _
@@ -245,6 +252,7 @@ sub host_advance ( _
     cp_z() as integer, _
     tele() as Teleporter, _
     plat() as PlatEnt, _
+    door() as DoorEnt, _
     host_accum as single, _
     host_ticks as long, _
     mdl_ent() as MdlEnt, _
@@ -268,7 +276,7 @@ sub host_advance ( _
             exit do
         end if
         host_tick g, HOST_DT#, brush(), models(), planes(), nodes(), cp_x(), cp_y(), _
-                   cp_z(), tele(), plat(), mdl_ent(), item()
+                   cp_z(), tele(), plat(), door(), mdl_ent(), item()
         host_accum = host_accum - HOST_DT#
         host_ticks = host_ticks + 1
         steps = steps + 1
@@ -308,6 +316,7 @@ sub host_tick ( _
     cp_z() as integer, _
     tele() as Teleporter, _
     plat() as PlatEnt, _
+    door() as DoorEnt, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt _
 )
@@ -364,6 +373,7 @@ sub host_tick ( _
 
     '' movers, after the player has moved and before anything is drawn
     ent_move_plats g, dt, brush(), plat()
+    ent_move_doors g, dt, brush(), door()
 
     '' where each mover ended up, so the draw order can place it
     ent_place_models g.wld.count.models, models(), nodes(), planes(), brush()

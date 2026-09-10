@@ -59,9 +59,8 @@ type BrushModel
                                 '' draw -- a func_illusionary is drawn and not
                                 '' solid -- though every entity in dm3ish
                                 '' answers both the same way.
-    zofs        as single       '' how far it has moved from where the map put
-                                '' it, along z, the only axis anything in
-                                '' dm3ish travels. The renderer adds it to
+    ofs         as Vec3         '' how far it has moved from where the map put
+                                '' it, BSP space. The renderer adds it to
                                 '' every vertex; the collision subtracts it
                                 '' from the traced point. Same thing from
                                 '' either end.

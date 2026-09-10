@@ -165,8 +165,8 @@ void pascal far pl_trace(
         if ( brush[i].solid ) {
             s2 = *start;
             f2 = *fin;
-            s2.z -= brush[i].zofs;
-            f2.z -= brush[i].zofs;
+            s2.x -= brush[i].ofs.x; s2.y -= brush[i].ofs.y; s2.z -= brush[i].ofs.z;
+            f2.x -= brush[i].ofs.x; f2.y -= brush[i].ofs.y; f2.z -= brush[i].ofs.z;
 
             tr->all_solid = 1;
             dummy = pl_hull_check_c( (short) models[i].head_node1, (float) 0.0, (float) 1.0, &s2, &f2, tr, clip, planes );

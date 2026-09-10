@@ -307,7 +307,7 @@ void pascal far d_draw_faces(
     long  gp, lm_dc, src_dc, tex_dc, texofs;
     long  bt0, bface, build_cyc = 0;
     float su0, su1, su2, su3, sv0, sv1, sv2, sv3;
-    float tw, th, zofs, dp_dist, turbph, zl, zsum;
+    float tw, th, ox, oy, oz, dp_dist, turbph, zl, zsum;
     float vx, vy, vz, tu, tv, rw, lm_su, lm_sv;
     float dl_pdist;
     Plane far *pl;
@@ -425,7 +425,9 @@ void pascal far d_draw_faces(
             tex    = tri[i].tex_info_id;
             tex_id = texinf[tex].mip_tex;
             liquid = mipinf[tex_id].liquid;
-            zofs   = brush[ tri[i].side >> 1 ].zofs;   /* the owning submodel */
+            ox     = brush[ tri[i].side >> 1 ].ofs.x;  /* the owning submodel */
+            oy     = brush[ tri[i].side >> 1 ].ofs.y;
+            oz     = brush[ tri[i].side >> 1 ].ofs.z;
 
             /*
              * NO early reject here. BASIC had no such guard: a face with a
@@ -544,11 +546,11 @@ void pascal far d_draw_faces(
                 vy = gv[v0 + 1] * (float)VTX_UNSCALE;
                 vz = gv[v0 + 2] * (float)VTX_UNSCALE;
 
-                /* BSP is Z-up, renderer is Y-up: y and z swap, and the
-                   brush entity's offset rides on renderer y. */
-                vt_x[j] = vx;
-                vt_y[j] = vz + zofs;
-                vt_z[j] = vy;
+                /* BSP is Z-up, renderer is Y-up: y and z swap, the brush
+                   entity's offset with them. */
+                vt_x[j] = vx + ox;
+                vt_y[j] = vz + oz;
+                vt_z[j] = vy + oy;
 
                 tu = su0*vx + su1*vy + su2*vz + su3;
                 tv = sv0*vx + sv1*vy + sv2*vz + sv3;

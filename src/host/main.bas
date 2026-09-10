@@ -70,6 +70,7 @@ declare sub host_bench_report ( _
     h_dst_dc as long, _
     brush() as BrushModel, _
     plat() as PlatEnt, _
+    door() as DoorEnt, _
     mdl_ent() as MdlEnt, _
     byval host_ticks as long _
 )
@@ -110,6 +111,7 @@ declare sub host_advance ( _
     cp_z() as integer, _
     tele() as Teleporter, _
     plat() as PlatEnt, _
+    door() as DoorEnt, _
     host_accum as single, _
     host_ticks as long, _
     mdl_ent() as MdlEnt, _
@@ -162,6 +164,7 @@ declare sub host_init ( _
     brush() as BrushModel, _
     tele() as Teleporter, _
     plat() as PlatEnt, _
+    door() as DoorEnt, _
     mdltri_buffer() as MdlTri, _
     vmtri_buffer() as MdlTri, _
     kmtri_buffer() as MdlTri, _
@@ -186,6 +189,7 @@ declare sub host_main ( _
     bit_array() as integer, _
     mip_buff_inf() as MipTex, _
     plat() as PlatEnt, _
+    door() as DoorEnt, _
     tele() as Teleporter, _
     mdltri_buffer() as MdlTri, _
     vmtri_buffer() as MdlTri, _
@@ -287,7 +291,8 @@ declare sub mod_load_world ( _
     brush() as BrushModel, _
     tele() as Teleporter, _
     plat() as PlatEnt, _
-    item() as ItemEnt _
+    item() as ItemEnt, _
+    door() as DoorEnt _
 )
 declare sub mod_open ( _
     g as Game, _
@@ -399,6 +404,7 @@ dim brush() as BrushModel
 dim tele() as Teleporter
 dim item() as ItemEnt
 dim plat() as PlatEnt
+dim door() as DoorEnt
 dim bit_array() as integer
 dim frustum() as DiskPlane
 dim mip_buff_inf() as MipTex
@@ -507,7 +513,7 @@ dim shared z_dc as long
     host_init g, tri_buffer(), tex_inf_buff(), pln_buffer(), nds_buffer(), _
               mdl_buffer(), order_list(), poly_flag(), gv_buf(), bit_array(), _
               cp_x(), cp_y(), cp_z(), mip_buff_inf(), _
-              frustum(), brush(), tele(), plat(), _
+              frustum(), brush(), tele(), plat(), door(), _
               mdltri_buffer(), vmtri_buffer(), kmtri_buffer(), mdl_ent(), item()
     if ( g.env.dump_tex ) then
         mod_tex_dump g
@@ -519,7 +525,7 @@ dim shared z_dc as long
                   tri_buffer(), tex_inf_buff(), pln_buffer(), nds_buffer(), _
                   mdl_buffer(), order_list(), poly_flag(), gv_buf(), brush(), _
                   frustum(), bit_array(), _
-                  mip_buff_inf(), plat(), tele(), _
+                  mip_buff_inf(), plat(), door(), tele(), _
                   mdltri_buffer(), vmtri_buffer(), kmtri_buffer(), mdl_ent(), item()
     end if
     host_shutdown
@@ -637,6 +643,7 @@ sub host_init ( _
     brush() as BrushModel, _
     tele() as Teleporter, _
     plat() as PlatEnt, _
+    door() as DoorEnt, _
     mdltri_buffer() as MdlTri, _
     vmtri_buffer() as MdlTri, _
     kmtri_buffer() as MdlTri, _
@@ -750,7 +757,7 @@ sub host_init ( _
     '' level lumps
     mod_load_world g, tri_buffer(), tex_inf_buff(), pln_buffer(), nds_buffer(), _
                     mdl_buffer(), order_list(), poly_flag(), gv_buf(), brush(), tele(), _
-                    plat(), item()
+                    plat(), item(), door()
     pl_items_drop g, item(), mdl_buffer(), brush(), pln_buffer()
 
     t_lump = timer
@@ -872,6 +879,7 @@ sub host_main ( _
     bit_array() as integer, _
     mip_buff_inf() as MipTex, _
     plat() as PlatEnt, _
+    door() as DoorEnt, _
     tele() as Teleporter, _
     mdltri_buffer() as MdlTri, _
     vmtri_buffer() as MdlTri, _
@@ -1043,7 +1051,7 @@ sub host_main ( _
 
         pt0 = sys_now()
         host_advance g, g.scr.frame_time, brush(), mdl_buffer(), pln_buffer(), _
-                      nds_buffer(), cp_x(), cp_y(), cp_z(), tele(), plat(), _
+                      nds_buffer(), cp_x(), cp_y(), cp_z(), tele(), plat(), door(), _
                       host_accum, host_ticks, mdl_ent(), item()
         if ( g.ft.n > 0 ) then
             ptd = sys_now() - pt0
@@ -1086,15 +1094,15 @@ sub host_main ( _
         end if
         '' -campath ends when the route does, whatever -bench says
         if ( g.env.cam_path and g.cp.done ) then
-            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), mdl_ent(), host_ticks
+            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), door(), mdl_ent(), host_ticks
             exit do
         end if
         if ( g.env.bench_ticks > 0 and host_ticks >= g.env.bench_ticks ) then
-            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), mdl_ent(), host_ticks
+            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), door(), mdl_ent(), host_ticks
             exit do
         end if
         if ( g.env.bench_frames > 0 and frame_no >= g.env.bench_frames ) then
-            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), mdl_ent(), host_ticks
+            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), door(), mdl_ent(), host_ticks
             exit do
         end if
 
@@ -1149,7 +1157,7 @@ sub host_main ( _
         '' scr_count_frame just above, so this must run after it.
         ''
         if ( g.env.bench_secs > 0 and g.scr.bench_secs >= g.env.bench_secs ) then
-            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), mdl_ent(), host_ticks
+            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), door(), mdl_ent(), host_ticks
             exit do
         end if
 

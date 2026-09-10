@@ -48,6 +48,7 @@ type EntsHead
     nplat       as integer
     nhide       as integer
     nitem       as integer
+    ndoor       as integer
 end type
 
 type EntsItem
@@ -91,6 +92,18 @@ type EntsPlat
     travel      as single
 end type
 
+'' A func_door, resolved offline: travel is movedir * (size along it -
+'' lip), start_open swaps which end is shut, nolink is DOOR_DONT_LINK.
+type EntsDoor
+    model       as integer
+    travel      as Vec3
+    speed       as single
+    hold        as single       '' "wait": seconds open; below zero stays
+    start_open  as integer
+    nolink      as integer
+    targeted    as integer      '' has a targetname: opens by trigger, not touch
+end type
+
 const ENT_PLAT_DOWN = 0
 const ENT_PLAT_UP   = 1
 
@@ -104,6 +117,34 @@ type PlatEnt
     speed       as single       '' units per second
     state       as integer      '' heading down, or up
     mins        as Vec3         '' its volume at the map position
+    maxs        as Vec3
+end type
+
+const ENT_DOOR_SHUT    = 0
+const ENT_DOOR_OPENING = 1
+const ENT_DOOR_OPEN    = 2
+const ENT_DOOR_CLOSING = 3
+const ENT_DOOR_FIELD#  = 60.0   '' spawn_field: the touch box grows this much in x and y
+const ENT_DOOR_FIELDZ# = 8.0    '' and this much in z
+
+''
+'' A func_door: doors.qc without the sounds, keys and damage. A touch
+'' anywhere in the field sends every door of its linked group to the open
+'' end, where it holds and comes back; a touch while closing sends it out
+'' again. Linked doors are those whose brushes touch, as LinkDoors does.
+''
+type DoorEnt
+    model       as integer
+    ofs_shut    as Vec3         '' brush offset at each end of the travel
+    ofs_open    as Vec3
+    speed       as single
+    hold        as single
+    hold_left   as single
+    state       as integer
+    link        as integer      '' lowest door index of its group
+    nolink      as integer
+    targeted    as integer
+    mins        as Vec3         '' the touch field
     maxs        as Vec3
 end type
 

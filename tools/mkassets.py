@@ -399,12 +399,12 @@ def convert_lightmaps(d, lumps, out):
 ENT_PAIR = re.compile(r'"([^"]*)"\s*"([^"]*)"')
 
 
-def parse_entities(text: str, nmodels: int) -> bytes:
+def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> bytes:
     # Resolved here, not on the target: BASIC strings cap at 32,767 bytes
     # and e1m3's entities lump is 45,762 -- mod_find_spawn died at error 5
     # before anything else could. The renderer wants four facts out of the
     # text, so those are what ships: spawn, matched teleporter pairs,
-    # func_plats, and which submodels a trigger hides. Layout must match
+    # func_plats, func_doors, and which submodels a trigger hides. Layout must match
     # EntsHead/EntsTele/EntsPlat in q_ent.bi.
     spawn: tuple[float, float, float] = (0.0, 0.0, 0.0)
     angle = 0.0
@@ -412,6 +412,7 @@ def parse_entities(text: str, nmodels: int) -> bytes:
     trigs: list[tuple[str, int]] = []
     hides: list[int] = []
     plats: list[tuple[int, float, float]] = []
+    doors: list[tuple[int, tuple[float, float, float], float, float, int, int, int]] = []
     items: list[tuple[int, int, tuple[float, float, float]]] = []
     item_kind = {'item_health': 0, 'item_shells': 1}
 
@@ -427,6 +428,23 @@ def parse_entities(text: str, nmodels: int) -> bytes:
             case 'item_health', _, _: return 25
             case _, 1, _: return 40
             case _: return 20
+
+    def door_record(m: int, kv: dict[str, str], box: tuple[float, ...]) -> tuple:
+        # func_door: speed 100, wait 3, lip 8 unless the map says; SetMovedir
+        # makes angle -1 up and -2 down, anything else a heading
+        angle = float(kv.get('angle', '0'))
+        speed = float(kv.get('speed', '0')) or 100.0
+        hold = float(kv.get('wait', '0')) or 3.0
+        lip = float(kv.get('lip', '0')) or 8.0
+        flags = int(kv.get('spawnflags', '0'))
+        match angle:
+            case -1.0: mdir = (0.0, 0.0, 1.0)
+            case -2.0: mdir = (0.0, 0.0, -1.0)
+            case _: mdir = (math.cos(math.radians(angle)), math.sin(math.radians(angle)), 0.0)
+        size = [box[k + 3] - box[k] for k in range(3)]
+        dist = max(sum(abs(mdir[k]) * size[k] for k in range(3)) - lip, 0.0)
+        travel = (mdir[0] * dist, mdir[1] * dist, mdir[2] * dist)
+        return (m, travel, speed, hold, 1 if flags & 1 else 0, 1 if flags & 4 else 0, 1 if 'targetname' in kv else 0)
 
     def model(v: str) -> int:
         m = int(v[1:]) if v.startswith('*') and v[1:].isdigit() else 0
@@ -448,6 +466,8 @@ def parse_entities(text: str, nmodels: int) -> bytes:
                 # any trigger's brush is a volume: e1m1 drew its changelevel
                 # as a column of the "trigger" texture
                 hides.append(model(kv['model']))
+            case 'func_door' if model(kv.get('model', '')):
+                doors.append(door_record(model(kv['model']), kv, boxes[model(kv['model'])]))
             case 'func_plat' if model(kv.get('model', '')):
                 plats.append((model(kv['model']),
                               float(kv.get('speed', '0')),
@@ -459,8 +479,8 @@ def parse_entities(text: str, nmodels: int) -> bytes:
     # a teleporter with no destination still hides its brush
     teles = [(m, *dests[t]) for t, m in trigs if t in dests]
 
-    buf = bytearray(struct.pack('<4f5h', *spawn, angle, nmodels,
-                                len(teles), len(plats), len(hides), len(items)))
+    buf = bytearray(struct.pack('<4f6h', *spawn, angle, nmodels,
+                                len(teles), len(plats), len(hides), len(items), len(doors)))
     for m, org, yaw in teles:
         buf += struct.pack('<h3ff', m, *org, yaw)
     for m, speed, height in plats:
@@ -469,6 +489,8 @@ def parse_entities(text: str, nmodels: int) -> bytes:
         buf += struct.pack('<h', m)
     for kind, amount, org in items:
         buf += struct.pack('<hh3f', kind, amount, *org)
+    for m, travel, speed, hold, start_open, nolink, targeted in doors:
+        buf += struct.pack('<h3fffhhh', m, *travel, speed, hold, start_open, nolink, targeted)
     return bytes(buf)
 
 
@@ -569,7 +591,8 @@ def convert_lumps(d, lumps, outdir):
 
     ent_text = lump(0).split(b'\0')[0].decode('latin-1')
     nmodels = lumps[14][1] // 64
-    out['ents.bin'] = parse_entities(ent_text, nmodels)
+    boxes = [struct.unpack_from('<6f', lump(14), m * 64) for m in range(nmodels)]
+    out['ents.bin'] = parse_entities(ent_text, nmodels, boxes)
 
     # marksurfaces, models: identical either side
     out['lface.bld'] = lump(11)

@@ -28,6 +28,7 @@ type Game
     fight       as PlayerCombat   '' health, shells, kills, the shotgun's timers
     item_count  as integer        '' pickups in item(): the map's, then dropped backpacks
     item_fixed  as integer        '' how many of those are the map's
+    door_count  as integer
     vmdl        as MdlState       '' the view weapon, v_shot
     kmdl        as MdlState       '' the knight
 

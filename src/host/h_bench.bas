@@ -77,6 +77,7 @@ sub host_bench_report ( _
     h_dst_dc as long, _
     brush() as BrushModel, _
     plat() as PlatEnt, _
+    door() as DoorEnt, _
     mdl_ent() as MdlEnt, _
     byval host_ticks as long _
 )
@@ -278,8 +279,14 @@ sub host_bench_report ( _
     print #benchf, "water_level " + ltrim$(str$( g.pl.water_level ))
     print #benchf, "water_type " + ltrim$(str$( g.pl.water_type ))
     print #benchf, "anim_time " + ltrim$(str$( g.rdr.anim_time ))
+    print #benchf, "door_count " + ltrim$(str$( g.door_count ))
+    for  mi = 0 to g.door_count-1
+        print #benchf, "door_" + ltrim$(str$( mi )) + " " + ltrim$(str$( door(mi).model )) + " " + _
+            ltrim$(str$( door(mi).state )) + " " + ltrim$(str$( brush( door(mi).model ).ofs.x )) + " " + _
+            ltrim$(str$( brush( door(mi).model ).ofs.y )) + " " + ltrim$(str$( brush( door(mi).model ).ofs.z ))
+    next mi
     if ( g.plat_count > 0 ) then
-        print #benchf, "plat_zofs " + ltrim$(str$( brush( plat(0).model ).zofs ))
+        print #benchf, "plat_zofs " + ltrim$(str$( brush( plat(0).model ).ofs.z ))
         print #benchf, "plat_state " + ltrim$(str$( plat(0).state ))
     end if
     close #benchf
