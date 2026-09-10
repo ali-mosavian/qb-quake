@@ -1613,6 +1613,15 @@ time), which evicts the surface cache differently, `sc_evict` 10 against
 2, and the frames then differ for reasons that are not the model's
 geometry. That confound cost a false FAIL here before it was recognised.
 
+**The loop is `d_alias.c` now.** Profiled with two models in view, the
+BASIC triangle loop was 19.5 ms of a 27.1 ms model cost against 4.8 for
+the raster calls it fed; in C, with each vertex tested against the five
+planes and projected once so an inside triangle skips the clip, the
+model costs 9.7. Same arithmetic in the same order: the frame is
+byte-identical. Two things bcc taught on the way: a `static` named `cx`
+becomes `DGROUP:cx[di]`, which TASM reads as the register, and a C file
+named like a `.bas` file overwrites its object.
+
 ### And the other half was the clipper's ring walk, not the scanner
 
 Stand next to a spawned model after the clip fix and the streaks were

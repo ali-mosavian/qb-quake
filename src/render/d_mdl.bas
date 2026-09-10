@@ -69,7 +69,6 @@ declare function qglRsPoly ( byval dst as long, _
                              byval mode as integer, _
                              byval src as long ) as integer
 declare function qglSfZMode ( byval surf as long, byval mode as integer ) as integer
-declare function sys_rdtsc ( ) as long
 declare function qglSfNew ( _
     byval wid as integer, _
     byval hgt as integer, _
@@ -93,28 +92,24 @@ declare sub qglFileClose ( byval h as integer )
 ''
 '' This module's own procedures.
 ''
-declare sub mdl_rotate_all ( _
-    g as Game, _
+declare function mdl_draw_tris ( _
+    tri() as MdlTri, _
+    byval ntri as integer, _
+    byval nvert as integer, _
     byval frame as integer, _
-    byval yaw as single, _
-    wxr() as single, _
-    wyr() as single, _
-    wzr() as single _
-)
-'' Scratch, per-vertex: sits after '$STATIC deliberately, same reasoning
-'' as d_poly.bas's own prj_x/prj_y/prj_w -- touched per vertex per frame,
-'' and not COMMON because nothing outside this module reads it.
-dim shared mdl_wxr( MDL_MAXV ) as single
-dim shared mdl_wyr( MDL_MAXV ) as single
-dim shared mdl_wzr( MDL_MAXV ) as single
-'' Clip space, not screen space. A near-plane clip has to interpolate
-'' BEFORE the perspective divide -- that is the whole point of it -- so
-'' these hold the numerators and w, and the divide happens per emitted
-'' corner down in the triangle loop.
-dim shared mdl_cx( MDL_MAXV ) as single
-dim shared mdl_cy( MDL_MAXV ) as single
-dim shared mdl_cw( MDL_MAXV ) as single
-dim shared mdl_okv( MDL_MAXV ) as integer
+    org as Vec3, _
+    byval cyaw as single, _
+    byval syaw as single, _
+    scale as Vec3, _
+    origin as Vec3, _
+    byval vtx_hnd as integer, _
+    byval skin as long, _
+    mtx_fin as Mat4, _
+    byval xresh as single, _
+    byval yresh as single, _
+    byval z_near as single, _
+    byval dst as long _
+) as integer
 
 ''::::::::::::::
 '' name: mdl_load
@@ -265,60 +260,12 @@ sub mdl_load ( _
 end sub
 
 ''::::::::::::::
-'' name: mdl_rotate_all
-'' desc: the WHOLE vertex array, one call -- not one call per vertex.
-''       Writes wxr()/wyr()/wzr(), BSP space (Z up), for every vertex of
-''       this frame. yaw is degrees, rotating the model's local +X
-''       (forward) into the world the same way d_mdl.c's real-geometry
-''       path does. g.mdl.vtx_hnd is one EMS page (qglGemAlloc), mapped
-''       through PAGE_SLOT -- flat, frame-major, one PEEK per byte, same
-''       as reading through any other far pointer.
-''::::::::::::::
-sub mdl_rotate_all ( _
-    g as Game, _
-    byval frame as integer, _
-    byval yaw as single, _
-    wxr() as single, _
-    wyr() as single, _
-    wzr() as single _
-)
-    dim v as integer, voff as long
-    dim cy as single, sn as single, rx as single, ry as single
-    dim rad as single
-    dim bx as integer, by as integer, bz as integer
-    dim vtxseg as integer
-
-    rad = yaw * 0.017453293
-    cy = cos( rad ) : sn = sin( rad )
-
-    '' PAGE_SLOT, shared with nodes/leaves/clips/lightmap/geometry --
-    '' qglGemMap's own record of the slot means this costs nothing when
-    '' nobody else has claimed the slot since our own last read, and a
-    '' real remap (still correct, just not free) when they have.
-    vtxseg = qglGemMap( g.mdl.vtx_hnd, 0, PAGE_SLOT )
-    def seg = vtxseg
-
-    for v = 0 to g.mdl.nvert - 1
-        voff = ( clng( frame ) * g.mdl.nvert + v ) * 3
-        bx = peek( voff )
-        by = peek( voff + 1 )
-        bz = peek( voff + 2 )
-
-        rx = csng( bx ) * g.mdl.scale.x + g.mdl.origin.x
-        ry = csng( by ) * g.mdl.scale.y + g.mdl.origin.y
-        wxr( v ) = rx * cy - ry * sn
-        wyr( v ) = rx * sn + ry * cy
-        wzr( v ) = csng( bz ) * g.mdl.scale.z + g.mdl.origin.z
-    next v
-    def seg   '' restore the default segment -- see peektest.bas's own note
-end sub
-
-''::::::::::::::
 '' name: mdl_draw
 '' desc: one model, one frame, textured, through mtx_fin -- the same
 ''       lookAt*projection matrix host_render already built for the
 ''       world this frame, so scale and FOV match exactly. org is the
 ''       model's world position, BSP space (Z up); yaw is degrees.
+''       The work is d_alias.c's; this picks the frame and hands over.
 ''       Depth-tested like a brush entity (d_faces.c's own convention:
 ''       the world only WRITES, arrives front to back by BSP order; an
 ''       object dropped into that order without the world's own
@@ -334,206 +281,29 @@ sub mdl_draw ( _
     byval z_near as single, _
     byval dst as long _
 )
-    dim v as integer, j as integer, k as integer, k2 as integer
-    dim wx as single, wy as single, wz as single
-    dim rx as single, ry as single, rz as single    '' renderer space, Y up
-    dim rw as single
-    dim area as single
-    dim zm as integer
     dim frame as integer
-    dim qdst as long
-    dim qskin as long
-    dim qz as integer
-    '' Five planes add at most one corner each, so eight is the ceiling
-    '' and MDL_CLIPV is nine. qglRsPoly scans any convex polygon.
-    dim qv( MDL_CLIPV ) as QglVtx
-    dim ia(2) as integer                            '' the triangle's corners
-    dim t0 as long, t1 as long, tr0 as long, tras as long
-    dim cbx(1, MDL_CLIPV) as single                 '' the ping-pong rings,
-    dim cby(1, MDL_CLIPV) as single                 '' clip space
-    dim cbw(1, MDL_CLIPV) as single
-    dim cbu(1, MDL_CLIPV) as single
-    dim cbv(1, MDL_CLIPV) as single
-    dim cd( MDL_CLIPV ) as single                   '' distance to this plane
-    dim cn(1) as integer
-    dim sbuf as integer, dbuf as integer, cp as integer
-    dim nin as integer, nout as integer
-    dim f as single
+    dim rad as single
 
     if ( g.mdl.loaded = 0 ) then exit sub
 
     '' ent.anim_frame is mdl_think's own state (pl_move.bas), 0..7
-    '' within whichever cycle ent.state selects -- the SAME tick that
-    '' picks the monster's movement distance also picks its displayed
-    '' frame, matching soldier.qc's state-machine frames exactly rather
-    '' than a fixed 10Hz-of-wall-clock guess. Stand frames then run
-    '' frames, contiguous in the one EMS-page vertex block (mkmdl.py's
-    '' own order): frame 8 is run1.
+    '' within whichever cycle ent.state selects: the SAME tick that
+    '' picks the movement distance picks the displayed frame. Stand
+    '' frames then run frames, contiguous in the one EMS-page vertex
+    '' block (mkmdl.py's own order): frame 8 is run1.
     if ( ent.state = MDL_ST_STAND% ) then
         frame = ent.anim_frame
     else
         frame = MDL_STAND_FRAMES% + ent.anim_frame
     end if
-    t0 = sys_rdtsc()
-    mdl_rotate_all g, frame, ent.yaw, mdl_wxr(), mdl_wyr(), mdl_wzr()
-    t1 = sys_rdtsc()
-    g.pt.mrot_sum = g.pt.mrot_sum + (t1 - t0) / 1000000.0
-    t0 = t1
 
-    for v = 0 to g.mdl.nvert - 1
-        '' BSP space (Z up), model-local rotation already applied, now
-        '' translated to the world position --
-        wx = ent.pos.x + mdl_wxr( v )
-        wy = ent.pos.y + mdl_wyr( v )
-        wz = ent.pos.z + mdl_wzr( v )
-
-        '' -- then swapped to renderer space (Y up) the same way
-        '' d_faces.c reads a raw BSP vertex: x unchanged, z becomes y.
-        rx = wx : ry = wz : rz = wy
-
-        '' No divide here. A vertex in front of the near plane by a
-        '' hair has a colossal 1/w, and projecting it flings the corner
-        '' thousands of pixels off screen -- which is what the triangle
-        '' loop below used to draw, as a sliver stretched across the
-        '' frame. Keep w and clip against it first.
-        mdl_cw( v ) = rx * mtx_fin.m14 + ry * mtx_fin.m24 + rz * mtx_fin.m34 + mtx_fin.m44
-        mdl_cx( v ) = rx * mtx_fin.m11 + ry * mtx_fin.m21 + rz * mtx_fin.m31 + mtx_fin.m41
-        mdl_cy( v ) = rx * mtx_fin.m12 + ry * mtx_fin.m22 + rz * mtx_fin.m32 + mtx_fin.m42
-        mdl_okv( v ) = ( mdl_cw( v ) >= z_near )
-    next v
-    t1 = sys_rdtsc()
-    g.pt.mxf_sum = g.pt.mxf_sum + (t1 - t0) / 1000000.0
-    t0 = t1
-    tras = 0
-
-    '' qgl from here: the destination and the skin are both Surfaces.
-    '' The skin is EMS and is handed to every triangle, so its page is
-    '' mapped inside the draw that reads it and never held across one.
-    ''
-    '' A model tests depth, never merely writes it: it is drawn after the
-    '' world, which the BSP order already put in front of it where it
-    '' belongs. Set once for the whole model -- nothing between these
-    '' triangles draws anything else -- and left OFF for us by qglSfZMode
-    '' itself when the destination has no depth buffer, which is -noz.
-    qdst  = dst
-    qskin = g.mdl.skin
-    zm    = qglSfZMode%( qdst, QGL_Z_TEST )
-
-    for j = 0 to g.mdl.ntri - 1
-        ia(0) = tri( j ).a : ia(1) = tri( j ).b : ia(2) = tri( j ).c
-        nout = 0
-
-        if ( mdl_okv( ia(0) ) or mdl_okv( ia(1) ) or mdl_okv( ia(2) ) ) then
-            sbuf  = 0
-            cn(0) = 3
-            for k = 0 to 2
-                cbx(0, k) = mdl_cx( ia(k) )
-                cby(0, k) = mdl_cy( ia(k) )
-                cbw(0, k) = mdl_cw( ia(k) )
-            next k
-            cbu(0, 0) = csng( tri(j).u1 ) / MDL_UV_SCALE
-            cbu(0, 1) = csng( tri(j).u2 ) / MDL_UV_SCALE
-            cbu(0, 2) = csng( tri(j).u3 ) / MDL_UV_SCALE
-            cbv(0, 0) = csng( tri(j).v1 ) / MDL_UV_SCALE
-            cbv(0, 1) = csng( tri(j).v2 ) / MDL_UV_SCALE
-            cbv(0, 2) = csng( tri(j).v3 ) / MDL_UV_SCALE
-
-            '' Sutherland-Hodgman in CLIP space against all five planes:
-            '' w >= z_near, then |x| <= w and |y| <= w, which is the view
-            '' rectangle expressed before the divide.
-            ''
-            '' qgl clips to the view rectangle too (clip.asm), but AFTER
-            '' the divide, and by then the damage is done: a corner whose
-            '' w is a hair above z_near projects to tens of thousands of
-            '' pixels, and clipping that to the rect does not discard the
-            '' triangle -- it stretches the surviving sliver across the
-            '' frame. That is the wandering streak. Clipping x and y
-            '' against w here bounds every projected corner to the
-            '' viewport, so nothing reaches qgl that it has to rescue.
-            for cp = 0 to 4
-                nin = 0
-                for k = 0 to cn(sbuf) - 1
-                    select case cp
-                    case 0    : cd(k) = cbw(sbuf, k) - z_near
-                    case 1    : cd(k) = cbw(sbuf, k) - cbx(sbuf, k)
-                    case 2    : cd(k) = cbw(sbuf, k) + cbx(sbuf, k)
-                    case 3    : cd(k) = cbw(sbuf, k) - cby(sbuf, k)
-                    case else : cd(k) = cbw(sbuf, k) + cby(sbuf, k)
-                    end select
-                    if ( cd(k) >= 0.0 ) then nin = nin + 1
-                next k
-
-                if ( nin = 0 ) then
-                    cn(sbuf) = 0
-                    exit for
-                end if
-
-                '' Wholly inside: the ring is already the answer for this
-                '' plane, and copying it would only cost.
-                if ( nin < cn(sbuf) ) then
-                    dbuf = 1 - sbuf
-                    nout = 0
-                    for k = 0 to cn(sbuf) - 1
-                        k2 = k + 1 : if ( k2 = cn(sbuf) ) then k2 = 0
-
-                        if ( cd(k) >= 0.0 ) then
-                            cbx(dbuf, nout) = cbx(sbuf, k)
-                            cby(dbuf, nout) = cby(sbuf, k)
-                            cbw(dbuf, nout) = cbw(sbuf, k)
-                            cbu(dbuf, nout) = cbu(sbuf, k)
-                            cbv(dbuf, nout) = cbv(sbuf, k)
-                            nout = nout + 1
-                        end if
-
-                        if ( (cd(k) >= 0.0) <> (cd(k2) >= 0.0) ) then
-                            f = cd(k) / ( cd(k) - cd(k2) )
-                            cbx(dbuf, nout) = cbx(sbuf,k) + f * ( cbx(sbuf,k2) - cbx(sbuf,k) )
-                            cby(dbuf, nout) = cby(sbuf,k) + f * ( cby(sbuf,k2) - cby(sbuf,k) )
-                            cbw(dbuf, nout) = cbw(sbuf,k) + f * ( cbw(sbuf,k2) - cbw(sbuf,k) )
-                            cbu(dbuf, nout) = cbu(sbuf,k) + f * ( cbu(sbuf,k2) - cbu(sbuf,k) )
-                            cbv(dbuf, nout) = cbv(sbuf,k) + f * ( cbv(sbuf,k2) - cbv(sbuf,k) )
-                            nout = nout + 1
-                        end if
-                    next k
-                    cn(dbuf) = nout
-                    sbuf     = dbuf
-                end if
-            next cp
-
-            nout = cn(sbuf)
-        end if
-
-        if ( nout >= 3 ) then
-            '' The divide, finally, on corners that are all inside the
-            '' frustum and so all project onto the viewport.
-            for k = 0 to nout - 1
-                rw = 1.0 / cbw( sbuf, k )
-                qv(k).x = xresh + cbx( sbuf, k ) * rw * xresh
-                qv(k).y = yresh - cby( sbuf, k ) * rw * yresh
-                qv(k).z = rw
-                '' RAW u and v, not u/w. The model is drawn affine --
-                '' QGL_M_TEX below, uglTriT's mode, which is what this
-                '' path has always been -- and the affine filler steps u
-                '' and v linearly in screen space, so it wants the
-                '' coordinates themselves. Only QGL_M_PTEX owes the
-                '' divided pair (d_faces.c's pu[j] = vt_u[j]*rw).
-                qv(k).u = cbu( sbuf, k )
-                qv(k).v = cbv( sbuf, k )
-            next k
-
-            '' Backface after the clip, not before: clipping preserves
-            '' winding, so the first three corners answer for all of them.
-            area = ( qv(1).x - qv(0).x ) * ( qv(2).y - qv(0).y ) _
-                 - ( qv(2).x - qv(0).x ) * ( qv(1).y - qv(0).y )
-            if ( area < 0.0 ) then
-                tr0 = sys_rdtsc()
-                qz = qglRsPoly%( qdst, qv(0), nout, QGL_M_TEX, qskin )
-                tras = tras + (sys_rdtsc() - tr0)
-                g.pt.mtri_n = g.pt.mtri_n + 1
-            end if
-        end if
-    next j
-    t1 = sys_rdtsc()
-    g.pt.mras_sum = g.pt.mras_sum + tras / 1000000.0
-    g.pt.mclip_sum = g.pt.mclip_sum + (t1 - t0 - tras) / 1000000.0
+    '' Everything from here is d_alias.c: the vertex rotation and
+    '' transform, the clip, the projection and the raster calls, once
+    '' per model rather than 328 BASIC iterations.
+    rad = ent.yaw * 0.017453293
+    g.pt.mtri_n = g.pt.mtri_n + mdl_draw_tris( tri(), g.mdl.ntri, g.mdl.nvert, frame, _
+                                               ent.pos, cos( rad ), sin( rad ), _
+                                               g.mdl.scale, g.mdl.origin, _
+                                               g.mdl.vtx_hnd, g.mdl.skin, mtx_fin, _
+                                               xresh, yresh, z_near, dst )
 end sub

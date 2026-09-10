@@ -1,0 +1,219 @@
+/*
+ * d_alias.c -- one alias model's triangles, in one call.
+ *
+ * The BASIC loop this replaces cost 19.5 ms a frame for two models in
+ * view -- 60 us a triangle for a five-plane clip, six UV converts and a
+ * projection, against 15 us for the rasteriser it fed. Same arithmetic,
+ * same order, so the picture is the one d_mdl.bas drew; d_faces.c is
+ * the precedent for the world's faces.
+ *
+ * Every vertex of the frame is rotated by the yaw and transformed
+ * through mtx_fin, then each triangle is clipped in CLIP space against
+ * w >= z_near, |x| <= w and |y| <= w -- the view rectangle before the
+ * divide, which is what bounds a projected corner to the viewport
+ * (AGENTS.md, the wandering streaks) -- projected, backface-tested and
+ * handed to qglRsPoly affine. Returns the triangles handed over.
+ */
+
+#include "qcshared.h"
+
+extern short pascal far qglRsPoly  ( long dst, void far *v, short cnt,
+                                     short mode, long src );
+extern short pascal far qglSfZMode ( long surf, short mode );
+extern short pascal far qglGemMap  ( short h, short pg, short slot );
+
+#define QGL_M_TEX    2
+#define QGL_Z_TEST   2
+#define PAGE_SLOT    2          /* q_map.bi: shared with nodes, leaves, lightmap */
+#define MDL_MAXV     191        /* q_mdl.bi */
+#define MDL_CLIPV    9          /* five planes add at most one corner each */
+#define MDL_UV_SCALE 32767.0f
+
+typedef struct { float x, y, z, u, v; } QglVtx;
+typedef struct { short a, b, c, u1, v1, u2, v2, u3, v3; } MdlTri;
+
+/* Near, in DGROUP, like d_faces.c's scratch: 3 KB. Far statics here
+   made bcc emit es:okv[bx], which TASM 4.1 rejects. */
+static float near vx[MDL_MAXV + 1];
+static float near vy[MDL_MAXV + 1];
+static float near vw[MDL_MAXV + 1];
+static char  near okv[MDL_MAXV + 1];    /* in front of the near plane */
+/* Inside all five planes, and if so its projection, once per vertex
+   rather than once per corner of every triangle that shares it. A
+   triangle whose three corners are all inside skips the clip outright,
+   which is nearly every triangle of a model that is on screen. */
+static char  near inv[MDL_MAXV + 1];
+static float near sx[MDL_MAXV + 1];
+static float near sy[MDL_MAXV + 1];
+static float near srw[MDL_MAXV + 1];
+
+/* The ping-pong clip rings and the projected polygon. */
+static float near cbx[2][MDL_CLIPV], cby[2][MDL_CLIPV], cbw[2][MDL_CLIPV];
+static float near cbu[2][MDL_CLIPV], cbv[2][MDL_CLIPV];
+static float near cd[MDL_CLIPV];
+static QglVtx near qv[MDL_CLIPV];
+
+short pascal far mdl_draw_tris(
+    BASARRAY *a_tri,
+    short     ntri,
+    short     nvert,
+    short     frame,
+    Vec3     *org,              /* ent.pos, BSP space, Z up */
+    float     cyaw,             /* cos and sin of the yaw, from BASIC */
+    float     syaw,
+    Vec3     *scale,            /* vertex byte -> model unit */
+    Vec3     *origin,
+    short     vtx_hnd,
+    long      skin,
+    float    *m,                /* Mat4, 16 floats */
+    float     xresh,
+    float     yresh,
+    float     z_near,
+    long      dst )
+{
+    MdlTri far *tri = (MdlTri far *) a_tri->farptr;
+    unsigned char far *vb;
+    short v, j, k, k2, cp, nin, nout, sbuf, dbuf, drawn = 0;
+    short ia[3], cn[2];
+    float rx, ry, rz, wx, wy, wz, rw, f, area;
+
+    /* The frame's vertices: three bytes each, frames contiguous in the
+       one EMS page. qglGemMap's own record makes this free when nobody
+       else has taken the slot since the last model. */
+    vb = (unsigned char far *) ((unsigned long) qglGemMap( vtx_hnd, 0, PAGE_SLOT ) << 16);
+    vb += (long) frame * nvert * 3;
+
+    for ( v = 0; v < nvert; v++ ) {
+        rx = (float) vb[v*3]     * scale->x + origin->x;
+        ry = (float) vb[v*3 + 1] * scale->y + origin->y;
+        wx = org->x + ( rx * cyaw - ry * syaw );
+        wy = org->y + ( rx * syaw + ry * cyaw );
+        wz = org->z + ( (float) vb[v*3 + 2] * scale->z + origin->z );
+
+        /* Renderer space is Y up: x unchanged, z becomes y -- the same
+           swap d_faces.c makes reading a raw BSP vertex. */
+        rx = wx; ry = wz; rz = wy;
+
+        /* No divide here: a corner a hair in front of the near plane has
+           a colossal 1/w. Keep w and clip against it first. */
+        vw[v] = rx*m[3] + ry*m[7] + rz*m[11] + m[15];
+        vx[v] = rx*m[0] + ry*m[4] + rz*m[ 8] + m[12];
+        vy[v] = rx*m[1] + ry*m[5] + rz*m[ 9] + m[13];
+        okv[v] = ( vw[v] >= z_near );
+        inv[v] = okv[v] && vw[v] - vx[v] >= 0.0f && vw[v] + vx[v] >= 0.0f
+                        && vw[v] - vy[v] >= 0.0f && vw[v] + vy[v] >= 0.0f;
+        if ( inv[v] ) {
+            /* The same expressions the clipped path evaluates, so the
+               two agree to the bit on a corner that needs no clip. */
+            rw = 1.0f / vw[v];
+            sx[v] = xresh + vx[v] * rw * xresh;
+            sy[v] = yresh - vy[v] * rw * yresh;
+            srw[v] = rw;
+        }
+    }
+
+    /* A model tests depth, never merely writes it: it comes after the
+       world, which the BSP order put in front of it where it belongs.
+       Off for us by qglSfZMode itself when dst has no depth buffer. */
+    qglSfZMode( dst, QGL_Z_TEST );
+
+    for ( j = 0; j < ntri; j++ ) {
+        ia[0] = tri[j].a; ia[1] = tri[j].b; ia[2] = tri[j].c;
+        if ( !( okv[ia[0]] || okv[ia[1]] || okv[ia[2]] ) ) continue;
+
+        if ( inv[ia[0]] && inv[ia[1]] && inv[ia[2]] ) {
+            qv[0].x = sx[ia[0]]; qv[0].y = sy[ia[0]]; qv[0].z = srw[ia[0]];
+            qv[1].x = sx[ia[1]]; qv[1].y = sy[ia[1]]; qv[1].z = srw[ia[1]];
+            qv[2].x = sx[ia[2]]; qv[2].y = sy[ia[2]]; qv[2].z = srw[ia[2]];
+            area = ( qv[1].x - qv[0].x ) * ( qv[2].y - qv[0].y )
+                 - ( qv[2].x - qv[0].x ) * ( qv[1].y - qv[0].y );
+            if ( area >= 0.0f ) continue;       /* backface: no UV work at all */
+            qv[0].u = (float) tri[j].u1 / MDL_UV_SCALE; qv[0].v = (float) tri[j].v1 / MDL_UV_SCALE;
+            qv[1].u = (float) tri[j].u2 / MDL_UV_SCALE; qv[1].v = (float) tri[j].v2 / MDL_UV_SCALE;
+            qv[2].u = (float) tri[j].u3 / MDL_UV_SCALE; qv[2].v = (float) tri[j].v3 / MDL_UV_SCALE;
+            qglRsPoly( dst, (void far *) qv, 3, QGL_M_TEX, skin );
+            drawn++;
+            continue;
+        }
+
+        sbuf = 0;
+        cn[0] = 3;
+        for ( k = 0; k < 3; k++ ) {
+            cbx[0][k] = vx[ia[k]];
+            cby[0][k] = vy[ia[k]];
+            cbw[0][k] = vw[ia[k]];
+        }
+        cbu[0][0] = (float) tri[j].u1 / MDL_UV_SCALE;
+        cbu[0][1] = (float) tri[j].u2 / MDL_UV_SCALE;
+        cbu[0][2] = (float) tri[j].u3 / MDL_UV_SCALE;
+        cbv[0][0] = (float) tri[j].v1 / MDL_UV_SCALE;
+        cbv[0][1] = (float) tri[j].v2 / MDL_UV_SCALE;
+        cbv[0][2] = (float) tri[j].v3 / MDL_UV_SCALE;
+
+        /* Sutherland-Hodgman against the five clip-space planes. */
+        for ( cp = 0; cp < 5; cp++ ) {
+            nin = 0;
+            for ( k = 0; k < cn[sbuf]; k++ ) {
+                switch ( cp ) {
+                case 0:  cd[k] = cbw[sbuf][k] - z_near;      break;
+                case 1:  cd[k] = cbw[sbuf][k] - cbx[sbuf][k]; break;
+                case 2:  cd[k] = cbw[sbuf][k] + cbx[sbuf][k]; break;
+                case 3:  cd[k] = cbw[sbuf][k] - cby[sbuf][k]; break;
+                default: cd[k] = cbw[sbuf][k] + cby[sbuf][k]; break;
+                }
+                if ( cd[k] >= 0.0f ) nin++;
+            }
+            if ( nin == 0 ) { cn[sbuf] = 0; break; }
+            if ( nin == cn[sbuf] ) continue;      /* wholly inside */
+
+            dbuf = 1 - sbuf;
+            nout = 0;
+            for ( k = 0; k < cn[sbuf]; k++ ) {
+                k2 = k + 1; if ( k2 == cn[sbuf] ) k2 = 0;
+                if ( cd[k] >= 0.0f ) {
+                    cbx[dbuf][nout] = cbx[sbuf][k];
+                    cby[dbuf][nout] = cby[sbuf][k];
+                    cbw[dbuf][nout] = cbw[sbuf][k];
+                    cbu[dbuf][nout] = cbu[sbuf][k];
+                    cbv[dbuf][nout] = cbv[sbuf][k];
+                    nout++;
+                }
+                if ( (cd[k] >= 0.0f) != (cd[k2] >= 0.0f) ) {
+                    f = cd[k] / ( cd[k] - cd[k2] );
+                    cbx[dbuf][nout] = cbx[sbuf][k] + f * ( cbx[sbuf][k2] - cbx[sbuf][k] );
+                    cby[dbuf][nout] = cby[sbuf][k] + f * ( cby[sbuf][k2] - cby[sbuf][k] );
+                    cbw[dbuf][nout] = cbw[sbuf][k] + f * ( cbw[sbuf][k2] - cbw[sbuf][k] );
+                    cbu[dbuf][nout] = cbu[sbuf][k] + f * ( cbu[sbuf][k2] - cbu[sbuf][k] );
+                    cbv[dbuf][nout] = cbv[sbuf][k] + f * ( cbv[sbuf][k2] - cbv[sbuf][k] );
+                    nout++;
+                }
+            }
+            cn[dbuf] = nout;
+            sbuf = dbuf;
+        }
+        nout = cn[sbuf];
+        if ( nout < 3 ) continue;
+
+        /* The divide, on corners that are all inside the frustum. RAW u
+           and v: the model is drawn affine, and that filler steps them
+           linearly in screen space. */
+        for ( k = 0; k < nout; k++ ) {
+            rw = 1.0f / cbw[sbuf][k];
+            qv[k].x = xresh + cbx[sbuf][k] * rw * xresh;
+            qv[k].y = yresh - cby[sbuf][k] * rw * yresh;
+            qv[k].z = rw;
+            qv[k].u = cbu[sbuf][k];
+            qv[k].v = cbv[sbuf][k];
+        }
+
+        /* Backface after the clip: clipping preserves winding, so the
+           first three corners answer for all of them. */
+        area = ( qv[1].x - qv[0].x ) * ( qv[2].y - qv[0].y )
+             - ( qv[2].x - qv[0].x ) * ( qv[1].y - qv[0].y );
+        if ( area < 0.0f ) {
+            qglRsPoly( dst, (void far *) qv, nout, QGL_M_TEX, skin );
+            drawn++;
+        }
+    }
+    return drawn;
+}

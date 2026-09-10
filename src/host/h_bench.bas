@@ -184,10 +184,6 @@ sub host_bench_report ( _
         print #benchf, "pt_mdl_max " + ltrim$(str$( g.pt.mdl_max * 1000.0 ))
         print #benchf, "pt_loop_mean " + ltrim$(str$( (g.pt.loop_sum / g.ft.n) * 1000.0 ))
         print #benchf, "pt_loop_max " + ltrim$(str$( g.pt.loop_max * 1000.0 ))
-        print #benchf, "pt_mrot_mean " + ltrim$(str$( (g.pt.mrot_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_mxf_mean " + ltrim$(str$( (g.pt.mxf_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_mclip_mean " + ltrim$(str$( (g.pt.mclip_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_mras_mean " + ltrim$(str$( (g.pt.mras_sum / g.ft.n) * 1000.0 ))
         print #benchf, "mtri_per_frame " + ltrim$(str$( g.pt.mtri_n / g.ft.n ))
     end if
     print #benchf, "polys " + ltrim$(str$( g.rdr.polys ))

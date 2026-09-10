@@ -167,13 +167,6 @@ type PhaseTimes
     mdl_max     as single
     loop_sum    as single     '' the loop body, frame clock to frame count;
     loop_max    as single     '' ft minus this is what the loop's own edges cost
-    '' Inside mdl_draw, RDTSC microseconds summed as seconds, per drawn
-    '' model: the frame's yaw rotation, the vertex transform, the
-    '' triangle loop with its raster calls taken out, and those calls.
-    mrot_sum    as single
-    mxf_sum     as single
-    mclip_sum   as single
-    mras_sum    as single
     mtri_n      as long       '' triangles handed to qglRsPoly
     present_sum as single     '' vid_update: blit to the screen
     present_max as single
