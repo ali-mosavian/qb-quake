@@ -39,7 +39,6 @@ option explicit
 '$include: 'qgl.bi'
 '$include: 'pal.bi'
 '$include: 'kbd.bi'
-'$include: 'tmr.bi'
 '$include: 'dos.bi'
 '$include: 'arch.bi'
 '$include: 'uglu.bi'
@@ -126,6 +125,8 @@ declare function qglSfInit () as integer
 '' uglRestore has nothing left to restore.
 declare sub qglVgaShutdown ()
 declare function qglVgaScreen () as long
+declare sub qglTmrShutdown ()
+declare function qglTmrTicks () as long
 declare function qglSfZNew ( byval surf as long, byval kind as integer ) as long
 declare sub qglDrFill ( byval d as long, _
                         byval x0 as integer, _
@@ -652,9 +653,8 @@ sub host_init ( _
         sys_error "0x0043, d_faces.c's DrawParams layout is stale, len is" + str$( len( dp_probe ) ) + " drop at" + str$( varptr( dp_probe.qgl_drop ) - varptr( dp_probe ) )
     end if
 
-    '' TIMER, not a TMR: tmrInit does not run until inputOpen, the
-    '' second-to-last step below, so a TMR counter reads zero for almost
-    '' the whole load. TIMER is ~55ms granular, which is fine for phases
+    '' TIMER, not qglTmrTicks: the PIT is not hooked until sys_time_init,
+    '' after the load. TIMER is ~55ms granular, which is fine for phases
     '' measured in seconds.
     t_start = timer
 
@@ -843,7 +843,6 @@ sub host_main ( _
     dim xresh as single, yresh as single
     
     dim i as integer
-    dim hz as long
     dim frame_no as long
     dim pt0 as single, ptd as single
     dim pr0 as long, prd as long
@@ -889,8 +888,6 @@ sub host_main ( _
     
     dim zz as long                  '' soaks up uglZScale/uglZMode's
                                     '' return; the call is the point
-    hz = tmrMs2Freq&( 1000 )
-    tmrNew g.env.sec_timer, TMR.AUTOINIT, hz    
     
     h_dst_dc = g.env.h_back_bdc
     
@@ -961,6 +958,7 @@ sub host_main ( _
     ''
     ''
     sys_time_init
+    g.env.sec_mark = qglTmrTicks()
 
     do
     	''
@@ -1083,7 +1081,6 @@ sub host_main ( _
 
     loop while ( g.env.keyboard.esc = FALSE )
     
-    tmrDel g.env.sec_timer
     if ( g.cam.script_file <> 0 ) then close #g.cam.script_file
 
 end sub
@@ -1093,9 +1090,10 @@ end sub
 sub host_shutdown
     
     ''
-    '' Restore the video mode, then end mgl. uglEnd stays until mgl does:
-    '' it still holds the timer, the keyboard and the mouse.
+    '' Give the PIT and the mode back, then end mgl. uglEnd stays until
+    '' mgl does: it still holds the keyboard and the mouse.
     ''
+    qglTmrShutdown
     qglVgaShutdown
     uglEnd
     

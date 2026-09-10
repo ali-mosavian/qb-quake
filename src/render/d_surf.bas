@@ -4,7 +4,6 @@ option explicit
 '$include: 'qgl.bi'
 '$include: 'pal.bi'
 '$include: 'kbd.bi'
-'$include: 'tmr.bi'
 '$include: 'dos.bi'
 '$include: 'ems.bi'
 '$include: 'arch.bi'

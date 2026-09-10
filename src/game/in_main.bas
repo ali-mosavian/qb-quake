@@ -9,7 +9,6 @@ option explicit
 '$include: 'ugl.bi'
 '$include: 'pal.bi'
 '$include: 'kbd.bi'
-'$include: 'tmr.bi'
 '$include: 'dos.bi'
 '$include: 'arch.bi'
 '$include: 'uglu.bi'
@@ -84,11 +83,6 @@ sub in_init ( _
     '' Init keyboard
     ''
     kbdInit g.env.keyboard
-    
-    ''
-    '' Init timer
-    ''
-    tmrInit
 
 end sub
 

@@ -332,8 +332,7 @@ type Env
     mouse       as MOUSEINF
     keyboard    as TKBD
     
-    fps_timer   as TMR                      '' expires every frame
-    sec_timer   as TMR                      '' /       every second
+    sec_mark    as long                     '' tick of the last fps roll
     
     ''
     '' The RENDER target, which need not be the video mode. Everything

@@ -15,7 +15,6 @@ option explicit
 '$include: 'ugl.bi'
 '$include: 'pal.bi'
 '$include: 'kbd.bi'
-'$include: 'tmr.bi'
 '$include: 'dos.bi'
 '$include: 'arch.bi'
 '$include: 'uglu.bi'

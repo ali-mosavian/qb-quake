@@ -41,7 +41,7 @@ QGLSRC := $(QGL)/file.asm $(QGL)/vga.asm $(QGLCORE) \
           $(QGL)/txt.asm $(QGL)/dr.asm \
           $(QGL)/z.asm $(QGL)/clip.asm $(QGL)/rs.asm $(QGL)/sb.asm \
           $(QGL)/zip.asm $(QGL)/ar.asm \
-          $(QGL)/log.asm \
+          $(QGL)/log.asm $(QGL)/tmr.asm \
           $(QGL)/b8/b8fill.asm $(QGL)/b8/b8span.asm
 # Objects are DERIVED from QGLSRC, never listed again. Hand-listing them
 # meant every new module had to be added in three places, and twice a

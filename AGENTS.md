@@ -1108,14 +1108,17 @@ means it flew at whatever speed the framerate happened to give it.
 **The frame clock calibrates itself, and has to.** Asking uGL for a 1 kHz
 timer and dividing the counter by 1000 gave a dt seven times too small: the
 physics was frame-rate independent but ran in slow motion, every speed in the
-game being units per seven seconds. What the timer actually delivers is about
-144 Hz, and that is a property of uGL and the emulator underneath it, not
-something to hardcode. `sys_time_init` measures it against DOS's own TIMER.
+game being units per seven seconds. What mgl delivered was 145.6 Hz: its
+`tmrInit` programmed a PIT divisor of 8192 whatever was asked for. The PIT
+is qgl's now -- `src/qgl/tmr.asm` hooks INT 8 at a real 1000 Hz and chains
+the BIOS handler each time the divisor accumulates to 65536, so DOS's clock
+keeps its 18.2 -- and `sys_time_init` still measures it against DOS's own
+TIMER, because the emulator is still underneath it.
 
 That measurement aligns both ends of its window to a TIMER edge, because
 TIMER only ticks every 55ms: without the alignment the same binary measured
 142.9 Hz on one run and 148.1 on the next, and the game ran 4% faster on one
-of them. Aligned, three runs give 144.0, 145.5, 144.0.
+of them. Aligned, three runs gave 144.0, 145.5, 144.0 on mgl's timer.
 
 **Controls.** W/S forward and back, A/D strafe left and right, mouse looks,
 mouse buttons also walk. Space jumps. F1 mips, F2 render mode, F3 birdseye,
@@ -1966,8 +1969,10 @@ code failed too, which is how the loop above was found.
 -- `qgl_avail` had been beside it saying 64 bytes where it said
 246,848, and the difference is BASIC's heap, not free memory --
 `emsCheck` is `qglGemFrame`, and `-dumptex` reads its palette from
-`pal.raw` instead of the DAC. What mgl still holds is the timer, the
-keyboard and the mouse, and `uglInit`/`uglEnd` around them.
+`pal.raw` instead of the DAC. The timer is `qglTmrInit`/`qglTmrTicks`/
+`qglTmrShutdown`, `t29tmr` proving the BIOS chain and the restore. What
+mgl still holds is the keyboard and the mouse, and `uglInit`/`uglEnd`
+around them.
 
 **`sc_selftest` wrote its row through mgl and read it back through
 mgl, on a qgl Surface.** `uglRowWriteBuff`/`uglRowRead` take the

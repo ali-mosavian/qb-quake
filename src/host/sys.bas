@@ -11,7 +11,6 @@ option explicit
 '$include: 'ugl.bi'
 '$include: 'pal.bi'
 '$include: 'kbd.bi'
-'$include: 'tmr.bi'
 '$include: 'dos.bi'
 '$include: 'arch.bi'
 '$include: 'uglu.bi'
@@ -60,6 +59,11 @@ declare function sys_mem_fre ( byval i as integer ) as long
 '' qgl restores the mode; mgl no longer sets one.
 declare sub qglVgaShutdown ()
 declare function qglMemAvail ( byval what as integer ) as long
+'' The PIT: hooked at sys_time_init, counted by qglTmrTicks, given back
+'' on both exits.
+declare sub qglTmrInit ( byval hz as integer )
+declare function qglTmrTicks () as long
+declare sub qglTmrShutdown ()
 
 ''
 '' Declared here, not in a header: this module is the only caller, and a
@@ -74,13 +78,13 @@ declare sub host_shutdown ( )
 '' for sys_raw_dt: the benchmark's unclamped frame delta lives in /scr_s/
 
 ''
-'' Frame timing. A 1 kHz uGL timer, read once a frame.
+'' Frame timing. The PIT at 1 kHz through qgl's INT 8 hook, read once a
+'' frame.
 ''
 '' DOS's own TIMER ticks 18.2 times a second -- 55ms, which is longer than
 '' a frame at any framerate this renderer reaches, so it cannot measure one.
-'' A TMR can: tmrInit is running by the time the frame loop starts, even
-'' though it is not during doInit, which is why the load profiler had to
-'' use TIMER instead.
+'' The hook is up by the time the frame loop starts and not during doInit,
+'' which is why the load profiler uses TIMER instead.
 ''
 '$static
 ''
@@ -93,7 +97,6 @@ dim shared mem_fre() as long
 dim shared mem_tag() as string * 12
 dim shared mem_n as integer
 
-dim shared frame_tmr as TMR
 dim shared last_tick as long
 dim shared timing_on as integer
 dim shared tick_hz as single
@@ -297,9 +300,10 @@ sub sys_error ( msg as string )
     close #errf
 
     ''
-    '' Restore the video mode, then end mgl. uglEnd stays until mgl does:
-    '' it still holds the paged-array stores and the lightmap atlas.
+    '' Give the PIT and the mode back, then end mgl. uglEnd stays until
+    '' mgl does: it still holds the keyboard and the mouse.
     ''
+    qglTmrShutdown
     qglVgaShutdown
     uglEnd
     
@@ -317,24 +321,22 @@ end sub
 
 ''::::::::::
 '' name: sys_time_init
-'' desc: Starts the frame clock. Must run after tmrInit, which in_init does.
+'' desc: Hooks the PIT and starts the frame clock.
 ''::::::::::
 sub sys_time_init
-    dim hz as long
     dim t0 as single, elapsed as single
     dim c0 as long, c1 as long
     dim r0 as long, r1 as long
 
-    hz = tmrMs2Freq&( 1 )
-    tmrNew frame_tmr, TMR.AUTOINIT, hz
+    qglTmrInit 1000
 
     ''
-    '' Calibrate rather than trust the requested rate. Asking for 1 kHz and
-    '' dividing by 1000 gave a dt about seven times too small, so the physics
-    '' ran correctly but in slow motion: every speed in the game was in units
-    '' per seven seconds. What the timer actually delivers depends on uGL and
-    '' on the emulator underneath it, so measure it against the one clock DOS
-    '' guarantees.
+    '' Calibrate rather than trust the requested rate. Asking mgl for 1 kHz
+    '' and dividing by 1000 gave a dt about seven times too small, so the
+    '' physics ran correctly but in slow motion: every speed in the game was
+    '' in units per seven seconds. The PIT is ours now and does deliver
+    '' 1000, but the emulator is still underneath it, so measure against
+    '' the one clock DOS guarantees.
     ''
     '' TIMER is only accurate to 55ms, which is useless for a frame and ample
     '' over a quarter of a second.
@@ -352,14 +354,14 @@ sub sys_time_init
     loop until ( timer <> t0 )
 
     t0 = timer
-    c0 = frame_tmr.counter
+    c0 = qglTmrTicks()
     r0 = sndDebugStat&( 6 )
 
     do
     loop until ( timer - t0 >= 0.5 )
 
     elapsed = timer - t0
-    c1 = frame_tmr.counter
+    c1 = qglTmrTicks()
     r1 = sndDebugStat&( 6 )
 
     ''
@@ -397,7 +399,7 @@ sub sys_time_init
         tick_hz = 1000.0
     end if
 
-    last_tick = frame_tmr.counter
+    last_tick = qglTmrTicks()
     timing_on = true
 
 end sub
@@ -427,7 +429,7 @@ function sys_frame_time ( _
         exit function
     end if
 
-    tick = frame_tmr.counter
+    tick = qglTmrTicks()
     dt  = (tick - last_tick) / tick_hz
     last_tick = tick
 
@@ -466,12 +468,12 @@ end function
 ''       PART of a frame rather than the whole of it -- take it before and
 ''       after, subtract. Not an absolute time (the epoch is whenever
 ''       sys_time_init ran) and not meant to be one; only deltas are ever
-''       valid, and only ones short enough that frame_tmr.counter cannot
-''       have wrapped, which at ~144 Hz on a long is effectively forever
+''       valid, and only ones short enough that qglTmrTicks() cannot
+''       have wrapped, which at 1 kHz on a long is effectively forever
 ''       for anything measured within one frame.
 ''::::::::::
 function sys_now ( ) as single
-    sys_now = frame_tmr.counter / tick_hz
+    sys_now = qglTmrTicks() / tick_hz
 end function
 
 ''::::::::::
@@ -494,7 +496,7 @@ end function
 ''       anything BASIC-side arithmetic can correct. A caller taking a
 ''       difference between two calls must treat a negative or
 ''       wildly-oversized delta as a glitched sample and discard it,
-''       exactly as sys_frame_time already does for frame_tmr wrapping.
+''       exactly as sys_frame_time already does for the tick wrapping.
 ''
 ''       Like sys_now, only ever meaningful as a difference between two
 ''       calls, never as a value on its own -- and like sys_now, calling

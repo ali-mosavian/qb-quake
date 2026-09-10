@@ -15,7 +15,6 @@ option explicit
 '$include: 'u3d.bi'
 '$include: 'ugl.bi'         '' RECT, for mouse.bi below; no call goes through it
 '$include: 'kbd.bi'
-'$include: 'tmr.bi'
 '$include: 'dos.bi'
 '$include: 'arch.bi'
 '$include: 'mouse.bi'       '' MOUSEINF, which q_env.bi names
@@ -306,6 +305,8 @@ declare sub qglDrShade ( _
 '' qglVgaShutdown goes back to.
 declare function qglVgaInit ( ) as long
 declare sub qglVgaPalette ( seg pal as PalRgb )
+declare function qglTmrTicks () as long
+declare function qglTmrHz () as long
 declare sub scr_pal_load ( )
 declare function scr_pal_fit ( _
     pal() as PalRgb, _
@@ -1751,7 +1752,7 @@ sub scr_count_frame ( _
 
     fps1 = fps1 + 1
 
-    if g.env.sec_timer.counter > 0 then
+    if ( qglTmrTicks() - g.env.sec_mark >= qglTmrHz() ) then
         g.scr.fps = fps1
         if ( fps1 > g.scr.fps_peak ) then g.scr.fps_peak = fps1
         '' low ignores the first completed second: it contains the tail of
@@ -1762,7 +1763,7 @@ sub scr_count_frame ( _
         end if
         g_fsec = fps1
         fps1 = 0
-        g.env.sec_timer.counter = 0
+        g.env.sec_mark = qglTmrTicks()
         g.scr.bench_secs = g.scr.bench_secs + 1
     end if
 
