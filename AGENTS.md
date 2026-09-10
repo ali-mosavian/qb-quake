@@ -2229,7 +2229,7 @@ resolves each one offline -- `travel` is `movedir * (size along it -
 lip)`, SetMovedir's -1 up and -2 down, speed 100, wait 3, lip 8 unless
 the map says -- and `ent_door_init` puts the brush at the shut end, or
 the open end for DOOR_START_OPEN. A door with a targetname waits for a
-trigger nothing fires yet; the rest open by touch: `spawn_field` is the
+trigger; the rest open by touch: `spawn_field` is the
 brush grown 60 in x and y and 8 in z, and the player's box in it sends
 the door's whole linked group out. `ent_link_doors` is LinkDoors, brushes
 that touch unless DOOR_DONT_LINK, so both halves of e1m1's first double
@@ -2260,6 +2260,33 @@ is suspect; check the listing for `add ax,` right after a load into AX.
 `tools/check.sh --e1m1`'s third frame is the test: `-walk` from
 (330,576) at the first double door must carry the player through it,
 px below 190; a door that does not open stops them at 272.03.
+
+## Triggers and buttons
+
+`trigger_once`, `trigger_multiple`, `trigger_counter` and `func_button`
+are one array, `trig()`, since all four do one thing: fire a target.
+mkassets turns every targetname into a number, so a door's `targeted`
+is its name's id and `ent_use_targets` is a loop over ids, never a
+string compare. A touch in a trigger's volume fires its target and says
+its message; once is a multiple with wait -1, a multiple re-arms after
+wait (0.2); a counter fires its own target when used `count` times (2).
+A button slides in when touched and fires when it ARRIVES, as
+`button_wait` does, holds `wait` seconds (-1 stays), and comes back.
+Nothing in `delay`, `killtarget`, health or sounds, and a trigger with
+health -- e1m1's `*16`, shot to lower a door -- is not emitted until the
+shotgun reports what it hit.
+
+A message is a centerprint: `ent_say` puts it in `g.fight.msg` for two
+seconds and the overlay draws it where the state messages go, under
+`-nostats` too. A targeted door says its own when its brush is touched
+(door_touch), which is why such a door's field is the brush plus two
+units where a touch door's is grown 60. `tools/ref/e1m1-exit.bmp`
+carries "Walk into the slipgate to exit." because its camera stands in
+that trigger; the reference is what proves the text draws.
+
+`tools/check.sh --e1m1`'s fourth frame walks into the first button:
+the plunger floor (`*3`, a door targeted by `*4`) must go down with the
+player on it, pz below -100 by tick 240.
 
 ## `-nostats` makes the picture deterministic
 

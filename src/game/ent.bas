@@ -86,7 +86,8 @@ declare sub ent_load_teleports ( _
     faces() as Face, _
     plat() as PlatEnt, _
     item() as ItemEnt, _
-    door() as DoorEnt _
+    door() as DoorEnt, _
+    trig() as TrigEnt _
 )
 declare sub ent_check_teleport ( _
     g as Game, _
@@ -128,6 +129,41 @@ declare function ent_door_step ( _
     p as Vec3, _
     goal as Vec3, _
     byval by as single _
+) as integer
+declare sub ent_trig_init ( _
+    g as Game, _
+    xr as EntsTrig, _
+    models() as Submodel, _
+    trig() as TrigEnt _
+)
+declare sub ent_use_targets ( _
+    g as Game, _
+    byval id as integer, _
+    door() as DoorEnt, _
+    trig() as TrigEnt _
+)
+declare sub ent_trig_fire ( _
+    g as Game, _
+    byval k as integer, _
+    door() as DoorEnt, _
+    trig() as TrigEnt _
+)
+declare sub ent_move_trigs ( _
+    g as Game, _
+    byval dt as single, _
+    brush() as BrushModel, _
+    door() as DoorEnt, _
+    trig() as TrigEnt _
+)
+declare sub ent_say ( _
+    g as Game, _
+    msg as string _
+)
+declare function ent_box_touched ( _
+    g as Game, _
+    mins as Vec3, _
+    maxs as Vec3, _
+    byval slack as single _
 ) as integer
 declare sub ent_place_models ( _
     byval model_count as integer, _
@@ -224,7 +260,8 @@ sub ent_load_teleports ( _
     faces() as Face, _
     plat() as PlatEnt, _
     item() as ItemEnt, _
-    door() as DoorEnt _
+    door() as DoorEnt, _
+    trig() as TrigEnt _
 )
     dim u as integer
     dim h as EntsHead
@@ -232,6 +269,7 @@ sub ent_load_teleports ( _
     dim ir as EntsItem
     dim pr as EntsPlat
     dim dr as EntsDoor
+    dim xr as EntsTrig
     dim i as integer, j as integer, k as integer
     dim mdlnum as integer
 
@@ -243,12 +281,14 @@ sub ent_load_teleports ( _
     redim tele( h.ntele ) as Teleporter
     redim plat( h.nplat ) as PlatEnt
     redim door( h.ndoor ) as DoorEnt
+    redim trig( h.ntrig ) as TrigEnt
     '' room after the map's items for one backpack a soldier
     redim item( h.nitem + MDL_MAX_ENTS% ) as ItemEnt
 
     g.tele_count = 0
     g.plat_count = 0
     g.door_count = 0
+    g.trig_count = 0
     g.item_count = 0
 
     '' every submodel draws and blocks unless something claims it as a trigger
@@ -338,6 +378,13 @@ sub ent_load_teleports ( _
     next i
     ent_link_doors g, door()
 
+    for  i = 1 to h.ntrig
+        ent_get u, clng( varseg( xr ) ) * 65536& + (clng( varptr( xr ) ) and 65535&), len( xr )
+        if ( xr.model >= 0 and xr.model <= g.wld.count.models-1 ) then
+            ent_trig_init g, xr, models(), trig()
+        end if
+    next i
+
     qglFileClose u
 
 end sub
@@ -352,6 +399,7 @@ sub ent_door_init ( _
 )
     dim k as integer, m as integer
     dim d as DoorEnt
+    dim fx as single, fz as single
 
     '' Filled in a local and stored whole. BC miscompiles the first single
     '' stored into a member of an indexed element after another store to
@@ -367,6 +415,7 @@ sub ent_door_init ( _
     d.hold_left = 0.0
     d.nolink    = dr.nolink
     d.targeted  = dr.targeted
+    d.msg       = dr.msg
     d.state     = ENT_DOOR_SHUT
     d.link      = k
 
@@ -383,13 +432,17 @@ sub ent_door_init ( _
     end if
     brush(m).ofs = d.ofs_shut
 
-    '' spawn_field: the brush's box where it sits, grown 60 in x and y, 8 in z
-    d.mins.x = models(m).mins.x + d.ofs_shut.x - ENT_DOOR_FIELD#
-    d.mins.y = models(m).mins.y + d.ofs_shut.y - ENT_DOOR_FIELD#
-    d.mins.z = models(m).mins.z + d.ofs_shut.z - ENT_DOOR_FIELDZ#
-    d.maxs.x = models(m).maxs.x + d.ofs_shut.x + ENT_DOOR_FIELD#
-    d.maxs.y = models(m).maxs.y + d.ofs_shut.y + ENT_DOOR_FIELD#
-    d.maxs.z = models(m).maxs.z + d.ofs_shut.z + ENT_DOOR_FIELDZ#
+    '' spawn_field: the brush's box where it sits, grown 60 in x and y, 8
+    '' in z. A targeted door has no field; touching the brush itself says
+    '' its message (door_touch)
+    fx = ENT_DOOR_FIELD# : fz = ENT_DOOR_FIELDZ#
+    if ( d.targeted ) then fx = ENT_TOUCH_SLACK# : fz = ENT_TOUCH_SLACK#
+    d.mins.x = models(m).mins.x + d.ofs_shut.x - fx
+    d.mins.y = models(m).mins.y + d.ofs_shut.y - fx
+    d.mins.z = models(m).mins.z + d.ofs_shut.z - fz
+    d.maxs.x = models(m).maxs.x + d.ofs_shut.x + fx
+    d.maxs.y = models(m).maxs.y + d.ofs_shut.y + fx
+    d.maxs.z = models(m).maxs.z + d.ofs_shut.z + fz
 
     door(k) = d
     g.door_count = g.door_count + 1
@@ -432,14 +485,25 @@ function ent_door_touched ( _
     g as Game, _
     d as DoorEnt _
 ) as integer
-    ent_door_touched = false
-    if ( g.pl.pos.x + 16.0 < d.mins.x ) then exit function
-    if ( g.pl.pos.x - 16.0 > d.maxs.x ) then exit function
-    if ( g.pl.pos.y + 16.0 < d.mins.y ) then exit function
-    if ( g.pl.pos.y - 16.0 > d.maxs.y ) then exit function
-    if ( g.pl.pos.z + 32.0 < d.mins.z ) then exit function
-    if ( g.pl.pos.z - PL_FEET# > d.maxs.z ) then exit function
-    ent_door_touched = true
+    ent_door_touched = ent_box_touched( g, d.mins, d.maxs, 0.0 )
+end function
+
+
+'' The player's box against one grown by slack.
+function ent_box_touched ( _
+    g as Game, _
+    mins as Vec3, _
+    maxs as Vec3, _
+    byval slack as single _
+) as integer
+    ent_box_touched = false
+    if ( g.pl.pos.x + PL_HALF# + slack < mins.x ) then exit function
+    if ( g.pl.pos.x - PL_HALF# - slack > maxs.x ) then exit function
+    if ( g.pl.pos.y + PL_HALF# + slack < mins.y ) then exit function
+    if ( g.pl.pos.y - PL_HALF# - slack > maxs.y ) then exit function
+    if ( g.pl.pos.z + PL_ZHI# + slack < mins.z ) then exit function
+    if ( g.pl.pos.z + PL_ZLO# - slack > maxs.z ) then exit function
+    ent_box_touched = true
 end function
 
 
@@ -492,7 +556,8 @@ end function
 ''::::::::::
 '' name: ent_move_doors
 '' desc: The touch fields, then every door's state machine. A door with a
-''       targetname waits for a trigger nothing here fires yet.
+''       targetname waits for ent_use_targets, and says its message
+''       when touched.
 ''::::::::::
 sub ent_move_doors ( _
     g as Game, _
@@ -503,8 +568,12 @@ sub ent_move_doors ( _
     dim k as integer, m as integer
 
     for  k = 0 to g.door_count-1
-        if ( door(k).targeted = 0 ) then
-            if ( ent_door_touched( g, door(k) ) ) then ent_door_fire g, door(k).link, door()
+        if ( ent_door_touched( g, door(k) ) ) then
+            if ( door(k).targeted = 0 ) then
+                ent_door_fire g, door(k).link, door()
+            else
+                ent_say g, door(k).msg
+            end if
         end if
     next k
 
@@ -525,6 +594,155 @@ sub ent_move_doors ( _
                 if ( ent_door_step( brush(m).ofs, door(k).ofs_shut, door(k).speed * dt ) ) then
                     door(k).state = ENT_DOOR_SHUT
                 end if
+        end select
+    next k
+end sub
+
+
+
+
+sub ent_trig_init ( _
+    g as Game, _
+    xr as EntsTrig, _
+    models() as Submodel, _
+    trig() as TrigEnt _
+)
+    dim t as TrigEnt
+    dim m as integer
+
+    '' a local, stored whole: see ent_door_init
+    m = xr.model
+    t.model     = m
+    t.kind      = xr.kind
+    t.target    = xr.target
+    t.name      = xr.name
+    t.state     = ENT_TRIG_READY
+    t.left      = xr.count
+    t.wait      = xr.wait
+    t.wait_left = 0.0
+    t.speed     = xr.speed
+    t.ofs_out   = xr.travel
+    t.mins      = models(m).mins
+    t.maxs      = models(m).maxs
+    t.msg       = xr.msg
+    trig( g.trig_count ) = t
+    g.trig_count = g.trig_count + 1
+end sub
+
+
+'' centerprint: shown for ENT_MSG_TIME
+sub ent_say ( _
+    g as Game, _
+    msg as string _
+)
+    if ( len( rtrim$( msg ) ) = 0 ) then exit sub
+    g.fight.msg = msg
+    g.fight.msg_until = g.rdr.anim_time + ENT_MSG_TIME#
+end sub
+
+
+'' SUB_UseTargets: every door and trigger named id.
+sub ent_use_targets ( _
+    g as Game, _
+    byval id as integer, _
+    door() as DoorEnt, _
+    trig() as TrigEnt _
+)
+    dim k as integer
+
+    if ( id = 0 ) then exit sub
+    for  k = 0 to g.door_count-1
+        if ( door(k).targeted = id ) then ent_door_fire g, door(k).link, door()
+    next k
+    for  k = 0 to g.trig_count-1
+        if ( trig(k).name = id ) then
+            select case trig(k).kind
+                case ENT_TRIG_COUNTER
+                    if ( trig(k).state <> ENT_TRIG_DONE ) then
+                        trig(k).left = trig(k).left - 1
+                        if ( trig(k).left <= 0 ) then ent_trig_fire g, k, door(), trig()
+                    end if
+                case ENT_TRIG_ONCE, ENT_TRIG_MULTI
+                    if ( trig(k).state = ENT_TRIG_READY ) then ent_trig_fire g, k, door(), trig()
+            end select
+        end if
+    next k
+end sub
+
+
+'' multi_trigger: the message, then the targets; once and counters are
+'' done, a multiple re-arms after wait.
+sub ent_trig_fire ( _
+    g as Game, _
+    byval k as integer, _
+    door() as DoorEnt, _
+    trig() as TrigEnt _
+)
+    ent_say g, trig(k).msg
+    if ( trig(k).kind = ENT_TRIG_COUNTER or trig(k).wait < 0.0 ) then
+        trig(k).state = ENT_TRIG_DONE
+    else
+        trig(k).state = ENT_TRIG_HELD
+        trig(k).wait_left = trig(k).wait
+    end if
+    ent_use_targets g, trig(k).target, door(), trig()
+end sub
+
+
+''::::::::::
+'' name: ent_move_trigs
+'' desc: The touches, and every button's travel. A button fires when it
+''       arrives, not when it is pressed, as button_wait does.
+''::::::::::
+sub ent_move_trigs ( _
+    g as Game, _
+    byval dt as single, _
+    brush() as BrushModel, _
+    door() as DoorEnt, _
+    trig() as TrigEnt _
+)
+    dim k as integer, m as integer
+    dim home as Vec3
+
+    for  k = 0 to g.trig_count-1
+        m = trig(k).model
+        select case trig(k).kind
+            case ENT_TRIG_BUTTON
+                select case trig(k).state
+                    case ENT_TRIG_READY
+                        if ( ent_box_touched( g, trig(k).mins, trig(k).maxs, ENT_TOUCH_SLACK# ) ) then
+                            trig(k).state = ENT_TRIG_GOING
+                        end if
+                    case ENT_TRIG_GOING
+                        if ( ent_door_step( brush(m).ofs, trig(k).ofs_out, trig(k).speed * dt ) ) then
+                            trig(k).state = ENT_TRIG_HELD
+                            trig(k).wait_left = trig(k).wait
+                            ent_say g, trig(k).msg
+                            ent_use_targets g, trig(k).target, door(), trig()
+                        end if
+                    case ENT_TRIG_HELD
+                        if ( trig(k).wait >= 0.0 ) then
+                            trig(k).wait_left = trig(k).wait_left - dt
+                            if ( trig(k).wait_left <= 0.0 ) then trig(k).state = ENT_TRIG_BACK
+                        end if
+                    case ENT_TRIG_BACK
+                        '' button_blocked, without the push: wait for the player to step off
+                        if ( ent_box_touched( g, trig(k).mins, trig(k).maxs, 0.0 ) = 0 ) then
+                            if ( ent_door_step( brush(m).ofs, home, trig(k).speed * dt ) ) then
+                                trig(k).state = ENT_TRIG_READY
+                            end if
+                        end if
+                end select
+            case ENT_TRIG_ONCE, ENT_TRIG_MULTI
+                select case trig(k).state
+                    case ENT_TRIG_READY
+                        if ( ent_box_touched( g, trig(k).mins, trig(k).maxs, 0.0 ) ) then
+                            ent_trig_fire g, k, door(), trig()
+                        end if
+                    case ENT_TRIG_HELD
+                        trig(k).wait_left = trig(k).wait_left - dt
+                        if ( trig(k).wait_left <= 0.0 ) then trig(k).state = ENT_TRIG_READY
+                end select
         end select
     next k
 end sub

@@ -49,6 +49,7 @@ type EntsHead
     nhide       as integer
     nitem       as integer
     ndoor       as integer
+    ntrig       as integer
 end type
 
 type EntsItem
@@ -101,7 +102,8 @@ type EntsDoor
     hold        as single       '' "wait": seconds open; below zero stays
     start_open  as integer
     nolink      as integer
-    targeted    as integer      '' has a targetname: opens by trigger, not touch
+    targeted    as integer      '' its targetname's id: opens by trigger, not touch
+    msg         as string * 40  '' centerprint on touch, space padded
 end type
 
 const ENT_PLAT_DOWN = 0
@@ -146,6 +148,57 @@ type DoorEnt
     targeted    as integer
     mins        as Vec3         '' the touch field
     maxs        as Vec3
+    msg         as string * 40
+end type
+
+const ENT_TRIG_ONCE    = 0
+const ENT_TRIG_MULTI   = 1
+const ENT_TRIG_COUNTER = 2
+const ENT_TRIG_BUTTON  = 3
+
+'' Anything that fires a target, resolved offline: a trigger's volume, a
+'' button's travel. Names are ids -- a door's targeted, a trigger's name
+'' and target -- matched by number, never by string, at run time.
+type EntsTrig
+    model       as integer
+    kind        as integer      '' ENT_TRIG_*
+    target      as integer      '' what it fires, 0 none
+    name        as integer      '' what fires it, 0 none
+    count       as integer      '' a counter's count
+    wait        as single       '' re-arm delay; below zero fires once, or stays pressed
+    speed       as single       '' a button's
+    travel      as Vec3
+    msg         as string * 40
+end type
+
+const ENT_TRIG_READY = 0
+const ENT_TRIG_GOING = 1        '' a button on its way in
+const ENT_TRIG_HELD  = 2        '' pressed, or a trigger waiting to re-arm
+const ENT_TRIG_BACK  = 3        '' a button on its way out
+const ENT_TRIG_DONE  = 4
+const ENT_MSG_TIME#     = 2.0   '' scr_centertime
+const ENT_TOUCH_SLACK#  = 2.0   '' a brush is touched from this close
+
+''
+'' triggers.qc and buttons.qc without sounds, health and delay: a touch
+'' fires a trigger's target and says its message; a counter fires its
+'' own when used count times; a button slides in when touched, fires on
+'' arrival, and comes back after wait.
+''
+type TrigEnt
+    model       as integer
+    kind        as integer
+    target      as integer
+    name        as integer
+    state       as integer      '' ENT_TRIG_READY..DONE
+    left        as integer      '' a counter's uses to go
+    wait        as single
+    wait_left   as single
+    speed       as single
+    ofs_out     as Vec3         '' a button's pressed offset
+    mins        as Vec3         '' the volume, or the button's brush
+    maxs        as Vec3
+    msg         as string * 40
 end type
 
 ''

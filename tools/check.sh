@@ -220,7 +220,11 @@ fi
 # side by side in the lump -- and whose changelevel volume drew as a
 # column. Then the first double door: -walk from its approach side must
 # carry the player through it, where a door that does not open stops
-# them at x 271. Needs the shareware PAK; skips without it.
+# them at x 271. Then the plunger floor at the first button: -walk into
+# the button must press it and send the floor, a targeted door, down with
+# the player on it. The exit reference carries the "Walk into the
+# slipgate" centerprint, since its camera stands in that trigger. Needs
+# the shareware PAK; skips without it.
 if [[ "${1:-}" == "--e1m1" ]]; then
     PAK="${PAK:-$HOME/dos/QUAKE_SW/ID1/PAK0.PAK}"
     if [[ ! -f "$ROOT/data/e1m1.bsp" ]]; then
@@ -255,6 +259,13 @@ PY
         echo "PASS  e1m1 door: px $px, through the door"
     else
         echo "FAIL  e1m1 door: px ${px:-none}, the door did not open"; rc=1
+    fi
+    run_frame "-lm -nostats -at 0 576 24 -yaw 180 -walk -bench 400 -ticks 240" "$VBD_OUT/e1m1-button.bmp" e1m1.bsp
+    pz=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pz"{print $2}')
+    if awk -v z="${pz:-999}" 'BEGIN{exit !(z < -100)}'; then
+        echo "PASS  e1m1 button: pz $pz, the floor went down"
+    else
+        echo "FAIL  e1m1 button: pz ${pz:-none}, the button did nothing"; rc=1
     fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc

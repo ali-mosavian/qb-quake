@@ -138,6 +138,8 @@ type PlayerCombat
     rot_at      as single      '' megahealth: the next point over 100 rots then
     dmg_pct     as single      '' V_ParseDamage: the red shift, 0..150, fading 150/s
     bonus_pct   as single      '' the pickup flash, 50, fading 100/s
+    msg         as string * 40 '' centerprint, shown until msg_until
+    msg_until   as single
 end type
 
 const PL_HEALTH%       = 100

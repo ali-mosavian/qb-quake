@@ -1808,6 +1808,7 @@ sub scr_draw_hud ( _
     case GS_WON%   : msg = "AREA CLEARED - FIRE TO GO AGAIN"
     case else      : msg = ""
     end select
+    if ( len( msg ) = 0 and g.rdr.anim_time < g.fight.msg_until ) then msg = rtrim$( g.fight.msg )
     if ( len( msg ) > 0 ) then
         if ( g.fight.state = GS_DEAD% ) then qglDrFill h_dst_dc, 0, h \ 2 - 8, w, h \ 2 + 8, hc_bad
         draw_string h_dst_dc, w \ 2 - len( msg ) * 2, h \ 2 - 3, msg

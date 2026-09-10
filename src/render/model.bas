@@ -132,7 +132,8 @@ declare sub mod_load_world ( _
     tele() as Teleporter, _
     plat() as PlatEnt, _
     item() as ItemEnt, _
-    door() as DoorEnt _
+    door() as DoorEnt, _
+    trig() as TrigEnt _
 )
 declare sub mod_load_colormap ( _
     g as Game _
@@ -182,7 +183,8 @@ declare sub ent_load_teleports ( _
     faces() as Face, _
     plat() as PlatEnt, _
     item() as ItemEnt, _
-    door() as DoorEnt _
+    door() as DoorEnt, _
+    trig() as TrigEnt _
 )
 declare sub pl_load_hulls ( _
     g as Game _
@@ -880,7 +882,8 @@ sub mod_load_world ( _
     tele() as Teleporter, _
     plat() as PlatEnt, _
     item() as ItemEnt, _
-    door() as DoorEnt _
+    door() as DoorEnt, _
+    trig() as TrigEnt _
 )
     mod_alloc g, faces(), tex_info(), planes(), nodes(), models(), ord(), pflag()
     sys_mem_mark "bsp_arrays"
@@ -905,6 +908,6 @@ sub mod_load_world ( _
     mod_load_clipnodes g
     sys_mem_mark "clip_nodes"
 
-    ent_load_teleports g, models(), brush(), tele(), faces(), plat(), item(), door()
+    ent_load_teleports g, models(), brush(), tele(), faces(), plat(), item(), door(), trig()
 
 end sub

@@ -78,6 +78,7 @@ sub host_bench_report ( _
     brush() as BrushModel, _
     plat() as PlatEnt, _
     door() as DoorEnt, _
+    trig() as TrigEnt, _
     mdl_ent() as MdlEnt, _
     byval host_ticks as long _
 )
@@ -284,6 +285,11 @@ sub host_bench_report ( _
         print #benchf, "door_" + ltrim$(str$( mi )) + " " + ltrim$(str$( door(mi).model )) + " " + _
             ltrim$(str$( door(mi).state )) + " " + ltrim$(str$( brush( door(mi).model ).ofs.x )) + " " + _
             ltrim$(str$( brush( door(mi).model ).ofs.y )) + " " + ltrim$(str$( brush( door(mi).model ).ofs.z ))
+    next mi
+    print #benchf, "trig_count " + ltrim$(str$( g.trig_count ))
+    for  mi = 0 to g.trig_count-1
+        print #benchf, "trig_" + ltrim$(str$( mi )) + " " + ltrim$(str$( trig(mi).model )) + " " + _
+            ltrim$(str$( trig(mi).kind )) + " " + ltrim$(str$( trig(mi).state )) + " " + ltrim$(str$( trig(mi).left ))
     next mi
     if ( g.plat_count > 0 ) then
         print #benchf, "plat_zofs " + ltrim$(str$( brush( plat(0).model ).ofs.z ))

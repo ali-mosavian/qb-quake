@@ -397,6 +397,7 @@ def convert_lightmaps(d, lumps, out):
 
 
 ENT_PAIR = re.compile(r'"([^"]*)"\s*"([^"]*)"')
+TRIG_ONCE, TRIG_MULTI, TRIG_COUNTER, TRIG_BUTTON = 0, 1, 2, 3   # ENT_TRIG_* in q_ent.bi
 
 
 def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> bytes:
@@ -404,8 +405,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
     # and e1m3's entities lump is 45,762 -- mod_find_spawn died at error 5
     # before anything else could. The renderer wants four facts out of the
     # text, so those are what ships: spawn, matched teleporter pairs,
-    # func_plats, func_doors, and which submodels a trigger hides. Layout must match
-    # EntsHead/EntsTele/EntsPlat in q_ent.bi.
+    # func_plats, func_doors, what fires them, and which submodels a
+    # trigger hides. Layout must match the Ents* types in q_ent.bi.
     spawn: tuple[float, float, float] = (0.0, 0.0, 0.0)
     angle = 0.0
     dests: dict[str, tuple[tuple[float, float, float], float]] = {}
@@ -414,6 +415,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
     plats: list[tuple[int, float, float]] = []
     doors: list[tuple[int, tuple[float, float, float], float, float, int, int, int]] = []
     items: list[tuple[int, int, tuple[float, float, float]]] = []
+    uses: list[tuple] = []
+    names: dict[str, int] = {}
     item_kind = {'item_health': 0, 'item_shells': 1}
 
     def vec(v: str) -> tuple[float, float, float]:
@@ -429,22 +432,52 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
             case _, 1, _: return 40
             case _: return 20
 
-    def door_record(m: int, kv: dict[str, str], box: tuple[float, ...]) -> tuple:
-        # func_door: speed 100, wait 3, lip 8 unless the map says; SetMovedir
-        # makes angle -1 up and -2 down, anything else a heading
-        angle = float(kv.get('angle', '0'))
-        speed = float(kv.get('speed', '0')) or 100.0
-        hold = float(kv.get('wait', '0')) or 3.0
-        lip = float(kv.get('lip', '0')) or 8.0
-        flags = int(kv.get('spawnflags', '0'))
+    def name_id(s: str) -> int:
+        # targetnames become ids; 0 is none
+        return names.setdefault(s, len(names) + 1) if s else 0
+
+    def msg_of(kv: dict[str, str]) -> bytes:
+        return kv.get('message', '')[:40].encode('latin1').ljust(40)
+
+    def travel_of(angle: float, box: tuple[float, ...], lip: float) -> tuple[float, float, float]:
+        # SetMovedir: angle -1 up, -2 down, anything else a heading; the
+        # brush moves its size along that, less the lip
         match angle:
             case -1.0: mdir = (0.0, 0.0, 1.0)
             case -2.0: mdir = (0.0, 0.0, -1.0)
             case _: mdir = (math.cos(math.radians(angle)), math.sin(math.radians(angle)), 0.0)
         size = [box[k + 3] - box[k] for k in range(3)]
         dist = max(sum(abs(mdir[k]) * size[k] for k in range(3)) - lip, 0.0)
-        travel = (mdir[0] * dist, mdir[1] * dist, mdir[2] * dist)
-        return (m, travel, speed, hold, 1 if flags & 1 else 0, 1 if flags & 4 else 0, 1 if 'targetname' in kv else 0)
+        return (mdir[0] * dist, mdir[1] * dist, mdir[2] * dist)
+
+    def door_record(m: int, kv: dict[str, str], box: tuple[float, ...]) -> tuple:
+        # func_door: speed 100, wait 3, lip 8 unless the map says
+        speed = float(kv.get('speed', '0')) or 100.0
+        hold = float(kv.get('wait', '0')) or 3.0
+        lip = float(kv.get('lip', '0')) or 8.0
+        flags = int(kv.get('spawnflags', '0'))
+        travel = travel_of(float(kv.get('angle', '0')), box, lip)
+        return (m, travel, speed, hold, 1 if flags & 1 else 0, 1 if flags & 4 else 0,
+                name_id(kv.get('targetname', '')), msg_of(kv))
+
+    def trig_record(m: int, kv: dict[str, str]) -> tuple:
+        # trigger_once is a multiple with wait -1; a multiple re-arms after
+        # wait, 0.2 unless the map says; a counter fires at count, 2
+        match kv['classname']:
+            case 'trigger_once': kind, wait, count = TRIG_ONCE, -1.0, 0
+            case 'trigger_multiple': kind, wait, count = TRIG_MULTI, float(kv.get('wait', '0')) or 0.2, 0
+            case _: kind, wait, count = TRIG_COUNTER, -1.0, int(kv.get('count', '0')) or 2
+        return (m, kind, name_id(kv.get('target', '')), name_id(kv.get('targetname', '')), count,
+                wait, 0.0, (0.0, 0.0, 0.0), msg_of(kv))
+
+    def button_record(m: int, kv: dict[str, str], box: tuple[float, ...]) -> tuple:
+        # func_button: speed 40, wait 1, lip 4; wait -1 stays pressed
+        speed = float(kv.get('speed', '0')) or 40.0
+        wait = float(kv.get('wait', '0')) or 1.0
+        lip = float(kv.get('lip', '0')) or 4.0
+        travel = travel_of(float(kv.get('angle', '0')), box, lip)
+        return (m, TRIG_BUTTON, name_id(kv.get('target', '')), name_id(kv.get('targetname', '')), 0,
+                wait, speed, travel, msg_of(kv))
 
     def model(v: str) -> int:
         m = int(v[1:]) if v.startswith('*') and v[1:].isdigit() else 0
@@ -462,6 +495,17 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
             case 'trigger_teleport' if model(kv.get('model', '')):
                 trigs.append((kv.get('target', ''), model(kv['model'])))
                 hides.append(model(kv['model']))
+            case 'trigger_once' | 'trigger_multiple' if model(kv.get('model', '')) and 'health' not in kv:
+                # one with health is shot, not touched, and waits for the
+                # shotgun to report what it hit; hidden like the rest
+                hides.append(model(kv['model']))
+                uses.append(trig_record(model(kv['model']), kv))
+            case 'trigger_counter':
+                if model(kv.get('model', '')):
+                    hides.append(model(kv['model']))
+                uses.append(trig_record(model(kv.get('model', '')), kv))
+            case 'func_button' if model(kv.get('model', '')):
+                uses.append(button_record(model(kv['model']), kv, boxes[model(kv['model'])]))
             case str(c) if c.startswith('trigger_') and model(kv.get('model', '')):
                 # any trigger's brush is a volume: e1m1 drew its changelevel
                 # as a column of the "trigger" texture
@@ -479,8 +523,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
     # a teleporter with no destination still hides its brush
     teles = [(m, *dests[t]) for t, m in trigs if t in dests]
 
-    buf = bytearray(struct.pack('<4f6h', *spawn, angle, nmodels,
-                                len(teles), len(plats), len(hides), len(items), len(doors)))
+    buf = bytearray(struct.pack('<4f7h', *spawn, angle, nmodels,
+                                len(teles), len(plats), len(hides), len(items), len(doors), len(uses)))
     for m, org, yaw in teles:
         buf += struct.pack('<h3ff', m, *org, yaw)
     for m, speed, height in plats:
@@ -489,8 +533,10 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
         buf += struct.pack('<h', m)
     for kind, amount, org in items:
         buf += struct.pack('<hh3f', kind, amount, *org)
-    for m, travel, speed, hold, start_open, nolink, targeted in doors:
-        buf += struct.pack('<h3fffhhh', m, *travel, speed, hold, start_open, nolink, targeted)
+    for m, travel, speed, hold, start_open, nolink, targeted, msg in doors:
+        buf += struct.pack('<h3fffhhh40s', m, *travel, speed, hold, start_open, nolink, targeted, msg)
+    for m, kind, target, name, count, wait, speed, travel, msg in uses:
+        buf += struct.pack('<5hff3f40s', m, kind, target, name, count, wait, speed, *travel, msg)
     return bytes(buf)
 
 
