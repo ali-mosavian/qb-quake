@@ -119,6 +119,8 @@ sub in_handle_toggles ( _
     if ( in_keystroke( g.env.keyboard.f12 ) ) then g.scr.stats    = not g.scr.stats
     if ( in_keystroke( g.env.keyboard.b   ) ) then g.rdr.backface = not g.rdr.backface
     if ( in_keystroke( g.env.keyboard.l   ) ) then g.rdr.lightmap = not g.rdr.lightmap
+    if ( in_keystroke( g.env.keyboard.p   ) ) then g.rdr.portal   = not g.rdr.portal
+    if ( in_keystroke( g.env.keyboard.o   ) ) then g.scr.portal_wire = not g.scr.portal_wire
     if ( in_keystroke( g.env.keyboard.f4  ) ) then g.pl.no_clip    = not g.pl.no_clip
 
 end sub

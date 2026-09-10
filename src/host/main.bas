@@ -197,6 +197,18 @@ declare sub in_screenshot_key ( _
 declare sub vid_update ( _
     g as Game _
 )
+declare sub scr_draw_hud ( _
+    g as Game, _
+    h_dst_dc as long, _
+    byval w as integer, _
+    byval h as integer _
+)
+declare sub qglDrBlit ( _
+    byval d as long, _
+    byval x as integer, _
+    byval y as integer, _
+    byval s as long _
+)
 declare function sys_mem_count ( ) as integer
 declare function sys_mem_fre ( byval i as integer ) as long
 declare function sys_mem_tag ( byval i as integer ) as string
@@ -833,6 +845,7 @@ sub host_main ( _
     dim frame_no as long
     dim pt0 as single, ptd as single
     dim pr0 as long, prd as long
+    dim ht0 as single, htd as single
     dim benchf as integer
     
     ''
@@ -929,6 +942,8 @@ sub host_main ( _
     ''
     g.rdr.backface = -1
     if ( g.env.no_cull ) then g.rdr.backface = 0
+    g.rdr.portal = not g.env.no_portal
+    g.scr.portal_wire = g.env.pt_wire
     g.scr.stats    = 0
     if ( g.env.want_stats ) then g.scr.stats = -1
     if ( g.env.no_stats ) then g.scr.stats = 0
@@ -1045,6 +1060,22 @@ sub host_main ( _
         ''
         pr0 = sys_rdtsc()
         vid_update g
+        ''
+        '' -comp: vid_update scaled the view into the composite and left the
+        '' screen alone, so the overlay goes on at the mode's own size and one
+        '' blit carries the result to video. Drawing it on the screen after a
+        '' present is a second pass over live video memory, and it tears.
+        ''
+        if ( g.env.comp ) then
+            ht0 = sys_now()
+            scr_draw_hud g, g.env.h_comp_dc, g.env.scr_x_res, g.env.scr_y_res
+            if ( g.ft.n > 0 ) then
+                htd = sys_now() - ht0
+                g.pt.hud_sum = g.pt.hud_sum + htd
+                if ( htd > g.pt.hud_max ) then g.pt.hud_max = htd
+            end if
+            qglDrBlit qglVgaScreen(), 0, 0, g.env.h_comp_dc
+        end if
         if ( g.ft.n > 0 ) then
             prd = sys_rdtsc() - pr0
             if ( prd >= 0 and prd <= 1000000 ) then

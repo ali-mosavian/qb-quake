@@ -19,6 +19,9 @@ type VisState
                                 '' integer compare, not a call, once they are
                                 '' all placed -- which is early, there being
                                 '' three of them and hundreds of nodes.
+    pt_culled   as integer      '' leaves the portal flood removed from the
+                                '' PVS this frame; negative when it gave up
+                                '' and the PVS was used unchanged
     no_ents     as integer      '' -noents, and
     bad_order   as integer      '' -badorder, copied here from env because
                                 '' r_bsp.bas has no room for the env block

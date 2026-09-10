@@ -800,6 +800,19 @@ def main():
 
     print(f"done: {written} atlases for {ntex} textures across {MIPS} mip levels")
 
+    # Portals, rebuilt from the tree -- tools/mkportals.py says why -- held to
+    # its PVS-subset check here too, so a map whose portals do not cover the
+    # PVS fails the build rather than culling what it should have drawn.
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import mkportals
+    pb = mkportals.read_bsp(bsp)
+    portals = mkportals.build_portals(pb)
+    checked, bad = mkportals.pvs_subset_check(pb, portals)
+    if bad:
+        raise SystemExit(f"portals do not cover the PVS: {bad} of {checked} leaves")
+    OUT['portalidx.bld'], OUT['portalref.bld'] = mkportals.portal_lumps(pb, portals)
+    print(f"  portals: {len(OUT['portalref.bld'])//14} refs over {len(pb.leaves)} leaves")
+
     write_zip(os.path.join(outdir, 'assets.zip'))
 
 main()

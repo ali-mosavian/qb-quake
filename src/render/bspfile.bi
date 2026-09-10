@@ -355,6 +355,9 @@ type Env
     
     h_font      as long
     h_back_bdc  as long
+    h_comp_dc   as long         '' -comp: a mode-sized composite the view is
+                                '' scaled INTO and the overlay drawn onto at
+                                '' 1:1, so one blit reaches the screen
     
     mouse       as MouseInf
     keyboard    as Keys
@@ -409,6 +412,15 @@ type Env
                                 '' world walk, the bug this flag exists to show.
     no_z        as integer      '' -noz: skip the depth buffer entirely
     no_cull     as integer      '' -nocull: backface culling off, for A/B
+    no_portal   as integer      '' -noportal: skip the portal flood, the PVS
+                                '' as it stands. Narrowing to what is visible
+                                '' must draw exactly what not narrowing draws.
+    pt_wire     as integer      '' -ptwire: portal outlines on from the start;
+                                '' O does the same, but a flag can be checked
+                                '' headlessly and a keypress cannot
+    comp        as integer      '' -comp: composite through h_comp_dc. Scaling
+                                '' to the screen and then drawing the overlay
+                                '' on it is two passes over video memory.
     no_mip      as integer      '' -nomip: mip 0 for every face, whatever
                                 '' the distance. The A/B for anything that
                                 '' looks like it tracks a texture's size.

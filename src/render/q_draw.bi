@@ -126,6 +126,8 @@ type RenderState
                                 '' consumer, and putting it here keeps main.bas
                                 '' from having to see every map array to hold a
                                 '' single float.
+    portal      as integer      '' portal-culling toggle, P. Off means the
+                                '' walk sees the PVS unnarrowed.
     dlight      as DynLight     '' the player-following test light
 end type
 

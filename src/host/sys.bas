@@ -167,6 +167,15 @@ sub sys_parse_args ( _
         if ( lcase$(argv(i)) = "-nocull" ) then
             g.env.no_cull = true
         end if
+        if ( lcase$(argv(i)) = "-noportal" ) then
+            g.env.no_portal = true
+        end if
+        if ( lcase$(argv(i)) = "-ptwire" ) then
+            g.env.pt_wire = true
+        end if
+        if ( lcase$(argv(i)) = "-comp" ) then
+            g.env.comp = true
+        end if
         if ( lcase$(argv(i)) = "-nomip" ) then
             g.env.no_mip = true
         end if

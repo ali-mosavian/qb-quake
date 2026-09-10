@@ -99,9 +99,17 @@ function vid_present ( _
         sys_error "0x001A, no qgl present for this video shape"
     end if
 
-    qglDrBlitScl qglVgaScreen(), _
+    '' -comp scales into the composite and leaves the screen alone; the
+    '' host loop draws the overlay on top and blits the result once.
+    if ( g.env.comp ) then
+        qglDrBlitScl g.env.h_comp_dc, _
                     g.env.view_x, g.env.view_y, _
                     g.env.view_w, g.env.view_h, g.env.h_back_bdc
+    else
+        qglDrBlitScl qglVgaScreen(), _
+                    g.env.view_x, g.env.view_y, _
+                    g.env.view_w, g.env.view_h, g.env.h_back_bdc
+    end if
     vid_present = true
 
 end function
@@ -164,6 +172,20 @@ sub vid_init ( _
     g.env.h_back_bdc = qglSfNew&( g.env.x_res, g.env.y_res, QGL_SURF_CMEM )
     if ( g.env.h_back_bdc = FALSE ) then
         sys_error "0x0002, Could not create a backbuffer..."
+    end if
+
+    ''
+    '' -comp: one more surface, the size of the MODE, that the view is
+    '' scaled into and the overlay drawn onto at 1:1, so video memory is
+    '' written once a frame. Conventional: 64,000 bytes at 320x200, and
+    '' the memtrace shows 268,080 free after the depth buffer.
+    ''
+    if ( g.env.comp ) then
+        g.env.h_comp_dc = qglSfNew&( g.env.scr_x_res, g.env.scr_y_res, QGL_SURF_CMEM )
+        if ( g.env.h_comp_dc = FALSE ) then
+            sys_error "0x0003, Could not create the composite buffer..."
+        end if
+        qglDrFill g.env.h_comp_dc, 0, 0, g.env.scr_x_res-1, g.env.scr_y_res-1, 0
     end if
 
     ''

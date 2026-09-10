@@ -46,6 +46,30 @@ declare sub mod_load_flat ( _
     flname as string, _
     byval dst as long _
 )
+declare function r_portal_mark ( _
+    mtx as Mat4, _
+    byval cam_leaf as integer, _
+    byval visleafs as integer, _
+    byval xresh as single, _
+    byval yresh as single, _
+    byval z_near as single, _
+    idx() as integer, _
+    ref() as integer, _
+    pvsb() as integer, _
+    outb() as integer _
+) as integer
+declare sub r_portal_draw ( _
+    byval dc as long, _
+    mtx as Mat4, _
+    byval visleafs as integer, _
+    byval xresh as single, _
+    byval yresh as single, _
+    byval z_near as single, _
+    byval clr as integer, _
+    idx() as integer, _
+    ref() as integer, _
+    seen() as integer _
+)
 declare sub r_mark_leaves ( _
     g as Game, _
     byval nodenr as integer, _
@@ -96,6 +120,7 @@ declare sub r_draw_world ( _
     g as Game, _
     byval model as integer, _
     campos as Vec3, _
+    mtx_fin as Mat4, _
     models() as Submodel, _
     brush() as BrushModel, _
     nodes() as Node, _
@@ -143,6 +168,14 @@ declare function mod_pvs_base ( _
 dim shared lef_buffer() as Leaf
 dim shared lfc_buffer() as integer
 dim shared pvs_buffer_b() as integer
+'' Portals, rebuilt offline by tools/mkportals.py: pt_idx is one entry per
+'' leaf plus one, so a leaf's refs are pt_idx(l)..pt_idx(l+1)-1 and the last
+'' entry is the ref count; pt_ref is seven shorts a ref, the neighbouring
+'' leaf and the portal's bsp-space box. pvs_now is what the walk reads:
+'' the PVS narrowed to what the portals reach from where the eye is.
+dim shared pt_idx() as integer
+dim shared pt_ref() as integer
+dim shared pvs_now() as integer
 
 dim shared r_ignore_pvs as integer
 '$dynamic
@@ -312,6 +345,7 @@ sub r_draw_world ( _
     g as Game, _
     byval model as integer, _
     campos as Vec3, _
+    mtx_fin as Mat4, _
     models() as Submodel, _
     brush() as BrushModel, _
     nodes() as Node, _
@@ -361,6 +395,29 @@ sub r_draw_world ( _
     end if
 
     ''
+    '' Narrow the PVS to what the portals reach from this eye. The PVS is a
+    '' fact about the LEAF -- visible from anywhere in it, looking anywhere --
+    '' so it cannot tell a doorway behind you from one in front. This can, and
+    '' runs every frame because the answer moves when you turn.
+    ''
+    '' Writes pvs_now rather than pvs_buffer_b, which r_mark_leaves rebuilds
+    '' only on a leaf change -- a bit cleared there stays cleared.
+    ''
+    g.vis.pt_culled = 0
+    if ( g.rdr.portal ) then
+        g.vis.pt_culled = r_portal_mark( mtx_fin, dbg_camleaf, _
+                                          int( g.wld.count.leaves-1 ), _
+                                          g.env.x_res / 2.0, g.env.y_res / 2.0, _
+                                          g.env.z_near, pt_idx(), pt_ref(), _
+                                          pvs_buffer_b(), pvs_now() )
+    end if
+    if ( g.vis.pt_culled < 0 or g.rdr.portal = 0 ) then
+        for  i = 0 to g.wld.count.leaves-1
+            pvs_now(i) = pvs_buffer_b(i)
+        next i
+    end if
+
+    ''
     '' How many brush entities the walk still has to place. Once it is zero
     '' the per-node test below costs nothing.
     ''
@@ -376,7 +433,7 @@ sub r_draw_world ( _
     r_recursive_world_node g, int( models(model).head_node0 ), _
                               g.wld.count.models, models(), brush(), campos, r_ignore_pvs, _
                               nodes(), planes(), lef_buffer(), lfc_buffer(), _
-                              pvs_buffer_b(), pflag(), ord(), fru()
+                              pvs_now(), pflag(), ord(), fru()
     if ( g.ft.n > 0 ) then
         ptd = sys_now() - pt0
         g.pt.walk_sum = g.pt.walk_sum + ptd
@@ -395,7 +452,7 @@ sub r_draw_world ( _
                 r_recursive_world_node g, int( models(i).head_node0 ), _
                               g.wld.count.models, models(), brush(), campos, r_ignore_pvs, _
                               nodes(), planes(), lef_buffer(), lfc_buffer(), _
-                              pvs_buffer_b(), pflag(), ord(), fru()
+                              pvs_now(), pflag(), ord(), fru()
                 r_ignore_pvs = false
             end if
         next i
@@ -693,6 +750,46 @@ end sub
 ''::::::::::
 sub r_alloc_pvs ( byval leaf_count as long )
     redim pvs_buffer_b( leaf_count-1 ) as integer
+end sub
+
+''::::::::::
+'' name: r_load_portals
+'' desc: The portal adjacency, out of assets.zip -- tools/mkportals.py.
+''
+''       The index is one short per leaf plus one, and that last entry is
+''       the ref count, which is not in the bsp: loading the index first is
+''       what sizes the refs.
+''::::::::::
+sub r_load_portals ( byval leaf_count as long )
+    dim nrefs as long
+
+    redim pvs_now( leaf_count-1 ) as integer
+    redim pt_idx( leaf_count ) as integer
+    mod_load_flat "assets.zip::portalidx.bld", _
+        clng( varseg( pt_idx(0) ) ) * 65536& + (clng( varptr( pt_idx(0) ) ) and 65535&)
+
+    nrefs = pt_idx( leaf_count )
+    if ( nrefs <= 0 ) then exit sub
+
+    redim pt_ref( nrefs*7 - 1 ) as integer
+    mod_load_flat "assets.zip::portalref.bld", _
+        clng( varseg( pt_ref(0) ) ) * 65536& + (clng( varptr( pt_ref(0) ) ) and 65535&)
+end sub
+
+''::::::::::
+'' name: r_portal_outline
+'' desc: Outline every portal the flood went through this frame. The
+''       portal store and pvs_now are this module's, so the caller hands
+''       in the destination and the arrays never leave.
+''::::::::::
+sub r_portal_outline ( _
+    g as Game, _
+    byval dc as long, _
+    mtx_fin as Mat4 _
+)
+    r_portal_draw dc, mtx_fin, int( g.wld.count.leaves-1 ), _
+                   g.env.x_res / 2.0, g.env.y_res / 2.0, g.env.z_near, _
+                   251, pt_idx(), pt_ref(), pvs_now()
 end sub
 
 ''::::::::::

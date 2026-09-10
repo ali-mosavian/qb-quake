@@ -156,7 +156,9 @@ declare sub scr_load_part ( _
 )
 declare sub scr_draw_hud ( _
     g as Game, _
-    h_dst_dc as long _
+    h_dst_dc as long, _
+    byval w as integer, _
+    byval h as integer _
 )
 declare sub draw_init_font ( )
 declare sub scr_count_frame ( _
@@ -1388,9 +1390,13 @@ end sub
 ''       behaving. The key hints moved to one footer line -- repeating
 ''       "press f1 to disable" on every row cost more space than the rows.
 ''::::::::::
+'' Laid out against w by h, the DESTINATION's size: the render target's
+'' when drawn into it, the mode's under -comp.
 sub scr_draw_hud ( _
     g as Game, _
-    h_dst_dc as long _
+    h_dst_dc as long, _
+    byval w as integer, _
+    byval h as integer _
 )
     dim scs as CacheStats
     dim lx as integer, rx as integer, cw as integer
@@ -1402,7 +1408,7 @@ sub scr_draw_hud ( _
 
     cw = 146
     lx = 3
-    rx = g.env.x_res - cw - 3
+    rx = w - cw - 3
 
     ''
     '' Two columns need 2*cw and the gaps between them. A view too
@@ -1439,6 +1445,7 @@ sub scr_draw_hud ( _
         hud_row h_dst_dc, lx, cw, 38, "Triangles", ltrim$(str$( g.rdr.tris ))
         hud_row h_dst_dc, lx, cw, 46, "Leaves drawn/culled", _
                 ltrim$(str$( g.vis.drw_leafs )) + "/" + ltrim$(str$( g.vis.cul_leafs ))
+        hud_row h_dst_dc, lx, cw, 54, "Leaves portal-cut", ltrim$(str$( g.vis.pt_culled ))
         draw_string h_dst_dc, lx+5, 60, "fps 60"
         hud_graph h_dst_dc, lx+cw-GRAPH_N-5, 59, 17, g_fps(), 60
 
@@ -1514,14 +1521,18 @@ sub scr_draw_hud ( _
         if ( g.rdr.backface ) then ftr = ftr + "ON " else ftr = ftr + "off"
         ftr = ftr + "   L lm "
         if ( g.rdr.lightmap ) then ftr = ftr + "ON " else ftr = ftr + "off"
+        ftr = ftr + "   P portal "
+        if ( g.rdr.portal ) then ftr = ftr + "ON " else ftr = ftr + "off"
+        ftr = ftr + "   O ptl "
+        if ( g.scr.portal_wire ) then ftr = ftr + "ON " else ftr = ftr + "off"
         ftr = ftr + "   F12 hide"
 
-        yy = g.env.y_res - 9
-        qglDrFill h_dst_dc, 0, yy-2, g.env.x_res, g.env.y_res, hc_bg
-        qglDrHline h_dst_dc, 0, yy-2, g.env.x_res, hc_slabhi
+        yy = h - 9
+        qglDrFill h_dst_dc, 0, yy-2, w, h, hc_bg
+        qglDrHline h_dst_dc, 0, yy-2, w, hc_slabhi
         draw_string h_dst_dc, 4, yy, ftr
     else
-        yy = g.env.y_res - 9
+        yy = h - 9
         draw_string h_dst_dc, 4, yy, "F12 stats"
     end if
 
@@ -1561,8 +1572,13 @@ sub scr_draw_hud ( _
                     ltrim$(str$( cint( g.pl.pos.z ) )) + _
            " -yaw " + ltrim$(str$( cint( yawd ) ))
 
-    qglDrFill h_dst_dc, 0, 0, g.env.x_res, 9, hc_bg
+    qglDrFill h_dst_dc, 0, 0, w, 9, hc_bg
     draw_string h_dst_dc, 4, 1, pstr
+    '' Stats hidden or not: the number a player watches. Not under
+    '' -nostats, whose frame is a byte-for-byte reference.
+    if ( g.env.no_stats = 0 ) then
+        draw_string_r h_dst_dc, w-4, 1, ltrim$(str$( g.scr.fps )) + " fps"
+    end if
 end sub
 
 

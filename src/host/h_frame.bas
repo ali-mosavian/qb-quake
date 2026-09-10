@@ -123,6 +123,7 @@ declare sub r_draw_world ( _
     g as Game, _
     byval model as integer, _
     campos as Vec3, _
+    mtx_fin as Mat4, _
     models() as Submodel, _
     brush() as BrushModel, _
     nodes() as Node, _
@@ -164,7 +165,14 @@ declare sub d_draw_faces ( _
 )
 declare sub scr_draw_hud ( _
     g as Game, _
-    h_dst_dc as long _
+    h_dst_dc as long, _
+    byval w as integer, _
+    byval h as integer _
+)
+declare sub r_portal_outline ( _
+    g as Game, _
+    byval dc as long, _
+    mtx_fin as Mat4 _
 )
 declare function sys_now ( ) as single
 
@@ -378,7 +386,7 @@ sub host_render ( _
     ''
     '' Walk BSP tree
     ''
-    r_draw_world g, 0, g.cam.pos, mdl_buffer(), brush(), nds_buffer(), pln_buffer(), _
+    r_draw_world g, 0, g.cam.pos, mtx_fin, mdl_buffer(), brush(), nds_buffer(), pln_buffer(), _
                   poly_flag(), order_list(), frustum(), bit_array()
 
     ''
@@ -483,12 +491,18 @@ sub host_render ( _
         next mdl_i
     end if
 
+    if ( g.scr.portal_wire ) then
+        r_portal_outline g, h_dst_dc, mtx_fin
+    end if
+
     '' Nothing turns depth off for the overlay: the overlay draws
     '' through the 2D calls, which never touch depth, and every 3D draw
     '' names its own depth mode. There is no installed mode to restore.
 
+    '' Under -comp the host loop draws this onto the composite after the
+    '' scale, at the mode's own size.
     pt0 = sys_now()
-    scr_draw_hud g, h_dst_dc
+    if ( g.env.comp = 0 ) then scr_draw_hud g, h_dst_dc, g.env.x_res, g.env.y_res
     if ( g.ft.n > 0 ) then
         ptd = sys_now() - pt0
         g.pt.hud_sum = g.pt.hud_sum + ptd

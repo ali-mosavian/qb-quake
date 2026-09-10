@@ -17,6 +17,8 @@
 #                               buffer. The two frames may differ only where
 #                               depth legitimately changes the picture.
 #   tools/check.sh --hud        the overlay, stats on, against tools/ref/hud.bmp
+#   tools/check.sh --portal     the bench with and without the portal flood:
+#                               the flood must cut leaves and change nothing
 #   tools/check.sh --model      the alias model against -nomdl at two campath
 #                               ticks: one where it must draw nothing, one
 #                               where it must draw something.
@@ -138,6 +140,20 @@ if [[ "${1:-}" == "--hud" ]]; then
     out=$(python3 "$ROOT/tools/imgdiff.py" "$ROOT/tools/ref/hud.bmp" "$VBD_OUT/hud.bmp" | tail -1)
     [[ "$out" == IDENTICAL* ]] && { echo "PASS  hud: $out"; exit 0; }
     echo "FAIL  hud: $out"; exit 1
+fi
+
+# The portal flood refines the PVS, so it may only remove leaves the frame
+# could not see: on and off must be pixel-identical. That is vacuous when
+# the flood removes nothing, so the on run must also report a cut.
+if [[ "${1:-}" == "--portal" ]]; then
+    build_exe
+    run_frame "$BENCH"           "$VBD_OUT/portal-on.bmp"
+    cut=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="portal_culled"{print $2}')
+    run_frame "$BENCH -noportal" "$VBD_OUT/portal-off.bmp"
+    out=$(python3 "$ROOT/tools/imgdiff.py" "$VBD_OUT/portal-off.bmp" "$VBD_OUT/portal-on.bmp" | tail -1)
+    [[ "$out" == IDENTICAL* ]] || { echo "FAIL  portal: $out -- the flood culled something visible"; exit 1; }
+    [[ "${cut:-0}" -gt 0 ]] || { echo "FAIL  portal: portal_culled=${cut:-none}, the flood cut nothing"; exit 1; }
+    echo "PASS  portal: $out, $cut leaves cut"; exit 0
 fi
 
 if [[ "${1:-}" == "--model" ]]; then

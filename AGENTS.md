@@ -1976,6 +1976,44 @@ matched nothing in a `\r\n` file, the assert failed inside a helper
 the script did not stop on, and the unmutated source ran green. One
 line per pattern, or match the line ending.
 
+## Portal culling and the composite HUD
+
+Ported from `alim/portal-culling`, which was written against mgl and the
+flat `src/` layout; `docs/portal-culling.md` is its design note.
+
+**The flood refines the PVS, so on and off must draw the same picture.**
+`tools/mkportals.py` rebuilds the portals a compiled BSP no longer
+carries and `mkassets.py` ships them as `portalidx.bld`/`portalref.bld`
+in assets.zip, held to the PVS-subset check on every build -- a map whose
+portals do not cover the PVS fails `make assets` rather than culling what
+it should have drawn. `r_portal.c` floods from the camera's leaf every
+frame with a shrinking screen rectangle and writes `pvs_now`, which the
+walk reads instead of `pvs_buffer_b`; a negative return is a bail and the
+PVS is copied through unchanged. `tools/check.sh --portal` is the gate:
+the bench frame with and without `-noportal` must be IDENTICAL, and the
+on run must report `portal_culled` above zero, or the identity is
+vacuous. P toggles it, O outlines the portals the flood went through,
+`-ptwire` starts with the outlines on.
+
+**It is a net loss on dm3ish and is on by default anyway.** The branch
+measured the campath at +4.03 ms with the flood on: the map is small and
+the PVS already tight, so the flood costs more than the leaves it cuts
+save. It is here for the maps where that reverses, and `-noportal` is
+the A/B.
+
+**`-comp` writes video memory once a frame.** The view is scaled into a
+mode-sized conventional Surface, `scr_draw_hud` draws onto that at 1:1
+-- it takes the destination's width and height now, not `x_res`/`y_res`
+-- and one `qglDrBlit` carries the result to the screen. Without it the
+overlay is drawn into the render target and magnified with the view.
+`-bench`'s BENCH.BMP is still the render target, so under `-comp` it
+carries no overlay; the HUD gate runs without `-comp` for that reason.
+
+**Adding a field to `Env` or `RenderState` moves `GAME_VIS_OFFSET` and
+`GAME_DLIGHT_OFFSET`**, in r_walk.c and sb_build.c: 4958/4942 became
+4970/4954 here for `h_comp_dc`, three flags and `rdr.portal`. The
+startup assertion says so, with the number to paste in.
+
 ## `-nostats` makes the picture deterministic
 
 With the HUD off the renderer is **byte-identical run to run** -- one

@@ -27,8 +27,8 @@ type Game
     mdl_count   as integer        '' how many of mdl_ent() are actually spawned
 
     '' LAST, deliberately. r_walk.c and sb_build.c reach g.vis and
-    '' g.rdr.dlight by byte offset -- GAME_VIS_OFFSET 4958 and
-    '' GAME_DLIGHT_OFFSET 4942 -- so a field added anywhere above here
+    '' g.rdr.dlight by byte offset -- GAME_VIS_OFFSET 4970 and
+    '' GAME_DLIGHT_OFFSET 4954 -- so a field added anywhere above here
     '' moves both and the startup layout check fails, which is exactly
     '' what it did when this went into Env instead.
     qgl_check   as integer        '' -qglcheck: run the qgl ABI test and exit
