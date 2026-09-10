@@ -671,7 +671,7 @@ sub host_init ( _
     '' surface cache opens, and sc_store_open's own call was too late
     '' -- the atlas load failed with 0x0016 and nothing said why.
     if ( qglSfInit() = 0 ) then sys_error "0x0017, qgl has no EMS"
-    sys_mem_mark "ugl"
+    sys_mem_mark "meminit"
 
     '' -qgldiff: qgl's rasteriser against mgl's, which it brings up and
     '' ends itself. Before the map, because nothing it draws comes from
@@ -893,8 +893,10 @@ sub host_main ( _
     qglM4Persp mtx_prj, g.env.cam_fov, aspect, g.env.z_near, g.env.z_far
 
     ''
-    '' Depth buffer, matching the destination. EMS: 320x200 of depth is
-    '' 128,000 bytes and conventional memory has nothing like that spare.
+    '' Depth buffer, matching the destination. Conventional first: 160x100
+    '' of depth is 32,000 bytes against the 262,416 the memtrace shows
+    '' free after the backbuffer, and a page the fillers never have to
+    '' map. EMS on a refusal, which is what 320x200's 128,000 gets.
     ''
     '' The scale maps 1/z into 16 bits. 1/z is largest at the near plane,
     '' so 65535 * z_near puts the nearest thing drawn at the top of the
@@ -908,10 +910,12 @@ sub host_main ( _
     '' stays global: every depth buffer in the frame is in its units.
     z_dc = 0
     if ( g.env.no_z = 0 ) then
-        z_dc = qglSfZNew&( h_dst_dc, QGL_SURF_EMS )
+        z_dc = qglSfZNew&( h_dst_dc, QGL_SURF_CMEM )
+        if ( z_dc = 0 ) then z_dc = qglSfZNew&( h_dst_dc, QGL_SURF_EMS )
         if ( z_dc = 0 ) then sys_error "0x0019, no qgl depth buffer"
         zz = qglZScale&( 65535.0 * g.env.z_near )
     end if
+    sys_mem_mark "depth"
     
     g.rdr.use_mips = (g.env.no_mip = 0)
     '' follows -lm: with no lightmap data loaded there is nothing to toggle

@@ -978,7 +978,7 @@ end sub
 sub scr_load_chrome ( _
     g as Game _
 )
-    dim ttl as string, sub1 as string, ftr as string
+    dim ttl as string, sub1 as string
     dim plate_x as integer, plate_w as integer
 
     ''
@@ -1026,9 +1026,6 @@ sub scr_load_chrome ( _
     '' the well the bar sits in, sunken into the wall
     qglDrFill ldr.dc, PAN_X, PAN_Y, PAN_X+PAN_W, PAN_Y+PAN_H, C_PANEL
     bevel PAN_X, PAN_Y, PAN_X+PAN_W, PAN_Y+PAN_H, C_EDGEHI, C_EDGE, 0
-
-    ftr = "powered by uGL"
-    draw_string ldr.dc, 320 - len(ftr)*4 - 12, 186, ftr
 end sub
 
 
@@ -1526,10 +1523,6 @@ sub scr_draw_hud ( _
     else
         yy = g.env.y_res - 9
         draw_string h_dst_dc, 4, yy, "F12 stats"
-    end if
-
-    if ( wide ) then
-        draw_string_r h_dst_dc, g.env.x_res-4, g.env.y_res-9, "powered by uGL"
     end if
 
     ''

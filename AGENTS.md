@@ -1923,6 +1923,16 @@ no tool mounts the mgl tree, `ugl-patch/` and the native mgl build are
 deleted, and the qgl benches that raced mgl went with them. The bench
 stayed IDENTICAL through every step.
 
+**The depth buffer is conventional memory first, EMS on a refusal.**
+With the per-texture DCs, the font DCs and the library gone the
+memtrace shows 303,648 bytes in BASIC's far heap before it and 268,080
+after: 160x100 of depth is 32,000 bytes, and a page the fillers no
+longer map. 320x200 wants 128,000 and takes the EMS path as before.
+The bench stayed IDENTICAL. A six-run interleaved campath A/B against
+the EMS build was NOT a measurement: another emulator was running on
+the host and the spread was 15ms an arm on a 54ms frame, medians 53.9
+against 53.7. Repeat it on a quiet host before quoting a speed.
+
 **`sc_selftest` wrote its row through mgl and read it back through
 mgl, on a qgl Surface.** `uglRowWriteBuff`/`uglRowRead` take the
 scanline table at `DC_addrTB`, 32, where a Surface keeps it at 38, so
