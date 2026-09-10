@@ -431,6 +431,9 @@ type Env
                                 '' pixels with the model, 0 without.
     no_view     as integer      '' -noview: no view weapon, so the model
                                 '' gate can still ask what the soldiers add
+    no_ai       as integer      '' -noai: no mdl_think, so the monsters
+                                '' hold their spawns and a viewpoint that
+                                '' sees none of them stays that way
     cam_path     as integer      '' -campath: fly the A* route from
                                 '' campath.bin instead of standing still.
                                 '' The old bench rendered ONE viewpoint, so

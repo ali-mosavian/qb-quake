@@ -340,7 +340,9 @@ sub host_tick ( _
         '' mdl_think against g.rdr.anim_time
         ndead = 0
         for mdl_i = 0 to g.mdl_count - 1
-            if ( mdl_ent( mdl_i ).kind = MDL_KIND_KNIGHT% ) then
+            if ( g.env.no_ai ) then
+                '' held at the spawn: the model gate's away arm
+            elseif ( mdl_ent( mdl_i ).kind = MDL_KIND_KNIGHT% ) then
                 mdl_think g, mdl_ent( mdl_i ), g.kmdl, -1, models(), brush(), planes()
             else
                 mdl_think g, mdl_ent( mdl_i ), g.mdl, -1, models(), brush(), planes()

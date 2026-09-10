@@ -37,7 +37,7 @@
    field with vis immediately following it -- a cheap independent check
    this comment records but does not rely on at run time.
 */
-#define GAME_DLIGHT_OFFSET 4958
+#define GAME_DLIGHT_OFFSET 4960
 
 #define GEOM_LMOFS 1
 #define LS_NEUTRAL 120

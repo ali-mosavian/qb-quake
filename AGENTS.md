@@ -1609,7 +1609,9 @@ The general rule, worth more than this bug: **clipping to the near plane
 bounds w, not the projection.** Anything handing a projected polygon to a
 rasteriser that clips in screen space owes it side planes too.
 
-`tools/check.sh --model` is the regression test. Two viewpoints, because
+`tools/check.sh --model` is the regression test, `-noai` on the away arm
+since the monsters wander -- by tick 360 a knight had reached a visible
+leaf, `mdl_drawn 1` under an identical picture. Two viewpoints, because
 one assertion cannot fail both ways: at campath tick 360 no entity is in
 frame so the model must add NOTHING, and from a fixed camera 200 units in
 front of spawned entity 1 it must add SOMETHING. Campath tick 240 was the

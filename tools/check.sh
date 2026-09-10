@@ -118,7 +118,9 @@ fi
 #
 #   away  campath tick 360, where no entity is in frame, so the model must
 #         add NOTHING. Before the fix it added 138 index-0 pixels of
-#         streak; 947 with lightmaps on.
+#         streak; 947 with lightmaps on. -noai, since the monsters
+#         wander: by tick 360 a knight had walked into a visible leaf
+#         and mdl_drawn read 1 with the picture still identical.
 #   near  a fixed camera 200 units in front of spawned entity 1, so the
 #         model must add SOMETHING -- otherwise "draws no streaks" also
 #         passes for "draws nothing at all". The spawns are seeded
@@ -164,7 +166,7 @@ fi
 if [[ "${1:-}" == "--model" ]]; then
     build_exe
     rc=0
-    for arm in "away:-campath -bench 4000 -ticks 360" \
+    for arm in "away:-noai -campath -bench 4000 -ticks 360" \
                "near:-at 264 -40 40 -yaw 0 -bench 8 -ticks 2"; do
         tag="${arm%%:*}"; flags="${arm#*:}"
         run_frame "-nostats -noview $flags"         "$VBD_OUT/mdl-$tag-on.bmp"
