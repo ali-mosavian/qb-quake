@@ -216,8 +216,8 @@ sub v_update_camera ( _
         if ( g.env.keyboard.a  ) then strafe = strafe + 1.0
         if ( g.env.keyboard.d  ) then strafe = strafe - 1.0
 
-        if ( g.env.mouse.left  ) then fwd    = fwd    + 1.0
-        if ( g.env.mouse.right ) then fwd    = fwd    - 1.0
+        '' mouse 1 is the shotgun now; mouse 2 still walks forward
+        if ( g.env.mouse.right ) then fwd    = fwd    + 1.0
 
         if ( g.env.bench_walk   ) then fwd    = 1.0
         if ( g.env.bench_strafe ) then strafe = 1.0

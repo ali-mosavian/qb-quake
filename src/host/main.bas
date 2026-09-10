@@ -717,6 +717,9 @@ sub host_init ( _
     scr_begin_loading g
     ent_load_spawn g
     pl_init g
+    g.fight.health = PL_HEALTH%
+    g.fight.shells = PL_SHELLS%
+    g.fight.spawn.x = g.pl.pos.x : g.fight.spawn.y = g.pl.pos.y : g.fight.spawn.z = g.pl.pos.z
 
     t_map = timer
 

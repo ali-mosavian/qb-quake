@@ -120,6 +120,25 @@ type PlayerState
     water_type  as integer      '' CONTENTS_WATER, _SLIME or _LAVA
 end type
 
+'' The player as a combatant: what the soldiers can take away and what
+'' the shotgun spends. After vis in Game, so the C offsets stay put.
+type PlayerCombat
+    health      as integer
+    shells      as integer
+    kills       as integer
+    deaths      as integer
+    next_fire   as single      '' anim_time the shotgun is ready again
+    flash_until as single      '' the muzzle flash widens the dlight until then
+    hurt_until  as single      '' the status line reads red until then
+    spawn       as Vec3        '' where dying puts the player back
+end type
+
+const PL_HEALTH%       = 100
+const PL_SHELLS%       = 25     '' Quake's starting shells
+const PL_FIRE_RATE#    = 0.5    '' the shotgun's attack_finished
+const PL_SHOT_RANGE#   = 2048.0
+const PL_SHOT_DAMAGE%  = 15     '' six pellets of four, most of them landing
+
 
 ''
 '' pl_move.bas. Declared here: these name PlayerState and TraceResult.

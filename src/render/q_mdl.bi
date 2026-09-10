@@ -19,8 +19,16 @@
 '' movement port and its own documented simplifications.
 const MDL_ST_STAND%    = 0
 const MDL_ST_RUN%      = 1
+const MDL_ST_DEAD%     = 2    '' plays the death frames once, then lies there
 const MDL_STAND_FRAMES% = 8   '' army_stand1..8
 const MDL_RUN_FRAMES%   = 8   '' army_run1..8
+const MDL_DEATH_FRAMES% = 10  '' army_death1..10, after the run set
+const MDL_HEALTH%       = 30  '' monster_army's health
+const MDL_DAMAGE%       = 8   '' about half of army_fire's four pellets landing
+const MDL_HIT_CHANCE#   = 0.5
+const MDL_ATTACK_RATE#  = 1.0 '' seconds between volleys
+const MDL_BACKPACK%     = 5   '' the shells a dead soldier's backpack carries
+const MDL_RESPAWN#      = 15.0 '' seconds a corpse lies before it is a soldier again
 const MDL_YAW_SPEED#    = 20.0   '' walkmonster_start_go's yaw_speed
 const MDL_RANGE_MELEE#  = 120.0  '' ai.qc range() -- visible() alone is enough here
 const MDL_RANGE_MID#    = 1000.0 '' range() >= this is RANGE_FAR, never noticed
@@ -82,6 +90,11 @@ type MdlEnt
     goal        as Vec3        '' current wander destination
     stand_until as single      '' g.rdr.anim_time to leave STAND and pick a new goal
     wander_ticks as integer    '' think-ticks spent chasing the current goal
+    health      as integer
+    hunting     as integer     '' has seen the player: RUN chases instead of wandering
+    next_attack as single      '' anim_time of the next volley
+    dead_at     as single      '' anim_time it died, for the respawn
+    spawn       as Vec3        '' where it respawns
 end type
 
 '' UV as fixed-point Integer (0..32767 = 0.0..1.0), not Single -- halves

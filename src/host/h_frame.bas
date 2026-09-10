@@ -114,6 +114,13 @@ declare sub mdl_think ( _
     brush() as BrushModel, _
     planes() as Plane _
 )
+declare sub pl_fire ( _
+    g as Game, _
+    mdl_ent() as MdlEnt, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+)
 declare sub ls_animate ( byval anim_time as single )
 declare sub r_set_frustum ( _
     frustum() as DiskPlane, _
@@ -284,13 +291,16 @@ sub host_tick ( _
     '' and what the world does about it: camera, and the physics under it
     v_update_camera g, dt, cp_x(), cp_y(), cp_z(), brush(), models(), planes(), nodes()
 
-    '' every spawned model's own movement -- Quake's real think rate
-    '' (10Hz), gated inside mdl_think itself against g.rdr.anim_time, not
-    '' every tick. can_chase is false: a crowd spawned to fill the map is
-    '' not meant to hunt the player, just stand and animate -- same as a
-    '' real Quake walkmonster nothing ever spots (see q_mdl.bi's note).
+    '' the shotgun: mouse 1 or ctrl, rate-limited inside
+    if ( g.env.mouse.left or g.env.keyboard.ctrl ) then
+        pl_fire g, mdl_ent(), models(), brush(), planes()
+    end if
+
+    '' every spawned model's own think -- Quake's real rate (10Hz), gated
+    '' inside mdl_think against g.rdr.anim_time. A soldier that spots the
+    '' player hunts; the rest wander.
     for mdl_i = 0 to g.mdl_count - 1
-        mdl_think g, mdl_ent( mdl_i ), 0, models(), brush(), planes()
+        mdl_think g, mdl_ent( mdl_i ), -1, models(), brush(), planes()
     next mdl_i
 
     '' and anything the world does to the player as a result of moving
@@ -315,6 +325,8 @@ sub host_tick ( _
     g.rdr.dlight.pos.y = g.pl.pos.y
     g.rdr.dlight.pos.z = g.pl.pos.z
     g.rdr.dlight.radius = DL_RADIUS#
+    '' and the muzzle flash, which is the same light, wider
+    if ( g.rdr.anim_time < g.fight.flash_until ) then g.rdr.dlight.radius = DL_RADIUS# * 2.0
 
 end sub
 

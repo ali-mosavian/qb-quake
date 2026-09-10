@@ -1404,7 +1404,10 @@ sub scr_draw_hud ( _
     dim fcol as integer
     dim wide as integer
     dim dxv as single, dyv as single, ayv as single, yawd as single
-    dim pstr as string
+    dim pstr as string, fstr as string
+
+    fstr = "HP " + ltrim$(str$( g.fight.health )) + "  SHELLS " + ltrim$(str$( g.fight.shells )) + _
+           "  KILLS " + ltrim$(str$( g.fight.kills )) + "  DEATHS " + ltrim$(str$( g.fight.deaths ))
 
     cw = 146
     lx = 3
@@ -1532,8 +1535,12 @@ sub scr_draw_hud ( _
         qglDrHline h_dst_dc, 0, yy-2, w, hc_slabhi
         draw_string h_dst_dc, 4, yy, ftr
     else
+        '' the status line, red while a volley just landed
         yy = h - 9
-        draw_string h_dst_dc, 4, yy, "F12 stats"
+        if ( g.rdr.anim_time < g.fight.hurt_until ) then
+            qglDrFill h_dst_dc, 0, yy-1, w, h, hc_bad
+        end if
+        draw_string h_dst_dc, 4, yy, fstr
     end if
 
     ''
@@ -1574,6 +1581,7 @@ sub scr_draw_hud ( _
 
     qglDrFill h_dst_dc, 0, 0, w, 9, hc_bg
     draw_string h_dst_dc, 4, 1, pstr
+    if ( wide ) then draw_string_r h_dst_dc, w - 40, 1, fstr
     '' Stats hidden or not: the number a player watches. Not under
     '' -nostats, whose frame is a byte-for-byte reference.
     if ( g.env.no_stats = 0 ) then

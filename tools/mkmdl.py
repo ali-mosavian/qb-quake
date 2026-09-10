@@ -90,8 +90,9 @@ def main() -> int:
     # soldier is 116 KB of vertices, and the comparison only ever plays
     # stand/walk/run.
     import re
-    frames = [f for f in m.frames
-              if re.sub(r"\d+$", "", f.name) in frameset]
+    # In frameset order, not file order: the .mdl keeps death before run
+    # and d_mdl.bas indexes the sets by position.
+    frames = [f for name in frameset for f in m.frames if re.sub(r"\d+$", "", f.name) == name]
     if not frames:
         frames = list(m.frames)
 

@@ -113,7 +113,7 @@ $(ASSETS): data/$(MAP) data/base.dat tools/mkassets.py tools/mkportals.py
 # .geo stands in for the three files mkmdl.py writes, the way assets.zip
 # stands in for the texture set.
 data/assets/$(MDL).geo: $(PAK) tools/mkmdl.py
-	@python3 tools/mkmdl.py $(PAK) $(MDL) data/assets
+	@python3 tools/mkmdl.py $(PAK) $(MDL) data/assets stand,run,death
 
 data/assets/campath.bin: data/$(MAP) tools/campath.py
 	@python3 tools/campath.py data/$(MAP) data/assets

@@ -291,11 +291,11 @@ sub mdl_draw ( _
     '' picks the movement distance picks the displayed frame. Stand
     '' frames then run frames, contiguous in the one EMS-page vertex
     '' block (mkmdl.py's own order): frame 8 is run1.
-    if ( ent.state = MDL_ST_STAND% ) then
-        frame = ent.anim_frame
-    else
-        frame = MDL_STAND_FRAMES% + ent.anim_frame
-    end if
+    select case ent.state
+    case MDL_ST_STAND% : frame = ent.anim_frame
+    case MDL_ST_RUN%   : frame = MDL_STAND_FRAMES% + ent.anim_frame
+    case else          : frame = MDL_STAND_FRAMES% + MDL_RUN_FRAMES% + ent.anim_frame
+    end select
 
     '' Everything from here is d_alias.c: the vertex rotation and
     '' transform, the clip, the projection and the raster calls, once

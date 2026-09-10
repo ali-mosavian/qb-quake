@@ -52,6 +52,24 @@ declare function pl_hull_contents ( _
     clip() as ClipNode, _
     planes() as Plane _
 ) as integer
+declare function mdl_slab ( _
+    byval lo as single, _
+    byval hi as single, _
+    byval o as single, _
+    byval d as single, _
+    tn as single, _
+    tf as single _
+) as integer
+declare function mdl_ray_hit ( _
+    ent as MdlEnt, _
+    byval radius as single, _
+    byval zlo as single, _
+    byval zhi as single, _
+    org as Vec3, _
+    dir as Vec3, _
+    byval maxt as single _
+) as single
+declare sub pl_respawn ( g as Game )
 declare function pl_point_contents ( _
     p as Vec3, _
     nodes() as Node, _
@@ -1118,6 +1136,9 @@ sub mdl_spawn ( _
     ent.anim_frame = 0
     ent.goal.x = org.x : ent.goal.y = org.y : ent.goal.z = org.z
     ent.wander_ticks = 0
+    ent.health = MDL_HEALTH%
+    ent.hunting = 0
+    ent.next_attack = 0.0
     '' staggered, not all-at-0: eight monsters spawned in the same tick
     '' otherwise all pick their first wander goal on the same think.
     ent.stand_until = rnd * MDL_STAND_MAX#
@@ -1139,6 +1160,7 @@ sub mdl_spawn ( _
         ent.pos.y = tr.end_pos.y
         ent.pos.z = tr.end_pos.z
     end if
+    ent.spawn.x = ent.pos.x : ent.spawn.y = ent.pos.y : ent.spawn.z = ent.pos.z
 
     redim mdl_run_dist( MDL_RUN_FRAMES% - 1 ) as integer
     mdl_run_dist(0) = 11 : mdl_run_dist(1) = 15 : mdl_run_dist(2) = 10 : mdl_run_dist(3) = 10
@@ -1610,8 +1632,19 @@ sub mdl_think ( _
     if ( g.rdr.anim_time < ent.next_think ) then exit sub
     ent.next_think = g.rdr.anim_time + 0.1
 
+    '' Dead: the death frames once, then a corpse until the respawn.
+    if ( ent.state = MDL_ST_DEAD% ) then
+        if ( ent.anim_frame < MDL_DEATH_FRAMES% - 1 ) then ent.anim_frame = ent.anim_frame + 1
+        if ( g.rdr.anim_time >= ent.dead_at + MDL_RESPAWN# ) then
+            goal.x = ent.spawn.x : goal.y = ent.spawn.y : goal.z = ent.spawn.z
+            mdl_spawn g, ent, goal, models(), brush(), planes()
+        end if
+        exit sub
+    end if
+
     if ( ent.state = MDL_ST_STAND% ) then
         if ( can_chase and mdl_find_target( g, ent, models(), brush(), planes() ) ) then
+            ent.hunting = -1
             ent.state = MDL_ST_RUN%
             ent.anim_frame = 0
             ent.wander_ticks = 0
@@ -1628,7 +1661,19 @@ sub mdl_think ( _
     end if
 
     dist = mdl_run_dist( ent.anim_frame )
-    if ( can_chase ) then
+    if ( ent.hunting ) then
+        '' army_atk: a volley whenever the player is in sight, then the
+        '' chase goes on. The pellets land by chance, not by aim.
+        if ( g.rdr.anim_time >= ent.next_attack ) then
+            if ( mdl_find_target( g, ent, models(), brush(), planes() ) ) then
+                ent.next_attack = g.rdr.anim_time + MDL_ATTACK_RATE#
+                if ( rnd < MDL_HIT_CHANCE# ) then
+                    g.fight.health = g.fight.health - MDL_DAMAGE%
+                    g.fight.hurt_until = g.rdr.anim_time + 0.3
+                    if ( g.fight.health <= 0 ) then pl_respawn g
+                end if
+            end if
+        end if
         goal.x = g.pl.pos.x : goal.y = g.pl.pos.y : goal.z = g.pl.pos.z
     else
         goal.x = ent.goal.x : goal.y = ent.goal.y : goal.z = ent.goal.z
@@ -1640,7 +1685,7 @@ sub mdl_think ( _
     '' the same compass search a real chase can also fail to route
     '' around) -- a real chase never does either, an enemy hunt is
     '' unconditional, which is exactly why this is gated on can_chase.
-    if ( can_chase = 0 ) then
+    if ( ent.hunting = 0 ) then
         ent.wander_ticks = ent.wander_ticks + 1
         dx = ent.pos.x - ent.goal.x : dy = ent.pos.y - ent.goal.y
         d2 = dx*dx + dy*dy
@@ -1650,4 +1695,130 @@ sub mdl_think ( _
             ent.stand_until = g.rdr.anim_time + MDL_STAND_MIN# + rnd * ( MDL_STAND_MAX# - MDL_STAND_MIN# )
         end if
     end if
+end sub
+
+''::::::::::::::
+'' name: mdl_slab
+'' desc: One axis of the ray-box test: narrows tn..tf to the slab lo..hi.
+''       0 when the ray misses the slab outright.
+''::::::::::::::
+function mdl_slab ( _
+    byval lo as single, _
+    byval hi as single, _
+    byval o as single, _
+    byval d as single, _
+    tn as single, _
+    tf as single _
+) as integer
+    dim t0 as single, t1 as single
+
+    mdl_slab = 0
+    if ( abs( d ) < 0.0001 ) then
+        if ( o < lo or o > hi ) then exit function
+        mdl_slab = -1
+        exit function
+    end if
+    t0 = ( lo - o ) / d
+    t1 = ( hi - o ) / d
+    if ( t0 > t1 ) then swap t0, t1
+    if ( t0 > tn ) then tn = t0
+    if ( t1 < tf ) then tf = t1
+    mdl_slab = ( tn <= tf )
+end function
+
+''::::::::::::::
+'' name: mdl_ray_hit
+'' desc: Where a ray from org along dir enters the soldier's box, in
+''       units along dir, or -1 past maxt or missing. The box is the one
+''       r_mdl_visible culls with.
+''::::::::::::::
+function mdl_ray_hit ( _
+    ent as MdlEnt, _
+    byval radius as single, _
+    byval zlo as single, _
+    byval zhi as single, _
+    org as Vec3, _
+    dir as Vec3, _
+    byval maxt as single _
+) as single
+    dim tn as single, tf as single
+
+    mdl_ray_hit = -1.0
+    tn = 0.0 : tf = maxt
+    if ( mdl_slab( ent.pos.x - radius, ent.pos.x + radius, org.x, dir.x, tn, tf ) = 0 ) then exit function
+    if ( mdl_slab( ent.pos.y - radius, ent.pos.y + radius, org.y, dir.y, tn, tf ) = 0 ) then exit function
+    if ( mdl_slab( ent.pos.z + zlo, ent.pos.z + zhi, org.z, dir.z, tn, tf ) = 0 ) then exit function
+    mdl_ray_hit = tn
+end function
+
+''::::::::::::::
+'' name: pl_fire
+'' desc: The shotgun, as a single hitscan: the world first, then the
+''       nearest live soldier in front of it. A hit that does not kill
+''       makes the soldier hunt; a kill drops its backpack's shells.
+''::::::::::::::
+sub pl_fire ( _
+    g as Game, _
+    mdl_ent() as MdlEnt, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+)
+    dim org as Vec3, fin as Vec3, dir as Vec3
+    dim tr as TraceResult
+    dim i as integer, best as integer
+    dim t as single, bt as single
+
+    if ( g.rdr.anim_time < g.fight.next_fire ) then exit sub
+    if ( g.fight.shells <= 0 ) then exit sub
+    g.fight.next_fire = g.rdr.anim_time + PL_FIRE_RATE#
+    g.fight.shells = g.fight.shells - 1
+    g.fight.flash_until = g.rdr.anim_time + 0.1
+
+    '' cam.look_at is a unit direction in renderer space, Y up: BSP y is
+    '' renderer z and BSP z is renderer y.
+    dir.x = g.cam.look_at.x : dir.y = g.cam.look_at.z : dir.z = g.cam.look_at.y
+    org.x = g.pl.pos.x : org.y = g.pl.pos.y : org.z = g.pl.pos.z + PL_EYE#
+    fin.x = org.x + dir.x * PL_SHOT_RANGE#
+    fin.y = org.y + dir.y * PL_SHOT_RANGE#
+    fin.z = org.z + dir.z * PL_SHOT_RANGE#
+    pl_trace org, fin, tr, g.wld.count.models, models(), brush(), clp_buffer(), planes()
+
+    best = -1
+    bt = PL_SHOT_RANGE# * tr.frac
+    for i = 0 to g.mdl_count - 1
+        if ( mdl_ent(i).state <> MDL_ST_DEAD% ) then
+            t = mdl_ray_hit( mdl_ent(i), g.mdl.radius, g.mdl.zlo, g.mdl.zhi, org, dir, bt )
+            if ( t >= 0.0 and t < bt ) then bt = t : best = i
+        end if
+    next i
+    if ( best < 0 ) then exit sub
+
+    mdl_ent(best).health = mdl_ent(best).health - PL_SHOT_DAMAGE%
+    if ( mdl_ent(best).health <= 0 ) then
+        mdl_ent(best).state = MDL_ST_DEAD%
+        mdl_ent(best).anim_frame = 0
+        mdl_ent(best).dead_at = g.rdr.anim_time
+        g.fight.kills = g.fight.kills + 1
+        g.fight.shells = g.fight.shells + MDL_BACKPACK%
+    else
+        mdl_ent(best).hunting = -1
+        mdl_ent(best).state = MDL_ST_RUN%
+        mdl_ent(best).anim_frame = 0
+        mdl_ent(best).ideal_yaw = mdl_vectoyaw( g.pl.pos.x - mdl_ent(best).pos.x, _
+                                                g.pl.pos.y - mdl_ent(best).pos.y )
+    end if
+end sub
+
+''::::::::::::::
+'' name: pl_respawn
+'' desc: Back at the spawn with everything the game started with.
+''::::::::::::::
+sub pl_respawn ( g as Game )
+    g.fight.deaths = g.fight.deaths + 1
+    g.fight.health = PL_HEALTH%
+    g.fight.shells = PL_SHELLS%
+    g.fight.next_fire = 0.0
+    g.pl.pos.x = g.fight.spawn.x : g.pl.pos.y = g.fight.spawn.y : g.pl.pos.z = g.fight.spawn.z
+    g.pl.vel.x = 0.0 : g.pl.vel.y = 0.0 : g.pl.vel.z = 0.0
 end sub
