@@ -11,7 +11,6 @@ option explicit
 '$include: 'in.bi'
 '$include: 'dos.bi'
 '$include: 'arch.bi'
-'$include: 'uglu.bi'
 '$include: 'font.bi'
 '$include: 'bspfile.bi'
 '$include: 'snd.bi'
@@ -29,6 +28,20 @@ option explicit
 '$include: 'q_game.bi'
 
 declare sub qglMousePos ( byval x as integer, byval y as integer )
+declare sub v_bezier ( _
+    pts() as u3dVector3f, _
+    ctl() as u3dVector3f, _
+    byval c0 as integer, _
+    byval levels as integer _
+)
+declare sub v_bezier_axis ( _
+    byval a as single, _
+    byval b as single, _
+    byval c as single, _
+    byval d as single, _
+    byval levels as integer, _
+    f() as single _
+)
 
 ''
 '' cp_advance lives in main.bas; this is its only caller.
@@ -89,10 +102,10 @@ declare sub pl_move ( _
 '' never executes outside the main module, so v_open_script REDIMs them.
 ''
 '$dynamic
-dim shared ppos() as PNT3D
-dim shared plok() as PNT3D
-dim shared cbzp() as PNT3D
-dim shared cbzl() as PNT3D
+dim shared ppos() as u3dVector3f
+dim shared plok() as u3dVector3f
+dim shared cbzp() as u3dVector3f
+dim shared cbzl() as u3dVector3f
 
 '$static
 dim shared pa as integer            '' step within the current segment
@@ -142,8 +155,8 @@ sub v_update_camera ( _
             if ( pa > g.env.cam_interp ) then
                 
                         
-                ugluCubicBez3D ppos(0), cbzp(crr_pnt), g.env.cam_interp
-                ugluCubicBez3D plok(0), cbzl(crr_pnt), g.env.cam_interp
+                v_bezier ppos(), cbzp(), crr_pnt, g.env.cam_interp
+                v_bezier plok(), cbzl(), crr_pnt, g.env.cam_interp
                 
                 pa = 0
                 crr_pnt = crr_pnt+3
@@ -152,8 +165,8 @@ sub v_update_camera ( _
             if ( crr_pnt <> cnt_pnts and (not last_point) ) then
                 pa = 0
                 last_point = true
-                ugluCubicBez3D ppos(0), cbzp(cnt_pnts-4), g.env.cam_interp
-                ugluCubicBez3D plok(0), cbzl(cnt_pnts-4), g.env.cam_interp
+                v_bezier ppos(), cbzp(), cnt_pnts-4, g.env.cam_interp
+                v_bezier plok(), cbzl(), cnt_pnts-4, g.env.cam_interp
                 
             elseif ( pa > g.env.cam_interp ) then
                 crr_pnt = 0
@@ -352,10 +365,10 @@ sub v_open_script ( _
 )
     dim i as integer
 
-    redim ppos( g.env.cam_interp ) as PNT3D
-    redim plok( g.env.cam_interp ) as PNT3D
-    redim cbzp( 10 ) as PNT3D
-    redim cbzl( 10 ) as PNT3D
+    redim ppos( g.env.cam_interp ) as u3dVector3f
+    redim plok( g.env.cam_interp ) as u3dVector3f
+    redim cbzp( 10 ) as u3dVector3f
+    redim cbzl( 10 ) as u3dVector3f
 
     if ( g.env.cam_mode = 1 ) then
         g.cam.script_file = freefile
@@ -369,13 +382,91 @@ sub v_open_script ( _
         g.cam.script_file = 0
         cnt_pnts = i-1
 
-        ugluCubicBez3D ppos(0), cbzp(crr_pnt), g.env.cam_interp
-        ugluCubicBez3D plok(0), cbzl(crr_pnt), g.env.cam_interp
+        v_bezier ppos(), cbzp(), crr_pnt, g.env.cam_interp
+        v_bezier plok(), cbzl(), crr_pnt, g.env.cam_interp
         crr_pnt = crr_pnt + 3
 
     elseif ( g.env.cam_mode = 2 ) then
         g.cam.script_file = freefile
         open g.env.cam_script for output as #g.cam.script_file
     end if
+
+end sub
+
+
+''::::::::::
+'' name: v_bezier
+'' desc: The cubic through ctl(c0..c0+3), levels+1 points into pts().
+''       by forward differencing -- mgl's ugluCubicBez3D, which this
+''       replaces, in the same order of operations.
+''::::::::::
+sub v_bezier ( _
+    pts() as u3dVector3f, _
+    ctl() as u3dVector3f, _
+    byval c0 as integer, _
+    byval levels as integer _
+)
+    dim k as integer
+    dim a as single, b as single, c as single, d as single
+    redim f( levels ) as single
+
+    '' locals first: BC reads an array element with a field inside a
+    '' call's argument list as that statement's own argument list
+    a = ctl(c0).x : b = ctl(c0+1).x : c = ctl(c0+2).x : d = ctl(c0+3).x
+    v_bezier_axis a, b, c, d, levels, f()
+    for k = 0 to levels
+        pts(k).x = f(k)
+    next k
+    a = ctl(c0).y : b = ctl(c0+1).y : c = ctl(c0+2).y : d = ctl(c0+3).y
+    v_bezier_axis a, b, c, d, levels, f()
+    for k = 0 to levels
+        pts(k).y = f(k)
+    next k
+    a = ctl(c0).z : b = ctl(c0+1).z : c = ctl(c0+2).z : d = ctl(c0+3).z
+    v_bezier_axis a, b, c, d, levels, f()
+    for k = 0 to levels
+        pts(k).z = f(k)
+    next k
+
+end sub
+
+
+''::::::::::
+'' name: v_bezier_axis
+'' desc: One coordinate of the curve: f(0) = a, f(levels) = d, the rest
+''       stepped by the first, second and third differences.
+''::::::::::
+sub v_bezier_axis ( _
+    byval a as single, _
+    byval b as single, _
+    byval c as single, _
+    byval d as single, _
+    byval levels as integer, _
+    f() as single _
+)
+    dim dt1 as single, dt2 as single, dt3 as single
+    dim t1 as single, t2 as single
+    dim v as single, df as single, ddf as single, dddf as single
+    dim k as integer
+
+    dt1 = 1.0 / levels
+    dt2 = dt1 * dt1
+    dt3 = dt2 * dt1
+
+    t1 = a - 2.0 * b + c
+    t2 = 3.0 * ( b - c ) - a + d
+    v = a
+    df = ( b - a ) * ( 3.0 * dt1 ) + t1 * ( 3.0 * dt2 ) + t2 * dt3
+    ddf = t1 * ( 6.0 * dt2 ) + t2 * ( 6.0 * dt3 )
+    dddf = t2 * ( 6.0 * dt3 )
+
+    f(0) = a
+    for k = 1 to levels - 1
+        v = v + df
+        df = df + ddf
+        ddf = ddf + dddf
+        f(k) = v
+    next k
+    f(levels) = d
 
 end sub
