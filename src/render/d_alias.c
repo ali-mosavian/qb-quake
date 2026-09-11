@@ -26,7 +26,8 @@ extern short pascal far qglGemMap  ( short h, short pg, short slot );
 #define QGL_M_FLAT  1
 #define QGL_Z_TEST   2
 #define PAGE_SLOT    2          /* q_map.bi: shared with nodes, leaves, lightmap */
-#define MDL_MAXV     191        /* q_mdl.bi */
+#define CM_SLOT      3          /* model.bas: the colormap's, idle while a model draws */
+#define MDL_MAXV     236        /* d_mdl.bas; the dog has 236 */
 #define MDL_CLIPV    9          /* five planes add at most one corner each */
 #define MDL_UV_SCALE 32767.0f
 
@@ -55,7 +56,6 @@ static float near cd[MDL_CLIPV];
 static QglVtx near qv[MDL_CLIPV];
 
 short pascal far mdl_draw_tris(
-    BASARRAY *a_tri,
     short     ntri,
     short     nvert,
     short     frame,
@@ -75,7 +75,7 @@ short pascal far mdl_draw_tris(
     long      dst,
     short     zmode )           /* QGL_Z_TEST for a soldier, OFF for the view weapon */
 {
-    MdlTri far *tri = (MdlTri far *) a_tri->farptr;
+    MdlTri far *tri;
     unsigned char far *vb;
     short v, j, k, k2, cp, nin, nout, sbuf, dbuf, drawn = 0;
     short ia[3], cn[2];
@@ -86,6 +86,10 @@ short pascal far mdl_draw_tris(
        else has taken the slot since the last model. */
     vb = (unsigned char far *) ((unsigned long) qglGemMap( vtx_hnd, 0, PAGE_SLOT ) << 16);
     vb += (long) frame * nvert * 3;
+    /* The triangles: page 1 of the same handle, through the colormap's
+       slot -- nothing maps that while a model draws, and the next
+       surface build re-maps it for itself. */
+    tri = (MdlTri far *) ((unsigned long) qglGemMap( vtx_hnd, 1, CM_SLOT ) << 16);
 
     for ( v = 0; v < nvert; v++ ) {
         rx = (float) vb[v*3]     * scale->x + origin->x;

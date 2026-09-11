@@ -245,7 +245,6 @@ end type
 type Plane
     norm        as Vec3
     dist        as single
-    ptype       as integer
 end type
 
 type DiskNode

@@ -35,9 +35,10 @@ option explicit
 '$include: 'q_mdl.bi'
 '$include: 'q_game.bi'
 
-'' Just above the soldier's own 170 -- DGROUP is tight (LINK L2041 at 511),
-'' and nothing here needs headroom for a model this codebase does not have.
-const MDL_MAXV = 191
+'' The dog's 236; the soldier has 170, the knight 108. d_alias.c's copy
+'' must match: past it the C scratch overruns into string space, and
+'' DGROUP is tight (LINK L2041 at 511).
+const MDL_MAXV = 236
 
 '' UV fixed-point -> Single: must match mkmdl.py's own UV_SCALE.
 const MDL_UV_SCALE = 32767.0
@@ -46,7 +47,7 @@ const MDL_UV_SCALE = 32767.0
 '' eight corners, so nine is the highest index a ring can reach.
 const MDL_CLIPV = 9
 
-'' MdlTri/MdlState come from q_mdl.bi -- shared with main.bas (mdl_load's
+'' MdlState comes from q_mdl.bi -- shared with main.bas (mdl_load's
 '' caller) and h_frame.bas (mdl_draw's caller).
 
 '' qglRsPoly's vertex, five singles. Spelled here because BASIC cannot
@@ -93,7 +94,6 @@ declare sub qglFileClose ( byval h as integer )
 '' This module's own procedures.
 ''
 declare function mdl_draw_tris ( _
-    tri() as MdlTri, _
     byval ntri as integer, _
     byval nvert as integer, _
     byval frame as integer, _
@@ -125,10 +125,10 @@ declare function mdl_draw_tris ( _
 sub mdl_load ( _
     g as Game, _
     m as MdlState, _
-    mdlname as string, _
-    tri() as MdlTri _
+    mdlname as string _
 )
-    dim fh as integer, ti as integer
+    dim fh as integer
+    dim tribytes as long, triseg as integer
     dim hdr as string * 48
     dim geopath as string, skinpath as string, vtxpath as string
     dim u as integer
@@ -186,21 +186,13 @@ sub mdl_load ( _
         sys_error "0x0045, " + geopath + " header is empty, run make assets"
     end if
 
-    sys_mem_mark "mdl_pre_redim"
-    redim tri( m.ntri - 1 ) as MdlTri
-    sys_mem_mark "mdl_post_tri_redim"
-
-    '' whole-array Get silently left every element zero here (found in
-    '' the standalone test, src/test/mdldiag.bas) -- ReDim's runtime size
-    '' does not seem to reach it. Per-record Get is what every OTHER
-    '' loader in this codebase already does.
-    for ti = 0 to m.ntri - 1
-        get #fh, , tri( ti )
-    next ti
     close #fh
-    sys_mem_mark "mdl_post_tri_gets"
+    '' the triangles go to page 1 of the vertex handle below, so the far
+    '' heap holds nothing of a model: the four arrays were 20K on e1m1
+    tribytes = clng( m.ntri ) * MDL_TRI_BYTES
+    if ( tribytes > 16384 ) then sys_error "0x0048, " + geopath + " triangles past one page"
 
-    '' Vertices: one EMS page, raw qglGemAlloc/qglGemMap (not a Surface
+    '' Vertices: page 0 of the model's handle, raw qglGemAlloc/qglGemMap (not a Surface
     '' or a store) -- see this module's own header comment for the three
     '' designs tried and ruled out before this one. PAGE_SLOT, not a
     '' dedicated slot: slots 0 and 1 are the surfaces' own read and write
@@ -212,7 +204,8 @@ sub mdl_load ( _
     '' fresh immediately before each read, never held across another
     '' call.
     vtxbytes = clng( m.nframe ) * clng( m.nvert ) * 3
-    m.vtx_hnd = qglGemAlloc( vtxbytes )
+    '' two pages: 0 the vertices, 1 the triangles
+    m.vtx_hnd = qglGemAlloc( 32768& )
     if ( m.vtx_hnd <> 0 ) then
         vtxseg = qglGemMap( m.vtx_hnd, 0, PAGE_SLOT )
         if ( vtxseg <> 0 ) then
@@ -239,6 +232,19 @@ sub mdl_load ( _
     end if
     sys_mem_mark "mdl_post_vert_load"
     if ( m.vtx_hnd = 0 ) then exit sub
+
+    triseg = qglGemMap( m.vtx_hnd, 1, PAGE_SLOT )
+    u = qglFileOpenBas( geopath )
+    if ( triseg = 0 or u = 0 ) then sys_error "0x0049, " + geopath + " triangles would not load"
+    '' the header lands on the page first and the triangles overwrite it
+    if ( qglFileRead( u, clng( triseg ) * 65536&, clng( len( hdr ) ) ) <> len( hdr ) ) then
+        sys_error "0x0049, " + geopath + " header short"
+    end if
+    if ( qglFileRead( u, clng( triseg ) * 65536&, tribytes ) <> tribytes ) then
+        sys_error "0x0049, " + geopath + " triangles short"
+    end if
+    qglFileClose u
+    sys_mem_mark "mdl_post_tri_load"
 
     '' EMS, and <= 16,384 bytes: that is one page, and qglRsPoly refuses
     '' a texture crossing two because the texel base is a patched
@@ -290,7 +296,6 @@ end sub
 sub mdl_draw ( _
     g as Game, _
     m as MdlState, _
-    tri() as MdlTri, _
     ent as MdlEnt, _
     mtx_fin as Mat4, _
     byval xresh as single, _
@@ -321,7 +326,7 @@ sub mdl_draw ( _
     '' transform, the clip, the projection and the raster calls, once
     '' per model rather than 328 BASIC iterations.
     rad = ent.yaw * 0.017453293
-    g.pt.mtri_n = g.pt.mtri_n + mdl_draw_tris( tri(), m.ntri, m.nvert, frame, _
+    g.pt.mtri_n = g.pt.mtri_n + mdl_draw_tris( m.ntri, m.nvert, frame, _
                                                ent.pos, cos( rad ), sin( rad ), 1.0, 0.0, _
                                                m.scale, m.origin, _
                                                m.vtx_hnd, m.skin, mtx_fin, _
@@ -337,7 +342,6 @@ end sub
 sub mdl_draw_view ( _
     g as Game, _
     m as MdlState, _
-    tri() as MdlTri, _
     byval frame as integer, _
     org as Vec3, _
     byval cyaw as single, _
@@ -352,7 +356,7 @@ sub mdl_draw_view ( _
 )
     if ( m.loaded = 0 ) then exit sub
     if ( frame >= m.nframe ) then frame = m.nframe - 1
-    g.pt.mtri_n = g.pt.mtri_n + mdl_draw_tris( tri(), m.ntri, m.nvert, frame, _
+    g.pt.mtri_n = g.pt.mtri_n + mdl_draw_tris( m.ntri, m.nvert, frame, _
                                                org, cyaw, syaw, cpitch, spitch, _
                                                m.scale, m.origin, m.vtx_hnd, m.skin, mtx_fin, _
                                                xresh, yresh, z_near, dst, QGL_Z_OFF )

@@ -20,6 +20,7 @@ option explicit
 '' place that can see it" rule.
 ''
 declare function qglSfInit ( ) as integer
+declare function qglSbReserve ( ) as integer
 declare function qglSfNew ( byval wid as integer, byval hgt as integer, _
                               byval whr as integer ) as long
 declare sub qglSfFree ( byval s as long )
@@ -960,6 +961,9 @@ function sc_store_open ( ) as integer
         sc_store_open = 0
         exit function
     end if
+    '' the builder's 16K conventional scratch, at load and not at the
+    '' first lit face: short of it, every lit surface stayed zeros
+    if ( qglSbReserve() = 0 ) then sys_error "0x0046, no surface builder scratch"
     sc_cap = SC_STORE#
     sc_next = 0
     sc_store_open = -1

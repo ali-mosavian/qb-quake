@@ -209,7 +209,7 @@ sb$cnt          dw      ?
 ;; (A4184: initialized data not supported in BSS segments).
 .data
 sb$mseg         dw      0               ;; conventional scratch block's
-                                        ;; segment, 0 until first use.
+                                        ;; segment, 0 until qglSbReserve.
                                         ;; SC_PGBYTES does not fit in
                                         ;; DGROUP (L2041: stack plus data
                                         ;; exceed 64K) so it lives in its
@@ -251,6 +251,29 @@ ok:
 endm
 
 QGL_CODE
+
+;;::::::::::::::
+;; qglSbReserve () -> ax nonzero once the scratch block exists
+;;
+;; The builder used to take its block at the first lit face, and short
+;; of it every lit surface stayed zeros: a black world, polys and
+;; sc_built reading normal, the unlit frame right. sc_store_open calls
+;; this at load so a shortfall is an error with a name.
+;;::::::::::::::
+qglSbReserve    proc    public uses bx cx dx
+
+                cmp     ss:sb$mseg, 0
+                jne     @@have
+                invoke  qglMemAlloc, SC_PGBYTES ;; dx:ax, offset always 0;
+                                                ;; dx=0 means failure
+                test    dx, dx
+                jz      @@none
+                mov     ss:sb$mseg, dx
+@@have:         mov     ax, 1
+                ret
+@@none:         xor     ax, ax
+                ret
+qglSbReserve    endp
 
 ;;::::::::::::::
 ;; qglSbBuild (dstDc:dword, texDc:dword, parm:dword) :word
@@ -326,16 +349,11 @@ qglSbBuild      proc    public uses bx cx dx di si es ds fs gs,\
                 cmp     ax, SC_PGBYTES
                 ja      @@error
 
-                ;; the scratch block, allocated once and kept -- see
-                ;; sb$mseg's own comment on why it cannot live in DGROUP.
-                cmp     ss:sb$mseg, 0
-                jne     @@havemem
-                invoke  qglMemAlloc, SC_PGBYTES ;; dx:ax, offset always 0;
-                                                ;; dx=0 means failure
-                test    dx, dx
+                ;; the scratch block -- reserved at load by sc_store_open,
+                ;; taken here only for a caller that skipped that
+                invoke  qglSbReserve
+                test    ax, ax
                 jz      @@error
-                mov     ss:sb$mseg, dx
-@@havemem:
 
                 mov     ss:sb$savebp, bp
 

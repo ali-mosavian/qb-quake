@@ -349,6 +349,7 @@ dim shared clp_buffer() as ClipNode
 '' dim in a non-main module is the ls_tab trap (AGENTS.md): it never runs.
 dim shared mdl_run_dist() as integer
 dim shared knight_run_dist() as integer  '' knight_run1..8's ai_run
+dim shared dog_run_dist() as integer     '' dog_run1..12's ai_run
 dim shared knight_atk_dist() as integer  '' knight_atk1..10's ai_charge
 
 '' sv_move.c's own STEPSIZE -- see mdl_movestep.
@@ -1198,6 +1199,8 @@ sub mdl_spawn ( _
     ent.wander_ticks = 0
     if ( ent.kind = MDL_KIND_KNIGHT% ) then
         ent.health = KNIGHT_HEALTH%
+    elseif ( ent.kind = MDL_KIND_DOG% ) then
+        ent.health = DOG_HEALTH%
     else
         ent.health = MDL_HEALTH%
     end if
@@ -1233,6 +1236,10 @@ sub mdl_spawn ( _
     redim knight_run_dist( 7 ) as integer
     knight_run_dist(0) = 16 : knight_run_dist(1) = 20 : knight_run_dist(2) = 13 : knight_run_dist(3) =  7
     knight_run_dist(4) = 16 : knight_run_dist(5) = 20 : knight_run_dist(6) = 14 : knight_run_dist(7) =  6
+    redim dog_run_dist( 11 ) as integer
+    dog_run_dist(0) = 16 : dog_run_dist(1) = 32 : dog_run_dist(2)  = 32 : dog_run_dist(3)  = 20
+    dog_run_dist(4) = 64 : dog_run_dist(5) = 32 : dog_run_dist(6)  = 16 : dog_run_dist(7)  = 32
+    dog_run_dist(8) = 32 : dog_run_dist(9) = 20 : dog_run_dist(10) = 64 : dog_run_dist(11) = 32
     redim knight_atk_dist( 9 ) as integer
     knight_atk_dist(0) = 0 : knight_atk_dist(1) = 7 : knight_atk_dist(2) = 4 : knight_atk_dist(3) = 0
     knight_atk_dist(4) = 3 : knight_atk_dist(5) = 4 : knight_atk_dist(6) = 1 : knight_atk_dist(7) = 3
@@ -1703,9 +1710,11 @@ sub mdl_think ( _
     dim dx as single, dy as single, d2 as single
     dim chance as single
     dim knight as integer, stepped as integer
+    dim dog as integer, dmg as integer
 
     if ( m.loaded = 0 ) then exit sub
     knight = ( ent.kind = MDL_KIND_KNIGHT% )
+    dog = ( ent.kind = MDL_KIND_DOG% )
     if ( g.rdr.anim_time < ent.next_think ) then exit sub
     ent.next_think = g.rdr.anim_time + 0.1
 
@@ -1766,6 +1775,8 @@ sub mdl_think ( _
 
     if ( knight ) then
         dist = knight_run_dist( ent.anim_frame )
+    elseif ( dog ) then
+        dist = dog_run_dist( ent.anim_frame )
     else
         dist = mdl_run_dist( ent.anim_frame )
     end if
@@ -1779,6 +1790,21 @@ sub mdl_think ( _
                 ent.state = MDL_ST_ATTACK%
                 ent.anim_frame = 0
                 exit sub
+            end if
+        end if
+        goal.x = g.pl.pos.x : goal.y = g.pl.pos.y : goal.z = g.pl.pos.z
+    elseif ( ent.hunting and dog ) then
+        '' dog_bite on the run, no attack set fitting the page: a clear
+        '' line within DOG_BITE_RANGE, once an attack cycle
+        if ( g.rdr.anim_time >= ent.next_attack ) then
+            if ( mdl_find_target( g, ent, models(), brush(), planes() ) ) then
+                dx = g.pl.pos.x - ent.pos.x : dy = g.pl.pos.y - ent.pos.y
+                d2 = dx*dx + dy*dy + ( g.pl.pos.z - ent.pos.z ) * ( g.pl.pos.z - ent.pos.z )
+                if ( d2 < DOG_BITE_RANGE# * DOG_BITE_RANGE# ) then
+                    ent.next_attack = g.rdr.anim_time + DOG_BITE_RATE#
+                    dmg = int( ( rnd + rnd + rnd ) * DOG_BITE_DMG# )
+                    if ( dmg > 0 ) then pl_damage g, dmg
+                end if
             end if
         end if
         goal.x = g.pl.pos.x : goal.y = g.pl.pos.y : goal.z = g.pl.pos.z

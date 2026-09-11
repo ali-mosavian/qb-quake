@@ -419,7 +419,7 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
     uses: list[tuple] = []
     names: dict[str, int] = {}
     mons: list[tuple[int, tuple[float, float, float], float]] = []
-    mon_kind = {'monster_army': 0, 'monster_knight': 1}   # MDL_KIND_*; no model for the rest
+    mon_kind = {'monster_army': 0, 'monster_knight': 1, 'monster_dog': 2}   # MDL_KIND_*; no model for the rest
     item_kind = {'item_health': 0, 'item_shells': 1}
 
     def vec(v: str) -> tuple[float, float, float]:
@@ -714,12 +714,11 @@ def convert_lumps(d, lumps, outdir):
         buf += struct.pack('<h', cont) + struct.pack('<i', vislist) + bound + struct.pack('<hh', lfaceid, lfacenum)
     out['leaves.pag'] = bytes(buf)
 
-    # planes: plane(20) -> plane2(18), ptype narrows to an integer
+    # planes: plane(20) -> Plane(16), the type dropped -- nothing reads it
     raw = lump(1)
     buf = bytearray()
     for k in range(0, len(raw), 20):
-        nx, ny, nz, dist, ptype = struct.unpack_from('<ffffi', raw, k)
-        buf += struct.pack('<ffffh', nx, ny, nz, dist, ptype)
+        buf += raw[k:k + 16]
     out['planes.bld'] = bytes(buf)
 
     # nodes: node(24) -> nodeb(22). planeid narrows, and the bounding box

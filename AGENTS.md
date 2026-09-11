@@ -2044,7 +2044,8 @@ and grows freely.
 
 **The vertex page is the frame budget.** One EMS page holds the whole
 model: 170 vertices x 3 bytes = 510 a frame, 32 frames = 16,320 of
-16,384. `stand,run,death,pain` fills it; the soldier's shoot set does
+16,384; the triangles are page 1 of the same handle, read by
+`d_alias.c` through `CM_SLOT`. `stand,run,death,pain` fills it; the soldier's shoot set does
 not fit, so a volley has no animation. `mkmdl.py` emits the frameset in
 the order given and writes each set's count into the `.geo` header --
 stand, run, death, pain, attack, by position -- so the Makefile's list
@@ -2052,6 +2053,20 @@ IS the frame layout and `MdlState` carries it. The knight's 108
 vertices leave room for `attackb`, which is why it is the second
 monster: `MdlEnt.kind` picks `g.mdl` or `g.kmdl`, every other spawn
 is a knight, and `mdl_think` takes the `MdlState` it animates.
+
+**The dog is the third kind, and it bites on the run.** dog.mdl has 236
+vertices, so the page holds 23 frames: `stand:1,run,death,pain:1` --
+mkmdl.py's `:n` keeps the first n of a set -- and no attack set. So
+`mdl_think` bites from the run cycle: within 100 units with a clear
+line, `(r+r+r)*8` once per 0.8 seconds, dog.qc's cycle without its
+frames. Its run steps are dog_run's 16..64 a frame, which is why a dog
+closes so fast. The leap is not ported. e1m1 on easy has one, at
+(88,1520,-200); the e1m1 gate counts it by kind. `MDL_MAXV` is 236 in
+d_mdl.bas and d_alias.c both: at 191 the dog loaded past the BASIC
+check and overran the C scratch, and e1m1 died in `runtime error 14`,
+out of string space -- a corrupted near heap, not a full one. The
+memtrace prints `fre("")` as its third column now, so the next
+error 14 can be told from a real exhaustion in one look.
 
 **A monster that only looks while standing never sees anyone.** The
 port called FindTarget from `ai_stand` alone; id's `ai_walk` calls it
@@ -2198,10 +2213,23 @@ textures 17K, surface cache 57K, models 12K. Cut so far: the status bar's
 28K into its EMS surface, `face_mdl` (11K) into the bits above
 `Face.side`'s one, written at load by `ent_load_teleports` and read back
 as `side >> 1` in `d_faces.c`, and `CacheSlot.cls` (11K), which only the
-selftest read and `sc_bord` already held per block. 45K of far heap is
-free after the depth buffer. Next on the list if it tightens: the node
-and leaf bounds at 6 bytes instead of 12 -- the C cull unpacks them for
-nothing, unlike the BASIC attempt this file records.
+selftest read and `sc_bord` already held per block. Then, for the dog:
+a model's triangles into page 1 of its EMS handle (20K, the four arrays
+and their plumbing gone), `Plane.ptype` (3.6K, never read), the campath
+arrays only under `-campath` (3K). 25.6K of far heap is free after the
+depth buffer, DOS's largest block 1K. Next on the list if it tightens:
+the node and leaf bounds at 6 bytes instead of 12 -- the C cull unpacks
+them for nothing, unlike the BASIC attempt this file records -- and
+`sc_slot` at 33K.
+
+**A black lit world with every counter normal is a missing allocation.**
+The surface builder's 16K conventional scratch was taken at the first
+lit face by shrinking BASIC's heap, and short of it every lit surface
+stayed zeros: `polys` and `sc_built` as always, the unlit frame right,
+no error anywhere. A session went on EMS slot theories before the unlit
+frame pointed at the builder. `sc_store_open` runs from `host_init` now
+and `qglSbReserve` takes the block there, `0x0046` if it cannot. The
+e1m1 spawn and exit arms are the regression test; both failed on it.
 
 **Four files make a map's assets, not one.** mkassets writes assets.zip
 and, beside it, texr.raw, texs.raw and pal.raw -- the atlases qgl reads
@@ -2226,7 +2254,7 @@ model gates stand beside stays put. The gate aims with `-yaw 270`.
 easy is the skill played -- with origin and angle, first in the file;
 `ent_load_monsters` spawns them through `mdl_spawn` and faces them the
 map's way (a model's yaw is Quake's, CCW from +x, no mirror). Nine
-soldiers on e1m1; its eight dogs wait for a dog model. `MDL_MAX_ENTS`
+soldiers and a dog on e1m1. `MDL_MAX_ENTS`
 is 12; a map with none, dm3ish, still gets the scattered crowd of
 `MDL_CROWD`, eight. The e1m1 image arms run `-noai`: a soldier
 behind the exit camera shot the player inside the second and the

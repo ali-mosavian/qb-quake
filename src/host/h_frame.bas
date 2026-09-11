@@ -362,6 +362,8 @@ sub host_tick ( _
                 '' held at the spawn: the model gate's away arm
             elseif ( mdl_ent( mdl_i ).kind = MDL_KIND_KNIGHT% ) then
                 mdl_think g, mdl_ent( mdl_i ), g.kmdl, -1, models(), brush(), planes()
+            elseif ( mdl_ent( mdl_i ).kind = MDL_KIND_DOG% ) then
+                mdl_think g, mdl_ent( mdl_i ), g.dmdl, -1, models(), brush(), planes()
             else
                 mdl_think g, mdl_ent( mdl_i ), g.mdl, -1, models(), brush(), planes()
             end if
@@ -445,9 +447,6 @@ sub host_render ( _
     bit_array() as integer, _
     mip_buff_inf() as MipTex, _
     cam_up as Vec3, _
-    mdltri_buffer() as MdlTri, _
-    vmtri_buffer() as MdlTri, _
-    kmtri_buffer() as MdlTri, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt _
 )
@@ -606,13 +605,20 @@ sub host_render ( _
             if ( mdl_ent( mdl_i ).kind = MDL_KIND_KNIGHT% ) then
                 if ( r_mdl_visible( mdl_ent( mdl_i ).pos, g.kmdl.radius, g.kmdl.zlo, g.kmdl.zhi, _
                                     nds_buffer(), pln_buffer(), frustum() ) ) then
-                    mdl_draw g, g.kmdl, kmtri_buffer(), mdl_ent( mdl_i ), _
+                    mdl_draw g, g.kmdl, mdl_ent( mdl_i ), _
+                             mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
+                    g.mdl.drawn = g.mdl.drawn + 1
+                end if
+            elseif ( mdl_ent( mdl_i ).kind = MDL_KIND_DOG% ) then
+                if ( r_mdl_visible( mdl_ent( mdl_i ).pos, g.dmdl.radius, g.dmdl.zlo, g.dmdl.zhi, _
+                                    nds_buffer(), pln_buffer(), frustum() ) ) then
+                    mdl_draw g, g.dmdl, mdl_ent( mdl_i ), _
                              mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
                     g.mdl.drawn = g.mdl.drawn + 1
                 end if
             elseif ( r_mdl_visible( mdl_ent( mdl_i ).pos, g.mdl.radius, g.mdl.zlo, g.mdl.zhi, _
                                 nds_buffer(), pln_buffer(), frustum() ) ) then
-                mdl_draw g, g.mdl, mdltri_buffer(), mdl_ent( mdl_i ), _
+                mdl_draw g, g.mdl, mdl_ent( mdl_i ), _
                          mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
                 g.mdl.drawn = g.mdl.drawn + 1
                 '' the volley has no frames, so it has a flash: a small
@@ -667,7 +673,7 @@ sub host_render ( _
         '' renderer Y up: the yaw's cos and sin are the difference's x and z
         '' over their length, the pitch's are that length and -y, positive
         '' looking down
-        mdl_draw_view g, g.vmdl, vmtri_buffer(), vframe, bob, _
+        mdl_draw_view g, g.vmdl, vframe, bob, _
                       vdx / vlen, vdz / vlen, vlen, -vdy, _
                       mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
     end if

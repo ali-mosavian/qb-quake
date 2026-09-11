@@ -293,6 +293,7 @@ function ent_load_monsters ( _
         if ( n < MDL_MAX_ENTS% ) then
             mdl_ent( n ).kind = mr.kind
             if ( mr.kind = MDL_KIND_KNIGHT% and g.kmdl.loaded = 0 ) then mdl_ent( n ).kind = MDL_KIND_ARMY%
+            if ( mr.kind = MDL_KIND_DOG% and g.dmdl.loaded = 0 ) then mdl_ent( n ).kind = MDL_KIND_ARMY%
             mdl_spawn g, mdl_ent( n ), mr.org, models(), brush(), planes()
             mdl_ent( n ).yaw = mr.angle
             mdl_ent( n ).ideal_yaw = mr.angle

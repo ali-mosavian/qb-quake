@@ -28,6 +28,7 @@ const MDL_ST_ATTACK%   = 4    '' the knight's sword, charging
 '' the page at 32 frames of 170 vertices; the knight's 108 fit attackb.
 const MDL_KIND_ARMY%   = 0
 const MDL_KIND_KNIGHT% = 1
+const MDL_KIND_DOG%    = 2
 const MDL_HEALTH%       = 30  '' monster_army's health
 '' army_fire: FireBullets (4, dir, '0.1 0.1 0'), 4 damage a pellet, aimed
 '' 0.2 s behind the player's velocity
@@ -66,6 +67,12 @@ const KNIGHT_MELEE_DMG#  = 3.0
 const KNIGHT_PAIN#       = 1.0
 const KNIGHT_ATK_FIRST%  = 5     '' the frames that strike, 0-based
 const KNIGHT_ATK_LAST%   = 7
+'' dog.qc: 25 health, a bite within 100 for (r+r+r)*8, an eight-frame
+'' attack cycle. No attack set fits the page, so it bites on the run.
+const DOG_HEALTH%        = 25
+const DOG_BITE_RANGE#    = 100.0
+const DOG_BITE_DMG#      = 8.0
+const DOG_BITE_RATE#     = 0.8
 
 '' NOT in stock Quake: a walkmonster with no path_corner target just
 '' stands forever (see the note above) -- there is no explore state to
@@ -140,20 +147,10 @@ type MdlEnt
     kind        as integer     '' MDL_KIND_ARMY% or MDL_KIND_KNIGHT%
 end type
 
-'' UV as fixed-point Integer (0..32767 = 0.0..1.0), not Single -- halves
-'' this record versus 6 floats, and the unpack is one divide, not a
-'' string op. mkmdl.py's own UV_SCALE must match.
-type MdlTri
-    a  as integer
-    b  as integer
-    c  as integer
-    u1 as integer
-    v1 as integer
-    u2 as integer
-    v2 as integer
-    u3 as integer
-    v3 as integer
-end type
+'' A triangle on disk and in the model's page 1: three vertex indices and
+'' three (u,v) pairs, integers, u and v as 0..32767 = 0.0..1.0 -- d_alias.c's
+'' MdlTri, and mkmdl.py's UV_SCALE must match. No BASIC code holds one.
+const MDL_TRI_BYTES = 18
 
 '' Vertices are packed bytes (trivertx_t, one per axis), flat and
 '' frame-major, ONE EMS page (raw emsAlloc/emsMapEx, not a uGL DC or

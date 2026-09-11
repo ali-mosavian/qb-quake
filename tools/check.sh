@@ -225,7 +225,7 @@ fi
 # the player on it, the slipgate must end the level (gs_state 4), a
 # shot at the wall switch must lift the bridge it targets, and
 # the bench's ent lines must count the nine
-# soldiers the map places on easy. The exit reference carries the "Walk into the
+# soldiers and the dog the map places on easy. The exit reference carries the "Walk into the
 # slipgate" centerprint, since its camera stands in that trigger. Needs
 # the shareware PAK; skips without it.
 if [[ "${1:-}" == "--e1m1" ]]; then
@@ -272,12 +272,13 @@ PY
     else
         echo "FAIL  e1m1 button: pz ${pz:-none}, the button did nothing"; rc=1
     fi
-    # and the map's own monsters: nine soldiers on easy, from ents.bin
-    nent=$(tr -d '\r' < "$VBD_OUT/bench.txt" | grep -c '^ent[0-9]')
-    if [[ "$nent" == 9 ]]; then
-        echo "PASS  e1m1 monsters: $nent from the map"
+    # and the map's own monsters: nine soldiers and a dog on easy, from ents.bin
+    nent=$(tr -d '\r' < "$VBD_OUT/bench.txt" | grep -c '^ent[0-9]' || true)
+    ndog=$(tr -d '\r' < "$VBD_OUT/bench.txt" | grep -c '^ent[0-9]* 2 ' || true)
+    if [[ "$nent" == 10 && "$ndog" == 1 ]]; then
+        echo "PASS  e1m1 monsters: $nent from the map, $ndog dog"
     else
-        echo "FAIL  e1m1 monsters: $nent spawned, the map places 9"; rc=1
+        echo "FAIL  e1m1 monsters: $nent spawned, $ndog dogs; the map places 9 soldiers and a dog"; rc=1
     fi
     # and the exit: the slipgate's pad is 32 units up, so -jump too
     run_frame "-lm -nostats -noai -at 1312 660 -200 -yaw 90 -walk -jump -bench 400 -ticks 240" "$VBD_OUT/e1m1-slipgate.bmp" e1m1.bsp

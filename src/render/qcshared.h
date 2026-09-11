@@ -50,7 +50,7 @@ typedef struct { float x, y, z; } Vec3f;
 typedef struct { Vec3i min, max; } Bounds;
 
 /* bspfile.bi's Plane -- the map's own runtime plane record. */
-typedef struct { Vec3 norm; float dist; short ptype; } Plane;
+typedef struct { Vec3 norm; float dist; } Plane;
 
 /* bspfile.bi's DiskPlane -- the frustum's plane record (long ptype, not
    short; otherwise the same shape as Plane). */

@@ -32,6 +32,7 @@ type Game
     trig_count  as integer
     vmdl        as MdlState       '' the view weapon, v_shot
     kmdl        as MdlState       '' the knight
+    dmdl        as MdlState       '' the dog
 
     '' LAST, deliberately. r_walk.c and sb_build.c reach g.vis and
     '' g.rdr.dlight by byte offset -- GAME_VIS_OFFSET 4970 and
@@ -74,13 +75,11 @@ declare sub mod_tex_dump ( g as Game )
 declare sub mdl_load ( _
     g as Game, _
     m as MdlState, _
-    mdlname as string, _
-    tri() as MdlTri _
+    mdlname as string _
 )
 declare sub mdl_draw_view ( _
     g as Game, _
     m as MdlState, _
-    tri() as MdlTri, _
     byval frame as integer, _
     org as Vec3, _
     byval cyaw as single, _
@@ -96,7 +95,6 @@ declare sub mdl_draw_view ( _
 declare sub mdl_draw ( _
     g as Game, _
     m as MdlState, _
-    tri() as MdlTri, _
     ent as MdlEnt, _
     mtx_fin as Mat4, _
     byval xresh as single, _

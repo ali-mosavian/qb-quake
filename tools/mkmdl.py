@@ -80,7 +80,10 @@ def main() -> int:
     # mgl/docs/issues/ems-texture-and-zbuffer-dropouts.md's "MEM, not EMS"
     # skin fix, which trades EMS's texture-read bug for conventional-
     # memory pressure instead). Default unchanged: stand/walk/run.
-    frameset = sys.argv[4].split(",") if len(sys.argv) == 5 else ["stand", "walk", "run"]
+    # name, or name:n for the first n frames of that set -- the dog's 236
+    # vertices leave the page room for 23 frames
+    sets = [(e.split(":")[0], int(e.split(":")[1]) if ":" in e else 0)
+            for e in (sys.argv[4].split(",") if len(sys.argv) == 5 else ["stand", "walk", "run"])]
     os.makedirs(outdir, exist_ok=True)
 
     blob, entries = mdl.read_pak(pak)
@@ -94,7 +97,11 @@ def main() -> int:
     import re
     # In frameset order, not file order: the .mdl keeps death before run
     # and d_mdl.bas indexes the sets by position.
-    frames = [f for name in frameset for f in m.frames if re.sub(r"\d+$", "", f.name) == name]
+    def kept(name: str, n: int) -> list:
+        fs = [f for f in m.frames if re.sub(r"\d+$", "", f.name) == name]
+        return fs[:n] if n else fs
+
+    frames = [f for name, n in sets for f in kept(name, n)]
     if not frames:
         frames = list(m.frames)
 
@@ -128,7 +135,7 @@ def main() -> int:
     out = bytearray(struct.pack("<4sHHHHH", b"QMDL", len(m.tris), len(m.st),
                                 len(frames), sw, sh))
     out += struct.pack("<6f", *vscale.tolist(), *vmin.tolist())
-    counts = [sum(1 for f in m.frames if re.sub(r"\d+$", "", f.name) == n) for n in frameset]
+    counts = [len(kept(name, n)) for name, n in sets]
     out += struct.pack("<5H", *(counts + [0] * 5)[:5])
     for t, (_ff, a, b, c) in enumerate(m.tris):
         out += struct.pack("<3h", a, b, c)

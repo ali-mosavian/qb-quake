@@ -575,8 +575,11 @@ sub sys_mem_mark ( tag as string )
     dim mf as integer
     mf = freefile
     open "memtrace.txt" for append as #mf
+    '' largest DOS block, the far heap, and the near string space: BC
+    '' compiles near strings, so the third is DGROUP's slack, error 14
     print #mf, tag + " " + ltrim$(str$( mem_val( mem_n-1 ) )) + _
-               " " + ltrim$(str$( mem_fre( mem_n-1 ) ))
+               " " + ltrim$(str$( mem_fre( mem_n-1 ) )) + _
+               " " + ltrim$(str$( fre( "" ) ))
     close #mf
 end sub
 

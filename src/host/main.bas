@@ -94,9 +94,6 @@ declare sub host_render ( _
     bit_array() as integer, _
     mip_buff_inf() as MipTex, _
     cam_up as Vec3, _
-    mdltri_buffer() as MdlTri, _
-    vmtri_buffer() as MdlTri, _
-    kmtri_buffer() as MdlTri, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt _
 )
@@ -168,9 +165,6 @@ declare sub host_init ( _
     plat() as PlatEnt, _
     door() as DoorEnt, _
     trig() as TrigEnt, _
-    mdltri_buffer() as MdlTri, _
-    vmtri_buffer() as MdlTri, _
-    kmtri_buffer() as MdlTri, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt _
 )
@@ -195,9 +189,6 @@ declare sub host_main ( _
     door() as DoorEnt, _
     trig() as TrigEnt, _
     tele() as Teleporter, _
-    mdltri_buffer() as MdlTri, _
-    vmtri_buffer() as MdlTri, _
-    kmtri_buffer() as MdlTri, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt _
 )
@@ -324,6 +315,7 @@ declare sub mod_load_textures ( _
     g as Game, _
     mip_buff_inf() as MipTex _
 )
+declare function sc_store_open ( ) as integer
 declare sub sc_init ( _
     g as Game _
 )
@@ -444,9 +436,6 @@ dim gv_buf() as integer
 '' One alias (.mdl) model's geometry -- "mdl_buffer" above is already the
 '' BSP submodel array (doors, platforms), a different "model" entirely;
 '' these are named mdltri/mdlvert to not collide with it.
-dim mdltri_buffer() as MdlTri
-dim vmtri_buffer() as MdlTri
-dim kmtri_buffer() as MdlTri
 
 '' One spawned instance per element -- the asset (mdltri_buffer, above,
 '' and g.mdl) is shared; only per-monster position/state lives here.
@@ -527,7 +516,7 @@ dim shared z_dc as long
               mdl_buffer(), order_list(), poly_flag(), gv_buf(), bit_array(), _
               cp_x(), cp_y(), cp_z(), mip_buff_inf(), _
               frustum(), brush(), tele(), plat(), door(), trig(), _
-              mdltri_buffer(), vmtri_buffer(), kmtri_buffer(), mdl_ent(), item()
+              mdl_ent(), item()
     if ( g.env.dump_tex ) then
         mod_tex_dump g
     elseif ( g.env.dump_set ) then
@@ -539,7 +528,7 @@ dim shared z_dc as long
                   mdl_buffer(), order_list(), poly_flag(), gv_buf(), brush(), _
                   frustum(), bit_array(), _
                   mip_buff_inf(), plat(), door(), trig(), tele(), _
-                  mdltri_buffer(), vmtri_buffer(), kmtri_buffer(), mdl_ent(), item()
+                  mdl_ent(), item()
     end if
     host_shutdown
     
@@ -658,9 +647,6 @@ sub host_init ( _
     plat() as PlatEnt, _
     door() as DoorEnt, _
     trig() as TrigEnt, _
-    mdltri_buffer() as MdlTri, _
-    vmtri_buffer() as MdlTri, _
-    kmtri_buffer() as MdlTri, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt _
 )
@@ -785,6 +771,10 @@ sub host_init ( _
     sys_mem_mark "mapclose"
 
     sc_init g
+    '' the store now, not at the first lit face: its 16K conventional
+    '' scratch comes out of DOS's block here, where the shrink of BASIC's
+    '' heap it took mid-frame raised Out of memory on e1m1
+    if ( sc_store_open() = 0 ) then sys_error "0x0047, no surface cache store"
     ls_init
     sys_mem_mark "surfcache"
 
@@ -810,9 +800,10 @@ sub host_init ( _
     '' vid_init, above) already applies -- the skin's indices come from
     '' the same Quake palette mkmdl.py baked them from, so nothing extra
     '' to install here.
-    mdl_load g, g.mdl, "soldier", mdltri_buffer()
-    mdl_load g, g.vmdl, "v_shot", vmtri_buffer()
-    mdl_load g, g.kmdl, "knight", kmtri_buffer()
+    mdl_load g, g.mdl, "soldier"
+    mdl_load g, g.vmdl, "v_shot"
+    mdl_load g, g.kmdl, "knight"
+    mdl_load g, g.dmdl, "dog"
     g.mdl_count = 0
     if ( g.mdl.loaded ) then
         '' mdl_pick_section places every model from rnd, so a clock
@@ -902,9 +893,6 @@ sub host_main ( _
     door() as DoorEnt, _
     trig() as TrigEnt, _
     tele() as Teleporter, _
-    mdltri_buffer() as MdlTri, _
-    vmtri_buffer() as MdlTri, _
-    kmtri_buffer() as MdlTri, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt _
 )
@@ -1032,10 +1020,13 @@ sub host_main ( _
     if ( g.env.want_stats ) then g.scr.stats = -1
     if ( g.env.no_stats ) then g.scr.stats = 0
 
-    redim cp_x(CP_MAX) as integer
-    redim cp_y(CP_MAX) as integer
-    redim cp_z(CP_MAX) as integer
-    if ( g.env.cam_path ) then cp_load g, cp_x(), cp_y(), cp_z()
+    '' 3K of far heap, only when a route steers the camera
+    if ( g.env.cam_path ) then
+        redim cp_x(CP_MAX) as integer
+        redim cp_y(CP_MAX) as integer
+        redim cp_z(CP_MAX) as integer
+        cp_load g, cp_x(), cp_y(), cp_z()
+    end if
     g.vis.bad_order = g.env.bad_order
     g.vis.no_ents   = g.env.no_ents
     
@@ -1096,7 +1087,7 @@ sub host_main ( _
                      pln_buffer(), nds_buffer(), mdl_buffer(), order_list(), poly_flag(), _
                      gv_buf(), brush(), frustum(), bit_array(), _
                      mip_buff_inf(), cam_up, _
-                     mdltri_buffer(), vmtri_buffer(), kmtri_buffer(), mdl_ent(), item()
+                     mdl_ent(), item()
 
 
         ''
