@@ -21,7 +21,7 @@ extern short pascal far qglGemMap( short h, short pg, short slot );
 #define PAGE_SLOT   2
 #define SND_RING    4096L
 #define SND_CHANS   8               /* S_StartSound's */
-#define SND_STATICS 8               /* the ambients', looping */
+#define SND_STATICS 32              /* the ambients', looping; a silent one costs its pointer arithmetic */
 #define SND_ALL     (SND_CHANS + SND_STATICS)
 #define SND_CHUNK   512
 #define SND_AHEAD   2756L           /* a quarter second at 11025 */

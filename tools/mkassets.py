@@ -447,7 +447,9 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
     corners: list[tuple[str, tuple[float, float, float], float, str]] = []   # targetname, origin, wait, target
     trains: list[tuple[int, float, int, str]] = []                           # model, speed, targetname id, first corner
     # misc.qc's ambientsound calls: the wav and its volume, ATTN_STATIC
-    amb_kind = {'ambient_comp_hum': ('ambience/comp1', 1.0), 'ambient_drone': ('ambience/drone6', 0.5)}
+    amb_kind = {'ambient_comp_hum': ('ambience/comp1', 1.0), 'ambient_drone': ('ambience/drone6', 0.5),
+                'ambient_drip': ('ambience/drip1', 0.5), 'ambient_swamp1': ('ambience/swamp1', 0.5),
+                'ambient_swamp2': ('ambience/swamp2', 0.5)}
     mon_kind = {'monster_army': 0, 'monster_knight': 1, 'monster_dog': 2}   # MDL_KIND_*; no model for the rest
     item_kind = {'item_health': 0, 'item_shells': 1, 'item_armor1': 2, 'item_armor2': 3,
                  'weapon_supershotgun': 4, 'item_spikes': 5, 'weapon_nailgun': 6,

@@ -2231,10 +2231,12 @@ order of `q_pl.bi`'s `SND_*`, and `snd_init` refuses a count that
 disagrees. A sound starts at Quake's distance falloff from where it
 began, once, mono; eight channels, the one with least left is stolen.
 The map's `ambient_*` points -- e1m1 has four comp_hum and a drone --
-ship last in ents.bin and loop from sample 0 on eight static channels,
-placed from the player every frame at ATTN_STATIC, three a thousand
-units; `snd_loops` counts them. mksnd refuses a wav whose cue point
-is not 0, since the mixer knows no other loop start.
+ship after the items in ents.bin and loop from sample 0 on 32 static
+channels -- e1m2 has 20 drips and swamps, e1m4 31 -- placed from the
+player every frame at ATTN_STATIC, three a thousand units; one out of
+earshot costs the mixer its pointer arithmetic and nothing else.
+`snd_loops` counts them. mksnd refuses a wav whose cue point is not
+0, since the mixer knows no other loop start.
 The ring and the mixer's scratch are one DOS block, not DGROUP -- that
 is BASIC's string space -- and with the code they cost the e1m1 far
 heap 16K. `-nosound` leaves the card alone; a machine without one fails
