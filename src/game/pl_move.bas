@@ -33,6 +33,12 @@ option explicit
 '' "as string" parameter as a near pointer to its descriptor, which is
 '' what the assembly wants.
 ''
+declare sub ent_trig_fire ( _
+    g as Game, _
+    byval k as integer, _
+    door() as DoorEnt, _
+    trig() as TrigEnt _
+)
 declare function qglArLoadBas ( _
     flname as string, _
     byval typ as integer, _
@@ -60,6 +66,13 @@ declare function mdl_slab ( _
     tn as single, _
     tf as single _
 ) as integer
+declare function pl_ray_box ( _
+    mins as Vec3, _
+    maxs as Vec3, _
+    org as Vec3, _
+    dir as Vec3, _
+    byval maxt as single _
+) as single
 declare function mdl_ray_box ( _
     c as Vec3, _
     byval hx as single, _
@@ -1857,6 +1870,25 @@ end function
 ''       units along dir, or -1 past maxt or missing. The box is the one
 ''       r_mdl_visible culls with.
 ''::::::::::::::
+'' A ray against a box given by its corners; t or -1.
+function pl_ray_box ( _
+    mins as Vec3, _
+    maxs as Vec3, _
+    org as Vec3, _
+    dir as Vec3, _
+    byval maxt as single _
+) as single
+    dim tn as single, tf as single
+
+    pl_ray_box = -1.0
+    tn = 0.0 : tf = maxt
+    if ( mdl_slab( mins.x, maxs.x, org.x, dir.x, tn, tf ) = 0 ) then exit function
+    if ( mdl_slab( mins.y, maxs.y, org.y, dir.y, tn, tf ) = 0 ) then exit function
+    if ( mdl_slab( mins.z, maxs.z, org.z, dir.z, tn, tf ) = 0 ) then exit function
+    pl_ray_box = tn
+end function
+
+
 function mdl_ray_box ( _
     c as Vec3, _
     byval hx as single, _
@@ -1918,7 +1950,9 @@ sub pl_fire ( _
     models() as Submodel, _
     brush() as BrushModel, _
     planes() as Plane, _
-    item() as ItemEnt _
+    item() as ItemEnt, _
+    door() as DoorEnt, _
+    trig() as TrigEnt _
 )
     dim org as Vec3, fin as Vec3, aim as Vec3, dir as Vec3
     dim tr as TraceResult
@@ -1959,6 +1993,17 @@ sub pl_fire ( _
             end if
         next i
         if ( best >= 0 ) then hit(best) = hit(best) + PL_PELLET_DMG%
+        '' multi_killed: a trigger with health, in front of whatever the
+        '' pellet stopped at -- plus PL_HALF, since pl_trace walks hull 1,
+        '' the player's, and a wall stops the pellet that much early; e1m1's
+        '' switch volume stands 8 units off its wall. Firing takes it out
+        '' of READY, so one shot fires it once.
+        for i = 0 to g.trig_count - 1
+            if ( trig(i).kind = ENT_TRIG_SHOOT and trig(i).state = ENT_TRIG_READY ) then
+                t = pl_ray_box( trig(i).mins, trig(i).maxs, org, dir, bt + PL_HALF# )
+                if ( t >= 0.0 ) then ent_trig_fire g, i, door(), trig()
+            end if
+        next i
     next p
     for i = 0 to g.mdl_count - 1
         if ( hit(i) > 0 ) then mdl_damage g, mdl_ent(i), hit(i), item()

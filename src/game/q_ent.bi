@@ -166,6 +166,7 @@ const ENT_TRIG_MULTI   = 1
 const ENT_TRIG_COUNTER = 2
 const ENT_TRIG_BUTTON  = 3
 const ENT_TRIG_EXIT    = 4      '' trigger_changelevel: the level ends
+const ENT_TRIG_SHOOT   = 5      '' a trigger with health: pl_fire's pellets fire it
 
 '' Anything that fires a target, resolved offline: a trigger's volume, a
 '' button's travel. Names are ids -- a door's targeted, a trigger's name

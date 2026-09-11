@@ -222,7 +222,8 @@ fi
 # carry the player through it, where a door that does not open stops
 # them at x 271. Then the plunger floor at the first button: -walk into
 # the button must press it and send the floor, a targeted door, down with
-# the player on it, the slipgate must end the level (gs_state 4), and
+# the player on it, the slipgate must end the level (gs_state 4), a
+# shot at the wall switch must lift the bridge it targets, and
 # the bench's ent lines must count the nine
 # soldiers the map places on easy. The exit reference carries the "Walk into the
 # slipgate" centerprint, since its camera stands in that trigger. Needs
@@ -285,6 +286,16 @@ PY
         echo "PASS  e1m1 slipgate: gs_state 4, the level ends"
     else
         echo "FAIL  e1m1 slipgate: gs_state ${gs:-none}, the slipgate did nothing"; rc=1
+    fi
+    # and the shootable switch *16: -fire at it from the bridge it lifts,
+    # 108 units off and 26 degrees up, must send door *15 -- lowered 64 at
+    # load -- up: its brush leaves -64
+    run_frame "-lm -nostats -noai -at 560 2016 -160 -yaw 180 -pitch 26 -fire -bench 400 -ticks 120" "$VBD_OUT/e1m1-shoot.bmp" e1m1.bsp
+    dz=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1 ~ /^door_/ && $2==15 {print $6}')
+    if awk -v z="${dz:--64}" 'BEGIN{exit !(z > -64)}'; then
+        echo "PASS  e1m1 shoot: door 15 at z $dz, the switch was shot"
+    else
+        echo "FAIL  e1m1 shoot: door 15 at z ${dz:-none}, the switch took no shot"; rc=1
     fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc

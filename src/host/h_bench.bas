@@ -196,6 +196,7 @@ sub host_bench_report ( _
     print #benchf, "kmdl_loaded " + ltrim$(str$( g.kmdl.loaded ))
     print #benchf, "gs_state " + ltrim$(str$( g.fight.state ))
     print #benchf, "pl_health " + ltrim$(str$( g.fight.health ))
+    print #benchf, "pl_shells " + ltrim$(str$( g.fight.shells ))
     print #benchf, "pl_kills " + ltrim$(str$( g.fight.kills ))
     print #benchf, "pl_deaths " + ltrim$(str$( g.fight.deaths ))
     '' the crowd, one line each: kind state hunting frame x y z

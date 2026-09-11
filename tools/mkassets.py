@@ -397,7 +397,7 @@ def convert_lightmaps(d, lumps, out):
 
 
 ENT_PAIR = re.compile(r'"([^"]*)"\s*"([^"]*)"')
-TRIG_ONCE, TRIG_MULTI, TRIG_COUNTER, TRIG_BUTTON, TRIG_EXIT = 0, 1, 2, 3, 4   # ENT_TRIG_* in q_ent.bi
+TRIG_ONCE, TRIG_MULTI, TRIG_COUNTER, TRIG_BUTTON, TRIG_EXIT, TRIG_SHOOT = 0, 1, 2, 3, 4, 5   # ENT_TRIG_*
 
 
 def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> bytes:
@@ -470,6 +470,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
             case 'trigger_once': kind, wait, count = TRIG_ONCE, -1.0, 0
             case 'trigger_multiple': kind, wait, count = TRIG_MULTI, float(kv.get('wait', '0')) or 0.2, 0
             case _: kind, wait, count = TRIG_COUNTER, -1.0, int(kv.get('count', '0')) or 2
+        if int(kv.get('health', '0')) > 0:
+            kind = TRIG_SHOOT   # multi_killed: shot, not touched; wait as above
         return (m, kind, name_id(kv.get('target', '')), name_id(kv.get('targetname', '')), count,
                 wait, 0.0, (0.0, 0.0, 0.0), msg_of(kv))
 
@@ -500,9 +502,7 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
             case 'trigger_teleport' if model(kv.get('model', '')):
                 trigs.append((kv.get('target', ''), model(kv['model'])))
                 hides.append(model(kv['model']))
-            case 'trigger_once' | 'trigger_multiple' if model(kv.get('model', '')) and 'health' not in kv:
-                # one with health is shot, not touched, and waits for the
-                # shotgun to report what it hit; hidden like the rest
+            case 'trigger_once' | 'trigger_multiple' if model(kv.get('model', '')):
                 hides.append(model(kv['model']))
                 uses.append(trig_record(model(kv['model']), kv))
             case 'trigger_counter':

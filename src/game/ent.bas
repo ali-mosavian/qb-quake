@@ -835,11 +835,13 @@ sub ent_move_trigs ( _
                         trig(k).state = ENT_TRIG_DONE
                     end if
                 end if
-            case ENT_TRIG_ONCE, ENT_TRIG_MULTI
+            case ENT_TRIG_ONCE, ENT_TRIG_MULTI, ENT_TRIG_SHOOT
                 select case trig(k).state
                     case ENT_TRIG_READY
-                        if ( ent_box_touched( g, trig(k).mins, trig(k).maxs, 0.0 ) ) then
-                            ent_trig_fire g, k, door(), trig()
+                        if ( trig(k).kind <> ENT_TRIG_SHOOT ) then
+                            if ( ent_box_touched( g, trig(k).mins, trig(k).maxs, 0.0 ) ) then
+                                ent_trig_fire g, k, door(), trig()
+                            end if
                         end if
                     case ENT_TRIG_HELD
                         trig(k).wait_left = trig(k).wait_left - dt

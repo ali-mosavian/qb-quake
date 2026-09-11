@@ -143,7 +143,9 @@ declare sub pl_fire ( _
     models() as Submodel, _
     brush() as BrushModel, _
     planes() as Plane, _
-    item() as ItemEnt _
+    item() as ItemEnt, _
+    door() as DoorEnt, _
+    trig() as TrigEnt _
 )
 declare sub pl_items_touch ( g as Game, item() as ItemEnt )
 declare sub pl_respawn ( g as Game )
@@ -347,10 +349,10 @@ sub host_tick ( _
 
     '' the fight. Fire is mouse 1 or ctrl; outside GS_PLAY a fresh press
     '' is the only input that matters, and the world stands still.
-    fire = ( g.env.mouse.left or g.env.keyboard.ctrl )
+    fire = ( g.env.mouse.left or g.env.keyboard.ctrl or g.env.hold_fire )
     select case g.fight.state
     case GS_PLAY%
-        if ( fire ) then pl_fire g, mdl_ent(), models(), brush(), planes(), item()
+        if ( fire ) then pl_fire g, mdl_ent(), models(), brush(), planes(), item(), door(), trig()
         pl_items_touch g, item()
         '' every soldier's own think -- Quake's 10 Hz, gated inside
         '' mdl_think against g.rdr.anim_time

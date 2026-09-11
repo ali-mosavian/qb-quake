@@ -195,6 +195,9 @@ sub sys_parse_args ( _
         if ( lcase$(argv(i)) = "-noai" ) then
             g.env.no_ai = true
         end if
+        if ( lcase$(argv(i)) = "-fire" ) then
+            g.env.hold_fire = true
+        end if
         if ( lcase$(argv(i)) = "-nostats" ) then
             g.env.no_stats = true
         end if
@@ -229,6 +232,12 @@ sub sys_parse_args ( _
                 g.env.start_yaw = g.env.start_yaw + 360.0
             wend
             g.env.yaw_set   = true
+        end if
+        if ( lcase$(argv(i)) = "-pitch" and i+1 <= argc-1 ) then
+            g.env.start_pitch = val( argv(i+1) )
+            if ( g.env.start_pitch > 89.0 ) then g.env.start_pitch = 89.0
+            if ( g.env.start_pitch < -89.0 ) then g.env.start_pitch = -89.0
+            g.env.pitch_set = true
         end if
         if ( lcase$(argv(i)) = "-ticks" and i+1 <= argc-1 ) then
             g.env.bench_ticks = val( argv(i+1) )

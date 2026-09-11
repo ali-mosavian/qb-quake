@@ -2284,9 +2284,16 @@ its message; once is a multiple with wait -1, a multiple re-arms after
 wait (0.2); a counter fires its own target when used `count` times (2).
 A button slides in when touched and fires when it ARRIVES, as
 `button_wait` does, holds `wait` seconds (-1 stays), and comes back.
-Nothing in `delay`, `killtarget`, health or sounds, and a trigger with
-health -- e1m1's `*16`, shot to lower a door -- is not emitted until the
-shotgun reports what it hit.
+A trigger with health (e1m1's `*16`, a wall switch) is shot, not
+touched: `pl_fire` runs every pellet against such boxes short of what
+it stopped at plus `PL_HALF`, and the first hit fires it (multi_killed).
+The margin is there because `pl_trace` walks hull 1, the player's, so
+a wall stops a pellet 16 units early, and e1m1's switch volume stands
+8 units off its wall: without it four shots at the switch fired
+nothing. A point trace through hull 0 is the real fix. Nothing in
+`delay`, `killtarget` or sounds. `-fire` holds the trigger for a
+headless shot and `-pitch D` aims it up or down, as `-yaw` aims it
+round: the default view looks 11 degrees down, mouse y 110 of 200.
 
 A message is a centerprint: `ent_say` puts it in `g.fight.msg` for two
 seconds and the overlay draws it where the state messages go, under
@@ -2306,7 +2313,8 @@ every trigger and button as it loaded.
 the plunger floor (`*3`, a door targeted by `*4`) must go down with the
 player on it, pz below -100 by tick 240. The sixth walks and jumps
 into the slipgate -- its pad is 32 units up, past the 18 a step climbs
--- and wants `gs_state 4`.
+-- and wants `gs_state 4`. The seventh fires at `*16` from 108 units
+and wants door `*15`, the bridge it lifts, off its -64.
 
 ## `-nostats` makes the picture deterministic
 

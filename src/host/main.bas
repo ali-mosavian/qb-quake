@@ -951,7 +951,12 @@ sub host_main ( _
     cam_up.z = 0.0   
     
     if ( g.env.yaw_set ) then g.cam.start_angle = g.env.start_yaw
-    qglMousePos (g.env.scr_x_res-1) * g.cam.start_angle/360.0, 110
+    '' v_update_camera reads the pitch off mouse y: phi = pi * (y+2) / y_res,
+    '' level at y_res/2 - 2. 110 is where it always started, 11 degrees down
+    dim mouse_y as single
+    mouse_y = 110
+    if ( g.env.pitch_set ) then mouse_y = g.env.scr_y_res * ( 90.0 - g.env.start_pitch ) / 180.0 - 2.0
+    qglMousePos (g.env.scr_x_res-1) * g.cam.start_angle/360.0, mouse_y
     
     
 

@@ -404,6 +404,8 @@ type Env
     start_set   as integer
     start_yaw   as single       '' -yaw D: face this way instead of the spawn
     yaw_set     as integer      '' angle. For aiming a headless run at a thing.
+    start_pitch as single       '' -pitch D: degrees up (down below zero);
+    pitch_set   as integer      '' the default view looks 11 down
     no_ents     as integer      '' -noents: draw no brush entities at all. The
                                 '' reference image for "is this entity leaking
                                 '' through the wall in front of it".
@@ -434,6 +436,7 @@ type Env
     no_ai       as integer      '' -noai: no mdl_think, so the monsters
                                 '' hold their spawns and a viewpoint that
                                 '' sees none of them stays that way
+    hold_fire   as integer      '' -fire: the trigger held, for a headless shot
     cam_path     as integer      '' -campath: fly the A* route from
                                 '' campath.bin instead of standing still.
                                 '' The old bench rendered ONE viewpoint, so
