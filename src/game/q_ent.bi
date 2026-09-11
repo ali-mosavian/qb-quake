@@ -220,8 +220,9 @@ type PlatEnt
 end type
 
 '' BrushModel.node for a brush that moved since it was placed: leaf 32767,
-'' which no map has. ent_place_models descends only for these.
-const ENT_NODE_DIRTY   = -1
+'' which no map has. -1 would be leaf 0, the answer for a box in solid.
+'' ent_place_models descends only for these.
+const ENT_NODE_DIRTY   = &H8000
 
 const ENT_DOOR_SHUT    = 0
 const ENT_DOOR_OPENING = 1

@@ -551,8 +551,11 @@ end sub
 function host_lap ( t0 as long ) as single
     dim t1 as long
     t1 = sys_rdtsc()
-    host_lap = t1 - t0
-    if ( t1 < t0 ) then host_lap = -1.0   '' sys_rdtsc wrapped: no sample
+    '' a wrap, or sys_rdtsc's one-call glitch near zero: no sample
+    host_lap = -1.0
+    if ( t1 >= t0 ) then
+        if ( t1 - t0 <= 1000000 ) then host_lap = t1 - t0
+    end if
     t0 = t1
 end function
 
