@@ -335,6 +335,13 @@ declare sub qglDrShade ( _
 '' qglVgaShutdown goes back to.
 declare function qglVgaInit ( ) as long
 declare sub qglVgaPalette ( seg pal as PalRgb )
+'' scr_pal.c
+declare sub scr_pal_blend ( _
+    seg src as PalRgb, _
+    seg dst as PalRgb, _
+    byval dmg as single, _
+    byval bonus as single _
+)
 declare function qglTmrTicks () as long
 declare function qglTmrHz () as long
 declare sub scr_pal_load ( )
@@ -1430,27 +1437,13 @@ end sub
 ''::::::::::
 sub scr_pal_shift ( g as Game, byval dt as single )
     static was as integer
-    dim i as integer
-    dim r as single, gr as single, b as single
-    dim a as single
 
     if ( g.fight.dmg_pct <= 0.0 and g.fight.bonus_pct <= 0.0 ) then
         if ( was ) then qglVgaPalette scr_pal(0)
         was = 0
         exit sub
     end if
-    for i = 0 to 255
-        r  = asc( scr_pal(i).red )
-        gr = asc( scr_pal(i).green )
-        b  = asc( scr_pal(i).blue )
-        a = g.fight.dmg_pct / 255.0
-        r = r + ( 255.0 - r ) * a : gr = gr - gr * a : b = b - b * a
-        a = g.fight.bonus_pct / 255.0
-        r = r + ( 215.0 - r ) * a : gr = gr + ( 186.0 - gr ) * a : b = b + ( 69.0 - b ) * a
-        scr_pal_sh(i).red   = chr$( cint( r ) )
-        scr_pal_sh(i).green = chr$( cint( gr ) )
-        scr_pal_sh(i).blue  = chr$( cint( b ) )
-    next i
+    scr_pal_blend scr_pal(0), scr_pal_sh(0), g.fight.dmg_pct, g.fight.bonus_pct
     qglVgaPalette scr_pal_sh(0)
     was = -1
 
