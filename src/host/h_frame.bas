@@ -720,7 +720,9 @@ sub host_render ( _
         '' renderer Y up: the yaw's cos and sin are the difference's x and z
         '' over their length, the pitch's are that length and -y, positive
         '' looking down
-        if ( g.fight.weapon = PL_IT_NAILGUN% and g.nmdl.loaded ) then
+        if ( g.fight.state = GS_EXIT% ) then
+            '' no gun in the intermission's view
+        elseif ( g.fight.weapon = PL_IT_NAILGUN% and g.nmdl.loaded ) then
             mdl_draw_view g, g.nmdl, vframe, bob, _
                           vdx / vlen, vdz / vlen, vlen, -vdy, _
                           mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc

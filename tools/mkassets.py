@@ -429,6 +429,7 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
     spawn: tuple[float, float, float] = (0.0, 0.0, 0.0)
     title = ''
     angle = 0.0
+    inter: tuple[tuple[float, float, float], float, float] | None = None   # origin, pitch, yaw
     dests: dict[str, tuple[tuple[float, float, float], float]] = {}
     trigs: list[tuple[str, int]] = []
     hides: list[int] = []
@@ -564,6 +565,10 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
             case 'info_player_start':
                 spawn = vec(kv.get('origin', '0 0 0'))
                 angle = float(kv.get('angle', '0'))
+            case 'info_intermission' if inter is None:
+                # FindIntermission picks one at random; the first is as good
+                mangle = vec(kv.get('mangle', '0 0 0'))
+                inter = (vec(kv.get('origin', '0 0 0')), mangle[0], mangle[1])
             case 'info_teleport_destination':
                 dests[kv.get('targetname', '')] = (
                     vec(kv.get('origin', '0 0 0')), float(kv.get('angle', '0')))
@@ -611,7 +616,9 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
     # a teleporter with no destination still hides its brush
     teles = [(m, *dests[t]) for t, m in trigs if t in dests]
 
-    buf = bytearray(struct.pack('<4f9h', *spawn, angle, nmodels,
+    if inter is None:
+        inter = (spawn, 0.0, angle)   # no info_intermission: the start, as Quake does
+    buf = bytearray(struct.pack('<4f3fff9h', *spawn, angle, *inter[0], inter[1], inter[2], nmodels,
                                 len(teles), len(plats), len(hides), len(items), len(doors), len(uses), len(mons),
                                 len(ambs)))
     for kind, org, yaw in mons:

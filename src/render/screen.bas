@@ -1680,7 +1680,7 @@ sub scr_draw_hud ( _
     dim fcol as integer
     dim wide as integer
     dim dxv as single, dyv as single, ayv as single, yawd as single
-    dim pstr as string, fstr as string, msg as string
+    dim pstr as string, fstr as string, msg as string, secs as long
 
     fstr = "KILLS " + ltrim$(str$( g.fight.kills )) + "  DEATHS " + ltrim$(str$( g.fight.deaths ))
 
@@ -1834,6 +1834,14 @@ sub scr_draw_hud ( _
     if ( len( msg ) > 0 ) then
         if ( g.fight.state = GS_DEAD% ) then qglDrFill h_dst_dc, 0, h \ 2 - 8, w, h \ 2 + 8, hc_bad
         draw_string h_dst_dc, w \ 2 - len( msg ) * 2, h \ 2 - 3, msg
+    end if
+    '' the intermission's tally: kills, secrets and the level's time
+    if ( g.fight.state = GS_EXIT% ) then
+        secs = int( g.fight.exit_time - g.fight.level_start )
+        msg = "KILLS " + ltrim$( str$( g.fight.kills ) ) + "/" + ltrim$( str$( g.mdl_count ) ) _
+            + "  SECRETS " + ltrim$( str$( g.fight.secrets ) ) + "/" + ltrim$( str$( g.fight.secret_total ) ) _
+            + "  TIME " + ltrim$( str$( secs \ 60 ) ) + ":" + right$( "0" + ltrim$( str$( secs mod 60 ) ), 2 )
+        draw_string h_dst_dc, w \ 2 - len( msg ) * 2, h \ 2 + 5, msg
     end if
 
     '' the crosshair: four dots, the centre left open to see through

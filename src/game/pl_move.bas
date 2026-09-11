@@ -150,6 +150,7 @@ declare sub pl_items_drop ( _
 )
 declare sub pl_items_touch ( g as Game, item() as ItemEnt )
 declare sub pl_boxes_sync ( g as Game, item() as ItemEnt )
+declare sub qglMousePos ( byval x as integer, byval y as integer )
 declare sub pl_box_solid ( _
     byval i as integer, _
     mins as Vec3, _
@@ -2534,6 +2535,10 @@ sub pl_game_reset ( _
     next i
     pl_boxes_sync g, item()
     pl_reset_player g
+    '' back from the intermission: on foot, facing the map's way
+    g.pl.no_clip = 0
+    g.fight.level_start = g.rdr.anim_time
+    qglMousePos ( g.env.scr_x_res - 1 ) * g.cam.start_angle / 360.0, 110
 end sub
 
 ''::::::::::::::

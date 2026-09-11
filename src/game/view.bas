@@ -229,6 +229,8 @@ sub v_update_camera ( _
         ''
 
         if ( g.pl.no_clip ) then
+            '' the intermission holds still
+            if ( g.fight.state = GS_EXIT% ) then fwd = 0.0
             ''
             '' Also per second, not per frame. This used to advance a flat 3
             '' units every frame, so the camera flew at whatever speed the

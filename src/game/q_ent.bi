@@ -42,6 +42,9 @@ end type
 type EntsHead
     spawn       as Vec3
     angle       as single
+    inter       as Vec3         '' info_intermission: where the exit looks from
+    inter_pitch as single       '' its mangle, Quake's: positive down
+    inter_yaw   as single       '' CCW from +x, the map's way
     nmodels     as integer      '' stamp: must equal the map's model count,
                                 '' or the assets are from another map
     ntele       as integer

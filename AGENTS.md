@@ -2459,10 +2459,14 @@ door or a monster named by a killtarget stays; `delay` is not ported.
 The ninth e1m1 arm stands in `*54` and wants `*51` DONE.
 
 `trigger_changelevel` is the level's end: touching it is `GS_EXIT`,
-LEVEL COMPLETE with the worldspawn's message -- the map's title --
-above it, and fire starts the map over: `pl_game_reset` puts the
-monsters, items and player back and `ent_reset` every door shut and
-every trigger and button as it loaded.
+the view cut to the map's first `info_intermission` at its mangle
+(`ent_intermission`: noclip, held still, no gun), LEVEL COMPLETE with
+the worldspawn's message -- the map's title -- above it and the kills,
+secrets and time under it, and fire starts the map over: `pl_game_reset`
+puts the monsters, items and player back, on foot and facing the
+spawn's way, and `ent_reset` every door shut and every trigger and
+button as it loaded. A map with no info_intermission looks from its
+start, as Quake does. The slipgate arm wants the exit at (-112,704).
 
 `tools/check.sh --e1m1`'s fourth frame walks into the first button:
 the plunger floor (`*3`, a door targeted by `*4`) must go down with the

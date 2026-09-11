@@ -283,10 +283,12 @@ PY
     # and the exit: the slipgate's pad is 32 units up, so -jump too
     run_frame "-lm -nostats -noai -at 1312 660 -200 -yaw 90 -walk -jump -bench 400 -ticks 240" "$VBD_OUT/e1m1-slipgate.bmp" e1m1.bsp
     gs=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="gs_state"{print $2}')
-    if [[ "$gs" == 4 ]]; then
-        echo "PASS  e1m1 slipgate: gs_state 4, the level ends"
+    ix=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="px"{print $2}')
+    iy=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="py"{print $2}')
+    if [[ "$gs" == 4 && "$ix" == -112 && "$iy" == 704 ]]; then
+        echo "PASS  e1m1 slipgate: gs_state 4 at ($ix,$iy), the level ends on the intermission camera"
     else
-        echo "FAIL  e1m1 slipgate: gs_state ${gs:-none}, the slipgate did nothing"; rc=1
+        echo "FAIL  e1m1 slipgate: gs_state ${gs:-none} at (${ix:-none},${iy:-none}); want 4 at the info_intermission (-112,704)"; rc=1
     fi
     # and the shootable switch *16: -fire at it from the bridge it lifts,
     # 108 units off and 26 degrees up, must send door *15 -- lowered 64 at

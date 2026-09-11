@@ -266,6 +266,10 @@ sub ent_load_spawn ( _
     ent_open_bin g, u, h
     qglFileClose u
 
+    g.fight.inter = h.inter
+    g.fight.inter_pitch = h.inter_pitch
+    g.fight.inter_yaw = h.inter_yaw
+
     '' BSP is Z-up and the camera is Y-up, so y and z swap here
     g.cam.pos.x = h.spawn.x
     g.cam.pos.z = h.spawn.y
@@ -464,6 +468,11 @@ sub ent_load_teleports ( _
         if ( xr.model >= 0 and xr.model <= g.wld.count.models-1 ) then
             ent_trig_init g, xr, models(), trig()
         end if
+    next i
+
+    g.fight.secret_total = 0
+    for  i = 0 to g.trig_count-1
+        if ( trig(i).kind = ENT_TRIG_SECRET ) then g.fight.secret_total = g.fight.secret_total + 1
     next i
 
     for  i = 1 to h.namb
@@ -885,6 +894,23 @@ sub ent_trig_fire ( _
     ent_use_targets g, trig(k).target, door(), trig()
 end sub
 
+'' execute_changelevel's intermission: the view from the map's
+'' info_intermission, its mangle, the player held there in noclip until
+'' fire restarts the level. Quake's pitch is positive down, ours up.
+sub ent_intermission ( g as Game )
+    dim yaw as single
+
+    g.pl.no_clip = -1
+    g.pl.pos = g.fight.inter
+    g.cam.pos.x = g.fight.inter.x
+    g.cam.pos.z = g.fight.inter.y
+    g.cam.pos.y = g.fight.inter.z
+    yaw = 360.0 - g.fight.inter_yaw
+    if ( yaw >= 360.0 ) then yaw = yaw - 360.0
+    qglMousePos ( g.env.scr_x_res - 1 ) * yaw / 360.0, _
+                g.env.scr_y_res * ( 90.0 + g.fight.inter_pitch ) / 180.0 - 2.0
+end sub
+
 ''::::::::::
 '' name: ent_kill_targets
 '' desc: SUB_UseTargets' remove(): every trigger named id is gone until
@@ -957,6 +983,8 @@ sub ent_move_trigs ( _
                         ent_say g, trig(k).msg
                         g.fight.msg_until = g.rdr.anim_time + 3600.0
                         g.fight.state = GS_EXIT%
+                        g.fight.exit_time = g.rdr.anim_time
+                        ent_intermission g
                         trig(k).state = ENT_TRIG_DONE
                     end if
                 end if

@@ -162,6 +162,12 @@ type PlayerCombat
     booms       as integer     '' exploding boxes gone, for the bench
     fire_at     as single      '' anim_time of the last shot, the view weapon's frames run from it
     pain_at     as single      '' PainSound's pain_finished: one grunt a half second
+    inter       as Vec3        '' the intermission camera, BSP space
+    inter_pitch as single
+    inter_yaw   as single
+    secret_total as integer    '' trigger_secrets the map has
+    level_start as single      '' anim_time the level began, for the intermission's clock
+    exit_time   as single
 end type
 
 const PL_HEALTH%       = 100
