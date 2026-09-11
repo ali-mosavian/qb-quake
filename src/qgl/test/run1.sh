@@ -23,6 +23,14 @@ cycles=15000
 [dos]
 ems=true
 xms=true
+[mixer]
+nosound=true
+[sblaster]
+sbtype=sb16
+sbbase=220
+irq=7
+dma=1
+hdma=5
 [autoexec]
 @echo off
 mount w "$d"

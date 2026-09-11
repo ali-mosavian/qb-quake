@@ -10,6 +10,15 @@
 '' Nested rather than flat: g.pl.pos.z says which subsystem owns the field,
 '' and the groups already existed as their own types.
 ''
+'' snd.bas: the DSP is up and snd.raw is in the handle
+type SndState
+    on          as integer
+    off         as integer      '' -nosound
+    hnd         as integer      '' the samples' EMS handle
+    started     as integer      '' sounds begun, for the bench
+    under       as integer      '' frames the DMA got ahead of the mixer
+end type
+
 type Game
     wld         as World          '' the loaded map: counts, stores, dcs
     env         as Env            '' configuration, from stuff.ini and argv
@@ -35,6 +44,7 @@ type Game
     nmdl        as MdlState       '' and v_nail, the nailgun's
     kmdl        as MdlState       '' the knight
     dmdl        as MdlState       '' the dog
+    snd         as SndState       '' the sound layer
 
     '' LAST, deliberately. r_walk.c and sb_build.c reach g.vis and
     '' g.rdr.dlight by byte offset -- GAME_VIS_OFFSET 4970 and
@@ -57,6 +67,14 @@ declare function mod_geom_map ( _
     g as Game, _
     byval row as integer _
 ) as long
+declare sub snd_init ( g as Game )
+declare sub snd_frame ( g as Game )
+declare sub snd_shutdown ( g as Game )
+declare sub snd_play ( _
+    g as Game, _
+    byval id as integer, _
+    org as Vec3 _
+)
 declare function mod_tex_raw ( _
     g as Game, _
     byval k as integer, _

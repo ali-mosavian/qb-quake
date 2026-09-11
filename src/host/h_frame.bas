@@ -392,6 +392,7 @@ sub host_tick ( _
         next mdl_i
         if ( g.fight.health <= 0 ) then
             g.fight.state = GS_DEAD%
+            snd_play g, SND_DEATH%, g.pl.pos
             g.fight.state_until = g.rdr.anim_time + PL_DEATH_PAUSE#
         elseif ( g.mdl_count > 0 and ndead = g.mdl_count ) then
             g.fight.state = GS_WON%

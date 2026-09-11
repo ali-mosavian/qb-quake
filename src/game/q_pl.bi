@@ -161,6 +161,7 @@ type PlayerCombat
     dmg_time    as single      '' the next slime or lava bite
     booms       as integer     '' exploding boxes gone, for the bench
     fire_at     as single      '' anim_time of the last shot, the view weapon's frames run from it
+    pain_at     as single      '' PainSound's pain_finished: one grunt a half second
 end type
 
 const PL_HEALTH%       = 100
@@ -186,6 +187,37 @@ const PL_QUAD_MUL%     = 4
 '' slime 4 * waterlevel each second and none in the suit
 const PL_LAVA_DMG%     = 10
 const PL_SLIME_DMG%    = 4
+const PL_PAIN_GAP#     = 0.5
+const PL_LAND_SOFT#    = -300.0 '' PlayerPreThink: land.wav below this fall speed
+const PL_LAND_HARD#    = -650.0 '' land2.wav and five points
+'' the sounds, in tools/mksnd.py's SOUNDS order; SND_MON + kind * 4 is
+'' a monster's sight, then attack, pain, death
+const SND_COUNT%       = 57
+const SND_SHOTGUN%     = 0
+const SND_SSG%         = 1
+const SND_NAIL%        = 2
+const SND_BOOM%        = 3
+const SND_HEALTH%      = 4
+const SND_HEALTH_ROT%  = 5
+const SND_HEALTH_MEGA% = 6
+const SND_ARMOR%       = 7
+const SND_WEAPON%      = 8
+const SND_AMMO%        = 9
+const SND_QUAD%        = 10
+const SND_SUIT%        = 11
+const SND_SECRET%      = 12
+const SND_TALK%        = 13
+const SND_PAIN1%       = 14    '' three of them
+const SND_DEATH%       = 17
+const SND_JUMP%        = 18
+const SND_LAND%        = 19
+const SND_LAND2%       = 20
+const SND_SLIME%       = 21
+const SND_BURN1%       = 22    '' two
+const SND_MON%         = 24
+const SND_DOOR%        = 36    '' doors.qc's sounds 1..4: stop, move
+const SND_SECRET1%     = 44    '' func_door_secret's 1..3: noise1..3
+const SND_BUTTON%      = 53    '' func_button's 0..3
 '' W_FireSuperShotgun: FireBullets (14, dir, '0.14 0.08 0'), two shells,
 '' 0.7 to be ready; with one shell left it fires as the shotgun
 const PL_SSG_RATE#     = 0.7

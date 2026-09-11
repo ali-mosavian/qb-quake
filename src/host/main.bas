@@ -129,6 +129,7 @@ declare function qglSfInit () as integer
 declare sub qglVgaShutdown ()
 declare function qglVgaScreen () as long
 declare sub qglTmrShutdown ()
+declare sub qglDspShutdown ()
 declare function qglTmrTicks () as long
 declare sub qglKbdShutdown ()
 declare sub qglMouseShutdown ()
@@ -812,6 +813,7 @@ sub host_init ( _
     mdl_load g, g.nmdl, "v_nail"
     mdl_load g, g.kmdl, "knight"
     mdl_load g, g.dmdl, "dog"
+    snd_init g
     g.mdl_count = 0
     if ( g.mdl.loaded ) then
         '' mdl_pick_section places every model from rnd, so a clock
@@ -1086,6 +1088,8 @@ sub host_main ( _
             if ( ptd > g.pt.tick_max ) then g.pt.tick_max = ptd
         end if
 
+        snd_frame g
+
         '' cp_advance is called from view.bas now, where the movement
         '' input is assembled -- it steers the player rather than placing
         '' the camera.
@@ -1204,6 +1208,7 @@ sub host_shutdown
     qglKbdShutdown
     qglMouseShutdown
     qglTmrShutdown
+    qglDspShutdown
     qglVgaShutdown
     qglMemShutdown
     

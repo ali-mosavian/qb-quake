@@ -94,6 +94,8 @@ declare sub pl_spread_dir ( _
     outdir as Vec3 _
 )
 declare sub pl_damage ( g as Game, byval dmg as integer )
+declare sub pl_land ( g as Game )
+declare function pl_item_sound ( it as ItemEnt ) as integer
 declare sub pl_fire_nail ( g as Game, nail() as Spike )
 declare sub pl_box_hit ( _
     g as Game, _
@@ -739,6 +741,7 @@ sub pl_gravity ( _
     pl_trace g.pl.pos, below, tr, model_count, models(), brush(), clip(), planes()
 
     if ( tr.frac < 1.0 and tr.norm.z > PL_GROUND_NRM# ) then
+        if ( g.pl.on_ground = 0 and g.pl.water_level = 0 ) then pl_land g
         g.pl.on_ground = true
         if ( g.pl.vel.z < 0.0 ) then g.pl.vel.z = 0.0
     else
@@ -1032,6 +1035,7 @@ sub pl_move ( _
     dim tr as TraceResult
     dim wishvel as Vec3, wishdir as Vec3
     dim wishspeed as single
+    dim wl_before as integer
 
     ''
     '' dir is the horizontal look direction in BSP space, passed in rather than
@@ -1070,7 +1074,9 @@ sub pl_move ( _
         end if
     end if
 
+    wl_before = g.pl.water_level
     pl_water_level g, nodes(), planes()
+    if ( wl_before = 0 and g.pl.water_level > 0 and g.pl.water_type = CONTENTS_SLIME ) then snd_play g, SND_SLIME%, g.pl.pos
 
     pl_gravity g, dt, tr, model_count, models(), brush(), clp_buffer(), planes()
 
@@ -1101,6 +1107,7 @@ sub pl_move ( _
     elseif ( jump and g.pl.on_ground ) then
         g.pl.vel.z     = PL_JUMP#
         g.pl.on_ground = false
+        snd_play g, SND_JUMP%, g.pl.pos
     end if
 
     ''
@@ -1811,6 +1818,7 @@ sub mdl_think ( _
     if ( ent.state = MDL_ST_STAND% ) then
         if ( can_chase and mdl_find_target( g, ent, models(), brush(), planes() ) ) then
             ent.hunting = -1
+            snd_play g, SND_MON% + ent.kind * 4, ent.pos
             ent.state = MDL_ST_RUN%
             ent.anim_frame = 0
             ent.wander_ticks = 0
@@ -1842,6 +1850,7 @@ sub mdl_think ( _
             if ( d2 < MDL_RANGE_MELEE# * MDL_RANGE_MELEE# ) then
                 ent.state = MDL_ST_ATTACK%
                 ent.anim_frame = 0
+                snd_play g, SND_MON% + ent.kind * 4 + 1, ent.pos
                 exit sub
             end if
         end if
@@ -1856,6 +1865,7 @@ sub mdl_think ( _
                 d2 = dx*dx + dy*dy + dz * dz
                 if ( d2 < DOG_BITE_RANGE# * DOG_BITE_RANGE# ) then
                     ent.next_attack = g.rdr.anim_time + DOG_BITE_RATE#
+                    snd_play g, SND_MON% + ent.kind * 4 + 1, ent.pos
                     dmg = int( ( rnd + rnd + rnd ) * DOG_BITE_DMG# )
                     if ( dmg > 0 ) then pl_damage g, dmg
                 elseif ( dx*dx + dy*dy > DOG_LEAP_MIN# * DOG_LEAP_MIN# and dx*dx + dy*dy < DOG_LEAP_MAX# * DOG_LEAP_MAX# ) then
@@ -1897,6 +1907,7 @@ sub mdl_think ( _
                 if ( rnd < chance ) then
                     ent.next_attack = g.rdr.anim_time + 1.0 + rnd
                     ent.flash_until = g.rdr.anim_time + MDL_FLASH#
+                    snd_play g, SND_MON% + ent.kind * 4 + 1, ent.pos
                     mdl_fire g, ent, models(), brush(), planes()
                 end if
             end if
@@ -1907,6 +1918,7 @@ sub mdl_think ( _
         '' then starts the run cycle and the step is skipped
         if ( can_chase and mdl_find_target( g, ent, models(), brush(), planes() ) ) then
             ent.hunting = -1
+            snd_play g, SND_MON% + ent.kind * 4, ent.pos
             ent.anim_frame = 0
             exit sub
         end if
@@ -2076,6 +2088,11 @@ sub pl_fire ( _
     g.fight.show_hostile = g.rdr.anim_time + 1.0
     g.fight.shells = g.fight.shells - 1
     g.fight.flash_until = g.rdr.anim_time + 0.1
+    if ( npellet = PL_SSG_PELLETS% ) then
+        snd_play g, SND_SSG%, g.pl.pos
+    else
+        snd_play g, SND_SHOTGUN%, g.pl.pos
+    end if
 
     '' cam.look_at is the POINT the eye looks at by now -- a direction
     '' only inside v_update_camera -- one unit from cam.pos, in renderer
@@ -2152,6 +2169,7 @@ sub mdl_damage ( _
     if ( ent.health <= 0 ) then
         ent.state = MDL_ST_DEAD%
         ent.anim_frame = 0
+        snd_play g, SND_MON% + ent.kind * 4 + 3, ent.pos
         g.fight.kills = g.fight.kills + 1
         if ( ent.kind = MDL_KIND_ARMY% ) then pl_item_add g, item(), ENT_ITEM_SHELLS, ENT_BACKPACK%, ent.pos
         exit sub
@@ -2168,6 +2186,7 @@ sub mdl_damage ( _
     end if
     ent.state = MDL_ST_PAIN%
     ent.anim_frame = 0
+    snd_play g, SND_MON% + ent.kind * 4 + 2, ent.pos
 end sub
 
 ''::::::::::::::
@@ -2228,6 +2247,15 @@ sub pl_damage ( g as Game, byval dmg as integer )
     end if
     g.fight.armor = g.fight.armor - save
     g.fight.health = g.fight.health - ( dmg - save )
+    '' PainSound: a burn in slime or lava, else a grunt, a half second apart
+    if ( g.fight.health > 0 and g.rdr.anim_time >= g.fight.pain_at ) then
+        g.fight.pain_at = g.rdr.anim_time + PL_PAIN_GAP#
+        if ( g.pl.water_level > 0 and g.pl.water_type <> CONTENTS_WATER ) then
+            snd_play g, SND_BURN1% + int( rnd * 2 ), g.pl.pos
+        else
+            snd_play g, SND_PAIN1% + int( rnd * 3 ), g.pl.pos
+        end if
+    end if
     g.fight.hurt_until = g.rdr.anim_time + 0.3
     g.fight.dmg_pct = g.fight.dmg_pct + dmg * PL_DMG_SHIFT#
     if ( g.fight.dmg_pct > PL_DMG_SHIFT_MAX# ) then g.fight.dmg_pct = PL_DMG_SHIFT_MAX#
@@ -2315,6 +2343,7 @@ sub pl_box_hit ( _
     item(i).gone = -1
     g.fight.booms = g.fight.booms + 1
     c = item(i).pos
+    snd_play g, SND_BOOM%, c
     c.z = c.z + ENT_BOX_TOP# * 0.5
     dx = g.pl.pos.x - c.x : dy = g.pl.pos.y - c.y : dz = g.pl.pos.z + ( PL_ZLO# + PL_ZHI# ) * 0.5 - c.z
     pts = ENT_BOX_DMG# - 0.5 * sqr( dx*dx + dy*dy + dz*dz )
@@ -2358,6 +2387,7 @@ sub pl_fire_nail ( g as Game, nail() as Spike )
     if ( i < 0 ) then exit sub
     g.fight.next_fire = g.rdr.anim_time + PL_NG_RATE#
     g.fight.fire_at = g.rdr.anim_time
+    snd_play g, SND_NAIL%, g.pl.pos
     g.fight.show_hostile = g.rdr.anim_time + 1.0
     g.fight.flash_until = g.rdr.anim_time + 0.1
     g.fight.nails = g.fight.nails - 1
@@ -2524,9 +2554,42 @@ end sub
 '' desc: Picks up whatever the player's box overlaps, and puts back what
 ''       megahealth rots. ammo_touch and T_Heal's caps.
 ''::::::::::::::
+'' PlayerPreThink's landing: a thud past 300 down, a grunt and five
+'' points past 650
+sub pl_land ( g as Game )
+    if ( g.pl.vel.z > PL_LAND_SOFT# ) then exit sub
+    if ( g.pl.vel.z > PL_LAND_HARD# ) then snd_play g, SND_LAND%, g.pl.pos : exit sub
+    snd_play g, SND_LAND2%, g.pl.pos
+    pl_damage g, 5
+end sub
+
+'' each item's touch sound, items.qc's noise
+function pl_item_sound ( it as ItemEnt ) as integer
+    select case it.kind
+        case ENT_ITEM_SHELLS, ENT_ITEM_NAILS
+            pl_item_sound = SND_AMMO%
+        case ENT_ITEM_SSG, ENT_ITEM_NAILGUN
+            pl_item_sound = SND_WEAPON%
+        case ENT_ITEM_ARMOR1, ENT_ITEM_ARMOR2
+            pl_item_sound = SND_ARMOR%
+        case ENT_ITEM_QUAD
+            pl_item_sound = SND_QUAD%
+        case ENT_ITEM_SUIT
+            pl_item_sound = SND_SUIT%
+        case else
+            if ( it.amount = ENT_ITEM_MEGA% ) then
+                pl_item_sound = SND_HEALTH_MEGA%
+            elseif ( it.amount < 15 ) then
+                pl_item_sound = SND_HEALTH_ROT%
+            else
+                pl_item_sound = SND_HEALTH%
+            end if
+    end select
+end function
+
 sub pl_items_touch ( g as Game, item() as ItemEnt )
     dim i as integer
-    dim dz as single, cap as integer, atype as single
+    dim dz as single, cap as integer, atype as single, sid as integer
 
     '' item_megahealth_rot: over 100, a point a second after five
     if ( g.fight.health > PL_HEALTH% and g.rdr.anim_time >= g.fight.rot_at ) then
@@ -2595,7 +2658,11 @@ sub pl_items_touch ( g as Game, item() as ItemEnt )
                         item(i).gone = -1
                     end if
                 end if
-                if ( item(i).gone ) then g.fight.bonus_pct = PL_BONUS_SHIFT#
+                if ( item(i).gone ) then
+                    g.fight.bonus_pct = PL_BONUS_SHIFT#
+                    sid = pl_item_sound( item(i) )
+                    snd_play g, sid, g.pl.pos
+                end if
             end if
         end if
     next i

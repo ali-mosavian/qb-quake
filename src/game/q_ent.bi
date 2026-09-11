@@ -129,6 +129,7 @@ type EntsDoor
     targeted    as integer      '' its targetname's id: opens by trigger, not touch
     secret      as integer      '' func_door_secret: touch says the message only
     shoot       as integer      '' a pellet opens it
+    snd         as integer      '' "sounds": doors.qc's set, 0 none
     msg         as string * 40  '' centerprint on touch, space padded
 end type
 
@@ -181,6 +182,7 @@ type DoorEnt
     link        as integer      '' lowest door index of its group
     nolink      as integer
     targeted    as integer
+    snd         as integer
     mins        as Vec3         '' the touch field
     maxs        as Vec3
     msg         as string * 40
@@ -207,6 +209,7 @@ type EntsTrig
     wait        as single       '' re-arm delay; below zero fires once, or stays pressed
     speed       as single       '' a button's
     travel      as Vec3
+    snd         as integer      '' "sounds": a trigger's 1 secret, 2 talk; a button's set
     msg         as string * 40
 end type
 
@@ -237,6 +240,7 @@ type TrigEnt
     wait_left   as single
     speed       as single
     ofs_out     as Vec3         '' a button's pressed offset
+    snd         as integer
     mins        as Vec3         '' the volume, or the button's brush
     maxs        as Vec3
     msg         as string * 40

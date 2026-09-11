@@ -114,6 +114,7 @@ viz)
         -e "s|^cycles=75000$|cycles=${CYCLES:-75000}|" \
         -e "s|^core=dynamic$|core=${CORE:-dynamic}|" \
         -e 's/^output=surface$/output=opengl/' \
+        -e 's/^nosound=true$/nosound=false/' \
         -e '$ { /^exit$/d; }' \
         -e '/^\[sdl\]/a\
 fullscreen=false\

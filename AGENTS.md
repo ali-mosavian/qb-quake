@@ -484,7 +484,8 @@ a real bug:
 5. **Never name a variable after a BASIC intrinsic.** `rnd` for the render
    state failed with "Simple or array variable expected" -- `RND` is the
    random-number function. `timer`, `screen`, `date`, `time`, `error` are the
-   same trap.
+   same trap, and so are `pos`, `seg`, `tab` and `left` -- each cost a build
+   here, as a parameter or a local, with an error pointing at the next line.
 6. **Every `COMMON` variable's type is defined by an include that precedes
    `q_*.bi`, not one that follows it.** BC reads includes in file order,
    so a type declared in a `.bi` included *after* `q_*.bi` does not exist
@@ -2210,6 +2211,32 @@ on a far pointer truncates TOWARDS ZERO, so a window at E000h -- a
 negative long -- came out one paragraph high and every digit was read
 sixteen bytes off. `scr_seg_of` subtracts the low half first.
 
+**Sound is a Sound Blaster at 220h, polled.** `src/qgl/dsp.asm` is
+Quake's snd_dos.c on the SB16 path: reset, version 4 or nothing, a
+4096-byte ring from `qglMemAlloc` aligned to 4096 so it never crosses a
+DMA page, filled with 128 (silence is not zero), DMA channel 1 in
+auto-init -- the mode byte is 59h; 58h is channel 0, and `t34dsp` fails
+on it -- and the DSP playing 8-bit unsigned mono at 11025 in blocks of
+half the ring. Nothing waits for the interrupt: `qglDspPos` reads the
+count register (flip-flop cleared, interrupts off) and `snd_mix.c`
+paints a quarter second past it once a frame, between the tick and the
+render, where no one holds an EMS window; a stub on IRQ 7 acknowledges
+the block ends or the BIOS's iret leaves the PIC's in-service bit set.
+The samples are `tools/mksnd.py`'s `snd.raw`, every wav the ported
+QuakeC plays back to back at the DSP's own rate, in one EMS handle read
+through `PAGE_SLOT`; `sndtab.raw` is the (offset, length) table in the
+order of `q_pl.bi`'s `SND_*`, and `snd_init` refuses a count that
+disagrees. A sound starts at Quake's distance falloff from where it
+began, once, mono; eight channels, the one with least left is stolen.
+The ring and the mixer's scratch are one DOS block, not DGROUP -- that
+is BASIC's string space -- and with the code they cost the e1m1 far
+heap 16K. `-nosound` leaves the card alone; a machine without one fails
+the reset and plays nothing. Every conf pins `[sblaster]` to the
+emulator's own 220/IRQ 7/DMA 1, `[mixer] nosound=true` still advances
+the DMA, and `viz` turns the sound on. `snd_started` and `snd_under` are
+in bench.txt; the two underruns a lit run always shows are the first
+frames, which build every surface.
+
 ## e1m1: the first id map
 
 `tools/check.sh --e1m1` pulls `maps/e1m1.bsp` out of the shareware PAK,
@@ -2283,7 +2310,8 @@ is a kilobyte of far heap -- so the node and leaf bounds are six bytes:
 min rounded down and the max up, `PackedBounds`; `r_cull_box_c` unpacks
 to six floats up front and `r_leaf_bound` for the spawn scatter. Node
 and Leaf are 16 bytes, 25.6K back: 33.5K of far heap after the depth
-buffer with `MDL_MAX_ENTS` at 48 and three view models loaded. A box
+buffer with `MDL_MAX_ENTS` at 48 and three view models loaded, 17.6K
+once the sound layer took its ring and its code. A box
 only grows, so the walk marks a few more leaves: the world's pixels did
 not move on any reference, but a pickup in the far doorway of
 `tools/ref/bench.bmp` is drawn now and `hud.bmp`'s leaf counter reads

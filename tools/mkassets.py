@@ -492,7 +492,7 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
         flags = int(kv.get('spawnflags', '0'))
         travel = travel_of(float(kv.get('angle', '0')), box, lip)
         return (m, travel, (0.0, 0.0, 0.0), speed, hold, 1 if flags & 1 else 0, 1 if flags & 4 else 0,
-                name_id(kv.get('targetname', '')), 0, 0, msg_of(kv))
+                name_id(kv.get('targetname', '')), 0, 0, int(kv.get('sounds', '0')), msg_of(kv))
 
     def secret_record(m: int, kv: dict[str, str], box: tuple[float, ...]) -> tuple:
         # func_door_secret, fd_secret_use: back t_width along v_right (or
@@ -512,7 +512,7 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
         hold = -1.0 if flags & 1 else (float(kv.get('wait', '0')) or 5.0)
         name = name_id(kv.get('targetname', ''))
         shoot = 0 if flags & 8 else (1 if not name or flags & 16 else 0)
-        return (m, travel, mid, speed, hold, 0, 1, name, 1, shoot, msg_of(kv))
+        return (m, travel, mid, speed, hold, 0, 1, name, 1, shoot, int(kv.get('sounds', '0')) or 3, msg_of(kv))
 
     def trig_record(m: int, kv: dict[str, str]) -> tuple:
         # trigger_once is a multiple with wait -1; a multiple re-arms after
@@ -525,10 +525,13 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
         if int(kv.get('health', '0')) > 0:
             kind = TRIG_SHOOT   # multi_killed: shot, not touched; wait as above
         msg = msg_of(kv)
-        if kind == TRIG_SECRET and not kv.get('message'):
-            msg = b'You found a secret area!'.ljust(40)
+        snd = int(kv.get('sounds', '0'))
+        if kind == TRIG_SECRET:
+            snd = snd or 1
+            if not kv.get('message'):
+                msg = b'You found a secret area!'.ljust(40)
         return (m, kind, name_id(kv.get('target', '')), name_id(kv.get('targetname', '')),
-                name_id(kv.get('killtarget', '')), count, wait, 0.0, (0.0, 0.0, 0.0), msg)
+                name_id(kv.get('killtarget', '')), count, wait, 0.0, (0.0, 0.0, 0.0), snd, msg)
 
     def button_record(m: int, kv: dict[str, str], box: tuple[float, ...]) -> tuple:
         # func_button: speed 40, wait 1, lip 4; wait -1 stays pressed
@@ -537,7 +540,7 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
         lip = float(kv.get('lip', '0')) or 4.0
         travel = travel_of(float(kv.get('angle', '0')), box, lip)
         return (m, TRIG_BUTTON, name_id(kv.get('target', '')), name_id(kv.get('targetname', '')),
-                name_id(kv.get('killtarget', '')), 0, wait, speed, travel, msg_of(kv))
+                name_id(kv.get('killtarget', '')), 0, wait, speed, travel, int(kv.get('sounds', '0')), msg_of(kv))
 
     def model(v: str) -> int:
         m = int(v[1:]) if v.startswith('*') and v[1:].isdigit() else 0
@@ -575,7 +578,7 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
             case 'trigger_changelevel' if model(kv.get('model', '')):
                 # the level ends here; its message is the map's title
                 hides.append(model(kv['model']))
-                uses.append((model(kv['model']), TRIG_EXIT, 0, 0, 0, 0, -1.0, 0.0, (0.0, 0.0, 0.0),
+                uses.append((model(kv['model']), TRIG_EXIT, 0, 0, 0, 0, -1.0, 0.0, (0.0, 0.0, 0.0), 0,
                              title[:40].encode('latin1').ljust(40)))
             case 'func_button' if model(kv.get('model', '')):
                 uses.append(button_record(model(kv['model']), kv, boxes[model(kv['model'])]))
@@ -612,11 +615,11 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
         buf += struct.pack('<h', m)
     for kind, amount, org in items:
         buf += struct.pack('<hh3f', kind, amount, *org)
-    for m, travel, mid, speed, hold, start_open, nolink, targeted, secret, shoot, msg in doors:
-        buf += struct.pack('<h3f3fffhhhhh40s', m, *travel, *mid, speed, hold, start_open, nolink, targeted,
-                           secret, shoot, msg)
-    for m, kind, target, name, kill, count, wait, speed, travel, msg in uses:
-        buf += struct.pack('<6hff3f40s', m, kind, target, name, kill, count, wait, speed, *travel, msg)
+    for m, travel, mid, speed, hold, start_open, nolink, targeted, secret, shoot, snd, msg in doors:
+        buf += struct.pack('<h3f3fffhhhhhh40s', m, *travel, *mid, speed, hold, start_open, nolink, targeted,
+                           secret, shoot, snd, msg)
+    for m, kind, target, name, kill, count, wait, speed, travel, snd, msg in uses:
+        buf += struct.pack('<6hff3fh40s', m, kind, target, name, kill, count, wait, speed, *travel, snd, msg)
     return bytes(buf)
 
 

@@ -40,7 +40,7 @@ QGLCORE := $(QGL)/sf.asm $(QGL)/mem.asm $(QGL)/gem.asm \
 QGLSRC := $(QGL)/file.asm $(QGL)/vga.asm $(QGLCORE) \
           $(QGL)/txt.asm $(QGL)/dr.asm \
           $(QGL)/z.asm $(QGL)/clip.asm $(QGL)/rs.asm $(QGL)/sb.asm \
-          $(QGL)/zip.asm $(QGL)/ar.asm \
+          $(QGL)/zip.asm $(QGL)/ar.asm $(QGL)/dsp.asm \
           $(QGL)/log.asm $(QGL)/tmr.asm $(QGL)/kbd.asm $(QGL)/mouse.asm \
           $(QGL)/m4.asm $(QGL)/cpi4.asm \
           $(QGL)/b8/b8fill.asm $(QGL)/b8/b8span.asm

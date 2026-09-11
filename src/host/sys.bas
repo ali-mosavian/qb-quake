@@ -54,6 +54,7 @@ declare sub qglTmrInit ( byval hz as integer )
 declare function qglTmrTicks () as long
 declare function qglTmrCycles () as long
 declare sub qglTmrShutdown ()
+declare sub qglDspShutdown ()
 declare sub qglKbdShutdown ()
 declare sub qglMouseShutdown ()
 declare sub qglMemShutdown ()
@@ -122,6 +123,7 @@ sub sys_parse_args ( _
         print "  -affine       the linear mapper instead of the perspective one"
         print "  -wire         wireframe"
         print "  -nomdl        draw no alias models, for A/B"
+        print "  -nosound      leave the Sound Blaster alone"
         print "  -bench N      render N frames, write bench.bmp and bench.txt, exit"
         print "  -benchsecs N  run for N real seconds, then report, exit"
         print "  -lm           composite lightmaps via the surface cache"
@@ -194,6 +196,9 @@ sub sys_parse_args ( _
         end if
         if ( lcase$(argv(i)) = "-noai" ) then
             g.env.no_ai = true
+        end if
+        if ( lcase$(argv(i)) = "-nosound" ) then
+            g.snd.off = true
         end if
         if ( lcase$(argv(i)) = "-fire" ) then
             g.env.hold_fire = true
@@ -326,6 +331,7 @@ sub sys_error ( msg as string )
     qglKbdShutdown
     qglMouseShutdown
     qglTmrShutdown
+    qglDspShutdown
     qglVgaShutdown
     qglMemShutdown
     

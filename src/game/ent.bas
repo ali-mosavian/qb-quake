@@ -170,6 +170,15 @@ declare sub ent_say ( _
     g as Game, _
     msg as string _
 )
+declare sub ent_talk ( _
+    g as Game, _
+    msg as string _
+)
+declare sub ent_door_sound ( _
+    g as Game, _
+    d as DoorEnt, _
+    byval leg as integer _
+)
 declare function ent_box_touched ( _
     g as Game, _
     mins as Vec3, _
@@ -488,6 +497,7 @@ sub ent_door_init ( _
     d.targeted  = dr.targeted
     d.secret    = dr.secret
     d.shoot     = dr.shoot
+    d.snd       = dr.snd
     d.ofs_mid   = dr.mid
     d.pause_left = 0.0
     d.msg       = dr.msg
@@ -595,11 +605,15 @@ sub ent_door_fire ( _
         if ( door(k).link = grp ) then
             if ( door(k).secret ) then
                 '' fd_secret_use: nothing while it is anywhere but home
-                if ( door(k).state = ENT_DOOR_SHUT ) then door(k).state = ENT_DOOR_OUT1
+                if ( door(k).state = ENT_DOOR_SHUT ) then
+                    door(k).state = ENT_DOOR_OUT1
+                    ent_door_sound g, door(k), 2
+                end if
             else
                 select case door(k).state
                     case ENT_DOOR_SHUT, ENT_DOOR_CLOSING
                         door(k).state = ENT_DOOR_OPENING
+                        ent_door_sound g, door(k), 1
                     case ENT_DOOR_OPEN
                         door(k).hold_left = door(k).hold
                 end select
@@ -652,7 +666,7 @@ sub ent_move_doors ( _
             if ( door(k).targeted = 0 and door(k).secret = 0 ) then
                 ent_door_fire g, door(k).link, door()
             else
-                ent_say g, door(k).msg
+                ent_talk g, door(k).msg
             end if
         end if
     next k
@@ -664,11 +678,15 @@ sub ent_move_doors ( _
                 if ( ent_door_step( brush(m).ofs, door(k).ofs_open, door(k).speed * dt ) ) then
                     door(k).state = ENT_DOOR_OPEN
                     door(k).hold_left = door(k).hold
+                    ent_door_sound g, door(k), 0
                 end if
             case ENT_DOOR_OPEN
                 if ( door(k).hold >= 0.0 ) then
                     door(k).hold_left = door(k).hold_left - dt
-                    if ( door(k).hold_left <= 0.0 ) then door(k).state = ENT_DOOR_CLOSING
+                    if ( door(k).hold_left <= 0.0 ) then
+                        door(k).state = ENT_DOOR_CLOSING
+                        ent_door_sound g, door(k), 1
+                    end if
                 end if
             case ENT_DOOR_CLOSING
                 if ( door(k).secret ) then
@@ -678,6 +696,7 @@ sub ent_move_doors ( _
                     end if
                 elseif ( ent_door_step( brush(m).ofs, door(k).ofs_shut, door(k).speed * dt ) ) then
                     door(k).state = ENT_DOOR_SHUT
+                    ent_door_sound g, door(k), 0
                 end if
             case ENT_DOOR_OUT1
                 if ( ent_door_step( brush(m).ofs, door(k).ofs_mid, door(k).speed * dt ) ) then
@@ -686,13 +705,20 @@ sub ent_move_doors ( _
                 end if
             case ENT_DOOR_PAUSE_OUT
                 door(k).pause_left = door(k).pause_left - dt
-                if ( door(k).pause_left <= 0.0 ) then door(k).state = ENT_DOOR_OPENING
+                if ( door(k).pause_left <= 0.0 ) then
+                    door(k).state = ENT_DOOR_OPENING
+                    ent_door_sound g, door(k), 1
+                end if
             case ENT_DOOR_PAUSE_BACK
                 door(k).pause_left = door(k).pause_left - dt
-                if ( door(k).pause_left <= 0.0 ) then door(k).state = ENT_DOOR_BACK2
+                if ( door(k).pause_left <= 0.0 ) then
+                    door(k).state = ENT_DOOR_BACK2
+                    ent_door_sound g, door(k), 1
+                end if
             case ENT_DOOR_BACK2
                 if ( ent_door_step( brush(m).ofs, door(k).ofs_shut, door(k).speed * dt ) ) then
                     door(k).state = ENT_DOOR_SHUT
+                    ent_door_sound g, door(k), 0
                 end if
         end select
     next k
@@ -723,6 +749,7 @@ sub ent_trig_init ( _
     t.wait      = xr.wait
     t.wait_left = 0.0
     t.speed     = xr.speed
+    t.snd       = xr.snd
     t.ofs_out   = xr.travel
     t.mins      = models(m).mins
     t.maxs      = models(m).maxs
@@ -769,6 +796,34 @@ sub ent_say ( _
     g.fight.msg_until = g.rdr.anim_time + ENT_MSG_TIME#
 end sub
 
+'' SUB_UseTargets and door_touch: the message, and misc/talk with it
+sub ent_talk ( _
+    g as Game, _
+    msg as string _
+)
+    if ( len( rtrim$( msg ) ) = 0 ) then exit sub
+    ent_say g, msg
+    snd_play g, SND_TALK%, g.pl.pos
+end sub
+
+'' leg 0: the stop (a secret door's noise3), 1: a move (noise2),
+'' 2: a secret door leaving home (noise1). sounds 0 is a silent door.
+sub ent_door_sound ( _
+    g as Game, _
+    d as DoorEnt, _
+    byval leg as integer _
+)
+    dim id as integer
+
+    if ( d.snd <= 0 ) then exit sub
+    if ( d.secret ) then
+        id = SND_SECRET1% + ( d.snd - 1 ) * 3 + ( 2 - leg )
+    else
+        id = SND_DOOR% + ( d.snd - 1 ) * 2 + leg
+    end if
+    snd_play g, id, d.mins
+end sub
+
 
 '' SUB_UseTargets: every door and trigger named id.
 sub ent_use_targets ( _
@@ -807,8 +862,13 @@ sub ent_trig_fire ( _
     door() as DoorEnt, _
     trig() as TrigEnt _
 )
-    ent_say g, trig(k).msg
     if ( trig(k).kind = ENT_TRIG_SECRET ) then g.fight.secrets = g.fight.secrets + 1
+    if ( trig(k).snd = 1 ) then
+        ent_say g, trig(k).msg
+        snd_play g, SND_SECRET%, g.pl.pos
+    else
+        ent_talk g, trig(k).msg
+    end if
     if ( trig(k).kind = ENT_TRIG_COUNTER or trig(k).wait < 0.0 ) then
         trig(k).state = ENT_TRIG_DONE
     else
@@ -862,12 +922,13 @@ sub ent_move_trigs ( _
                     case ENT_TRIG_READY
                         if ( ent_box_touched( g, trig(k).mins, trig(k).maxs, ENT_TOUCH_SLACK# ) ) then
                             trig(k).state = ENT_TRIG_GOING
+                            snd_play g, SND_BUTTON% + trig(k).snd, trig(k).mins
                         end if
                     case ENT_TRIG_GOING
                         if ( ent_door_step( brush(m).ofs, trig(k).ofs_out, trig(k).speed * dt ) ) then
                             trig(k).state = ENT_TRIG_HELD
                             trig(k).wait_left = trig(k).wait
-                            ent_say g, trig(k).msg
+                            ent_talk g, trig(k).msg
                             ent_use_targets g, trig(k).target, door(), trig()
                         end if
                     case ENT_TRIG_HELD
