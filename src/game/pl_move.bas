@@ -107,6 +107,7 @@ declare sub ent_use_targets ( _
     plat() as PlatEnt _
 )
 declare sub pl_fire_nail ( g as Game, nail() as Spike )
+declare function pl_nail_free ( nail() as Spike ) as integer
 declare sub pl_box_hit ( _
     g as Game, _
     item() as ItemEnt, _
@@ -2409,10 +2410,7 @@ sub pl_fire_nail ( g as Game, nail() as Spike )
     dim i as integer, n as integer
 
     if ( g.fight.nails <= 0 ) then exit sub
-    i = -1
-    for n = 0 to ubound( nail )
-        if ( nail(n).alive = 0 and i < 0 ) then i = n
-    next n
+    i = pl_nail_free( nail() )
     if ( i < 0 ) then exit sub
     g.fight.next_fire = g.rdr.anim_time + PL_NG_RATE#
     g.fight.fire_at = g.rdr.anim_time
@@ -2436,7 +2434,44 @@ sub pl_fire_nail ( g as Game, nail() as Spike )
     nail(i).vel.y = aim.y * PL_NG_SPEED#
     nail(i).vel.z = aim.z * PL_NG_SPEED#
     nail(i).die_at = g.rdr.anim_time + PL_NG_LIFE#
+    nail(i).hostile = 0
     nail(i).alive = -1
+end sub
+
+function pl_nail_free ( nail() as Spike ) as integer
+    dim n as integer
+    pl_nail_free = -1
+    for n = 0 to ubound( nail )
+        if ( nail(n).alive = 0 ) then pl_nail_free = n : exit function
+    next n
+end function
+
+'' spikeshooter_use: every shooter a trigger used this tick sends a
+'' hostile spike from its origin along its movedir at its speed
+sub pl_traps_tick ( _
+    g as Game, _
+    trig() as TrigEnt, _
+    nail() as Spike _
+)
+    dim k as integer, n as integer
+
+    for k = 0 to g.trig_count - 1
+        if ( trig(k).kind = ENT_TRIG_SHOOTER and trig(k).state = ENT_TRIG_ARMED ) then
+            trig(k).state = ENT_TRIG_READY
+            n = pl_nail_free( nail() )
+            if ( n >= 0 ) then
+                nail(n).pos = trig(k).mins
+                nail(n).vel.x = trig(k).ofs_out.x * trig(k).speed
+                nail(n).vel.y = trig(k).ofs_out.y * trig(k).speed
+                nail(n).vel.z = trig(k).ofs_out.z * trig(k).speed
+                nail(n).die_at = g.rdr.anim_time + PL_NG_LIFE#
+                nail(n).hostile = -1
+                nail(n).dmg = trig(k).count
+                nail(n).alive = -1
+                snd_play g, SND_SPIKE2%, trig(k).mins
+            end if
+        end if
+    next k
 end sub
 
 '' every nail a step along its velocity: the first monster on the way
@@ -2450,6 +2485,7 @@ sub pl_nails_tick ( _
     models() as Submodel, _
     brush() as BrushModel, _
     planes() as Plane, _
+    nodes() as Node, _
     item() as ItemEnt, _
     door() as DoorEnt, _
     trig() as TrigEnt, _
@@ -2457,7 +2493,8 @@ sub pl_nails_tick ( _
 )
     dim n as integer, i as integer, best as integer, ndmg as integer
     dim fin as Vec3, dir as Vec3, tr as TraceResult
-    dim t as single, bt as single, reach as single
+    dim pmins as Vec3, pmaxs as Vec3
+    dim t as single, bt as single, reach as single, spd as single
 
     for n = 0 to ubound( nail )
         if ( nail(n).alive ) then
@@ -2467,11 +2504,31 @@ sub pl_nails_tick ( _
                 fin.x = nail(n).pos.x + nail(n).vel.x * dt
                 fin.y = nail(n).pos.y + nail(n).vel.y * dt
                 fin.z = nail(n).pos.z + nail(n).vel.z * dt
+                spd = sqr( nail(n).vel.x * nail(n).vel.x + nail(n).vel.y * nail(n).vel.y + nail(n).vel.z * nail(n).vel.z )
+                if ( spd < 1.0 ) then spd = 1.0
+                reach = spd * dt
+                dir.x = nail(n).vel.x / spd
+                dir.y = nail(n).vel.y / spd
+                dir.z = nail(n).vel.z / spd
+                if ( nail(n).hostile ) then
+                    '' A trap's spike leaves from a point 8 units off its
+                    '' wall, inside hull 1's grown solid, so it is walked
+                    '' as a point through hull 0: a step into solid ends
+                    '' it where it is. spike_touch on the player: their
+                    '' box over the step, T_Damage
+                    if ( pl_point_contents( fin, nodes(), planes() ) = CONTENTS_SOLID ) then
+                        nail(n).alive = 0
+                    else
+                        pmins.x = g.pl.pos.x - PL_HALF# : pmaxs.x = g.pl.pos.x + PL_HALF#
+                        pmins.y = g.pl.pos.y - PL_HALF# : pmaxs.y = g.pl.pos.y + PL_HALF#
+                        pmins.z = g.pl.pos.z - PL_FEET# : pmaxs.z = g.pl.pos.z + PL_ZHI#
+                        t = pl_ray_box( pmins, pmaxs, nail(n).pos, dir, reach )
+                        if ( t >= 0.0 ) then pl_damage g, nail(n).dmg : nail(n).alive = 0
+                        nail(n).pos = fin
+                    end if
+                    goto nail_next
+                end if
                 pl_trace nail(n).pos, fin, tr, g.wld.count.models, models(), brush(), clp_buffer(), planes()
-                reach = PL_NG_SPEED# * dt
-                dir.x = nail(n).vel.x / PL_NG_SPEED#
-                dir.y = nail(n).vel.y / PL_NG_SPEED#
-                dir.z = nail(n).vel.z / PL_NG_SPEED#
                 bt = reach * tr.frac
                 best = -1
                 for i = 0 to g.mdl_count - 1
@@ -2508,6 +2565,7 @@ sub pl_nails_tick ( _
                 nail(n).pos = tr.end_pos
             end if
         end if
+nail_next:
     next n
 end sub
 

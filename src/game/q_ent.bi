@@ -246,6 +246,7 @@ const ENT_TRIG_BUTTON  = 3
 const ENT_TRIG_EXIT    = 4      '' trigger_changelevel: the level ends
 const ENT_TRIG_SHOOT   = 5      '' a trigger with health: pl_fire's pellets fire it
 const ENT_TRIG_SECRET  = 6      '' trigger_secret: a once that counts
+const ENT_TRIG_SHOOTER = 7      '' trap_spikeshooter: used, it fires a spike; mins is its origin, count its damage
 
 '' Anything that fires a target, resolved offline: a trigger's volume, a
 '' button's travel. Names are ids -- a door's targeted, a trigger's name
@@ -258,8 +259,9 @@ type EntsTrig
     kill        as integer      '' killtarget: the triggers it removes first, 0 none
     count       as integer      '' a counter's count
     wait        as single       '' re-arm delay; below zero fires once, or stays pressed
-    speed       as single       '' a button's
-    travel      as Vec3
+    speed       as single       '' a button's; a shooter's spike speed
+    travel      as Vec3         '' a button's; a shooter's movedir
+    org         as Vec3         '' a shooter's origin
     snd         as integer      '' "sounds": a trigger's 1 secret, 2 talk; a button's set
     msg         as string * 40
 end type
@@ -269,6 +271,7 @@ const ENT_TRIG_GOING = 1        '' a button on its way in
 const ENT_TRIG_HELD  = 2        '' pressed, or a trigger waiting to re-arm
 const ENT_TRIG_BACK  = 3        '' a button on its way out
 const ENT_TRIG_DONE  = 4
+const ENT_TRIG_ARMED = 5        '' a shooter used this tick, for pl_traps_tick
 const ENT_MSG_TIME#     = 2.0   '' scr_centertime
 const ENT_TOUCH_SLACK#  = 2.0   '' a brush is touched from this close
 

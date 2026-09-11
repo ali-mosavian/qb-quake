@@ -473,6 +473,15 @@ if [[ "${1:-}" == "--e1m2" ]]; then
     else
         echo "FAIL  e1m2 keydoor: *39 state ${d39:-none}, py ${ky:-none}; want shut and py near -216"; rc=1
     fi
+    # the spike trap: standing in trigger_multiple *41 at (2000,-256) has
+    # the shooter at (2120,-256) fire down the line every 0.8 s, 9 a hit
+    run_frame "-lm -nostats -noai -at 2000 -256 355 -yaw 0 -bench 400 -ticks 150" "$VBD_OUT/e1m2-trap.bmp" e1m2.bsp
+    hp=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_health"{print $2}')
+    if [[ "${hp:-100}" -lt 100 ]]; then
+        echo "PASS  e1m2 trap: health $hp, the spikes bit"
+    else
+        echo "FAIL  e1m2 trap: health ${hp:-none}; want under 100"; rc=1
+    fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc
 fi

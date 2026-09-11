@@ -2434,6 +2434,19 @@ ported: the bar's key icons -- the cell band is 512 wide and full.
 The e1m2 gate's second arm stands on the key, the third walks at the
 key doors without it.
 
+**`trap_spikeshooter` is a trigger kind**: used, it arms
+(`ENT_TRIG_ARMED`) and `pl_traps_tick` sends a hostile spike from its
+origin along its movedir at 500, weapons/spike2, 9 or 18 for
+SUPERSPIKE. A hostile spike is walked as a POINT through hull 0
+(`pl_point_contents` a step at a time) rather than traced through hull
+1: its origin sits 8 units off its wall, inside hull 1's grown solid,
+and the hull-1 trace ended it before it flew -- the first run read
+health 100 with six spike sounds. It bites the player's box
+(spike_touch), not monsters, and passes brush entities. The nail step
+divides by each nail's own speed now, not the nailgun's 1000. The e1m2
+gate's fourth arm stands in the trap's trigger for 2.5 s and wants
+health under 100.
+
 **BC miscompiles a store of a single into a member of an indexed
 element when it is the second such store in a row.** `door(k).model = m`
 then `door(k).speed = dr.speed`: the second keeps `k*70` cached in AX,

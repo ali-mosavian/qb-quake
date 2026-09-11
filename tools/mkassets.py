@@ -417,6 +417,7 @@ def convert_lightmaps(d, lumps, out):
 
 ENT_PAIR = re.compile(r'"([^"]*)"\s*"([^"]*)"')
 TRIG_ONCE, TRIG_MULTI, TRIG_COUNTER, TRIG_BUTTON, TRIG_EXIT, TRIG_SHOOT, TRIG_SECRET = 0, 1, 2, 3, 4, 5, 6   # ENT_TRIG_*
+TRIG_SHOOTER = 7
 KEY_NAMES = ('key', 'runekey', 'keycard')   # items.qc's netname by worldtype
 
 
@@ -485,13 +486,16 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
     def msg_of(kv: dict[str, str]) -> bytes:
         return kv.get('message', '')[:40].encode('latin1').ljust(40)
 
-    def travel_of(angle: float, box: tuple[float, ...], lip: float) -> tuple[float, float, float]:
-        # SetMovedir: angle -1 up, -2 down, anything else a heading; the
-        # brush moves its size along that, less the lip
+    def movedir(angle: float) -> tuple[float, float, float]:
+        # SetMovedir: angle -1 up, -2 down, anything else a heading
         match angle:
-            case -1.0: mdir = (0.0, 0.0, 1.0)
-            case -2.0: mdir = (0.0, 0.0, -1.0)
-            case _: mdir = (math.cos(math.radians(angle)), math.sin(math.radians(angle)), 0.0)
+            case -1.0: return (0.0, 0.0, 1.0)
+            case -2.0: return (0.0, 0.0, -1.0)
+            case _: return (math.cos(math.radians(angle)), math.sin(math.radians(angle)), 0.0)
+
+    def travel_of(angle: float, box: tuple[float, ...], lip: float) -> tuple[float, float, float]:
+        # the brush moves its size along its movedir, less the lip
+        mdir = movedir(angle)
         size = [box[k + 3] - box[k] for k in range(3)]
         dist = max(sum(abs(mdir[k]) * size[k] for k in range(3)) - lip, 0.0)
         return (mdir[0] * dist, mdir[1] * dist, mdir[2] * dist)
@@ -598,6 +602,12 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
                 if model(kv.get('model', '')):
                     hides.append(model(kv['model']))
                 uses.append(trig_record(model(kv.get('model', '')), kv))
+            case 'trap_spikeshooter':
+                # spikeshooter_use: a spike along movedir at 500 when used;
+                # SUPERSPIKE (1) bites 18 for 9. wait carries the damage
+                uses.append((0, TRIG_SHOOTER, 0, name_id(kv.get('targetname', '')), 0,
+                             18 if int(kv.get('spawnflags', '0')) & 1 else 9, 0.0, 500.0,
+                             movedir(float(kv.get('angle', '0'))), 0, b''.ljust(40), vec(kv.get('origin', '0 0 0'))))
             case 'trigger_changelevel' if model(kv.get('model', '')):
                 # the level ends here; its message is the map's title
                 hides.append(model(kv['model']))
@@ -659,8 +669,9 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
     for m, travel, mid, speed, hold, start_open, nolink, targeted, secret, shoot, snd, key, msg in doors:
         buf += struct.pack('<h3f3fffhhhhhhh40s', m, *travel, *mid, speed, hold, start_open, nolink, targeted,
                            secret, shoot, snd, key, msg)
-    for m, kind, target, name, kill, count, wait, speed, travel, snd, msg in uses:
-        buf += struct.pack('<6hff3fh40s', m, kind, target, name, kill, count, wait, speed, *travel, snd, msg)
+    for m, kind, target, name, kill, count, wait, speed, travel, snd, msg, *rest in uses:
+        org = rest[0] if rest else (0.0, 0.0, 0.0)   # a shooter's
+        buf += struct.pack('<6hff3f3fh40s', m, kind, target, name, kill, count, wait, speed, *travel, *org, snd, msg)
     for snd, vol, org in ambs:
         buf += struct.pack('<hh3f', snd, vol, *org)
     for m, speed, targeted, first in trains:

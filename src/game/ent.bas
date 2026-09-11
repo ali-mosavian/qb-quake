@@ -850,6 +850,7 @@ sub ent_trig_init ( _
     t.ofs_out   = xr.travel
     t.mins      = models(m).mins
     t.maxs      = models(m).maxs
+    if ( xr.kind = ENT_TRIG_SHOOTER ) then t.mins = xr.org : t.maxs = xr.org
     t.msg       = xr.msg
     trig( g.trig_count ) = t
     g.trig_count = g.trig_count + 1
@@ -1036,6 +1037,8 @@ sub ent_use_targets ( _
                     end if
                 case ENT_TRIG_ONCE, ENT_TRIG_MULTI
                     if ( trig(k).state = ENT_TRIG_READY ) then ent_trig_fire g, k, door(), trig(), plat()
+                case ENT_TRIG_SHOOTER
+                    trig(k).state = ENT_TRIG_ARMED
             end select
         end if
     next k

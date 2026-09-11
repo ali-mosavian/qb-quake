@@ -128,6 +128,8 @@ type Spike
     vel         as Vec3
     alive       as integer
     die_at      as single
+    hostile     as integer     '' a trap's: it bites the player, not the monsters
+    dmg         as integer     '' what a hostile one bites
 end type
 
 type PlayerCombat
