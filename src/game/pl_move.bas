@@ -96,7 +96,16 @@ declare sub pl_spread_dir ( _
 )
 declare sub pl_damage ( g as Game, byval dmg as integer )
 declare sub pl_land ( g as Game )
-declare function pl_item_sound ( it as ItemEnt ) as integer
+declare function pl_item_sound ( g as Game, it as ItemEnt ) as integer
+declare function pl_key_name ( byval wt as integer, byval kind as integer ) as string
+declare sub ent_say ( g as Game, msg as string )
+declare sub ent_use_targets ( _
+    g as Game, _
+    byval id as integer, _
+    door() as DoorEnt, _
+    trig() as TrigEnt, _
+    plat() as PlatEnt _
+)
 declare sub pl_fire_nail ( g as Game, nail() as Spike )
 declare sub pl_box_hit ( _
     g as Game, _
@@ -151,7 +160,13 @@ declare sub pl_items_drop ( _
     brush() as BrushModel, _
     planes() as Plane _
 )
-declare sub pl_items_touch ( g as Game, item() as ItemEnt )
+declare sub pl_items_touch ( _
+    g as Game, _
+    item() as ItemEnt, _
+    door() as DoorEnt, _
+    trig() as TrigEnt, _
+    plat() as PlatEnt _
+)
 declare sub pl_boxes_sync ( g as Game, item() as ItemEnt )
 declare sub qglMousePos ( byval x as integer, byval y as integer )
 declare sub pl_box_solid ( _
@@ -2519,7 +2534,7 @@ sub pl_carry_save ( g as Game )
     dim f as integer
     dim c as PlayerCarry
 
-    c.items = g.fight.items
+    c.items = g.fight.items and not ( PL_IT_KEY1% or PL_IT_KEY2% )
     c.health = g.fight.health
     if ( c.health > PL_HEALTH% ) then c.health = PL_HEALTH%
     if ( c.health < PL_CARRY_MIN% ) then c.health = PL_CARRY_MIN%
@@ -2646,9 +2661,27 @@ sub pl_land ( g as Game )
     pl_damage g, 5
 end sub
 
+'' items.qc's netname for a key: silver or gold, then the worldtype's word
+function pl_key_name ( byval wt as integer, byval kind as integer ) as string
+    dim s as string
+    s = "silver "
+    if ( kind = ENT_ITEM_KEY2 ) then s = "gold "
+    select case wt
+        case 1 : s = s + "runekey"
+        case 2 : s = s + "keycard"
+        case else : s = s + "key"
+    end select
+    pl_key_name = s
+end function
+
 '' each item's touch sound, items.qc's noise
-function pl_item_sound ( it as ItemEnt ) as integer
+function pl_item_sound ( g as Game, it as ItemEnt ) as integer
+    dim wt as integer
+    wt = g.fight.worldtype
+    if ( wt > 1 ) then wt = 1
     select case it.kind
+        case ENT_ITEM_KEY1, ENT_ITEM_KEY2
+            pl_item_sound = SND_KEY% + wt
         case ENT_ITEM_SHELLS, ENT_ITEM_NAILS
             pl_item_sound = SND_AMMO%
         case ENT_ITEM_SSG, ENT_ITEM_NAILGUN
@@ -2670,8 +2703,14 @@ function pl_item_sound ( it as ItemEnt ) as integer
     end select
 end function
 
-sub pl_items_touch ( g as Game, item() as ItemEnt )
-    dim i as integer
+sub pl_items_touch ( _
+    g as Game, _
+    item() as ItemEnt, _
+    door() as DoorEnt, _
+    trig() as TrigEnt, _
+    plat() as PlatEnt _
+)
+    dim i as integer, bit as integer
     dim dz as single, cap as integer, atype as single, sid as integer
 
     '' item_megahealth_rot: over 100, a point a second after five
@@ -2721,6 +2760,15 @@ sub pl_items_touch ( g as Game, item() as ItemEnt )
                     item(i).gone = -1
                 elseif ( item(i).kind = ENT_ITEM_EXPLOBOX ) then
                     '' shot, never taken
+                elseif ( item(i).kind = ENT_ITEM_KEY1 or item(i).kind = ENT_ITEM_KEY2 ) then
+                    '' key_touch: one of each; the name is the worldtype's
+                    bit = PL_IT_KEY1%
+                    if ( item(i).kind = ENT_ITEM_KEY2 ) then bit = PL_IT_KEY2%
+                    if ( ( g.fight.items and bit ) = 0 ) then
+                        g.fight.items = g.fight.items or bit
+                        ent_say g, "You got the " + pl_key_name( g.fight.worldtype, item(i).kind )
+                        item(i).gone = -1
+                    end if
                 elseif ( item(i).kind = ENT_ITEM_ARMOR1 or item(i).kind = ENT_ITEM_ARMOR2 ) then
                     '' armor_touch: only what beats the armor worn, type * value
                     atype = PL_ARMOR1_TYPE#
@@ -2743,8 +2791,10 @@ sub pl_items_touch ( g as Game, item() as ItemEnt )
                 end if
                 if ( item(i).gone ) then
                     g.fight.bonus_pct = PL_BONUS_SHIFT#
-                    sid = pl_item_sound( item(i) )
+                    sid = pl_item_sound( g, item(i) )
                     snd_play g, sid, g.pl.pos
+                    '' SUB_UseTargets: every touch fires the item's target
+                    ent_use_targets g, item(i).target, door(), trig(), plat()
                 end if
             end if
         end if

@@ -453,6 +453,26 @@ if [[ "${1:-}" == "--e1m2" ]]; then
     else
         echo "FAIL  e1m2 train: *17 at (${t17:-none}), *18 at (${t18:-none}); want 17 -10 263 -82 and 18 -26 263 -82"; rc=1
     fi
+    # the silver key at (880,-300) on its floor at 424: taken, it is
+    # PL_IT_KEY1 in pl_items and its target t122, door *49, opens
+    run_frame "-lm -nostats -noai -at 880 -300 452 -yaw 0 -bench 400 -ticks 120" "$VBD_OUT/e1m2-key.bmp" e1m2.bsp
+    it=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_items"{print $2}')
+    d49=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$2==49 && $1 ~ /^door_/ {print $3}')
+    if [[ $(( ${it:-0} & 8 )) == 8 && "${d49:-0}" != 0 ]]; then
+        echo "PASS  e1m2 key: pl_items $it, door *49 state $d49"
+    else
+        echo "FAIL  e1m2 key: pl_items ${it:-none}, door *49 state ${d49:-none}; want the key bit and the door open"; rc=1
+    fi
+    # and the key doors *39/*40 without it: three seconds' walk at them
+    # from (240,-140) stops at their face, py -215.97, both shut
+    run_frame "-lm -nostats -noai -at 240 -140 333 -yaw 90 -walk -bench 400 -ticks 180" "$VBD_OUT/e1m2-keydoor.bmp" e1m2.bsp
+    d39=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$2==39 && $1 ~ /^door_/ {print $3}')
+    ky=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="py"{print $2}')
+    if [[ "${d39:-1}" == 0 ]] && awk -v y="${ky:-0}" 'BEGIN{exit !(y < -210 && y > -220)}'; then
+        echo "PASS  e1m2 keydoor: *39 shut, the walk stopped at py $ky"
+    else
+        echo "FAIL  e1m2 keydoor: *39 state ${d39:-none}, py ${ky:-none}; want shut and py near -216"; rc=1
+    fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc
 fi

@@ -165,7 +165,13 @@ declare sub pl_nails_tick ( _
     trig() as TrigEnt, _
     plat() as PlatEnt _
 )
-declare sub pl_items_touch ( g as Game, item() as ItemEnt )
+declare sub pl_items_touch ( _
+    g as Game, _
+    item() as ItemEnt, _
+    door() as DoorEnt, _
+    trig() as TrigEnt, _
+    plat() as PlatEnt _
+)
 declare sub pl_env_damage ( g as Game )
 declare sub pl_select_weapon ( g as Game )
 declare sub pl_respawn ( g as Game )
@@ -407,7 +413,7 @@ sub host_tick ( _
         pl_select_weapon g
         if ( fire ) then pl_fire g, mdl_ent(), models(), brush(), planes(), item(), door(), trig(), nail(), plat()
         pl_nails_tick g, dt, nail(), mdl_ent(), models(), brush(), planes(), item(), door(), trig(), plat()
-        pl_items_touch g, item()
+        pl_items_touch g, item(), door(), trig(), plat()
         pl_env_damage g
         '' every soldier's own think -- Quake's 10 Hz, gated inside
         '' mdl_think against g.rdr.anim_time

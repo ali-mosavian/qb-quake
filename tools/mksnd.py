@@ -49,6 +49,11 @@ SOUNDS = [
     # func_button's sounds 0..3
     "buttons/airbut1", "buttons/switch21", "buttons/switch02", "buttons/switch04",  # 53..56
     "ambience/comp1", "ambience/drone6",                                            # 57, 58 the ambients
+    "misc/medkey", "misc/runekey",                                                  # 59, 60 a key taken, by worldtype (base is registered)
+    "doors/medtry", "doors/meduse", "doors/runetry", "doors/runeuse",               # 61..64 a key door refused, opened, by worldtype
+    "ambience/drip1", "ambience/swamp1", "ambience/swamp2",                         # 65..67 more ambients
+    "plats/train1", "plats/train2",                                                 # 68, 69 a train's stop and move
+    "weapons/spike2",                                                               # 70 the spike shooter
 ]
 
 

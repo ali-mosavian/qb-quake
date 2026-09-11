@@ -170,6 +170,7 @@ type PlayerCombat
     exit_time   as single
     next_map    as string * 8  '' where the exit leads, from ents.bin; blank for nowhere
     carry       as integer     '' -carry: CARRY.BIN holds the last level's kit
+    worldtype   as integer     '' worldspawn's: 0 medieval, 1 rune, 2 base -- the keys' names and sounds
 end type
 
 '' What a level hands the next through CARRY.BIN: SetChangeParms' parms,
@@ -194,6 +195,8 @@ const PL_FIRE_RATE#    = 0.5    '' the shotgun's attack_finished
 const PL_IT_SHOTGUN%   = 1
 const PL_IT_SSG%       = 2
 const PL_IT_NAILGUN%   = 4
+const PL_IT_KEY1%      = 8      '' the silver key, and the gold: this map's, never carried
+const PL_IT_KEY2%      = 16
 '' W_FireSpikes: a nail every 0.2 from 16 up and 4 aside, alternating,
 '' at 1000 for 9 (spike_touch), gone after 6 s (SUB_Remove)
 const PL_NG_RATE#      = 0.2
@@ -214,7 +217,7 @@ const PL_LAND_SOFT#    = -300.0 '' PlayerPreThink: land.wav below this fall spee
 const PL_LAND_HARD#    = -650.0 '' land2.wav and five points
 '' the sounds, in tools/mksnd.py's SOUNDS order; SND_MON + kind * 4 is
 '' a monster's sight, then attack, pain, death
-const SND_COUNT%       = 59
+const SND_COUNT%       = 71
 const SND_SHOTGUN%     = 0
 const SND_SSG%         = 1
 const SND_NAIL%        = 2
@@ -240,6 +243,10 @@ const SND_MON%         = 24
 const SND_DOOR%        = 36    '' doors.qc's sounds 1..4: stop, move
 const SND_SECRET1%     = 44    '' func_door_secret's 1..3: noise1..3
 const SND_BUTTON%      = 53    '' func_button's 0..3
+const SND_KEY%         = 59    '' a key taken: medieval, rune
+const SND_KEYTRY%      = 61    '' a key door refused then opened, medieval; rune is +2
+const SND_TRAIN%       = 68    '' plats/train1 the stop, train2 the move
+const SND_SPIKE2%      = 70    '' trap_spikeshooter
 '' 57, 58 are comp1 and drone6, the ambient_* points; mkassets writes
 '' their ids into ents.bin, so nothing here names them -- and a const
 '' SND_AMBIENT% is the sub snd_ambient to BC, sigil or not

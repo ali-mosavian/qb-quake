@@ -417,6 +417,7 @@ def convert_lightmaps(d, lumps, out):
 
 ENT_PAIR = re.compile(r'"([^"]*)"\s*"([^"]*)"')
 TRIG_ONCE, TRIG_MULTI, TRIG_COUNTER, TRIG_BUTTON, TRIG_EXIT, TRIG_SHOOT, TRIG_SECRET = 0, 1, 2, 3, 4, 5, 6   # ENT_TRIG_*
+KEY_NAMES = ('key', 'runekey', 'keycard')   # items.qc's netname by worldtype
 
 
 def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skill: int) -> bytes:
@@ -428,6 +429,7 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
     # submodels a trigger hides. Layout must match the Ents* types in q_ent.bi.
     spawn: tuple[float, float, float] = (0.0, 0.0, 0.0)
     title = ''
+    worldtype = 0
     angle = 0.0
     inter: tuple[tuple[float, float, float], float, float] | None = None   # origin, pitch, yaw
     next_map = ''
@@ -448,7 +450,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
     mon_kind = {'monster_army': 0, 'monster_knight': 1, 'monster_dog': 2}   # MDL_KIND_*; no model for the rest
     item_kind = {'item_health': 0, 'item_shells': 1, 'item_armor1': 2, 'item_armor2': 3,
                  'weapon_supershotgun': 4, 'item_spikes': 5, 'weapon_nailgun': 6,
-                 'item_artifact_super_damage': 7, 'item_artifact_envirosuit': 8, 'misc_explobox': 9}
+                 'item_artifact_super_damage': 7, 'item_artifact_envirosuit': 8, 'misc_explobox': 9,
+                 'item_key1': 10, 'item_key2': 11}
 
     def vec(v: str) -> tuple[float, float, float]:
         x, y, z = (float(t) for t in v.split())
@@ -500,8 +503,14 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
         lip = float(kv.get('lip', '0')) or 8.0
         flags = int(kv.get('spawnflags', '0'))
         travel = travel_of(float(kv.get('angle', '0')), box, lip)
+        # DOOR_SILVER_KEY 16, DOOR_GOLD_KEY 8: door_touch's "You need the
+        # silver key" stands in for a message the map does not give
+        key = 1 if flags & 16 else 2 if flags & 8 else 0
+        msg = msg_of(kv)
+        if key and not kv.get('message'):
+            msg = f"You need the {'silver' if key == 1 else 'gold'} {KEY_NAMES[worldtype]}".encode('latin1').ljust(40)
         return (m, travel, (0.0, 0.0, 0.0), speed, hold, 1 if flags & 1 else 0, 1 if flags & 4 else 0,
-                name_id(kv.get('targetname', '')), 0, 0, int(kv.get('sounds', '0')), msg_of(kv))
+                name_id(kv.get('targetname', '')), 0, 0, int(kv.get('sounds', '0')), key, msg)
 
     def secret_record(m: int, kv: dict[str, str], box: tuple[float, ...]) -> tuple:
         # func_door_secret, fd_secret_use: back t_width along v_right (or
@@ -521,7 +530,7 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
         hold = -1.0 if flags & 1 else (float(kv.get('wait', '0')) or 5.0)
         name = name_id(kv.get('targetname', ''))
         shoot = 0 if flags & 8 else (1 if not name or flags & 16 else 0)
-        return (m, travel, mid, speed, hold, 0, 1, name, 1, shoot, int(kv.get('sounds', '0')) or 3, msg_of(kv))
+        return (m, travel, mid, speed, hold, 0, 1, name, 1, shoot, int(kv.get('sounds', '0')) or 3, 0, msg_of(kv))
 
     def trig_record(m: int, kv: dict[str, str]) -> tuple:
         # trigger_once is a multiple with wait -1; a multiple re-arms after
@@ -565,6 +574,7 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
         match kv.get('classname'):
             case 'worldspawn':
                 title = kv.get('message', '')
+                worldtype = int(kv.get('worldtype', '0') or 0)
             case 'info_player_start':
                 spawn = vec(kv.get('origin', '0 0 0'))
                 angle = float(kv.get('angle', '0'))
@@ -619,7 +629,7 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
                 mons.append((mon_kind[c], vec(kv.get('origin', '0 0 0')), float(kv.get('angle', '0'))))
             case str(c) if c in item_kind:
                 items.append((item_kind[c], item_amount(c, int(kv.get('spawnflags', '0'))),
-                              vec(kv.get('origin', '0 0 0'))))
+                              name_id(kv.get('target', '')), vec(kv.get('origin', '0 0 0'))))
             case str(c) if c in amb_kind:
                 wav, fvol = amb_kind[c]
                 ambs.append((mksnd.SOUNDS.index(wav), int(255 * fvol), vec(kv.get('origin', '0 0 0'))))
@@ -632,9 +642,10 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
     # corners by index, each pointing at the next; a train at one with no target stays
     corner_at = {name: i for i, (name, _, _, _) in reversed(list(enumerate(corners))) if name}
     trains = [(m, speed, targeted, corner_at[first]) for m, speed, targeted, first in trains if first in corner_at]
-    buf = bytearray(struct.pack('<4f3fff11h8s', *spawn, angle, *inter[0], inter[1], inter[2], nmodels,
+    buf = bytearray(struct.pack('<4f3fff12h8s', *spawn, angle, *inter[0], inter[1], inter[2], nmodels,
                                 len(teles), len(plats), len(hides), len(items), len(doors), len(uses), len(mons),
-                                len(ambs), len(trains), len(corners), next_map[:8].encode('latin1').ljust(8)))
+                                len(ambs), len(trains), len(corners), worldtype,
+                                next_map[:8].encode('latin1').ljust(8)))
     for kind, org, yaw in mons:
         buf += struct.pack('<h3ff', kind, *org, yaw)
     for m, org, yaw in teles:
@@ -643,11 +654,11 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
         buf += struct.pack('<hff', m, speed, height)
     for m in hides:
         buf += struct.pack('<h', m)
-    for kind, amount, org in items:
-        buf += struct.pack('<hh3f', kind, amount, *org)
-    for m, travel, mid, speed, hold, start_open, nolink, targeted, secret, shoot, snd, msg in doors:
-        buf += struct.pack('<h3f3fffhhhhhh40s', m, *travel, *mid, speed, hold, start_open, nolink, targeted,
-                           secret, shoot, snd, msg)
+    for kind, amount, target, org in items:
+        buf += struct.pack('<hhh3f', kind, amount, target, *org)
+    for m, travel, mid, speed, hold, start_open, nolink, targeted, secret, shoot, snd, key, msg in doors:
+        buf += struct.pack('<h3f3fffhhhhhhh40s', m, *travel, *mid, speed, hold, start_open, nolink, targeted,
+                           secret, shoot, snd, key, msg)
     for m, kind, target, name, kill, count, wait, speed, travel, snd, msg in uses:
         buf += struct.pack('<6hff3fh40s', m, kind, target, name, kill, count, wait, speed, *travel, snd, msg)
     for snd, vol, org in ambs:

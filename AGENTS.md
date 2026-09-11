@@ -2419,6 +2419,21 @@ pair of corners at one point, and bounce between them standing still.
 `tools/check.sh --e1m2`'s first arm stands on their button and wants
 both at that corner. Not ported: the ratchet sounds, blocking damage.
 
+**Keys.** `item_key1`/`item_key2` are item kinds: taken once into
+`fight.items` as `PL_IT_KEY1`/`KEY2`, "You got the silver key" (the
+worldtype's word: key, runekey, keycard), misc/medkey or runekey, and
+-- as every pickup does now, SUB_UseTargets -- the item's `target`
+fired: e1m2's key opens door *49. A door with DOOR_SILVER_KEY (16) or
+DOOR_GOLD_KEY (8) has no spawn field, like a targeted one: touching
+its brush without the key says its message -- mkassets puts door_touch's
+"You need the silver key" there when the map gives none -- and plays
+doors/medtry two seconds apart; with it the key is spent, meduse, and
+the group goes. Base's key wavs are registered, so worldtype 2 plays
+the rune set. Keys never carry to the next map (SetChangeParms). Not
+ported: the bar's key icons -- the cell band is 512 wide and full.
+The e1m2 gate's second arm stands on the key, the third walks at the
+key doors without it.
+
 **BC miscompiles a store of a single into a member of an indexed
 element when it is the second such store in a row.** `door(k).model = m`
 then `door(k).speed = dr.speed`: the second keeps `k*70` cached in AX,

@@ -57,6 +57,7 @@ type EntsHead
     namb        as integer
     ntrain      as integer
     ncorner     as integer
+    worldtype   as integer      '' worldspawn's: the keys' names and sounds
     next_map    as string * 8   '' trigger_changelevel's map, space padded; blank for none
 end type
 
@@ -90,6 +91,7 @@ end type
 type EntsItem
     kind        as integer
     amount      as integer
+    target      as integer      '' SUB_UseTargets on the touch: a key opens its door
     org         as Vec3
 end type
 
@@ -99,6 +101,7 @@ end type
 type ItemEnt
     kind        as integer
     amount      as integer     '' healamount or aflag
+    target      as integer     '' fired when taken
     pos         as Vec3         '' BSP space, on the floor
     gone        as integer
 end type
@@ -121,6 +124,8 @@ const ENT_ITEM_NAILGUN  = 6      '' weapon_nailgun; amount is its nails
 const ENT_ITEM_QUAD     = 7      '' item_artifact_super_damage; amount is its seconds
 const ENT_ITEM_SUIT     = 8      '' item_artifact_envirosuit
 const ENT_ITEM_EXPLOBOX = 9      '' misc_explobox; amount is its health, shot down
+const ENT_ITEM_KEY1     = 10     '' item_key1, the silver key: PL_IT_KEY1
+const ENT_ITEM_KEY2     = 11     '' item_key2, the gold
 const ENT_BOX_HALF#     = 15.0   '' b_explob.bsp, 30 by 30 by 62
 const ENT_BOX_TOP#      = 62.0
 const ENT_BOX_DMG#      = 160.0  '' barrel_explode: T_RadiusDamage 160
@@ -163,6 +168,7 @@ type EntsDoor
     secret      as integer      '' func_door_secret: touch says the message only
     shoot       as integer      '' a pellet opens it
     snd         as integer      '' "sounds": doors.qc's set, 0 none
+    key         as integer      '' 1 silver, 2 gold: opens by touch with the key, once
     msg         as string * 40  '' centerprint on touch, space padded
 end type
 
@@ -226,6 +232,8 @@ type DoorEnt
     nolink      as integer
     targeted    as integer
     snd         as integer
+    key         as integer      '' 1 silver, 2 gold; touched without it, the message and a refusal
+    say_at      as single       '' door_touch's attack_finished: the refusal two seconds apart
     mins        as Vec3         '' the touch field
     maxs        as Vec3
     msg         as string * 40

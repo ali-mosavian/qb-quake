@@ -30,6 +30,11 @@ dim shared ent_corner() as PathCorner
 '' This module's own procedures.
 ''
 declare sub ent_train_init ( p as PlatEnt, brush() as BrushModel )
+declare sub ent_door_key ( _
+    g as Game, _
+    byval k as integer, _
+    door() as DoorEnt _
+)
 declare sub ent_move_train ( _
     g as Game, _
     byval dt as single, _
@@ -289,6 +294,7 @@ sub ent_load_spawn ( _
     g.fight.inter_pitch = h.inter_pitch
     g.fight.inter_yaw = h.inter_yaw
     g.fight.next_map = h.next_map
+    g.fight.worldtype = h.worldtype
 
     '' BSP is Z-up and the camera is Y-up, so y and z swap here
     g.cam.pos.x = h.spawn.x
@@ -471,6 +477,7 @@ sub ent_load_teleports ( _
         ent_get u, clng( varseg( ir ) ) * 65536& + (clng( varptr( ir ) ) and 65535&), len( ir )
         item( g.item_count ).kind = ir.kind
         item( g.item_count ).amount = ir.amount
+        item( g.item_count ).target = ir.target
         item( g.item_count ).pos  = ir.org
         item( g.item_count ).gone = 0
         g.item_count = g.item_count + 1
@@ -557,6 +564,8 @@ sub ent_door_init ( _
     d.secret    = dr.secret
     d.shoot     = dr.shoot
     d.snd       = dr.snd
+    d.key       = dr.key
+    d.say_at    = 0.0
     d.ofs_mid   = dr.mid
     d.pause_left = 0.0
     d.msg       = dr.msg
@@ -577,10 +586,10 @@ sub ent_door_init ( _
     brush(m).ofs = d.ofs_shut
 
     '' spawn_field: the brush's box where it sits, grown 60 in x and y, 8
-    '' in z. A targeted or secret door has no field; touching the brush
-    '' itself says its message (door_touch, secret_touch)
+    '' in z. A targeted, secret or key door has no field; touching the
+    '' brush itself says its message (door_touch, secret_touch)
     fx = ENT_DOOR_FIELD# : fz = ENT_DOOR_FIELDZ#
-    if ( d.targeted or d.secret ) then fx = ENT_TOUCH_SLACK# : fz = ENT_TOUCH_SLACK#
+    if ( d.targeted or d.secret or d.key ) then fx = ENT_TOUCH_SLACK# : fz = ENT_TOUCH_SLACK#
     d.mins.x = models(m).mins.x + d.ofs_shut.x - fx
     d.mins.y = models(m).mins.y + d.ofs_shut.y - fx
     d.mins.z = models(m).mins.z + d.ofs_shut.z - fz
@@ -712,6 +721,33 @@ end function
 ''       targetname waits for ent_use_targets, and says its message
 ''       when touched.
 ''::::::::::
+'' door_touch's key half: without the key the message and noise3, two
+'' seconds apart; with it the key is spent, noise4, and the group goes.
+'' Base's wavs are registered, so its sounds are the rune set.
+sub ent_door_key ( _
+    g as Game, _
+    byval k as integer, _
+    door() as DoorEnt _
+)
+    dim bit as integer, wt as integer
+
+    if ( door(k).state <> ENT_DOOR_SHUT ) then exit sub
+    bit = PL_IT_KEY1%
+    if ( door(k).key = 2 ) then bit = PL_IT_KEY2%
+    wt = g.fight.worldtype
+    if ( wt > 1 ) then wt = 1
+    if ( ( g.fight.items and bit ) = 0 ) then
+        if ( g.rdr.anim_time < door(k).say_at ) then exit sub
+        door(k).say_at = g.rdr.anim_time + 2.0
+        ent_say g, door(k).msg
+        snd_play g, SND_KEYTRY% + wt * 2, g.pl.pos
+        exit sub
+    end if
+    g.fight.items = g.fight.items and not bit
+    snd_play g, SND_KEYTRY% + 1 + wt * 2, g.pl.pos
+    ent_door_fire g, door(k).link, door()
+end sub
+
 sub ent_move_doors ( _
     g as Game, _
     byval dt as single, _
@@ -722,7 +758,9 @@ sub ent_move_doors ( _
 
     for  k = 0 to g.door_count-1
         if ( ent_door_touched( g, door(k) ) ) then
-            if ( door(k).targeted = 0 and door(k).secret = 0 ) then
+            if ( door(k).key ) then
+                ent_door_key g, k, door()
+            elseif ( door(k).targeted = 0 and door(k).secret = 0 ) then
                 ent_door_fire g, door(k).link, door()
             else
                 ent_talk g, door(k).msg
