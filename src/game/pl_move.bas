@@ -2685,6 +2685,15 @@ end sub
 sub pl_damage ( g as Game, byval dmg as integer )
     dim save as integer
 
+    '' T_Damage: nothing through the pentagram, protect3 two seconds apart
+    if ( g.rdr.anim_time < g.fight.pent_until ) then
+        if ( g.rdr.anim_time >= g.fight.pent_at ) then
+            g.fight.pent_at = g.rdr.anim_time + 2.0
+            snd_play g, SND_PENT_HIT%, g.pl.pos
+        end if
+        exit sub
+    end if
+
     '' T_Damage: the armor takes ceil(type * damage) first, and the last
     '' of it takes the type with it
     save = -int( -g.fight.armor_type * dmg )
@@ -3275,6 +3284,8 @@ sub pl_reset_player ( g as Game )
     g.fight.rockets = 0
     g.fight.quad_until = 0.0
     g.fight.suit_until = 0.0
+    g.fight.pent_until = 0.0
+    g.fight.pent_at = 0.0
     g.fight.dmg_time = 0.0
     g.fight.next_fire = 0.0
     g.fight.show_hostile = 0.0
@@ -3452,6 +3463,8 @@ function pl_item_sound ( g as Game, it as ItemEnt ) as integer
             pl_item_sound = SND_QUAD%
         case ENT_ITEM_SUIT
             pl_item_sound = SND_SUIT%
+        case ENT_ITEM_PENT
+            pl_item_sound = SND_PENT%
         case else
             if ( it.amount = ENT_ITEM_MEGA% ) then
                 pl_item_sound = SND_HEALTH_MEGA%
@@ -3541,6 +3554,9 @@ sub pl_items_touch ( _
                     item(i).gone = -1
                 elseif ( item(i).kind = ENT_ITEM_SUIT ) then
                     g.fight.suit_until = g.rdr.anim_time + item(i).amount
+                    item(i).gone = -1
+                elseif ( item(i).kind = ENT_ITEM_PENT ) then
+                    g.fight.pent_until = g.rdr.anim_time + item(i).amount
                     item(i).gone = -1
                 elseif ( item(i).kind = ENT_ITEM_EXPLOBOX ) then
                     '' shot, never taken

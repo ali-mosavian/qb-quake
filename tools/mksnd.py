@@ -62,6 +62,7 @@ SOUNDS = [
     "shambler/ssight", "shambler/sattck1", "shambler/shurt2", "shambler/sdeath",    # 90..93 kind 7
     "weapons/sgun1",                                                                # 94 the rocket launcher
     "shambler/melee1", "shambler/smack", "shambler/sboom",                          # 95..97 the smash, its hit, the lightning
+    "items/protect", "items/protect3",                                              # 98, 99 the pentagram taken, a hit it turned
 ]
 
 

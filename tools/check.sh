@@ -31,7 +31,7 @@
 #   tools/check.sh --e1m4       e1m4's spawn frame, the super nailgun
 #   tools/check.sh --e1m5       e1m5's spawn frame, the shambler, the rocket launcher
 #   tools/check.sh --e1m6       e1m6's spawn frame; --e1m7 and --e1m8 likewise,
-#                               and e1m8's jump under its sv_gravity of 100
+#                               and e1m8's jump under its sv_gravity of 100, its pentagram
 #
 # -nostats is not optional. The overlay prints live fps and frame time, so
 # two runs of the SAME build differ by ~28 pixels in the digits, and a
@@ -662,6 +662,14 @@ if [[ "${1:-}" == "--e1m6" || "${1:-}" == "--e1m7" || "${1:-}" == "--e1m8" ]]; t
             echo "PASS  e1m8 jump: pz $pz over the -736 floor, peak_z $pk the spawn"
         else
             echo "FAIL  e1m8 jump: pz ${pz:-none} peak_z ${pk:-none}; want pz over -600 (a jump under sv_gravity 100) and peak_z -104"; rc=1
+        fi
+        # the pentagram at (672,536,-712): standing on it starts its thirty seconds
+        run_frame "-lm -nostats -noai -at 672 536 -712 -bench 400 -ticks 30" "$VBD_OUT/e1m8-pent.bmp" e1m8.bsp
+        np=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_pent_left"{print int($2)}')
+        if [[ "${np:-0}" -ge 28 ]]; then
+            echo "PASS  e1m8 pent: pl_pent_left $np, the pentagram was taken"
+        else
+            echo "FAIL  e1m8 pent: pl_pent_left ${np:-none}, the pentagram was not taken"; rc=1
         fi
     fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back

@@ -585,7 +585,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
                  'weapon_supershotgun': 4, 'item_spikes': 5, 'weapon_nailgun': 6,
                  'item_artifact_super_damage': 7, 'item_artifact_envirosuit': 8, 'misc_explobox': 9,
                  'item_key1': 10, 'item_key2': 11, 'weapon_grenadelauncher': 12, 'item_rockets': 13,
-                 'weapon_supernailgun': 14, 'weapon_rocketlauncher': 15}
+                 'weapon_supernailgun': 14, 'weapon_rocketlauncher': 15,
+                 'item_artifact_invulnerability': 16}
 
     def vec(v: str) -> tuple[float, float, float]:
         x, y, z = (float(t) for t in v.split())
@@ -599,7 +600,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
         # item_spikes 25, WEAPON_BIG2 50; a powerup's 30 seconds; the
         # exploding box's 20 health
         match classname, flags & 1, flags & 2:
-            case 'item_artifact_super_damage' | 'item_artifact_envirosuit', _, _: return 30
+            case 'item_artifact_super_damage' | 'item_artifact_envirosuit' | 'item_artifact_invulnerability', _, _:
+                return 30
             case 'misc_explobox', _, _: return 20
             case 'weapon_supershotgun', _, _: return 5
             case 'weapon_nailgun', _, _: return 30

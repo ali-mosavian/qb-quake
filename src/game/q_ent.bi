@@ -144,6 +144,7 @@ const ENT_ITEM_GL       = 12     '' weapon_grenadelauncher; amount is its rocket
 const ENT_ITEM_ROCKETS  = 13     '' item_rockets, 5 or 10
 const ENT_ITEM_SNG      = 14     '' weapon_supernailgun, 30 nails
 const ENT_ITEM_RL       = 15     '' weapon_rocketlauncher, 5 rockets
+const ENT_ITEM_PENT     = 16     '' item_artifact_invulnerability; amount is its seconds
 const ENT_BOX_HALF#     = 15.0   '' b_explob.bsp, 30 by 30 by 62
 const ENT_BOX_TOP#      = 62.0
 const ENT_BOX_DMG#      = 160.0  '' barrel_explode: T_RadiusDamage 160

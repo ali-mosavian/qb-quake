@@ -785,6 +785,10 @@ sub host_render ( _
                     nbox = mdl_draw_box( bob, ENT_ITEM_HALF#, ENT_ITEM_TOP#, cos( g.rdr.anim_time * 2.0 ), _
                                          sin( g.rdr.anim_time * 2.0 ), mtx_fin, xresh, yresh, g.env.z_near, _
                                          h_dst_dc, ENT_COL_GREEN%, ENT_COL_WHITE% )
+                elseif ( item( mdl_i ).kind = ENT_ITEM_PENT ) then
+                    nbox = mdl_draw_box( bob, ENT_ITEM_HALF#, ENT_ITEM_TOP#, cos( g.rdr.anim_time * 2.0 ), _
+                                         sin( g.rdr.anim_time * 2.0 ), mtx_fin, xresh, yresh, g.env.z_near, _
+                                         h_dst_dc, ENT_COL_RED%, ENT_COL_YELLOW% )
                 elseif ( item( mdl_i ).kind = ENT_ITEM_HEALTH ) then
                     nbox = mdl_draw_box( bob, ENT_ITEM_HALF#, ENT_ITEM_TOP#, cos( g.rdr.anim_time * 2.0 ), _
                                          sin( g.rdr.anim_time * 2.0 ), mtx_fin, xresh, yresh, g.env.z_near, _

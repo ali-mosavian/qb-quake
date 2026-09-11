@@ -2295,13 +2295,16 @@ which hangs 630 over its floor, and at tick 400 wants the body over
 -600: the jump goes 364 up by v^2/2g against 48 under 800. `peak_z`
 read 0 on any map under z 0 -- nothing set it -- so `pl_init` starts
 it at the spawn, and the gate wants e1m8's -104. Not ported: Chthon (`monster_boss`, no kind; e1m7 ships
-without it), `trigger_monsterjump`, `item_artifact_invulnerability`;
+without it), `trigger_monsterjump` -- e1m6's one sits at the foot of a
+targeted door and no easy-skill monster can reach it, so no arm;
 `func_wall` draws as any solid brush model.
 
 **The powerups are thirty-second clocks on `fight`**: the quad
 (`quad_until`) makes every pellet and nail four times (T_Damage's
 super_damage_finished), the envirosuit (`suit_until`) turns the slime
-off and lava down to a bite a second. Slime and lava hurt at all now,
+off and lava down to a bite a second, the pentagram (`pent_until`)
+makes `pl_damage` return -- T_Damage's invincible_finished, protect3
+two seconds apart while it does; e1m8's gate stands on its own. Slime and lava hurt at all now,
 `pl_env_damage`, PlayerPreThink's 4 and 10 a water level; e1m1 has 112
 slime leaves and no lava. `misc_explobox` is an item that is shot, not
 taken: 20 health against the pellets and nails (`pl_box_ray`, its brush

@@ -163,6 +163,8 @@ type PlayerCombat
     rockets     as integer     '' the launchers'
     quad_until  as single      '' super_damage_finished: hits do four times
     suit_until  as single      '' radsuit_finished: slime does nothing, lava a fifth
+    pent_until  as single      '' invincible_finished: T_Damage returns
+    pent_at     as single      '' invincible_sound: the next protect3, two seconds apart
     dmg_time    as single      '' the next slime or lava bite
     booms       as integer     '' exploding boxes gone, for the bench
     fire_at     as single      '' anim_time of the last shot, the view weapon's frames run from it
@@ -246,7 +248,7 @@ const PL_LAND_SOFT#    = -300.0 '' PlayerPreThink: land.wav below this fall spee
 const PL_LAND_HARD#    = -650.0 '' land2.wav and five points
 '' the sounds, in tools/mksnd.py's SOUNDS order; SND_MON + kind * 4 is
 '' a monster's sight, then attack, pain, death
-const SND_COUNT%       = 98
+const SND_COUNT%       = 100
 const SND_SHOTGUN%     = 0
 const SND_SSG%         = 1
 const SND_NAIL%        = 2
@@ -284,6 +286,8 @@ const SND_ROCKET%      = 94    '' weapons/sgun1, the rocket launcher
 const SND_SHAM_MELEE%  = 95    '' the shambler's smash, its hit, its lightning
 const SND_SHAM_SMACK%  = 96
 const SND_SHAM_BOOM%   = 97
+const SND_PENT%        = 98    '' items/protect, the pentagram taken
+const SND_PENT_HIT%    = 99    '' protect3, a hit it turned
 '' 57, 58 are comp1 and drone6, the ambient_* points; mkassets writes
 '' their ids into ents.bin, so nothing here names them -- and a const
 '' SND_AMBIENT% is the sub snd_ambient to BC, sigil or not
