@@ -133,6 +133,7 @@ type Spike
     dmg         as integer     '' what a hostile one bites
     grenade     as integer     '' an ogre's or the player's: gravity, a bounce, a fuse and a blast
     gib         as integer     '' a zombie's: bites what it lands on, stops on a wall, no blast
+    rocket      as integer     '' the player's rocket: straight, the blast where it stops
 end type
 
 type PlayerCombat
@@ -161,7 +162,7 @@ type PlayerCombat
     weapon      as integer     '' the one in hand, a PL_IT_* bit
     nails       as integer
     nail_side   as integer     '' player_nail1/2: the barrel the next nail leaves
-    rockets     as integer     '' the grenade launcher's
+    rockets     as integer     '' the launchers'
     quad_until  as single      '' super_damage_finished: hits do four times
     suit_until  as single      '' radsuit_finished: slime does nothing, lava a fifth
     dmg_time    as single      '' the next slime or lava bite
@@ -205,6 +206,8 @@ const PL_IT_NAILGUN%   = 4
 const PL_IT_KEY1%      = 8      '' the silver key, and the gold: this map's, never carried
 const PL_IT_KEY2%      = 16
 const PL_IT_GL%        = 32
+const PL_IT_SNG%       = 64
+const PL_IT_RL%        = 128
 '' W_FireSpikes: a nail every 0.2 from 16 up and 4 aside, alternating,
 '' at 1000 for 9 (spike_touch), gone after 6 s (SUB_Remove)
 const PL_NG_RATE#      = 0.2
@@ -223,6 +226,18 @@ const PL_GL_SPEED#     = 600.0
 const PL_GL_UP#        = 200.0
 const PL_GL_FUSE#      = 2.5
 const PL_GL_DMG#       = 120.0
+'' W_FireSuperSpikes: two nails from the middle for 18 (superspike_touch)
+const PL_SNG_DMG%      = 18
+'' W_FireRocket: 1000 straight along the aim from 8 before the origin,
+'' 0.8 to be ready; T_MissileTouch is 100 + 20 * random on what it hits
+'' and a blast of 120 where it stopped; one that hits nothing goes at 5 s
+const PL_RL_RATE#      = 0.8
+const PL_RL_SPEED#     = 1000.0
+const PL_RL_FWD#       = 8.0
+const PL_RL_HIT%       = 100
+const PL_RL_HIT_RND%   = 20
+const PL_RL_DMG#       = 120.0
+const PL_RL_LIFE#      = 5.0
 const PL_ROCKETS_CAP%  = 100
 '' client.qc: lava 10 * waterlevel each 0.2 s (a second in the suit),
 '' slime 4 * waterlevel each second and none in the suit
@@ -233,7 +248,7 @@ const PL_LAND_SOFT#    = -300.0 '' PlayerPreThink: land.wav below this fall spee
 const PL_LAND_HARD#    = -650.0 '' land2.wav and five points
 '' the sounds, in tools/mksnd.py's SOUNDS order; SND_MON + kind * 4 is
 '' a monster's sight, then attack, pain, death
-const SND_COUNT%       = 90
+const SND_COUNT%       = 91
 const SND_SHOTGUN%     = 0
 const SND_SSG%         = 1
 const SND_NAIL%        = 2
@@ -267,6 +282,7 @@ const SND_DJUMP%       = 79    '' the demon's leap
 const SND_GRENADE%     = 80    '' the ogre's grenade thrown, and bounced
 const SND_BOUNCE%      = 81
 const SND_MON2%        = 82    '' the zombie's and the wizard's four, kinds 5 up
+const SND_ROCKET%      = 90    '' weapons/sgun1, the rocket launcher
 '' 57, 58 are comp1 and drone6, the ambient_* points; mkassets writes
 '' their ids into ents.bin, so nothing here names them -- and a const
 '' SND_AMBIENT% is the sub snd_ambient to BC, sigil or not

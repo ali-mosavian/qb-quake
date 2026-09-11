@@ -28,7 +28,7 @@
 #                               load and draw polygons at the spawn
 #   tools/check.sh --e1m2       e1m2's own entities, from the build's MAPS\
 #   tools/check.sh --e1m3       e1m3, the first map with no soldier: its spawn frame
-#   tools/check.sh --e1m4       e1m4's spawn frame
+#   tools/check.sh --e1m4       e1m4's spawn frame, the super nailgun
 #
 # -nostats is not optional. The overlay prints live fps and frame time, so
 # two runs of the SAME build differ by ~28 pixels in the digits, and a
@@ -573,6 +573,19 @@ if [[ "${1:-}" == "--e1m4" ]]; then
     run_frame "-lm -nostats -noai -bench 40 -ticks 60" "$VBD_OUT/e1m4-spawn.bmp" e1m4.bsp
     out=$(python3 "$ROOT/tools/imgdiff.py" "$ROOT/tools/ref/e1m4-spawn.bmp" "$VBD_OUT/e1m4-spawn.bmp" | tail -1)
     if [[ "$out" == IDENTICAL* ]]; then echo "PASS  e1m4 spawn: $out"; else echo "FAIL  e1m4 spawn: $out"; rc=1; fi
+    # the super nailgun at (704,1368,516), 4 above its floor, with fire held
+    # a second from 540 (516 is inside hull 1): the first tick's shotgun,
+    # its 30 nails and the spikes beside it, then two nails a shot at 0.2
+    # from 0.5 -- 55 less three shots by tick 60. It fell to the room 192
+    # below before pl_items_drop traced from the box point
+    run_frame "-lm -nostats -noai -at 704 1368 540 -fire -bench 400 -ticks 60" "$VBD_OUT/e1m4-sng.bmp" e1m4.bsp
+    wp=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_weapon"{print $2}')
+    nl=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_nails"{print $2}')
+    if [[ "${wp:-0}" -eq 64 && "${nl:-0}" -eq 49 ]]; then
+        echo "PASS  e1m4 sng: weapon $wp, nails $nl"
+    else
+        echo "FAIL  e1m4 sng: weapon ${wp:-none}, nails ${nl:-none}; want 64 and 49"; rc=1
+    fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc
 fi

@@ -835,6 +835,8 @@ sub host_init ( _
     mdl_load g, g.smdl, "v_shot2"
     mdl_load g, g.nmdl, "v_nail"
     mdl_load g, g.gmdl, "v_rock"
+    mdl_load g, g.n2mdl, "v_nail2"
+    mdl_load g, g.rmdl, "v_rock2"
     if ( mon_kinds and 2 ) then mdl_load g, mon( MDL_KIND_KNIGHT% ), "knight"
     if ( mon_kinds and 4 ) then mdl_load g, mon( MDL_KIND_DOG% ), "dog"
     if ( mon_kinds and 8 ) then mdl_load g, mon( MDL_KIND_OGRE% ), "ogre"

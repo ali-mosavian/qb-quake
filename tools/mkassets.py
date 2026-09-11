@@ -455,7 +455,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
     item_kind = {'item_health': 0, 'item_shells': 1, 'item_armor1': 2, 'item_armor2': 3,
                  'weapon_supershotgun': 4, 'item_spikes': 5, 'weapon_nailgun': 6,
                  'item_artifact_super_damage': 7, 'item_artifact_envirosuit': 8, 'misc_explobox': 9,
-                 'item_key1': 10, 'item_key2': 11, 'weapon_grenadelauncher': 12, 'item_rockets': 13}
+                 'item_key1': 10, 'item_key2': 11, 'weapon_grenadelauncher': 12, 'item_rockets': 13,
+                 'weapon_supernailgun': 14, 'weapon_rocketlauncher': 15}
 
     def vec(v: str) -> tuple[float, float, float]:
         x, y, z = (float(t) for t in v.split())
@@ -464,8 +465,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
     def item_amount(classname: str, flags: int) -> int:
         # items.qc: H_ROTTEN 15, H_MEGA 100, else 25; WEAPON_BIG2 40 shells,
         # else 20; armor_touch's 100 green, 150 yellow; weapon_touch's
-        # 5 shells with the super shotgun, 30 nails with the nailgun and 5
-        # rockets with the grenade launcher; item_rockets 5, WEAPON_BIG2 10;
+        # 5 shells with the super shotgun, 30 nails with either nailgun and
+        # 5 rockets with either launcher; item_rockets 5, WEAPON_BIG2 10;
         # item_spikes 25, WEAPON_BIG2 50; a powerup's 30 seconds; the
         # exploding box's 20 health
         match classname, flags & 1, flags & 2:
@@ -473,7 +474,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
             case 'misc_explobox', _, _: return 20
             case 'weapon_supershotgun', _, _: return 5
             case 'weapon_nailgun', _, _: return 30
-            case 'weapon_grenadelauncher', _, _: return 5
+            case 'weapon_grenadelauncher' | 'weapon_rocketlauncher', _, _: return 5
+            case 'weapon_supernailgun', _, _: return 30
             case 'item_rockets', 1, _: return 10
             case 'item_rockets', _, _: return 5
             case 'item_spikes', 1, _: return 50

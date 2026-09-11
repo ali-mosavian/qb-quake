@@ -2233,6 +2233,31 @@ freed when the portal table bails (3K on e1m3), `item()`'s backpack
 room the map's monster count instead of 48 (0.8K) -- 14.5K after
 depth on e1m3.
 
+**`weapon_supernailgun` and `weapon_rocketlauncher` are v_nail2 and
+v_rock2**, `5` and `6`, `PL_IT_SNG` and `PL_IT_RL`. The super nailgun
+is W_FireSuperSpikes through `pl_fire_nail`: with two nails a shot
+from the middle for 18 and weapons/spike2, with one the nailgun's
+nail; a nail carries its own `dmg` now. `pl_fire_rocket` is
+W_FireRocket, a `Spike` with `rocket` set, 1000 straight along the
+aim from 8 before the origin, 0.8 to be ready; `pl_nails_tick` flies
+it as a nail and where it stops -- a monster hit for 100 + 20 *
+random, the box, a switch, a wall -- `pl_grenade_explode` blasts 120
+from there (T_MissileTouch); one that hits nothing is gone at 5 s,
+unexploded, as SUB_Remove leaves it. Both quad in the tick. And
+`pl_nail_free` clears the flags of the slot it hands out: a nail
+fired into a spent grenade's slot kept `grenade` and bounced. The
+e1m4 gate's second arm stands on the map's super nailgun with fire
+held a second and wants weapon 64 and 49 nails, its 30 and the pack
+beside it less three shots; e1m4's rocket launcher is deathmatch-only, so the launcher's arm
+waits for e1m5. That arm found `pl_items_drop` tracing the origin
+itself through hull 1: an item the map put within 24 of its floor
+started inside the grown solid, and where a room lay under it within
+256 -- the super nailgun's, 192 down -- it fell through, while one
+dropped from higher stopped 24 above the floor and floated. It
+traces from `PL_FEET` above the origin now, SV_ClipMoveToEntity's
+offset of the hull's clip_mins against the item's mins, and lands
+the origin on the floor.
+
 **The powerups are thirty-second clocks on `fight`**: the quad
 (`quad_until`) makes every pellet and nail four times (T_Damage's
 super_damage_finished), the envirosuit (`suit_until`) turns the slime

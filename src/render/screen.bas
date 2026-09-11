@@ -499,7 +499,7 @@ const SBARC_ICON   = 11          '' SB_SHELLS
 const SBARC_FACE   = 12          '' FACE1, the healthy one; FACE5 is +4
 const SBARC_ARMOR  = 17          '' SB_ARMOR1, green; yellow is +1
 const SBARC_NAILS  = 19          '' SB_NAILS, the nailgun's ammo
-const SBARC_ROCKETS = 20         '' SB_ROCKET, the grenade launcher's
+const SBARC_ROCKETS = 20         '' SB_ROCKET, the launchers'
 const SBARC_SPANS  = 6           '' opaque runs a cell row can have
 '' One EMS surface, 512 wide because a row must divide 16K: the untouched
 '' bar in rows 0..23, the 21 cells side by side in 24..47, the composed
@@ -1382,8 +1382,8 @@ sub scr_sbar_paint ( g as Game )
     if ( hp < 0 ) then hp = 0
     '' currentammo: what the weapon in hand fires
     sh = g.fight.shells : icon = SBARC_ICON
-    if ( g.fight.weapon = PL_IT_NAILGUN% ) then sh = g.fight.nails : icon = SBARC_NAILS
-    if ( g.fight.weapon = PL_IT_GL% ) then sh = g.fight.rockets : icon = SBARC_ROCKETS
+    if ( g.fight.weapon = PL_IT_NAILGUN% or g.fight.weapon = PL_IT_SNG% ) then sh = g.fight.nails : icon = SBARC_NAILS
+    if ( g.fight.weapon = PL_IT_GL% or g.fight.weapon = PL_IT_RL% ) then sh = g.fight.rockets : icon = SBARC_ROCKETS
     ar = g.fight.armor
     f = hp \ 20
     if ( f > 4 ) then f = 4

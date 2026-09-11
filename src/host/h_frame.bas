@@ -754,7 +754,7 @@ sub host_render ( _
             end if
         end if
     next mdl_i
-    '' the view weapon: v_shot, v_shot2, v_nail or v_rock by the weapon in hand,
+    '' the view weapon: v_shot, v_shot2, v_nail, v_rock, v_nail2 or v_rock2 by the weapon in hand,
     '' at the eye, turned with the view, last and with depth off, as Quake
     '' draws it. The fire animation is shot2.. at 10 Hz from the shot,
     '' the model's last frame held until it is ready again; the nailgun
@@ -769,7 +769,7 @@ sub host_render ( _
         vframe = 0
         if ( g.rdr.anim_time < g.fight.next_fire ) then
             vframe = 1 + int( ( g.rdr.anim_time - g.fight.fire_at ) * 10.0 )
-            if ( g.fight.weapon = PL_IT_NAILGUN% ) then vframe = 1 + ( clng( g.rdr.anim_time * 10.0 ) mod 8 )
+            if ( g.fight.weapon = PL_IT_NAILGUN% or g.fight.weapon = PL_IT_SNG% ) then vframe = 1 + ( clng( g.rdr.anim_time * 10.0 ) mod 8 )
         end if
         '' look_at is the point one unit from cam.pos the eye looks at,
         '' renderer Y up: the yaw's cos and sin are the difference's x and z
@@ -777,6 +777,14 @@ sub host_render ( _
         '' looking down
         if ( g.fight.state = GS_EXIT% ) then
             '' no gun in the intermission's view
+        elseif ( g.fight.weapon = PL_IT_RL% and g.rmdl.loaded ) then
+            mdl_draw_view g, g.rmdl, vframe, bob, _
+                          vdx / vlen, vdz / vlen, vlen, -vdy, _
+                          mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
+        elseif ( g.fight.weapon = PL_IT_SNG% and g.n2mdl.loaded ) then
+            mdl_draw_view g, g.n2mdl, vframe, bob, _
+                          vdx / vlen, vdz / vlen, vlen, -vdy, _
+                          mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
         elseif ( g.fight.weapon = PL_IT_GL% and g.gmdl.loaded ) then
             mdl_draw_view g, g.gmdl, vframe, bob, _
                           vdx / vlen, vdz / vlen, vlen, -vdy, _

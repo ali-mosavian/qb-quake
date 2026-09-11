@@ -59,6 +59,7 @@ SOUNDS = [
     "demon/djump", "weapons/grenade", "weapons/bounce",                             # 79..81 the leap, the grenade thrown and bounced
     "zombie/z_idle", "zombie/z_shot1", "zombie/z_pain", "zombie/z_gib",             # 82..85 kinds 5 and 6, SND_MON2
     "wizard/wsight", "wizard/wattack", "wizard/wpain", "wizard/wdeath",             # 86..89
+    "weapons/sgun1",                                                                # 90 the rocket launcher
 ]
 
 
