@@ -77,6 +77,7 @@ short pascal far mdl_draw_tris(
     short     zmode )           /* QGL_Z_TEST for a soldier, OFF for the view weapon */
 {
     MdlTri far *tri;
+    MdlTri far *t;
     unsigned char far *vb;
     short v, j, k, k2, cp, nin, nout, sbuf, dbuf, drawn = 0;
     short ia[3], cn[2];
@@ -130,14 +131,20 @@ short pascal far mdl_draw_tris(
        Off for us by qglSfZMode itself when dst has no depth buffer. */
     qglSfZMode( dst, zmode );
 
-    for ( j = 0; j < ntri; j++ ) {
-        ia[0] = tri[j].a; ia[1] = tri[j].b; ia[2] = tri[j].c;
-        if ( !( okv[ia[0]] || okv[ia[1]] || okv[ia[2]] ) ) continue;
+    /* One walking far pointer, and each corner's index read once: the
+       record is 18 bytes, so tri[j].a costs a multiply and a fresh
+       es:bx every field. e1m6 walks 580 of these a frame and refuses
+       most of them on the first test. */
+    for ( t = tri, j = 0; j < ntri; j++, t++ ) {
+        short a = t->a, b = t->b, c = t->c;
 
-        if ( inv[ia[0]] && inv[ia[1]] && inv[ia[2]] ) {
-            qv[0].x = sx[ia[0]]; qv[0].y = sy[ia[0]]; qv[0].z = srw[ia[0]];
-            qv[1].x = sx[ia[1]]; qv[1].y = sy[ia[1]]; qv[1].z = srw[ia[1]];
-            qv[2].x = sx[ia[2]]; qv[2].y = sy[ia[2]]; qv[2].z = srw[ia[2]];
+        ia[0] = a; ia[1] = b; ia[2] = c;
+        if ( !( okv[a] || okv[b] || okv[c] ) ) continue;
+
+        if ( inv[a] && inv[b] && inv[c] ) {
+            qv[0].x = sx[a]; qv[0].y = sy[a]; qv[0].z = srw[a];
+            qv[1].x = sx[b]; qv[1].y = sy[b]; qv[1].z = srw[b];
+            qv[2].x = sx[c]; qv[2].y = sy[c]; qv[2].z = srw[c];
             area = ( qv[1].x - qv[0].x ) * ( qv[2].y - qv[0].y )
                  - ( qv[2].x - qv[0].x ) * ( qv[1].y - qv[0].y );
             /*
@@ -150,9 +157,9 @@ short pascal far mdl_draw_tris(
              * map, a gradient and a clip first.
              */
             if ( area > -2.0f ) continue;
-            qv[0].u = (float) tri[j].u1 / MDL_UV_SCALE; qv[0].v = (float) tri[j].v1 / MDL_UV_SCALE;
-            qv[1].u = (float) tri[j].u2 / MDL_UV_SCALE; qv[1].v = (float) tri[j].v2 / MDL_UV_SCALE;
-            qv[2].u = (float) tri[j].u3 / MDL_UV_SCALE; qv[2].v = (float) tri[j].v3 / MDL_UV_SCALE;
+            qv[0].u = (float) t->u1 / MDL_UV_SCALE; qv[0].v = (float) t->v1 / MDL_UV_SCALE;
+            qv[1].u = (float) t->u2 / MDL_UV_SCALE; qv[1].v = (float) t->v2 / MDL_UV_SCALE;
+            qv[2].u = (float) t->u3 / MDL_UV_SCALE; qv[2].v = (float) t->v3 / MDL_UV_SCALE;
             qglRsPoly( dst, (void far *) qv, 3, QGL_M_TEX, skin );
             drawn++;
             continue;
@@ -165,12 +172,12 @@ short pascal far mdl_draw_tris(
             cby[0][k] = vy[ia[k]];
             cbw[0][k] = vw[ia[k]];
         }
-        cbu[0][0] = (float) tri[j].u1 / MDL_UV_SCALE;
-        cbu[0][1] = (float) tri[j].u2 / MDL_UV_SCALE;
-        cbu[0][2] = (float) tri[j].u3 / MDL_UV_SCALE;
-        cbv[0][0] = (float) tri[j].v1 / MDL_UV_SCALE;
-        cbv[0][1] = (float) tri[j].v2 / MDL_UV_SCALE;
-        cbv[0][2] = (float) tri[j].v3 / MDL_UV_SCALE;
+        cbu[0][0] = (float) t->u1 / MDL_UV_SCALE;
+        cbu[0][1] = (float) t->u2 / MDL_UV_SCALE;
+        cbu[0][2] = (float) t->u3 / MDL_UV_SCALE;
+        cbv[0][0] = (float) t->v1 / MDL_UV_SCALE;
+        cbv[0][1] = (float) t->v2 / MDL_UV_SCALE;
+        cbv[0][2] = (float) t->v3 / MDL_UV_SCALE;
 
         /* Sutherland-Hodgman against the five clip-space planes. */
         for ( cp = 0; cp < 5; cp++ ) {
