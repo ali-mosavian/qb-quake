@@ -140,7 +140,16 @@ short pascal far mdl_draw_tris(
             qv[2].x = sx[ia[2]]; qv[2].y = sy[ia[2]]; qv[2].z = srw[ia[2]];
             area = ( qv[1].x - qv[0].x ) * ( qv[2].y - qv[0].y )
                  - ( qv[2].x - qv[0].x ) * ( qv[1].y - qv[0].y );
-            if ( area >= 0.0f ) continue;       /* backface: no UV work at all */
+            /*
+             * Backface, or too small to cover a scanline: qglRsPoly
+             * refuses anything whose denominator is under 2 (qgl$l1sqr,
+             * twice the area of one pixel) and area IS that denominator
+             * -- the triple it searches out of three vertices is these
+             * three. e1m6's monsters hand over 287 triangles a frame and
+             * 241 of them die in there, each having paid for a texture
+             * map, a gradient and a clip first.
+             */
+            if ( area > -2.0f ) continue;
             qv[0].u = (float) tri[j].u1 / MDL_UV_SCALE; qv[0].v = (float) tri[j].v1 / MDL_UV_SCALE;
             qv[1].u = (float) tri[j].u2 / MDL_UV_SCALE; qv[1].v = (float) tri[j].v2 / MDL_UV_SCALE;
             qv[2].u = (float) tri[j].u3 / MDL_UV_SCALE; qv[2].v = (float) tri[j].v3 / MDL_UV_SCALE;
