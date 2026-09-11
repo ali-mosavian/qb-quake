@@ -154,6 +154,13 @@ end type
 '' own read, screenshot-key polling and scr_count_frame's bookkeeping are
 '' all cheap enough that timing them would cost more than they take.
 ''
+type TickTimer
+    sum as single
+    lo  as single
+    hi  as single
+    n   as long
+end type
+
 type PhaseTimes
     tick_sum    as single     '' host_advance: simulation
     tick_max    as single
@@ -175,43 +182,19 @@ type PhaseTimes
     loop_min    as single
     mtri_n      as long       '' triangles handed to qglRsPoly
     place_stale as integer    '' ent_place_stale at the report: must read 0
-    tk_ticks    as long       '' the ticks the tk_ timers sampled
-    tk_cam      as single     '' host_tick: microseconds in the cam calls
-    tk_cam_min as single
-    tk_cam_max as single
-    tk_fire     as single     '' host_tick: microseconds in the fire calls
-    tk_fire_min as single
-    tk_fire_max as single
-    tk_nails    as single     '' host_tick: microseconds in the nails calls
-    tk_nails_min as single
-    tk_nails_max as single
-    tk_items    as single     '' host_tick: microseconds in the items calls
-    tk_items_min as single
-    tk_items_max as single
-    tk_think    as single     '' host_tick: microseconds in the think calls
-    tk_think_min as single
-    tk_think_max as single
-    tk_tele     as single     '' host_tick: microseconds in the tele calls
-    tk_tele_min as single
-    tk_tele_max as single
-    tk_plats    as single     '' host_tick: microseconds in the plats calls
-    tk_plats_min as single
-    tk_plats_max as single
-    tk_doors    as single     '' host_tick: microseconds in the doors calls
-    tk_doors_min as single
-    tk_doors_max as single
-    tk_trigs    as single     '' host_tick: microseconds in the trigs calls
-    tk_trigs_min as single
-    tk_trigs_max as single
-    tk_traps    as single     '' host_tick: microseconds in the traps calls
-    tk_traps_min as single
-    tk_traps_max as single
-    tk_place    as single     '' host_tick: microseconds in the place calls
-    tk_place_min as single
-    tk_place_max as single
-    tk_ls       as single     '' host_tick: microseconds in the ls calls
-    tk_ls_min as single
-    tk_ls_max as single
+    '' host_tick's calls, microseconds, each over the ticks it ran in
+    tk_cam     as TickTimer
+    tk_fire    as TickTimer
+    tk_nails   as TickTimer
+    tk_items   as TickTimer
+    tk_think   as TickTimer
+    tk_tele    as TickTimer
+    tk_plats   as TickTimer
+    tk_doors   as TickTimer
+    tk_trigs   as TickTimer
+    tk_traps   as TickTimer
+    tk_place   as TickTimer
+    tk_ls      as TickTimer
     present_sum as single     '' vid_update: blit to the screen
     present_max as single
     present_n   as long       '' the last frame exits before present and loop

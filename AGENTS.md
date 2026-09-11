@@ -2684,8 +2684,8 @@ must do the same. `place_stale` in bench.txt re-derives every placement
 at exit and counts the ones that disagree; `check.sh --e1m1` wants 0.
 
 **bench.txt timers are `name min mean max`, three decimals.** `pt_<phase>`
-is ms a frame; `pt_tk_<call>` is one `host_tick` call in ms a tick, over
-the ticks of timed frames. `sys_rdtsc` wraps about once a minute, and
+is ms a frame; `pt_tk_<call>` is one `host_tick` call in ms, over the
+ticks it ran in. `sys_rdtsc` wraps about once a minute, and
 `host_lap` drops a lap that runs backwards.
 
 **`func_train` rides the plat array** (`PlatEnt.kind`), and the map's

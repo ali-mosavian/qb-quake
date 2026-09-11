@@ -143,18 +143,18 @@ sub host_bench_report ( _
         host_kv benchf, "rdtsc_hz", str$( sys_rdtsc_hz() )
         host_kv benchf, "portal_culled", str$( g.vis.pt_culled )
         print #benchf, "mtri_per_frame " + host_fmt3( g.pt.mtri_n / g.ft.n )
-        host_pt_put benchf, "pt_tk_cam", g.pt.tk_cam_min, g.pt.tk_cam, g.pt.tk_cam_max, g.pt.tk_ticks, 0.001
-        host_pt_put benchf, "pt_tk_fire", g.pt.tk_fire_min, g.pt.tk_fire, g.pt.tk_fire_max, g.pt.tk_ticks, 0.001
-        host_pt_put benchf, "pt_tk_nails", g.pt.tk_nails_min, g.pt.tk_nails, g.pt.tk_nails_max, g.pt.tk_ticks, 0.001
-        host_pt_put benchf, "pt_tk_items", g.pt.tk_items_min, g.pt.tk_items, g.pt.tk_items_max, g.pt.tk_ticks, 0.001
-        host_pt_put benchf, "pt_tk_think", g.pt.tk_think_min, g.pt.tk_think, g.pt.tk_think_max, g.pt.tk_ticks, 0.001
-        host_pt_put benchf, "pt_tk_tele", g.pt.tk_tele_min, g.pt.tk_tele, g.pt.tk_tele_max, g.pt.tk_ticks, 0.001
-        host_pt_put benchf, "pt_tk_plats", g.pt.tk_plats_min, g.pt.tk_plats, g.pt.tk_plats_max, g.pt.tk_ticks, 0.001
-        host_pt_put benchf, "pt_tk_doors", g.pt.tk_doors_min, g.pt.tk_doors, g.pt.tk_doors_max, g.pt.tk_ticks, 0.001
-        host_pt_put benchf, "pt_tk_trigs", g.pt.tk_trigs_min, g.pt.tk_trigs, g.pt.tk_trigs_max, g.pt.tk_ticks, 0.001
-        host_pt_put benchf, "pt_tk_traps", g.pt.tk_traps_min, g.pt.tk_traps, g.pt.tk_traps_max, g.pt.tk_ticks, 0.001
-        host_pt_put benchf, "pt_tk_place", g.pt.tk_place_min, g.pt.tk_place, g.pt.tk_place_max, g.pt.tk_ticks, 0.001
-        host_pt_put benchf, "pt_tk_ls", g.pt.tk_ls_min, g.pt.tk_ls, g.pt.tk_ls_max, g.pt.tk_ticks, 0.001
+        host_pt_put benchf, "pt_tk_cam", g.pt.tk_cam.lo, g.pt.tk_cam.sum, g.pt.tk_cam.hi, g.pt.tk_cam.n, 0.001
+        host_pt_put benchf, "pt_tk_fire", g.pt.tk_fire.lo, g.pt.tk_fire.sum, g.pt.tk_fire.hi, g.pt.tk_fire.n, 0.001
+        host_pt_put benchf, "pt_tk_nails", g.pt.tk_nails.lo, g.pt.tk_nails.sum, g.pt.tk_nails.hi, g.pt.tk_nails.n, 0.001
+        host_pt_put benchf, "pt_tk_items", g.pt.tk_items.lo, g.pt.tk_items.sum, g.pt.tk_items.hi, g.pt.tk_items.n, 0.001
+        host_pt_put benchf, "pt_tk_think", g.pt.tk_think.lo, g.pt.tk_think.sum, g.pt.tk_think.hi, g.pt.tk_think.n, 0.001
+        host_pt_put benchf, "pt_tk_tele", g.pt.tk_tele.lo, g.pt.tk_tele.sum, g.pt.tk_tele.hi, g.pt.tk_tele.n, 0.001
+        host_pt_put benchf, "pt_tk_plats", g.pt.tk_plats.lo, g.pt.tk_plats.sum, g.pt.tk_plats.hi, g.pt.tk_plats.n, 0.001
+        host_pt_put benchf, "pt_tk_doors", g.pt.tk_doors.lo, g.pt.tk_doors.sum, g.pt.tk_doors.hi, g.pt.tk_doors.n, 0.001
+        host_pt_put benchf, "pt_tk_trigs", g.pt.tk_trigs.lo, g.pt.tk_trigs.sum, g.pt.tk_trigs.hi, g.pt.tk_trigs.n, 0.001
+        host_pt_put benchf, "pt_tk_traps", g.pt.tk_traps.lo, g.pt.tk_traps.sum, g.pt.tk_traps.hi, g.pt.tk_traps.n, 0.001
+        host_pt_put benchf, "pt_tk_place", g.pt.tk_place.lo, g.pt.tk_place.sum, g.pt.tk_place.hi, g.pt.tk_place.n, 0.001
+        host_pt_put benchf, "pt_tk_ls", g.pt.tk_ls.lo, g.pt.tk_ls.sum, g.pt.tk_ls.hi, g.pt.tk_ls.n, 0.001
     end if
     g.pt.place_stale = ent_place_stale( g.wld.count.models, models(), nodes(), planes(), brush() )
     host_kv benchf, "place_stale", str$( g.pt.place_stale )
@@ -285,18 +285,18 @@ sub host_pt_init ( g as Game )
     g.pt.present_min = 1E+09
     g.pt.mark_min = 1E+09
     g.pt.walk_min = 1E+09
-    g.pt.tk_cam_min = 1E+09
-    g.pt.tk_fire_min = 1E+09
-    g.pt.tk_nails_min = 1E+09
-    g.pt.tk_items_min = 1E+09
-    g.pt.tk_think_min = 1E+09
-    g.pt.tk_tele_min = 1E+09
-    g.pt.tk_plats_min = 1E+09
-    g.pt.tk_doors_min = 1E+09
-    g.pt.tk_trigs_min = 1E+09
-    g.pt.tk_traps_min = 1E+09
-    g.pt.tk_place_min = 1E+09
-    g.pt.tk_ls_min = 1E+09
+    g.pt.tk_cam.lo = 1E+09
+    g.pt.tk_fire.lo = 1E+09
+    g.pt.tk_nails.lo = 1E+09
+    g.pt.tk_items.lo = 1E+09
+    g.pt.tk_think.lo = 1E+09
+    g.pt.tk_tele.lo = 1E+09
+    g.pt.tk_plats.lo = 1E+09
+    g.pt.tk_doors.lo = 1E+09
+    g.pt.tk_trigs.lo = 1E+09
+    g.pt.tk_traps.lo = 1E+09
+    g.pt.tk_place.lo = 1E+09
+    g.pt.tk_ls.lo = 1E+09
 end sub
 
 '' One 'name value' line. The caller's str$ keeps each type's own format.

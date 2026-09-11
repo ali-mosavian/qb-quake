@@ -287,9 +287,7 @@ declare function host_lap ( t0 as long ) as single
 declare sub host_tk ( _
     byval timing as integer, _
     t0 as long, _
-    sum as single, _
-    mn as single, _
-    mx as single _
+    tt as TickTimer _
 )
 
 
@@ -450,7 +448,7 @@ sub host_tick ( _
     '' and what the world does about it: camera, and the physics under it
     t0 = sys_rdtsc()
     v_update_camera g, dt, cp_x(), cp_y(), cp_z(), brush(), models(), planes(), nodes()
-    host_tk g.ft.n > 0, t0, g.pt.tk_cam, g.pt.tk_cam_min, g.pt.tk_cam_max
+    host_tk g.ft.n > 0, t0, g.pt.tk_cam
 
     '' the fight. Fire is mouse 1 or ctrl; outside GS_PLAY a fresh press
     '' is the only input that matters, and the world stands still.
@@ -459,11 +457,11 @@ sub host_tick ( _
     case GS_PLAY%
         pl_select_weapon g
         if ( fire ) then pl_fire g, mdl_ent(), models(), brush(), planes(), item(), door(), trig(), nail(), plat()
-        host_tk g.ft.n > 0, t0, g.pt.tk_fire, g.pt.tk_fire_min, g.pt.tk_fire_max
+        host_tk g.ft.n > 0, t0, g.pt.tk_fire
         pl_nails_tick g, dt, nail(), mdl_ent(), models(), brush(), planes(), nodes(), item(), door(), trig(), plat()
-        host_tk g.ft.n > 0, t0, g.pt.tk_nails, g.pt.tk_nails_min, g.pt.tk_nails_max
+        host_tk g.ft.n > 0, t0, g.pt.tk_nails
         pl_items_touch g, item(), door(), trig(), plat()
-        host_tk g.ft.n > 0, t0, g.pt.tk_items, g.pt.tk_items_min, g.pt.tk_items_max
+        host_tk g.ft.n > 0, t0, g.pt.tk_items
         host_view_load g
         pl_env_damage g
         '' every soldier's own think -- Quake's 10 Hz, gated inside
@@ -477,7 +475,7 @@ sub host_tick ( _
             end if
             if ( mdl_ent( mdl_i ).state = MDL_ST_DEAD% ) then ndead = ndead + 1
         next mdl_i
-        host_tk g.ft.n > 0, t0, g.pt.tk_think, g.pt.tk_think_min, g.pt.tk_think_max
+        host_tk g.ft.n > 0, t0, g.pt.tk_think
         if ( g.fight.health <= 0 ) then
             g.fight.state = GS_DEAD%
             snd_play g, SND_DEATH%, g.pl.pos
@@ -516,29 +514,28 @@ sub host_tick ( _
     '' and anything the world does to the player as a result of moving
     t0 = sys_rdtsc()
     ent_check_teleport g, tele()
-    host_tk g.ft.n > 0, t0, g.pt.tk_tele, g.pt.tk_tele_min, g.pt.tk_tele_max
+    host_tk g.ft.n > 0, t0, g.pt.tk_tele
 
     '' movers, after the player has moved and before anything is drawn
     ent_move_plats g, dt, brush(), plat()
-    host_tk g.ft.n > 0, t0, g.pt.tk_plats, g.pt.tk_plats_min, g.pt.tk_plats_max
+    host_tk g.ft.n > 0, t0, g.pt.tk_plats
     ent_move_doors g, dt, brush(), door()
-    host_tk g.ft.n > 0, t0, g.pt.tk_doors, g.pt.tk_doors_min, g.pt.tk_doors_max
+    host_tk g.ft.n > 0, t0, g.pt.tk_doors
     ent_move_trigs g, dt, brush(), door(), trig(), plat()
-    host_tk g.ft.n > 0, t0, g.pt.tk_trigs, g.pt.tk_trigs_min, g.pt.tk_trigs_max
+    host_tk g.ft.n > 0, t0, g.pt.tk_trigs
     pl_traps_tick g, trig(), nail()
-    host_tk g.ft.n > 0, t0, g.pt.tk_traps, g.pt.tk_traps_min, g.pt.tk_traps_max
+    host_tk g.ft.n > 0, t0, g.pt.tk_traps
 
     '' where each mover ended up, so the draw order can place it
     ent_place_models g.wld.count.models, models(), nodes(), planes(), brush()
-    host_tk g.ft.n > 0, t0, g.pt.tk_place, g.pt.tk_place_min, g.pt.tk_place_max
+    host_tk g.ft.n > 0, t0, g.pt.tk_place
 
     '' map time, which drives every texture animation
     g.rdr.anim_time = g.rdr.anim_time + dt
 
     '' light styles: fixed 10 Hz off the same clock, not framerate
     ls_animate g.rdr.anim_time
-    host_tk g.ft.n > 0, t0, g.pt.tk_ls, g.pt.tk_ls_min, g.pt.tk_ls_max
-    if ( g.ft.n > 0 ) then g.pt.tk_ticks = g.pt.tk_ticks + 1
+    host_tk g.ft.n > 0, t0, g.pt.tk_ls
 
     '' the test dynamic light, following the player -- field by field,
     '' not a whole-UDT assignment, matching how every other Vec3 copy in
@@ -558,24 +555,24 @@ end sub
 function host_lap ( t0 as long ) as single
     dim t1 as long
     t1 = sys_rdtsc()
-    if ( t1 > t0 ) then host_lap = t1 - t0
+    host_lap = t1 - t0
+    if ( t1 < t0 ) then host_lap = -1.0   '' sys_rdtsc wrapped: no sample
     t0 = t1
 end function
 
-'' One call's lap into its sum, min and max, once the frame clock counts.
+'' One call's lap into its timer, once the frame clock counts.
 sub host_tk ( _
     byval timing as integer, _
     t0 as long, _
-    sum as single, _
-    mn as single, _
-    mx as single _
+    tt as TickTimer _
 )
     dim d as single
     d = host_lap( t0 )
-    if ( timing = 0 ) then exit sub
-    sum = sum + d
-    if ( d < mn ) then mn = d
-    if ( d > mx ) then mx = d
+    if ( timing = 0 or d < 0.0 ) then exit sub
+    tt.sum = tt.sum + d
+    tt.n = tt.n + 1
+    if ( d < tt.lo ) then tt.lo = d
+    if ( d > tt.hi ) then tt.hi = d
 end sub
 
 
