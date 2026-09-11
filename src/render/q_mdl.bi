@@ -22,6 +22,7 @@ const MDL_ST_RUN%      = 1
 const MDL_ST_DEAD%     = 2    '' plays the death frames once, then lies there
 const MDL_ST_PAIN%     = 3    '' the flinch a hit that does not kill plays, standing
 const MDL_ST_ATTACK%   = 4    '' the knight's sword, charging
+const MDL_ST_LEAP%     = 5    '' the dog in the air, on its velocity
 '' The frame sets -- stand, run, death, pain, attack -- are contiguous
 '' in that order and their counts come from the .geo header, so the
 '' Makefile's frameset IS the layout: soldier stand,run,death,pain fills
@@ -73,6 +74,11 @@ const DOG_HEALTH%        = 25
 const DOG_BITE_RANGE#    = 100.0
 const DOG_BITE_DMG#      = 8.0
 const DOG_BITE_RATE#     = 0.8
+const DOG_LEAP_SPEED#    = 300.0 '' dog_leap2: v_forward * 300 + '0 0 200'
+const DOG_LEAP_UP#       = 200.0
+const DOG_LEAP_MIN#      = 80.0  '' CheckDogJump's range, level distance
+const DOG_LEAP_MAX#      = 150.0
+const DOG_LEAP_DMG#      = 10.0  '' Dog_JumpTouch: 10 + 10 * random
 
 '' NOT in stock Quake: a walkmonster with no path_corner target just
 '' stands forever (see the note above) -- there is no explore state to
@@ -144,7 +150,9 @@ type MdlEnt
     flash_until as single      '' the volley's muzzle flash shows until then
     pain_finished as single    '' army_pain: no new flinch before this
     spawn       as Vec3        '' where it respawns
-    kind        as integer     '' MDL_KIND_ARMY% or MDL_KIND_KNIGHT%
+    kind        as integer     '' MDL_KIND_ARMY%, KNIGHT or DOG
+    vel         as Vec3        '' a leaping dog's, MOVETYPE_STEP off the ground
+    leapt       as integer     '' this leap's Dog_JumpTouch has landed its damage
 end type
 
 '' A triangle on disk and in the model's page 1: three vertex indices and

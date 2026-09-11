@@ -318,6 +318,15 @@ PY
     else
         echo "FAIL  e1m1 kill: trigger 51 state ${ks:-none}, the hint survived"; rc=1
     fi
+    # and the dog's leap: 120 units from e1m1's dog at (88,1520,-200), in
+    # its sight and on its level, it must leave the ground within 3 s
+    run_frame "-lm -nostats -at 208 1520 -200 -yaw 180 -bench 400 -ticks 180" "$VBD_OUT/e1m1-leap.bmp" e1m1.bsp
+    nl=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_leaps"{print $2}')
+    if [[ "${nl:-0}" -ge 1 ]]; then
+        echo "PASS  e1m1 leap: pl_leaps $nl, the dog leapt"
+    else
+        echo "FAIL  e1m1 leap: pl_leaps ${nl:-none}, the dog kept its feet"; rc=1
+    fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc
 fi

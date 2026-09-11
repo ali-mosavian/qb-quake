@@ -199,6 +199,7 @@ sub host_bench_report ( _
     print #benchf, "pl_health " + ltrim$(str$( g.fight.health ))
     print #benchf, "pl_shells " + ltrim$(str$( g.fight.shells ))
     print #benchf, "pl_kills " + ltrim$(str$( g.fight.kills ))
+    print #benchf, "pl_leaps " + ltrim$(str$( g.fight.leaps ))
     print #benchf, "pl_deaths " + ltrim$(str$( g.fight.deaths ))
     '' the crowd, one line each: kind state hunting frame x y z
     for mi = 0 to g.mdl_count - 1

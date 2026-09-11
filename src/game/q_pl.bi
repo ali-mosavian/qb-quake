@@ -140,6 +140,7 @@ type PlayerCombat
     bonus_pct   as single      '' the pickup flash, 50, fading 100/s
     msg         as string * 40 '' centerprint, shown until msg_until
     msg_until   as single
+    leaps       as integer     '' dogs that left the ground, for the bench
 end type
 
 const PL_HEALTH%       = 100

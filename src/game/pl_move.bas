@@ -1716,6 +1716,7 @@ sub mdl_think ( _
     dim chance as single
     dim knight as integer, stepped as integer
     dim dog as integer, dmg as integer
+    dim fin as Vec3, tr as TraceResult, dz as single
 
     if ( m.loaded = 0 ) then exit sub
     knight = ( ent.kind = MDL_KIND_KNIGHT% )
@@ -1760,6 +1761,38 @@ sub mdl_think ( _
         exit sub
     end if
 
+    '' In the air: gravity on the velocity, a trace along it, and
+    '' Dog_JumpTouch -- the player's box met while faster than 300 is
+    '' bitten once. A stop while falling is the ground and the run again;
+    '' one while rising is a wall, and the dog drops down it.
+    if ( ent.state = MDL_ST_LEAP% ) then
+        ent.vel.z = ent.vel.z - PL_FALLACC# * 0.1
+        fin.x = ent.pos.x + ent.vel.x * 0.1
+        fin.y = ent.pos.y + ent.vel.y * 0.1
+        fin.z = ent.pos.z + ent.vel.z * 0.1
+        pl_trace ent.pos, fin, tr, g.wld.count.models, models(), brush(), clp_buffer(), planes()
+        ent.pos = tr.end_pos
+        if ( ent.leapt = 0 ) then
+            dx = g.pl.pos.x - ent.pos.x : dy = g.pl.pos.y - ent.pos.y : dz = g.pl.pos.z - ent.pos.z
+            if ( abs( dx ) < MDL_HALF# + PL_HALF# and abs( dy ) < MDL_HALF# + PL_HALF# and abs( dz ) < MDL_ZHI# - PL_ZLO# ) then
+                if ( ent.vel.x * ent.vel.x + ent.vel.y * ent.vel.y + ent.vel.z * ent.vel.z > DOG_LEAP_SPEED# * DOG_LEAP_SPEED# ) then
+                    pl_damage g, int( DOG_LEAP_DMG# + rnd * DOG_LEAP_DMG# )
+                    ent.leapt = -1
+                end if
+            end if
+        end if
+        if ( tr.frac < 1.0 ) then
+            if ( ent.vel.z <= 0.0 ) then
+                ent.state = MDL_ST_RUN%
+                ent.anim_frame = 0
+                exit sub
+            end if
+            ent.vel.x = 0.0 : ent.vel.y = 0.0
+        end if
+        ent.anim_frame = ( ent.anim_frame + 1 ) mod m.nrun
+        exit sub
+    end if
+
     if ( ent.state = MDL_ST_STAND% ) then
         if ( can_chase and mdl_find_target( g, ent, models(), brush(), planes() ) ) then
             ent.hunting = -1
@@ -1799,16 +1832,33 @@ sub mdl_think ( _
         end if
         goal.x = g.pl.pos.x : goal.y = g.pl.pos.y : goal.z = g.pl.pos.z
     elseif ( ent.hunting and dog ) then
-        '' dog_bite on the run, no attack set fitting the page: a clear
-        '' line within DOG_BITE_RANGE, once an attack cycle
+        '' DogCheckAttack: dog_bite on the run within DOG_BITE_RANGE, once
+        '' an attack cycle -- no attack set fits the page -- else the leap,
+        '' CheckDogJump: 80 to 150 level, the player's body at its height
         if ( g.rdr.anim_time >= ent.next_attack ) then
             if ( mdl_find_target( g, ent, models(), brush(), planes() ) ) then
-                dx = g.pl.pos.x - ent.pos.x : dy = g.pl.pos.y - ent.pos.y
-                d2 = dx*dx + dy*dy + ( g.pl.pos.z - ent.pos.z ) * ( g.pl.pos.z - ent.pos.z )
+                dx = g.pl.pos.x - ent.pos.x : dy = g.pl.pos.y - ent.pos.y : dz = g.pl.pos.z - ent.pos.z
+                d2 = dx*dx + dy*dy + dz * dz
                 if ( d2 < DOG_BITE_RANGE# * DOG_BITE_RANGE# ) then
                     ent.next_attack = g.rdr.anim_time + DOG_BITE_RATE#
                     dmg = int( ( rnd + rnd + rnd ) * DOG_BITE_DMG# )
                     if ( dmg > 0 ) then pl_damage g, dmg
+                elseif ( dx*dx + dy*dy > DOG_LEAP_MIN# * DOG_LEAP_MIN# and dx*dx + dy*dy < DOG_LEAP_MAX# * DOG_LEAP_MAX# ) then
+                    if ( MDL_ZLO# < dz + PL_ZLO# + 0.75 * ( PL_ZHI# - PL_ZLO# ) and MDL_ZHI# > dz + PL_ZLO# + 0.25 * ( PL_ZHI# - PL_ZLO# ) ) then
+                        '' dog_leap2: ai_face, a unit up, 300 forward and 200 up
+                        ent.ideal_yaw = mdl_vectoyaw( dx, dy )
+                        ent.yaw = ent.ideal_yaw
+                        ent.pos.z = ent.pos.z + 1.0
+                        ent.vel.x = cos( ent.yaw * 0.017453293 ) * DOG_LEAP_SPEED#
+                        ent.vel.y = sin( ent.yaw * 0.017453293 ) * DOG_LEAP_SPEED#
+                        ent.vel.z = DOG_LEAP_UP#
+                        ent.leapt = 0
+                        ent.state = MDL_ST_LEAP%
+                        ent.anim_frame = 0
+                        ent.next_attack = g.rdr.anim_time + DOG_BITE_RATE#
+                        g.fight.leaps = g.fight.leaps + 1
+                        exit sub
+                    end if
                 end if
             end if
         end if

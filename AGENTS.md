@@ -2060,8 +2060,16 @@ mkmdl.py's `:n` keeps the first n of a set -- and no attack set. So
 `mdl_think` bites from the run cycle: within 100 units with a clear
 line, `(r+r+r)*8` once per 0.8 seconds, dog.qc's cycle without its
 frames. Its run steps are dog_run's 16..64 a frame, which is why a dog
-closes so fast. The leap is not ported. e1m1 on easy has one, at
-(88,1520,-200); the e1m1 gate counts it by kind. `MDL_MAXV` is 236 in
+closes so fast. The leap is CheckDogJump and dog_leap2: 80 to 150
+level units off with the player's body at its height, it faces them
+and takes 300 forward and 200 up as a velocity, the one MOVETYPE_STEP
+in the air here -- gravity at each 10 Hz think, a trace along the
+velocity, the player's box met above 300 u/s bitten for 10 + 10 *
+random once (Dog_JumpTouch), a stop while falling the ground and the
+run again. It has no leap frames on the page, so it flies through its
+run cycle. e1m1 on easy has one, at (88,1520,-200); the e1m1 gate counts
+it by kind, and its tenth arm stands 120 units from it and wants
+`pl_leaps` above zero. `MDL_MAXV` is 236 in
 d_mdl.bas and d_alias.c both: at 191 the dog loaded past the BASIC
 check and overran the C scratch, and e1m1 died in `runtime error 14`,
 out of string space -- a corrupted near heap, not a full one. The
