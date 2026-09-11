@@ -139,7 +139,8 @@ declare sub mdl_think ( _
     byval can_chase as integer, _
     models() as Submodel, _
     brush() as BrushModel, _
-    planes() as Plane _
+    planes() as Plane, _
+    nail() as Spike _
 )
 declare sub pl_fire ( _
     g as Game, _
@@ -431,7 +432,7 @@ sub host_tick ( _
             if ( g.env.no_ai ) then
                 '' held at the spawn: the model gate's away arm
             else
-                mdl_think g, mdl_ent( mdl_i ), mon( mdl_ent( mdl_i ).kind ), -1, models(), brush(), planes()
+                mdl_think g, mdl_ent( mdl_i ), mon( mdl_ent( mdl_i ).kind ), -1, models(), brush(), planes(), nail()
             end if
             if ( mdl_ent( mdl_i ).state = MDL_ST_DEAD% ) then ndead = ndead + 1
         next mdl_i
@@ -738,13 +739,19 @@ sub host_render ( _
             end if
         end if
     next mdl_i
-    '' the nails in flight, a sliver each, dark with a bright end
+    '' the nails in flight, a sliver each, dark with a bright end; a
+    '' grenade a box
     for mdl_i = 0 to ubound( nail )
         if ( nail( mdl_i ).alive ) then
             bob = nail( mdl_i ).pos
             bob.z = bob.z - 1.0
-            nbox = mdl_draw_box( bob, 1.0, 2.0, 1.0, 0.0, mtx_fin, xresh, yresh, g.env.z_near, _
-                                 h_dst_dc, ENT_COL_BROWN%, ENT_COL_WHITE% )
+            if ( nail( mdl_i ).grenade ) then
+                nbox = mdl_draw_box( bob, 2.0, 4.0, 1.0, 0.0, mtx_fin, xresh, yresh, g.env.z_near, _
+                                     h_dst_dc, ENT_COL_BROWN%, ENT_COL_BROWN% )
+            else
+                nbox = mdl_draw_box( bob, 1.0, 2.0, 1.0, 0.0, mtx_fin, xresh, yresh, g.env.z_near, _
+                                     h_dst_dc, ENT_COL_BROWN%, ENT_COL_WHITE% )
+            end if
         end if
     next mdl_i
     '' the view weapon: v_shot, v_shot2 or v_nail by the weapon in hand,

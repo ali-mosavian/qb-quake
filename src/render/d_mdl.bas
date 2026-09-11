@@ -318,6 +318,7 @@ sub mdl_draw ( _
     case MDL_ST_RUN%    : frame = m.nstand + ent.anim_frame
     case MDL_ST_DEAD%   : frame = m.nstand + m.nrun + ent.anim_frame
     case MDL_ST_PAIN%   : frame = m.nstand + m.nrun + m.ndeath + ent.anim_frame
+    case MDL_ST_LEAP%   : frame = m.nstand + ent.anim_frame  '' no leap frames on the page: the run's
     case else           : frame = m.nstand + m.nrun + m.ndeath + m.npain + ent.anim_frame
     end select
     if ( frame >= m.nframe ) then frame = m.nframe - 1

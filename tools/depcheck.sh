@@ -29,7 +29,7 @@ mods=$(make BUILD="$OUT" -p -n 2>/dev/null |
 for m in $mods; do : > "$OUT/$m.obj"; done
 : > "$OUT/stuff.ini"; : > "$OUT/base.dat"
 : > "$OUT/FONT.FNT"
-: > "$OUT/.assets-stamp"; : > "$OUT/qrender.exe"
+: > "$OUT/.assets-stamp"; : > "$OUT/.maps-stamp"; : > "$OUT/GOMAP.BAT"; : > "$OUT/qrender.exe"
 
 uptodate () { make -q BUILD="$OUT" build 2>/dev/null; }
 

@@ -30,7 +30,9 @@ const MDL_ST_LEAP%     = 5    '' the dog in the air, on its velocity
 const MDL_KIND_ARMY%   = 0
 const MDL_KIND_KNIGHT% = 1
 const MDL_KIND_DOG%    = 2
-const MDL_KINDS%       = 3       '' mon() in main.bas: one MdlState a kind
+const MDL_KIND_OGRE%   = 3
+const MDL_KIND_DEMON%  = 4
+const MDL_KINDS%       = 5       '' mon() in main.bas: one MdlState a kind
 const MDL_HEALTH%       = 30  '' monster_army's health
 '' army_fire: FireBullets (4, dir, '0.1 0.1 0'), 4 damage a pellet, aimed
 '' 0.2 s behind the player's velocity
@@ -41,6 +43,7 @@ const MDL_AIM_LAG#      = 0.2
 '' SoldierCheckAttack's chance per think, by range, then 1 + random()
 const MDL_ATK_MELEE#    = 0.9
 const MDL_ATK_NEAR#     = 0.4
+const MDL_ATK_NEAR_MELEE# = 0.2 '' CheckAttack's, with a th_melee
 const MDL_ATK_MID#      = 0.05
 '' army_pain: pain_finished 0.6 for the short flinch, 1.1 for the others
 const MDL_PAIN_SHORT#   = 0.6
@@ -80,6 +83,32 @@ const DOG_LEAP_UP#       = 200.0
 const DOG_LEAP_MIN#      = 80.0  '' CheckDogJump's range, level distance
 const DOG_LEAP_MAX#      = 150.0
 const DOG_LEAP_DMG#      = 10.0  '' Dog_JumpTouch: 10 + 10 * random
+
+'' ogre.qc: the chainsaw on the run in melee range -- swing5..11's
+'' (r+r+r)*4 every other think within ai_melee's 100 -- and OgreFireGrenade
+const OGRE_HEALTH%       = 200
+const OGRE_SAW_RANGE#    = 100.0
+const OGRE_SAW_DMG#      = 4.0
+const OGRE_SWING#        = 1.4   '' a swing's 14 frames: ogsawatk once a swing
+const OGRE_GREN_FRAME%   = 2     '' ogre_nail4, $shoot3, throws
+const OGRE_GREN_SPEED#   = 600.0 '' toward the player, and 200 up
+const OGRE_GREN_UP#      = 200.0
+const OGRE_GREN_FUSE#    = 2.5
+const OGRE_GREN_DMG#     = 40.0  '' T_RadiusDamage 40, less half the distance
+'' demon.qc: attacka's claws on frames 5 and 11, 10 + 5 * random within
+'' 100, and CheckDemonJump's leap: 100 to 200 level, past 200 one in ten
+const DEMON_HEALTH%      = 300
+const DEMON_CLAW_RANGE#  = 100.0
+const DEMON_CLAW_BASE%   = 10
+const DEMON_CLAW_DMG#    = 5.0
+const DEMON_CLAW_A%      = 4     '' the frames that strike, 0-based
+const DEMON_CLAW_B%      = 10
+const DEMON_LEAP_SPEED#  = 600.0 '' demon1_jump4: v_forward * 600 + '0 0 250'
+const DEMON_LEAP_UP#     = 250.0
+const DEMON_LEAP_MIN#    = 100.0
+const DEMON_LEAP_MAX#    = 200.0
+const DEMON_LEAP_TOUCH#  = 400.0 '' Demon_JumpTouch bites past this speed
+const DEMON_LEAP_DMG#    = 40.0  '' 40 + 10 * random
 
 '' NOT in stock Quake: a walkmonster with no path_corner target just
 '' stands forever (see the note above) -- there is no explore state to
@@ -151,7 +180,7 @@ type MdlEnt
     flash_until as single      '' the volley's muzzle flash shows until then
     pain_finished as single    '' army_pain: no new flinch before this
     spawn       as Vec3        '' where it respawns
-    kind        as integer     '' MDL_KIND_ARMY%, KNIGHT or DOG
+    kind        as integer     '' MDL_KIND_*
     vel         as Vec3        '' a leaping dog's, MOVETYPE_STEP off the ground
     leapt       as integer     '' this leap's Dog_JumpTouch has landed its damage
     patrol      as integer     '' the map's target path_corner, -1 none; corner the one bound for

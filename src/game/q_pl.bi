@@ -31,6 +31,7 @@ const CONTENTS_SKY   = -6
 const PLAYER_HULL   = 1
 
 '' units per second squared. Quake's sv_gravity.
+const PL_BOUNCE#     = 1.5   '' MOVETYPE_BOUNCE's ClipVelocity overbounce
 const PL_FALLACC#    = 800.0
 '' a per-axis safety clamp, not a gameplay speed cap. Quake's sv_maxvelocity.
 const PL_MAXVEL#     = 2000.0
@@ -130,6 +131,7 @@ type Spike
     die_at      as single
     hostile     as integer     '' a trap's: it bites the player, not the monsters
     dmg         as integer     '' what a hostile one bites
+    grenade     as integer     '' an ogre's: gravity, a bounce, a fuse and a blast
 end type
 
 type PlayerCombat
@@ -219,7 +221,7 @@ const PL_LAND_SOFT#    = -300.0 '' PlayerPreThink: land.wav below this fall spee
 const PL_LAND_HARD#    = -650.0 '' land2.wav and five points
 '' the sounds, in tools/mksnd.py's SOUNDS order; SND_MON + kind * 4 is
 '' a monster's sight, then attack, pain, death
-const SND_COUNT%       = 71
+const SND_COUNT%       = 82
 const SND_SHOTGUN%     = 0
 const SND_SSG%         = 1
 const SND_NAIL%        = 2
@@ -242,13 +244,16 @@ const SND_LAND2%       = 20
 const SND_SLIME%       = 21
 const SND_BURN1%       = 22    '' two
 const SND_MON%         = 24
-const SND_DOOR%        = 36    '' doors.qc's sounds 1..4: stop, move
-const SND_SECRET1%     = 44    '' func_door_secret's 1..3: noise1..3
-const SND_BUTTON%      = 53    '' func_button's 0..3
-const SND_KEY%         = 59    '' a key taken: medieval, rune
-const SND_KEYTRY%      = 61    '' a key door refused then opened, medieval; rune is +2
-const SND_TRAIN%       = 68    '' plats/train1 the stop, train2 the move
-const SND_SPIKE2%      = 70    '' trap_spikeshooter
+const SND_DOOR%        = 44    '' doors.qc's sounds 1..4: stop, move
+const SND_SECRET1%     = 52    '' func_door_secret's 1..3: noise1..3
+const SND_BUTTON%      = 61    '' func_button's 0..3
+const SND_KEY%         = 67    '' a key taken: medieval, rune
+const SND_KEYTRY%      = 69    '' a key door refused then opened, medieval; rune is +2
+const SND_TRAIN%       = 76    '' plats/train1 the stop, train2 the move
+const SND_SPIKE2%      = 78    '' trap_spikeshooter
+const SND_DJUMP%       = 79    '' the demon's leap
+const SND_GRENADE%     = 80    '' the ogre's grenade thrown, and bounced
+const SND_BOUNCE%      = 81
 '' 57, 58 are comp1 and drone6, the ambient_* points; mkassets writes
 '' their ids into ents.bin, so nothing here names them -- and a const
 '' SND_AMBIENT% is the sub snd_ambient to BC, sigil or not

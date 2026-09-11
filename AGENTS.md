@@ -2081,6 +2081,27 @@ out of string space -- a corrupted near heap, not a full one. The
 memtrace prints `fre("")` as its third column now, so the next
 error 14 can be told from a real exhaustion in one look.
 
+**The ogre and the demon are kinds 3 and 4**, `mon()` in main.bas
+holding one MdlState a kind. The ogre's page is `stand:1,run,death,
+pain:3,shoot` (169 vertices, 32 frames): it saws on the run within
+ai_melee's 100, swing5..11's `(r+r+r)*4` every other think with no saw frames
+on the page, and past melee range throws OgreFireGrenade from shoot
+frame 2 at CheckAttack's 0.2 near and 0.05 mid. The grenade is a
+`Spike` with `grenade` set: `pl_nails_tick` flies it under gravity,
+bounces it off hull 1 at ClipVelocity's 1.5, and blows it up on the
+player's box or at 2.5 s -- T_RadiusDamage's 40 less half the
+distance, to the player alone. The demon's page is `stand:1,run,
+death,pain:3,attacka` (143, 34 of 38): attacka's charge strides with
+the claws on frames 5 and 11, 10 + 5 * random within 100, and
+CheckDemonJump's leap from 100 to 200 level (past 200 one think in
+ten), 600 forward and 250 up, 40 + 10 * random past 400 u/s -- the
+dog's leap state with its own numbers, and both draw the run cycle
+in the air now; the dog drew its last pain frame. e1m2 on easy has
+four ogres and a demon; the e1m2 gate's fifth arm stands 146 units
+before the ogre at (1790,-146) for six seconds and wants a bite with
+the ogre hunting -- health under 100 or a death, since it kills in
+that time and the respawn reads 100.
+
 **A monster that only looks while standing never sees anyone.** The
 port called FindTarget from `ai_stand` alone; id's `ai_walk` calls it
 every frame too, and a player who fired within the second is noticed
@@ -2246,6 +2267,19 @@ the DMA, and `viz` turns the sound on. `snd_started` and `snd_under` are
 in bench.txt; the two underruns a lit run always shows are the first
 frames, which build every surface.
 
+**The mixer's scratch is dsp.asm's to size, and snd_mix.c checks it.**
+`DSP_SCRATCH` was 1792 for a 1024-byte paint buffer, a 512-byte table
+and 8 channels of 14; the 32 static channels ran 304 bytes past the
+DOS block, and the 71 sounds past the 64-record table into the
+channels, whose clear then zeroed records 64 and up. dm3ish never
+noticed; e1m2 hung in BASIC's heap compactor once two more models
+moved the block, with nothing in run.out and no error.log -- the
+shape AGENTS.md's `B$FCompactMove` note describes. `snd_mix_setup`
+takes `qglDspScratchBytes()` and returns -1 when its layout does not
+fit, which `snd_init` reports (`0x0053`). A trace that stops at a
+model's marks may just be `MEM_MARKS` -- 64 now; 40 ran out at the
+eighth model's triangles.
+
 ## e1m1: the first id map
 
 `tools/check.sh --e1m1` pulls `maps/e1m1.bsp` out of the shareware PAK,
@@ -2328,9 +2362,13 @@ not move on any reference, but a pickup in the far doorway of
 391 for 376 -- both regenerated, 20 and 12 pixels. The oracles are out
 of the production link: `qglstub.bas` answers their flags with `0x0060`
 and `make ORACLES=1` builds the EXE `check.sh` runs them from, 13K of
-code. Next if it tightens: `sc_slot` at 33K. e1m2 is the next map and
-does not load yet: its clipnodes are 8,148 to e1m1's 5,408 and the
-first frame ran out of far heap with 6K left after the depth buffer.
+code. `sc_slot` is one integer a face now -- the block's generation tag
+and style epoch sit on the block, `sc_btag`/`sc_bstag`, since they
+describe its content and a face keeps only its block -- 22K back on
+e1m2's 5,516 faces less 4K on the blocks. e1m2 plays: far heap after
+the depth buffer 23,024 with eight models and the sound layer. Next
+if it tightens: per-map model loading (a kind the map lacks costs
+600 to 1,000 bytes), `mdl_ent()` sized to the map's count.
 
 **A black lit world with every counter normal is a missing allocation.**
 The surface builder's 16K conventional scratch was taken at the first

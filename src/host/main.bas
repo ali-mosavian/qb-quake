@@ -825,6 +825,8 @@ sub host_init ( _
     mdl_load g, g.nmdl, "v_nail"
     mdl_load g, mon( MDL_KIND_KNIGHT% ), "knight"
     mdl_load g, mon( MDL_KIND_DOG% ), "dog"
+    mdl_load g, mon( MDL_KIND_OGRE% ), "ogre"
+    mdl_load g, mon( MDL_KIND_DEMON% ), "demon"
     snd_init g
     g.mdl_count = 0
     if ( mon( MDL_KIND_ARMY% ).loaded ) then

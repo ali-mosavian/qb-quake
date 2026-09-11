@@ -101,7 +101,7 @@ ASSETS := data/assets/assets.zip
 # how it went missing: data/assets is generated, not tracked, and nothing
 # regenerated these. Only reachable with the PAK; wildcard-guarded so a
 # tree without it is not a build failure.
-MDL_ASSETS := $(if $(wildcard $(PAK)),data/assets/$(MDL).geo data/assets/knight.geo data/assets/dog.geo data/assets/v_shot.geo data/assets/v_shot2.geo data/assets/v_nail.geo)
+MDL_ASSETS := $(if $(wildcard $(PAK)),data/assets/$(MDL).geo data/assets/knight.geo data/assets/dog.geo data/assets/ogre.geo data/assets/demon.geo data/assets/v_shot.geo data/assets/v_shot2.geo data/assets/v_nail.geo)
 # The status bar's pictures, out of the PAK's gfx.wad.
 GFX_ASSETS := $(if $(wildcard $(PAK)),data/assets/sbar.raw data/assets/snd.raw)
 # The A* flight path -bench -campath walks. Generated, untracked, and it
@@ -150,6 +150,14 @@ data/assets/knight.geo: $(PAK) tools/mkmdl.py
 # run, the death, one flinch; no attack set, it bites on the run
 data/assets/dog.geo: $(PAK) tools/mkmdl.py
 	@python3 tools/mkmdl.py $(PAK) dog data/assets stand:1,run,death,pain:1
+
+# the ogre: 169 vertices, 32 frames -- the grenade's shoot set, no saw frames
+data/assets/ogre.geo: $(PAK) tools/mkmdl.py
+	@python3 tools/mkmdl.py $(PAK) ogre data/assets stand:1,run,death,pain:3,shoot
+
+# the demon: 143 vertices, 38 frames -- the claws fit, the leap does not
+data/assets/demon.geo: $(PAK) tools/mkmdl.py
+	@python3 tools/mkmdl.py $(PAK) demon data/assets stand:1,run,death,pain:3,attacka
 
 # the view weapon: shot1..7, the fire animation
 data/assets/v_shot.geo: $(PAK) tools/mkmdl.py

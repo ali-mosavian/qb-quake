@@ -493,6 +493,20 @@ if [[ "${1:-}" == "--e1m2" ]]; then
     else
         echo "FAIL  e1m2 trap: health ${hp:-none}; want under 100"; rc=1
     fi
+    # the ogre at (1790,-146) facing +y: 146 units before it for six
+    # seconds, the chainsaw or a grenade must have bitten -- it kills in
+    # that time and the respawn reads 100, so a death counts too -- and
+    # the kind-3 entity must be hunting (ent line: kind state hunting ...)
+    run_frame "-lm -nostats -at 1790 0 340 -yaw 90 -bench 400 -ticks 360" "$VBD_OUT/e1m2-ogre.bmp" e1m2.bsp
+    hp=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_health"{print $2}')
+    deaths=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_deaths"{print $2}')
+    og=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1 ~ /^ent[0-9]/ && $2 == 3 && $4 == -1' | wc -l | tr -d ' ')
+    if [[ ( "${hp:-100}" -lt 100 || "${deaths:-0}" -gt 0 ) && "${og:-0}" -ge 1 ]]; then
+        echo "PASS  e1m2 ogre: health $hp, deaths $deaths, $og ogre hunting"
+    else
+        echo "FAIL  e1m2 ogre: health ${hp:-none}, deaths ${deaths:-none}, ${og:-0} ogres hunting; want a bite and one"; rc=1
+        tr -d '\r' < "$VBD_OUT/bench.txt" | grep '^ent[0-9]'
+    fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc
 fi

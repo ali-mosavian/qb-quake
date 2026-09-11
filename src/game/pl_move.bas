@@ -101,6 +101,27 @@ declare function pl_key_name ( byval wt as integer, byval kind as integer ) as s
 declare sub ent_say ( g as Game, msg as string )
 declare sub ent_corner_at ( byval i as integer, c as PathCorner )
 declare sub mdl_patrol_to ( ent as MdlEnt, byval i as integer )
+declare function mdl_in_reach ( _
+    g as Game, _
+    ent as MdlEnt, _
+    byval range as single _
+) as integer
+declare sub mdl_claw ( g as Game, ent as MdlEnt )
+declare sub mdl_grenade ( _
+    g as Game, _
+    ent as MdlEnt, _
+    nail() as Spike _
+)
+declare sub mdl_leap ( _
+    g as Game, _
+    ent as MdlEnt, _
+    byval dx as single, _
+    byval dy as single, _
+    byval fwd as single, _
+    byval up as single _
+)
+declare function mdl_leap_height ( byval dz as single ) as integer
+declare sub pl_grenade_explode ( g as Game, s as Spike )
 declare sub ent_use_targets ( _
     g as Game, _
     byval id as integer, _
@@ -308,7 +329,8 @@ declare sub mdl_think ( _
     byval can_chase as integer, _
     models() as Submodel, _
     brush() as BrushModel, _
-    planes() as Plane _
+    planes() as Plane, _
+    nail() as Spike _
 )
 declare sub mdl_spawn ( _
     g as Game, _
@@ -403,6 +425,9 @@ dim shared mdl_run_dist() as integer
 dim shared knight_run_dist() as integer  '' knight_run1..8's ai_run
 dim shared dog_run_dist() as integer     '' dog_run1..12's ai_run
 dim shared knight_atk_dist() as integer  '' knight_atk1..10's ai_charge
+dim shared ogre_run_dist() as integer    '' ogre_run1..8's ai_run
+dim shared demon_run_dist() as integer   '' demon1_run1..6's ai_run
+dim shared demon_atk_dist() as integer   '' demon1_atta1..15's ai_charge
 
 '' sv_move.c's own STEPSIZE -- see mdl_movestep.
 const MDL_STEPSIZE# = 18.0
@@ -1260,13 +1285,13 @@ sub mdl_spawn ( _
         mdl_patrol_to ent, ent.corner
         ent.state = MDL_ST_RUN%
     end if
-    if ( ent.kind = MDL_KIND_KNIGHT% ) then
-        ent.health = KNIGHT_HEALTH%
-    elseif ( ent.kind = MDL_KIND_DOG% ) then
-        ent.health = DOG_HEALTH%
-    else
-        ent.health = MDL_HEALTH%
-    end if
+    select case ent.kind
+    case MDL_KIND_KNIGHT% : ent.health = KNIGHT_HEALTH%
+    case MDL_KIND_DOG%    : ent.health = DOG_HEALTH%
+    case MDL_KIND_OGRE%   : ent.health = OGRE_HEALTH%
+    case MDL_KIND_DEMON%  : ent.health = DEMON_HEALTH%
+    case else             : ent.health = MDL_HEALTH%
+    end select
     ent.hunting = 0
     ent.next_attack = 0.0
     ent.pain_finished = 0.0
@@ -1307,6 +1332,17 @@ sub mdl_spawn ( _
     knight_atk_dist(0) = 0 : knight_atk_dist(1) = 7 : knight_atk_dist(2) = 4 : knight_atk_dist(3) = 0
     knight_atk_dist(4) = 3 : knight_atk_dist(5) = 4 : knight_atk_dist(6) = 1 : knight_atk_dist(7) = 3
     knight_atk_dist(8) = 1 : knight_atk_dist(9) = 5
+    redim ogre_run_dist( 7 ) as integer
+    ogre_run_dist(0) =  9 : ogre_run_dist(1) = 12 : ogre_run_dist(2) =  8 : ogre_run_dist(3) = 22
+    ogre_run_dist(4) = 16 : ogre_run_dist(5) =  4 : ogre_run_dist(6) = 13 : ogre_run_dist(7) = 24
+    redim demon_run_dist( 5 ) as integer
+    demon_run_dist(0) = 20 : demon_run_dist(1) = 15 : demon_run_dist(2) = 36
+    demon_run_dist(3) = 20 : demon_run_dist(4) = 15 : demon_run_dist(5) = 36
+    redim demon_atk_dist( 14 ) as integer
+    demon_atk_dist(0)  = 4 : demon_atk_dist(1)  = 0 : demon_atk_dist(2)  = 0 : demon_atk_dist(3)  = 1
+    demon_atk_dist(4)  = 2 : demon_atk_dist(5)  = 1 : demon_atk_dist(6)  = 6 : demon_atk_dist(7)  = 8
+    demon_atk_dist(8)  = 4 : demon_atk_dist(9)  = 2 : demon_atk_dist(10) = 0 : demon_atk_dist(11) = 5
+    demon_atk_dist(12) = 8 : demon_atk_dist(13) = 4 : demon_atk_dist(14) = 4
 end sub
 
 ''::::::::::::::
@@ -1775,7 +1811,8 @@ sub mdl_think ( _
     byval can_chase as integer, _
     models() as Submodel, _
     brush() as BrushModel, _
-    planes() as Plane _
+    planes() as Plane, _
+    nail() as Spike _
 )
     dim dist as single
     dim goal as Vec3
@@ -1785,10 +1822,13 @@ sub mdl_think ( _
     dim dog as integer, dmg as integer
     dim fin as Vec3, tr as TraceResult, dz as single
     dim corner as PathCorner
+    dim ogre as integer, demon as integer, thr as single
 
     if ( m.loaded = 0 ) then exit sub
     knight = ( ent.kind = MDL_KIND_KNIGHT% )
     dog = ( ent.kind = MDL_KIND_DOG% )
+    ogre = ( ent.kind = MDL_KIND_OGRE% )
+    demon = ( ent.kind = MDL_KIND_DEMON% )
     if ( g.rdr.anim_time < ent.next_think ) then exit sub
     ent.next_think = g.rdr.anim_time + 0.1
 
@@ -1808,21 +1848,27 @@ sub mdl_think ( _
         exit sub
     end if
 
-    '' knight_atk1..10: ai_charge -- face the player and walk the
-    '' frame's distance straight ahead -- and the sword on 6, 7, 8.
+    '' the attack set, facing the player: knight_atk1..10 and
+    '' demon1_atta1..15 charge the frame's distance, the sword on 6, 7,
+    '' 8 and the claws on 5 and 11; ogre_nail1..7 stand and throw the
+    '' grenade from shoot frame 2
     if ( ent.state = MDL_ST_ATTACK% ) then
         ent.ideal_yaw = mdl_vectoyaw( g.pl.pos.x - ent.pos.x, g.pl.pos.y - ent.pos.y )
         mdl_change_yaw ent
-        dist = knight_atk_dist( ent.anim_frame )
+        dist = 0.0
+        if ( knight ) then dist = knight_atk_dist( ent.anim_frame )
+        if ( demon ) then dist = demon_atk_dist( ent.anim_frame )
         if ( dist > 0.0 ) then
             dx = cos( ent.yaw * 0.017453293 ) * dist
             dy = sin( ent.yaw * 0.017453293 ) * dist
             stepped = mdl_movestep( g, ent, dx, dy, g.wld.count.models, models(), brush(), planes() )
         end if
-        if ( ent.anim_frame >= KNIGHT_ATK_FIRST% and ent.anim_frame <= KNIGHT_ATK_LAST% ) then mdl_melee g, ent
+        if ( knight and ent.anim_frame >= KNIGHT_ATK_FIRST% and ent.anim_frame <= KNIGHT_ATK_LAST% ) then mdl_melee g, ent
+        if ( demon and ( ent.anim_frame = DEMON_CLAW_A% or ent.anim_frame = DEMON_CLAW_B% ) ) then mdl_claw g, ent
+        if ( ogre and ent.anim_frame = OGRE_GREN_FRAME% ) then mdl_grenade g, ent, nail()
         ent.anim_frame = ent.anim_frame + 1
         '' knight_atk10 is the last frame id uses; attackb11 is in the file
-        if ( ent.anim_frame > ubound( knight_atk_dist ) or ent.anim_frame >= m.natk ) then
+        if ( ent.anim_frame >= m.natk or ( knight and ent.anim_frame > ubound( knight_atk_dist ) ) ) then
             ent.state = MDL_ST_RUN%
             ent.anim_frame = 0
         end if
@@ -1843,8 +1889,14 @@ sub mdl_think ( _
         if ( ent.leapt = 0 ) then
             dx = g.pl.pos.x - ent.pos.x : dy = g.pl.pos.y - ent.pos.y : dz = g.pl.pos.z - ent.pos.z
             if ( abs( dx ) < MDL_HALF# + PL_HALF# and abs( dy ) < MDL_HALF# + PL_HALF# and abs( dz ) < MDL_ZHI# - PL_ZLO# ) then
-                if ( ent.vel.x * ent.vel.x + ent.vel.y * ent.vel.y + ent.vel.z * ent.vel.z > DOG_LEAP_SPEED# * DOG_LEAP_SPEED# ) then
-                    pl_damage g, int( DOG_LEAP_DMG# + rnd * DOG_LEAP_DMG# )
+                thr = DOG_LEAP_SPEED#
+                if ( demon ) then thr = DEMON_LEAP_TOUCH#
+                if ( ent.vel.x * ent.vel.x + ent.vel.y * ent.vel.y + ent.vel.z * ent.vel.z > thr * thr ) then
+                    if ( demon ) then
+                        pl_damage g, int( DEMON_LEAP_DMG# + rnd * 10.0 )
+                    else
+                        pl_damage g, int( DOG_LEAP_DMG# + rnd * DOG_LEAP_DMG# )
+                    end if
                     ent.leapt = -1
                 end if
             end if
@@ -1884,13 +1936,13 @@ sub mdl_think ( _
         exit sub
     end if
 
-    if ( knight ) then
-        dist = knight_run_dist( ent.anim_frame )
-    elseif ( dog ) then
-        dist = dog_run_dist( ent.anim_frame )
-    else
-        dist = mdl_run_dist( ent.anim_frame )
-    end if
+    select case ent.kind
+    case MDL_KIND_KNIGHT% : dist = knight_run_dist( ent.anim_frame )
+    case MDL_KIND_DOG%    : dist = dog_run_dist( ent.anim_frame )
+    case MDL_KIND_OGRE%   : dist = ogre_run_dist( ent.anim_frame )
+    case MDL_KIND_DEMON%  : dist = demon_run_dist( ent.anim_frame )
+    case else             : dist = mdl_run_dist( ent.anim_frame )
+    end select
     if ( ent.hunting and knight ) then
         '' CheckAttack for a monster with th_melee only: in RANGE_MELEE
         '' with a clear line, the sword instead of a step.
@@ -1919,19 +1971,66 @@ sub mdl_think ( _
                     dmg = int( ( rnd + rnd + rnd ) * DOG_BITE_DMG# )
                     if ( dmg > 0 ) then pl_damage g, dmg
                 elseif ( dx*dx + dy*dy > DOG_LEAP_MIN# * DOG_LEAP_MIN# and dx*dx + dy*dy < DOG_LEAP_MAX# * DOG_LEAP_MAX# ) then
-                    if ( MDL_ZLO# < dz + PL_ZLO# + 0.75 * ( PL_ZHI# - PL_ZLO# ) and MDL_ZHI# > dz + PL_ZLO# + 0.25 * ( PL_ZHI# - PL_ZLO# ) ) then
-                        '' dog_leap2: ai_face, a unit up, 300 forward and 200 up
-                        ent.ideal_yaw = mdl_vectoyaw( dx, dy )
-                        ent.yaw = ent.ideal_yaw
-                        ent.pos.z = ent.pos.z + 1.0
-                        ent.vel.x = cos( ent.yaw * 0.017453293 ) * DOG_LEAP_SPEED#
-                        ent.vel.y = sin( ent.yaw * 0.017453293 ) * DOG_LEAP_SPEED#
-                        ent.vel.z = DOG_LEAP_UP#
-                        ent.leapt = 0
-                        ent.state = MDL_ST_LEAP%
-                        ent.anim_frame = 0
+                    if ( mdl_leap_height( dz ) ) then
+                        '' dog_leap2: 300 forward and 200 up
+                        mdl_leap g, ent, dx, dy, DOG_LEAP_SPEED#, DOG_LEAP_UP#
                         ent.next_attack = g.rdr.anim_time + DOG_BITE_RATE#
-                        g.fight.leaps = g.fight.leaps + 1
+                        exit sub
+                    end if
+                end if
+            end if
+        end if
+        goal.x = g.pl.pos.x : goal.y = g.pl.pos.y : goal.z = g.pl.pos.z
+    elseif ( ent.hunting and ogre ) then
+        '' CheckAttack with a th_melee: in RANGE_MELEE with a clear line
+        '' the chainsaw on the run -- swing5..11's (r+r+r)*4 on every other
+        '' think, 7 bites a swing, within ai_melee's 100, no frames on the
+        '' page, ogsawatk once a swing;
+        '' past it the grenade at 0.2 near and 0.05 mid, 2 * random to be
+        '' ready again
+        if ( mdl_find_target( g, ent, models(), brush(), planes() ) ) then
+            dx = g.pl.pos.x - ent.pos.x : dy = g.pl.pos.y - ent.pos.y
+            d2 = dx*dx + dy*dy + ( g.pl.pos.z - ent.pos.z ) * ( g.pl.pos.z - ent.pos.z )
+            if ( d2 < MDL_RANGE_MELEE# * MDL_RANGE_MELEE# ) then
+                if ( g.rdr.anim_time >= ent.next_attack ) then
+                    ent.next_attack = g.rdr.anim_time + OGRE_SWING#
+                    snd_play g, SND_MON% + ent.kind * 4 + 1, ent.pos
+                end if
+                if ( ( ent.anim_frame and 1 ) and mdl_in_reach( g, ent, OGRE_SAW_RANGE# ) ) then
+                    dmg = int( ( rnd + rnd + rnd ) * OGRE_SAW_DMG# )
+                    if ( dmg > 0 ) then pl_damage g, dmg
+                end if
+            elseif ( g.rdr.anim_time >= ent.next_attack ) then
+                chance = MDL_ATK_MID#
+                if ( d2 < MDL_RANGE_NEAR# * MDL_RANGE_NEAR# ) then chance = MDL_ATK_NEAR_MELEE#
+                if ( d2 >= MDL_RANGE_MID# * MDL_RANGE_MID# ) then chance = 0.0
+                if ( rnd < chance ) then
+                    ent.next_attack = g.rdr.anim_time + 2.0 * rnd
+                    ent.state = MDL_ST_ATTACK%
+                    ent.anim_frame = 0
+                    exit sub
+                end if
+            end if
+        end if
+        goal.x = g.pl.pos.x : goal.y = g.pl.pos.y : goal.z = g.pl.pos.z
+    elseif ( ent.hunting and demon ) then
+        '' DemonCheckAttack: in RANGE_MELEE with a clear line the claws;
+        '' else, ready, CheckDemonJump -- 100 to 200 level, past 200 one
+        '' think in ten, the player's body at its height -- and the leap
+        if ( mdl_find_target( g, ent, models(), brush(), planes() ) ) then
+            dx = g.pl.pos.x - ent.pos.x : dy = g.pl.pos.y - ent.pos.y : dz = g.pl.pos.z - ent.pos.z
+            d2 = dx*dx + dy*dy + dz * dz
+            if ( d2 < MDL_RANGE_MELEE# * MDL_RANGE_MELEE# ) then
+                ent.state = MDL_ST_ATTACK%
+                ent.anim_frame = 0
+                exit sub
+            elseif ( g.rdr.anim_time >= ent.next_attack ) then
+                d2 = dx*dx + dy*dy
+                if ( d2 > DEMON_LEAP_MIN# * DEMON_LEAP_MIN# and ( d2 < DEMON_LEAP_MAX# * DEMON_LEAP_MAX# or rnd < 0.1 ) ) then
+                    if ( mdl_leap_height( dz ) ) then
+                        mdl_leap g, ent, dx, dy, DEMON_LEAP_SPEED#, DEMON_LEAP_UP#
+                        ent.next_attack = g.rdr.anim_time + 2.0 * rnd
+                        snd_play g, SND_DJUMP%, ent.pos
                         exit sub
                     end if
                 end if
@@ -2251,16 +2350,23 @@ sub mdl_damage ( _
     ent.hunting = -1
     ent.ideal_yaw = mdl_vectoyaw( g.pl.pos.x - ent.pos.x, g.pl.pos.y - ent.pos.y )
     if ( g.rdr.anim_time < ent.pain_finished ) then exit sub
-    if ( ent.kind = MDL_KIND_KNIGHT% ) then
+    select case ent.kind
+    case MDL_KIND_KNIGHT%, MDL_KIND_OGRE%, MDL_KIND_DEMON%
         ent.pain_finished = g.rdr.anim_time + KNIGHT_PAIN#
-    elseif ( rnd < MDL_PAIN_SHORT_P# ) then
-        ent.pain_finished = g.rdr.anim_time + MDL_PAIN_SHORT#
-    else
-        ent.pain_finished = g.rdr.anim_time + MDL_PAIN_LONG#
+    case else
+        if ( rnd < MDL_PAIN_SHORT_P# ) then
+            ent.pain_finished = g.rdr.anim_time + MDL_PAIN_SHORT#
+        else
+            ent.pain_finished = g.rdr.anim_time + MDL_PAIN_LONG#
+        end if
+    end select
+    snd_play g, SND_MON% + ent.kind * 4 + 2, ent.pos
+    '' demon1_pain: a hit under random() * 200 does not flinch
+    if ( ent.kind = MDL_KIND_DEMON% ) then
+        if ( rnd * 200.0 > dmg ) then exit sub
     end if
     ent.state = MDL_ST_PAIN%
     ent.anim_frame = 0
-    snd_play g, SND_MON% + ent.kind * 4 + 2, ent.pos
 end sub
 
 ''::::::::::::::
@@ -2340,14 +2446,85 @@ end sub
 '' desc: ai_melee: within 60 units, (random()+random()+random())*3.
 ''::::::::::::::
 sub mdl_melee ( g as Game, ent as MdlEnt )
-    dim dx as single, dy as single, dz as single
     dim dmg as integer
 
-    dx = g.pl.pos.x - ent.pos.x : dy = g.pl.pos.y - ent.pos.y : dz = g.pl.pos.z - ent.pos.z
-    if ( dx*dx + dy*dy + dz*dz > KNIGHT_MELEE_RANGE# * KNIGHT_MELEE_RANGE# ) then exit sub
+    if ( mdl_in_reach( g, ent, KNIGHT_MELEE_RANGE# ) = 0 ) then exit sub
     dmg = int( ( rnd + rnd + rnd ) * KNIGHT_MELEE_DMG# )
     if ( dmg > 0 ) then pl_damage g, dmg
 end sub
+
+'' ai_melee's and Demon_Melee's test: the player within range of the origin
+function mdl_in_reach ( _
+    g as Game, _
+    ent as MdlEnt, _
+    byval range as single _
+) as integer
+    dim dx as single, dy as single, dz as single
+
+    dx = g.pl.pos.x - ent.pos.x : dy = g.pl.pos.y - ent.pos.y : dz = g.pl.pos.z - ent.pos.z
+    mdl_in_reach = ( dx*dx + dy*dy + dz*dz <= range * range )
+end function
+
+'' Demon_Melee: within 100, dhit2 and 10 + 5 * random
+sub mdl_claw ( g as Game, ent as MdlEnt )
+    if ( mdl_in_reach( g, ent, DEMON_CLAW_RANGE# ) = 0 ) then exit sub
+    snd_play g, SND_MON% + ent.kind * 4 + 1, ent.pos
+    pl_damage g, DEMON_CLAW_BASE% + int( rnd * DEMON_CLAW_DMG# )
+end sub
+
+'' OgreFireGrenade: a Spike with grenade set, from the origin toward the
+'' player at 600 with 200 up; pl_nails_tick flies it
+sub mdl_grenade ( _
+    g as Game, _
+    ent as MdlEnt, _
+    nail() as Spike _
+)
+    dim n as integer, l as single
+    dim d as Vec3
+
+    n = pl_nail_free( nail() )
+    if ( n < 0 ) then exit sub
+    d.x = g.pl.pos.x - ent.pos.x : d.y = g.pl.pos.y - ent.pos.y : d.z = g.pl.pos.z - ent.pos.z
+    l = sqr( d.x*d.x + d.y*d.y + d.z*d.z )
+    if ( l < 1.0 ) then exit sub
+    nail(n).pos = ent.pos
+    nail(n).vel.x = d.x / l * OGRE_GREN_SPEED#
+    nail(n).vel.y = d.y / l * OGRE_GREN_SPEED#
+    nail(n).vel.z = OGRE_GREN_UP#
+    nail(n).die_at = g.rdr.anim_time + OGRE_GREN_FUSE#
+    nail(n).hostile = -1
+    nail(n).grenade = -1
+    nail(n).dmg = 0
+    nail(n).alive = -1
+    snd_play g, SND_GRENADE%, ent.pos
+end sub
+
+'' dog_leap2 and demon1_jump4: ai_face, a unit up, and the velocity
+sub mdl_leap ( _
+    g as Game, _
+    ent as MdlEnt, _
+    byval dx as single, _
+    byval dy as single, _
+    byval fwd as single, _
+    byval up as single _
+)
+    ent.ideal_yaw = mdl_vectoyaw( dx, dy )
+    ent.yaw = ent.ideal_yaw
+    ent.pos.z = ent.pos.z + 1.0
+    ent.vel.x = cos( ent.yaw * 0.017453293 ) * fwd
+    ent.vel.y = sin( ent.yaw * 0.017453293 ) * fwd
+    ent.vel.z = up
+    ent.leapt = 0
+    ent.state = MDL_ST_LEAP%
+    ent.anim_frame = 0
+    g.fight.leaps = g.fight.leaps + 1
+end sub
+
+'' CheckDogJump's and CheckDemonJump's height test: the player's body
+'' between a quarter and three quarters up the monster's
+function mdl_leap_height ( byval dz as single ) as integer
+    mdl_leap_height = ( MDL_ZLO# < dz + PL_ZLO# + 0.75 * ( PL_ZHI# - PL_ZLO# ) and MDL_ZHI# > dz + PL_ZLO# + 0.25 * ( PL_ZHI# - PL_ZLO# ) )
+end function
 
 ''::::::::::::::
 '' name: pl_item_add
@@ -2519,6 +2696,19 @@ sub pl_traps_tick ( _
     next k
 end sub
 
+'' OgreGrenadeExplode: r_exp3 and T_RadiusDamage 40 from where it lies,
+'' 40 less half the distance, to the player through the armor -- the
+'' monsters are spared, the blast having no owner to spare from it
+sub pl_grenade_explode ( g as Game, s as Spike )
+    dim dx as single, dy as single, dz as single, pts as single
+
+    s.alive = 0
+    snd_play g, SND_BOOM%, s.pos
+    dx = g.pl.pos.x - s.pos.x : dy = g.pl.pos.y - s.pos.y : dz = g.pl.pos.z + ( PL_ZLO# + PL_ZHI# ) * 0.5 - s.pos.z
+    pts = OGRE_GREN_DMG# - 0.5 * sqr( dx*dx + dy*dy + dz*dz )
+    if ( pts > 0.0 ) then pl_damage g, int( pts )
+end sub
+
 '' every nail a step along its velocity: the first monster on the way
 '' takes 9 (spike_touch), a shootable trigger or secret door fires, a
 '' wall ends it -- and so does six seconds
@@ -2539,12 +2729,13 @@ sub pl_nails_tick ( _
     dim n as integer, i as integer, best as integer, ndmg as integer
     dim fin as Vec3, dir as Vec3, tr as TraceResult
     dim pmins as Vec3, pmaxs as Vec3
-    dim t as single, bt as single, reach as single, spd as single
+    dim t as single, bt as single, reach as single, spd as single, backoff as single
 
     for n = 0 to ubound( nail )
         if ( nail(n).alive ) then
             if ( g.rdr.anim_time >= nail(n).die_at ) then
                 nail(n).alive = 0
+                if ( nail(n).grenade ) then pl_grenade_explode g, nail(n)
             else
                 fin.x = nail(n).pos.x + nail(n).vel.x * dt
                 fin.y = nail(n).pos.y + nail(n).vel.y * dt
@@ -2556,18 +2747,43 @@ sub pl_nails_tick ( _
                 dir.y = nail(n).vel.y / spd
                 dir.z = nail(n).vel.z / spd
                 if ( nail(n).hostile ) then
-                    '' A trap's spike leaves from a point 8 units off its
-                    '' wall, inside hull 1's grown solid, so it is walked
-                    '' as a point through hull 0: a step into solid ends
-                    '' it where it is. spike_touch on the player: their
-                    '' box over the step, T_Damage
-                    if ( pl_point_contents( fin, nodes(), planes() ) = CONTENTS_SOLID ) then
+                    '' the player's box over the step: spike_touch, or
+                    '' OgreGrenadeTouch on what takes damage
+                    pmins.x = g.pl.pos.x - PL_HALF# : pmaxs.x = g.pl.pos.x + PL_HALF#
+                    pmins.y = g.pl.pos.y - PL_HALF# : pmaxs.y = g.pl.pos.y + PL_HALF#
+                    pmins.z = g.pl.pos.z - PL_FEET# : pmaxs.z = g.pl.pos.z + PL_ZHI#
+                    t = pl_ray_box( pmins, pmaxs, nail(n).pos, dir, reach )
+                    if ( nail(n).grenade ) then
+                        '' MOVETYPE_BOUNCE: gravity, a hull-1 trace, the
+                        '' velocity off what it hits at ClipVelocity's 1.5
+                        '' and bounce.wav; SV_Physics_Toss lays it still on
+                        '' a floor under 60 up
+                        if ( t >= 0.0 ) then
+                            pl_grenade_explode g, nail(n)
+                        else
+                            nail(n).vel.z = nail(n).vel.z - PL_FALLACC# * dt
+                            fin.z = nail(n).pos.z + nail(n).vel.z * dt
+                            pl_trace nail(n).pos, fin, tr, g.wld.count.models, models(), brush(), clp_buffer(), planes()
+                            nail(n).pos = tr.end_pos
+                            if ( tr.frac < 1.0 ) then
+                                backoff = ( nail(n).vel.x * tr.norm.x + nail(n).vel.y * tr.norm.y + nail(n).vel.z * tr.norm.z ) * PL_BOUNCE#
+                                nail(n).vel.x = nail(n).vel.x - tr.norm.x * backoff
+                                nail(n).vel.y = nail(n).vel.y - tr.norm.y * backoff
+                                nail(n).vel.z = nail(n).vel.z - tr.norm.z * backoff
+                                if ( tr.norm.z > 0.7 and nail(n).vel.z < 60.0 ) then
+                                    nail(n).vel.x = 0.0 : nail(n).vel.y = 0.0 : nail(n).vel.z = 0.0
+                                else
+                                    snd_play g, SND_BOUNCE%, nail(n).pos
+                                end if
+                            end if
+                        end if
+                    elseif ( pl_point_contents( fin, nodes(), planes() ) = CONTENTS_SOLID ) then
+                        '' A trap's spike leaves from a point 8 units off
+                        '' its wall, inside hull 1's grown solid, so it is
+                        '' walked as a point through hull 0: a step into
+                        '' solid ends it where it is
                         nail(n).alive = 0
                     else
-                        pmins.x = g.pl.pos.x - PL_HALF# : pmaxs.x = g.pl.pos.x + PL_HALF#
-                        pmins.y = g.pl.pos.y - PL_HALF# : pmaxs.y = g.pl.pos.y + PL_HALF#
-                        pmins.z = g.pl.pos.z - PL_FEET# : pmaxs.z = g.pl.pos.z + PL_ZHI#
-                        t = pl_ray_box( pmins, pmaxs, nail(n).pos, dir, reach )
                         if ( t >= 0.0 ) then pl_damage g, nail(n).dmg : nail(n).alive = 0
                         nail(n).pos = fin
                     end if

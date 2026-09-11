@@ -39,21 +39,24 @@ SOUNDS = [
     "soldier/sight1", "soldier/sattck1", "soldier/pain1", "soldier/death1",         # 24..27
     "knight/ksight", "knight/sword1", "knight/khurt", "knight/kdeath",              # 28..31
     "dog/dsight", "dog/dattack1", "dog/dpain1", "dog/ddeath",                       # 32..35
+    "ogre/ogwake", "ogre/ogsawatk", "ogre/ogpain1", "ogre/ogdth",                    # 36..39
+    "demon/sight2", "demon/dhit2", "demon/dpain1", "demon/ddeath",                  # 40..43
     # doors.qc's sounds 1..4: the stop, then the move
-    "doors/drclos4", "doors/doormv1", "doors/hydro1", "doors/hydro2",               # 36..39
-    "doors/stndr1", "doors/stndr2", "doors/ddoor1", "doors/ddoor2",                 # 40..43
+    "doors/drclos4", "doors/doormv1", "doors/hydro1", "doors/hydro2",               # 44..47
+    "doors/stndr1", "doors/stndr2", "doors/ddoor1", "doors/ddoor2",                 # 48..51
     # func_door_secret's sounds 1..3: noise1, noise2, noise3
-    "doors/latch2", "doors/winch2", "doors/drclos4",                                # 44..46
-    "doors/airdoor1", "doors/airdoor2", "doors/airdoor2",                           # 47..49
-    "doors/basesec1", "doors/basesec2", "doors/basesec2",                           # 50..52
+    "doors/latch2", "doors/winch2", "doors/drclos4",                                # 52..54
+    "doors/airdoor1", "doors/airdoor2", "doors/airdoor2",                           # 55..57
+    "doors/basesec1", "doors/basesec2", "doors/basesec2",                           # 58..60
     # func_button's sounds 0..3
-    "buttons/airbut1", "buttons/switch21", "buttons/switch02", "buttons/switch04",  # 53..56
-    "ambience/comp1", "ambience/drone6",                                            # 57, 58 the ambients
-    "misc/medkey", "misc/runekey",                                                  # 59, 60 a key taken, by worldtype (base is registered)
-    "doors/medtry", "doors/meduse", "doors/runetry", "doors/runeuse",               # 61..64 a key door refused, opened, by worldtype
-    "ambience/drip1", "ambience/swamp1", "ambience/swamp2",                         # 65..67 more ambients
-    "plats/train1", "plats/train2",                                                 # 68, 69 a train's stop and move
-    "weapons/spike2",                                                               # 70 the spike shooter
+    "buttons/airbut1", "buttons/switch21", "buttons/switch02", "buttons/switch04",  # 61..64
+    "ambience/comp1", "ambience/drone6",                                            # 65, 66 the ambients
+    "misc/medkey", "misc/runekey",                                                  # 67, 68 a key taken, by worldtype (base is registered)
+    "doors/medtry", "doors/meduse", "doors/runetry", "doors/runeuse",               # 69..72 a key door refused, opened, by worldtype
+    "ambience/drip1", "ambience/swamp1", "ambience/swamp2",                         # 73..75 more ambients
+    "plats/train1", "plats/train2",                                                 # 76, 77 a train's stop and move
+    "weapons/spike2",                                                               # 78 the spike shooter
+    "demon/djump", "weapons/grenade", "weapons/bounce",                             # 79..81 the leap, the grenade thrown and bounced
 ]
 
 

@@ -28,6 +28,10 @@ def definitions():
     return out
 
 
+def flat(decl):
+    return ' '.join(decl.replace('_\n', ' ').split())
+
+
 def refresh(path, defs):
     s = io.open(path, 'rb').read().decode('latin-1').replace('\r\n', '\n')
     n = 0
@@ -38,8 +42,9 @@ def refresh(path, defs):
         if name not in defs:
             return m.group(0)
         new = defs[name]
-        if new.rstrip() != m.group(0).rstrip():
-            n += 1
+        if flat(new) == flat(m.group(0)):    # the same declare laid out differently stays
+            return m.group(0)
+        n += 1
         return new
 
     s = re.sub(r'^declare (sub|function) (\w+) \( _\n.*?^\)( as \w+)?$',
