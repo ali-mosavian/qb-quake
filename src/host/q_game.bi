@@ -32,6 +32,7 @@ type Game
     trig_count  as integer
     vmdl        as MdlState       '' the view weapon, v_shot
     smdl        as MdlState       '' and v_shot2, the super shotgun's
+    nmdl        as MdlState       '' and v_nail, the nailgun's
     kmdl        as MdlState       '' the knight
     dmdl        as MdlState       '' the dog
 

@@ -493,11 +493,12 @@ const SBARC_CELL_Y = 24          '' band of the EMS surface holding the cells
 const SBARC_WORK_Y = 48          '' band the blit reads, composed per paint
 const SBARC_EMS_H  = 72
 const SBARC_CELL   = 24
-const SBARC_CELLS  = 19
+const SBARC_CELLS  = 20
 const SBARC_MINUS  = 10
 const SBARC_ICON   = 11          '' SB_SHELLS
 const SBARC_FACE   = 12          '' FACE1, the healthy one; FACE5 is +4
 const SBARC_ARMOR  = 17          '' SB_ARMOR1, green; yellow is +1
+const SBARC_NAILS  = 19          '' SB_NAILS, the nailgun's ammo
 const SBARC_SPANS  = 6           '' opaque runs a cell row can have
 '' One EMS surface, 512 wide because a row must divide 16K: the untouched
 '' bar in rows 0..23, the 19 cells side by side in 24..47, the composed
@@ -505,7 +506,7 @@ const SBARC_SPANS  = 6           '' opaque runs a cell row can have
 dim shared sbar_work as long
 dim shared sbar_view as long            '' the 320 of the composed band
 dim shared sbar_health as integer, sbar_shells as integer, sbar_face as integer
-dim shared sbar_armor as integer
+dim shared sbar_armor as integer, sbar_weapon as integer
 dim shared spx() as integer      '' projected wireframe vertices
 dim shared spy() as integer
 '' Ring buffers behind the overlay graphs. Builds-per-frame is the one that
@@ -1374,15 +1375,18 @@ end sub
 sub scr_sbar_paint ( g as Game )
     dim hp as integer, sh as integer, f as integer, ar as integer
     dim y as integer, src as long, dst as long
+    dim icon as integer
 
     hp = g.fight.health
     if ( hp < 0 ) then hp = 0
-    sh = g.fight.shells
+    '' currentammo: what the weapon in hand fires
+    sh = g.fight.shells : icon = SBARC_ICON
+    if ( g.fight.weapon = PL_IT_NAILGUN% ) then sh = g.fight.nails : icon = SBARC_NAILS
     ar = g.fight.armor
     f = hp \ 20
     if ( f > 4 ) then f = 4
-    if ( hp = sbar_health and sh = sbar_shells and f = sbar_face and ar = sbar_armor ) then exit sub
-    sbar_health = hp : sbar_shells = sh : sbar_face = f : sbar_armor = ar
+    if ( hp = sbar_health and sh = sbar_shells and f = sbar_face and ar = sbar_armor and g.fight.weapon = sbar_weapon ) then exit sub
+    sbar_health = hp : sbar_shells = sh : sbar_face = f : sbar_armor = ar : sbar_weapon = g.fight.weapon
 
     for y = 0 to SBARC_H - 1
         src = qglSfRdRow( sbar_work, y )
@@ -1395,7 +1399,7 @@ sub scr_sbar_paint ( g as Game )
     end if
     scr_sbar_cell SBARC_FACE + ( 4 - f ), 112
     scr_sbar_num 136, hp
-    scr_sbar_cell SBARC_ICON, 224
+    scr_sbar_cell icon, 224
     scr_sbar_num 248, sh
 end sub
 

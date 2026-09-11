@@ -95,7 +95,8 @@ declare sub host_render ( _
     mip_buff_inf() as MipTex, _
     cam_up as Vec3, _
     mdl_ent() as MdlEnt, _
-    item() as ItemEnt _
+    item() as ItemEnt, _
+    nail() as Spike _
 )
 declare sub host_advance ( _
     g as Game, _
@@ -114,7 +115,8 @@ declare sub host_advance ( _
     host_accum as single, _
     host_ticks as long, _
     mdl_ent() as MdlEnt, _
-    item() as ItemEnt _
+    item() as ItemEnt, _
+    nail() as Spike _
 )
 declare function qglCheckAll () as integer
 declare function qglDiffAll () as integer
@@ -166,7 +168,8 @@ declare sub host_init ( _
     door() as DoorEnt, _
     trig() as TrigEnt, _
     mdl_ent() as MdlEnt, _
-    item() as ItemEnt _
+    item() as ItemEnt, _
+    nail() as Spike _
 )
 declare sub host_main ( _
     g as Game, _
@@ -190,7 +193,8 @@ declare sub host_main ( _
     trig() as TrigEnt, _
     tele() as Teleporter, _
     mdl_ent() as MdlEnt, _
-    item() as ItemEnt _
+    item() as ItemEnt, _
+    nail() as Spike _
 )
 
 ''
@@ -408,6 +412,7 @@ dim g as Game
 dim brush() as BrushModel
 dim tele() as Teleporter
 dim item() as ItemEnt
+dim nail() as Spike
 dim plat() as PlatEnt
 dim door() as DoorEnt
 dim trig() as TrigEnt
@@ -517,7 +522,7 @@ dim shared z_dc as long
               mdl_buffer(), order_list(), poly_flag(), gv_buf(), bit_array(), _
               cp_x(), cp_y(), cp_z(), mip_buff_inf(), _
               frustum(), brush(), tele(), plat(), door(), trig(), _
-              mdl_ent(), item()
+              mdl_ent(), item(), nail()
     if ( g.env.dump_tex ) then
         mod_tex_dump g
     elseif ( g.env.dump_set ) then
@@ -529,7 +534,7 @@ dim shared z_dc as long
                   mdl_buffer(), order_list(), poly_flag(), gv_buf(), brush(), _
                   frustum(), bit_array(), _
                   mip_buff_inf(), plat(), door(), trig(), tele(), _
-                  mdl_ent(), item()
+                  mdl_ent(), item(), nail()
     end if
     host_shutdown
     
@@ -649,7 +654,8 @@ sub host_init ( _
     door() as DoorEnt, _
     trig() as TrigEnt, _
     mdl_ent() as MdlEnt, _
-    item() as ItemEnt _
+    item() as ItemEnt, _
+    nail() as Spike _
 )
     ''
     '' Load profiling. A 1 kHz AUTOINIT timer counts milliseconds, and the
@@ -803,6 +809,7 @@ sub host_init ( _
     mdl_load g, g.mdl, "soldier"
     mdl_load g, g.vmdl, "v_shot"
     mdl_load g, g.smdl, "v_shot2"
+    mdl_load g, g.nmdl, "v_nail"
     mdl_load g, g.kmdl, "knight"
     mdl_load g, g.dmdl, "dog"
     g.mdl_count = 0
@@ -817,6 +824,7 @@ sub host_init ( _
         dim mdl_i as integer
         dim mdl_spawn_rad as single, mdl_spawn_fallback as Vec3, mdl_spawn_org as Vec3
         redim mdl_ent( MDL_MAX_ENTS% - 1 ) as MdlEnt
+        redim nail( PL_NAILS_MAX% - 1 ) as Spike
         '' the map's own, where it put them; a deathmatch map has none
         g.mdl_count = ent_load_monsters( g, mdl_ent(), mdl_buffer(), brush(), pln_buffer() )
         if ( g.mdl_count = 0 ) then
@@ -895,7 +903,8 @@ sub host_main ( _
     trig() as TrigEnt, _
     tele() as Teleporter, _
     mdl_ent() as MdlEnt, _
-    item() as ItemEnt _
+    item() as ItemEnt, _
+    nail() as Spike _
 )
     dim mtx_prj as Mat4
     dim aspect as single
@@ -1070,7 +1079,7 @@ sub host_main ( _
         pt0 = sys_now()
         host_advance g, g.scr.frame_time, brush(), mdl_buffer(), pln_buffer(), _
                       nds_buffer(), cp_x(), cp_y(), cp_z(), tele(), plat(), door(), trig(), _
-                      host_accum, host_ticks, mdl_ent(), item()
+                      host_accum, host_ticks, mdl_ent(), item(), nail()
         if ( g.ft.n > 0 ) then
             ptd = sys_now() - pt0
             g.pt.tick_sum = g.pt.tick_sum + ptd
@@ -1088,7 +1097,7 @@ sub host_main ( _
                      pln_buffer(), nds_buffer(), mdl_buffer(), order_list(), poly_flag(), _
                      gv_buf(), brush(), frustum(), bit_array(), _
                      mip_buff_inf(), cam_up, _
-                     mdl_ent(), item()
+                     mdl_ent(), item(), nail()
 
 
         ''

@@ -91,7 +91,7 @@ ASSETS := data/assets/assets.zip
 # how it went missing: data/assets is generated, not tracked, and nothing
 # regenerated these. Only reachable with the PAK; wildcard-guarded so a
 # tree without it is not a build failure.
-MDL_ASSETS := $(if $(wildcard $(PAK)),data/assets/$(MDL).geo data/assets/knight.geo data/assets/dog.geo data/assets/v_shot.geo data/assets/v_shot2.geo)
+MDL_ASSETS := $(if $(wildcard $(PAK)),data/assets/$(MDL).geo data/assets/knight.geo data/assets/dog.geo data/assets/v_shot.geo data/assets/v_shot2.geo data/assets/v_nail.geo)
 # The status bar's pictures, out of the PAK's gfx.wad.
 GFX_ASSETS := $(if $(wildcard $(PAK)),data/assets/sbar.raw)
 # The A* flight path -bench -campath walks. Generated, untracked, and it
@@ -132,6 +132,9 @@ data/assets/v_shot.geo: $(PAK) tools/mkmdl.py
 
 data/assets/v_shot2.geo: $(PAK) tools/mkmdl.py
 	@python3 tools/mkmdl.py $(PAK) v_shot2 data/assets shot
+
+data/assets/v_nail.geo: $(PAK) tools/mkmdl.py
+	@python3 tools/mkmdl.py $(PAK) v_nail data/assets shot
 
 # sbar.raw stands in for sbnum.raw too
 data/assets/sbar.raw: $(PAK) tools/mkgfx.py

@@ -73,7 +73,8 @@ declare sub host_tick ( _
     door() as DoorEnt, _
     trig() as TrigEnt, _
     mdl_ent() as MdlEnt, _
-    item() as ItemEnt _
+    item() as ItemEnt, _
+    nail() as Spike _
 )
 
 '' Declared here, not in a header: this module is the only caller of
@@ -139,6 +140,19 @@ declare sub mdl_think ( _
 )
 declare sub pl_fire ( _
     g as Game, _
+    mdl_ent() as MdlEnt, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane, _
+    item() as ItemEnt, _
+    door() as DoorEnt, _
+    trig() as TrigEnt, _
+    nail() as Spike _
+)
+declare sub pl_nails_tick ( _
+    g as Game, _
+    byval dt as single, _
+    nail() as Spike, _
     mdl_ent() as MdlEnt, _
     models() as Submodel, _
     brush() as BrushModel, _
@@ -274,7 +288,8 @@ sub host_advance ( _
     host_accum as single, _
     host_ticks as long, _
     mdl_ent() as MdlEnt, _
-    item() as ItemEnt _
+    item() as ItemEnt, _
+    nail() as Spike _
 )
     dim steps as integer
 
@@ -294,7 +309,7 @@ sub host_advance ( _
             exit do
         end if
         host_tick g, HOST_DT#, brush(), models(), planes(), nodes(), cp_x(), cp_y(), _
-                   cp_z(), tele(), plat(), door(), trig(), mdl_ent(), item()
+                   cp_z(), tele(), plat(), door(), trig(), mdl_ent(), item(), nail()
         host_accum = host_accum - HOST_DT#
         host_ticks = host_ticks + 1
         steps = steps + 1
@@ -337,7 +352,8 @@ sub host_tick ( _
     door() as DoorEnt, _
     trig() as TrigEnt, _
     mdl_ent() as MdlEnt, _
-    item() as ItemEnt _
+    item() as ItemEnt, _
+    nail() as Spike _
 )
     dim mdl_i as integer
     dim fire as integer, ndead as integer
@@ -354,7 +370,8 @@ sub host_tick ( _
     select case g.fight.state
     case GS_PLAY%
         pl_select_weapon g
-        if ( fire ) then pl_fire g, mdl_ent(), models(), brush(), planes(), item(), door(), trig()
+        if ( fire ) then pl_fire g, mdl_ent(), models(), brush(), planes(), item(), door(), trig(), nail()
+        pl_nails_tick g, dt, nail(), mdl_ent(), models(), brush(), planes(), item(), door(), trig()
         pl_items_touch g, item()
         '' every soldier's own think -- Quake's 10 Hz, gated inside
         '' mdl_think against g.rdr.anim_time
@@ -450,7 +467,8 @@ sub host_render ( _
     mip_buff_inf() as MipTex, _
     cam_up as Vec3, _
     mdl_ent() as MdlEnt, _
-    item() as ItemEnt _
+    item() as ItemEnt, _
+    nail() as Spike _
 )
     dim mtx_mdl as Mat4
     dim bob as Vec3
@@ -656,10 +674,20 @@ sub host_render ( _
             end if
         end if
     next mdl_i
-    '' the view weapon: v_shot, or v_shot2 with the super shotgun in hand,
+    '' the nails in flight, a sliver each, dark with a bright end
+    for mdl_i = 0 to ubound( nail )
+        if ( nail( mdl_i ).alive ) then
+            bob = nail( mdl_i ).pos
+            bob.z = bob.z - 1.0
+            nbox = mdl_draw_box( bob, 1.0, 2.0, 1.0, 0.0, mtx_fin, xresh, yresh, g.env.z_near, _
+                                 h_dst_dc, ENT_COL_BROWN%, ENT_COL_WHITE% )
+        end if
+    next mdl_i
+    '' the view weapon: v_shot, v_shot2 or v_nail by the weapon in hand,
     '' at the eye, turned with the view, last and with depth off, as Quake
     '' draws it. The fire animation is shot2.. at 10 Hz from the shot,
-    '' the model's last frame held until it is ready again.
+    '' the model's last frame held until it is ready again; the nailgun
+    '' cycles its eight while fire is held (player_nail1/2).
     if ( g.env.no_mdl = 0 and g.env.no_view = 0 ) then
         bob.x = g.pl.pos.x : bob.y = g.pl.pos.y : bob.z = g.pl.pos.z + PL_EYE#
         vdx = g.cam.look_at.x - g.cam.pos.x
@@ -670,12 +698,17 @@ sub host_render ( _
         vframe = 0
         if ( g.rdr.anim_time < g.fight.next_fire ) then
             vframe = 1 + int( ( g.rdr.anim_time - g.fight.fire_at ) * 10.0 )
+            if ( g.fight.weapon = PL_IT_NAILGUN% ) then vframe = 1 + ( clng( g.rdr.anim_time * 10.0 ) mod 8 )
         end if
         '' look_at is the point one unit from cam.pos the eye looks at,
         '' renderer Y up: the yaw's cos and sin are the difference's x and z
         '' over their length, the pitch's are that length and -y, positive
         '' looking down
-        if ( g.fight.weapon = PL_IT_SSG% and g.smdl.loaded ) then
+        if ( g.fight.weapon = PL_IT_NAILGUN% and g.nmdl.loaded ) then
+            mdl_draw_view g, g.nmdl, vframe, bob, _
+                          vdx / vlen, vdz / vlen, vlen, -vdy, _
+                          mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
+        elseif ( g.fight.weapon = PL_IT_SSG% and g.smdl.loaded ) then
             mdl_draw_view g, g.smdl, vframe, bob, _
                           vdx / vlen, vdz / vlen, vlen, -vdy, _
                           mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc

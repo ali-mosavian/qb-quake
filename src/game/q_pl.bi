@@ -122,6 +122,14 @@ end type
 
 '' The player as a combatant: what the soldiers can take away and what
 '' the shotgun spends. After vis in Game, so the C offsets stay put.
+'' a nail in flight, MOVETYPE_FLYMISSILE: no gravity, gone at the first touch
+type Spike
+    pos         as Vec3
+    vel         as Vec3
+    alive       as integer
+    die_at      as single
+end type
+
 type PlayerCombat
     health      as integer
     shells      as integer
@@ -146,6 +154,8 @@ type PlayerCombat
     armor_type  as single      '' armortype: the share of a hit it takes, 0 none
     items       as integer     '' the weapons owned, PL_IT_* bits
     weapon      as integer     '' the one in hand, a PL_IT_* bit
+    nails       as integer
+    nail_side   as integer     '' player_nail1/2: the barrel the next nail leaves
     fire_at     as single      '' anim_time of the last shot, the view weapon's frames run from it
 end type
 
@@ -156,6 +166,17 @@ const PL_SHELLS%       = 25     '' Quake's starting shells
 const PL_FIRE_RATE#    = 0.5    '' the shotgun's attack_finished
 const PL_IT_SHOTGUN%   = 1
 const PL_IT_SSG%       = 2
+const PL_IT_NAILGUN%   = 4
+'' W_FireSpikes: a nail every 0.2 from 16 up and 4 aside, alternating,
+'' at 1000 for 9 (spike_touch), gone after 6 s (SUB_Remove)
+const PL_NG_RATE#      = 0.2
+const PL_NG_SPEED#     = 1000.0
+const PL_NG_DMG%       = 9
+const PL_NG_OX#        = 4.0
+const PL_NG_UP#        = 16.0
+const PL_NG_LIFE#      = 6.0
+const PL_NAILS_CAP%    = 200
+const PL_NAILS_MAX%    = 24    '' in flight at once
 '' W_FireSuperShotgun: FireBullets (14, dir, '0.14 0.08 0'), two shells,
 '' 0.7 to be ready; with one shell left it fires as the shotgun
 const PL_SSG_RATE#     = 0.7

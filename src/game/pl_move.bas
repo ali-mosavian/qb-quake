@@ -94,6 +94,7 @@ declare sub pl_spread_dir ( _
     outdir as Vec3 _
 )
 declare sub pl_damage ( g as Game, byval dmg as integer )
+declare sub pl_fire_nail ( g as Game, nail() as Spike )
 declare sub mdl_melee ( g as Game, ent as MdlEnt )
 declare sub mdl_damage ( _
     g as Game, _
@@ -2035,7 +2036,8 @@ sub pl_fire ( _
     planes() as Plane, _
     item() as ItemEnt, _
     door() as DoorEnt, _
-    trig() as TrigEnt _
+    trig() as TrigEnt, _
+    nail() as Spike _
 )
     dim org as Vec3, fin as Vec3, aim as Vec3, dir as Vec3
     dim tr as TraceResult
@@ -2045,6 +2047,7 @@ sub pl_fire ( _
     dim npellet as integer, sx as single, sy as single, rate as single
 
     if ( g.rdr.anim_time < g.fight.next_fire ) then exit sub
+    if ( g.fight.weapon = PL_IT_NAILGUN% ) then pl_fire_nail g, nail() : exit sub
     if ( g.fight.shells <= 0 ) then exit sub
     npellet = PL_PELLETS% : sx = PL_SPREAD# : sy = PL_SPREAD# : rate = PL_FIRE_RATE#
     if ( g.fight.weapon = PL_IT_SSG% ) then
@@ -2249,10 +2252,110 @@ sub pl_respawn ( g as Game )
     pl_reset_player g
 end sub
 
-'' W_ChangeWeapon: 1 the shotgun, 2 the super shotgun once it is owned
+'' W_ChangeWeapon: 1 the shotgun, 2 the super shotgun and 3 the nailgun once owned
 sub pl_select_weapon ( g as Game )
     if ( g.env.keyboard.one ) then g.fight.weapon = PL_IT_SHOTGUN%
     if ( g.env.keyboard.two and ( g.fight.items and PL_IT_SSG% ) ) then g.fight.weapon = PL_IT_SSG%
+    if ( g.env.keyboard.three and ( g.fight.items and PL_IT_NAILGUN% ) ) then g.fight.weapon = PL_IT_NAILGUN%
+end sub
+
+'' W_FireSpikes: the aim from the eye, the nail from 16 up and 4 to the
+'' side the last one did not leave; a free slot or nothing
+sub pl_fire_nail ( g as Game, nail() as Spike )
+    dim aim as Vec3, rx as single, ry as single, rl as single
+    dim i as integer, n as integer
+
+    if ( g.fight.nails <= 0 ) then exit sub
+    i = -1
+    for n = 0 to ubound( nail )
+        if ( nail(n).alive = 0 and i < 0 ) then i = n
+    next n
+    if ( i < 0 ) then exit sub
+    g.fight.next_fire = g.rdr.anim_time + PL_NG_RATE#
+    g.fight.fire_at = g.rdr.anim_time
+    g.fight.show_hostile = g.rdr.anim_time + 1.0
+    g.fight.flash_until = g.rdr.anim_time + 0.1
+    g.fight.nails = g.fight.nails - 1
+    g.fight.nail_side = -g.fight.nail_side - 1
+    aim.x = g.cam.look_at.x - g.cam.pos.x
+    aim.y = g.cam.look_at.z - g.cam.pos.z
+    aim.z = g.cam.look_at.y - g.cam.pos.y
+    rx = aim.y : ry = -aim.x
+    rl = sqr( rx*rx + ry*ry )
+    if ( rl < 0.001 ) then rx = 1.0 : ry = 0.0 : rl = 1.0
+    rx = rx / rl * PL_NG_OX# : ry = ry / rl * PL_NG_OX#
+    if ( g.fight.nail_side ) then rx = -rx : ry = -ry
+    nail(i).pos.x = g.pl.pos.x + rx
+    nail(i).pos.y = g.pl.pos.y + ry
+    nail(i).pos.z = g.pl.pos.z + PL_NG_UP#
+    nail(i).vel.x = aim.x * PL_NG_SPEED#
+    nail(i).vel.y = aim.y * PL_NG_SPEED#
+    nail(i).vel.z = aim.z * PL_NG_SPEED#
+    nail(i).die_at = g.rdr.anim_time + PL_NG_LIFE#
+    nail(i).alive = -1
+end sub
+
+'' every nail a step along its velocity: the first monster on the way
+'' takes 9 (spike_touch), a shootable trigger or secret door fires, a
+'' wall ends it -- and so does six seconds
+sub pl_nails_tick ( _
+    g as Game, _
+    byval dt as single, _
+    nail() as Spike, _
+    mdl_ent() as MdlEnt, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane, _
+    item() as ItemEnt, _
+    door() as DoorEnt, _
+    trig() as TrigEnt _
+)
+    dim n as integer, i as integer, best as integer
+    dim fin as Vec3, dir as Vec3, tr as TraceResult
+    dim t as single, bt as single, reach as single
+
+    for n = 0 to ubound( nail )
+        if ( nail(n).alive ) then
+            if ( g.rdr.anim_time >= nail(n).die_at ) then
+                nail(n).alive = 0
+            else
+                fin.x = nail(n).pos.x + nail(n).vel.x * dt
+                fin.y = nail(n).pos.y + nail(n).vel.y * dt
+                fin.z = nail(n).pos.z + nail(n).vel.z * dt
+                pl_trace nail(n).pos, fin, tr, g.wld.count.models, models(), brush(), clp_buffer(), planes()
+                reach = PL_NG_SPEED# * dt
+                dir.x = nail(n).vel.x / PL_NG_SPEED#
+                dir.y = nail(n).vel.y / PL_NG_SPEED#
+                dir.z = nail(n).vel.z / PL_NG_SPEED#
+                bt = reach * tr.frac
+                best = -1
+                for i = 0 to g.mdl_count - 1
+                    if ( mdl_ent(i).state <> MDL_ST_DEAD% ) then
+                        t = mdl_ray_box( mdl_ent(i).pos, MDL_HALF#, MDL_ZLO#, MDL_ZHI#, nail(n).pos, dir, bt )
+                        if ( t >= 0.0 and t < bt ) then bt = t : best = i
+                    end if
+                next i
+                if ( best >= 0 ) then
+                    mdl_damage g, mdl_ent(best), PL_NG_DMG%, item()
+                    nail(n).alive = 0
+                end if
+                for i = 0 to g.trig_count - 1
+                    if ( trig(i).kind = ENT_TRIG_SHOOT and trig(i).state = ENT_TRIG_READY ) then
+                        t = pl_ray_box( trig(i).mins, trig(i).maxs, nail(n).pos, dir, bt + PL_HALF# )
+                        if ( t >= 0.0 ) then ent_trig_fire g, i, door(), trig() : nail(n).alive = 0
+                    end if
+                next i
+                for i = 0 to g.door_count - 1
+                    if ( door(i).shoot and door(i).state = ENT_DOOR_SHUT ) then
+                        t = pl_ray_box( door(i).mins, door(i).maxs, nail(n).pos, dir, bt + PL_HALF# )
+                        if ( t >= 0.0 ) then ent_door_fire g, door(i).link, door() : nail(n).alive = 0
+                    end if
+                next i
+                if ( tr.frac < 1.0 ) then nail(n).alive = 0
+                nail(n).pos = tr.end_pos
+            end if
+        end if
+    next n
 end sub
 
 sub pl_reset_player ( g as Game )
@@ -2263,6 +2366,7 @@ sub pl_reset_player ( g as Game )
     g.fight.secrets = 0
     g.fight.items = PL_IT_SHOTGUN%
     g.fight.weapon = PL_IT_SHOTGUN%
+    g.fight.nails = 0
     g.fight.next_fire = 0.0
     g.fight.show_hostile = 0.0
     g.pl.pos.x = g.fight.spawn.x : g.pl.pos.y = g.fight.spawn.y : g.pl.pos.z = g.fight.spawn.z
@@ -2354,6 +2458,18 @@ sub pl_items_touch ( g as Game, item() as ItemEnt )
                     g.fight.shells = g.fight.shells + item(i).amount
                     if ( g.fight.shells > PL_SHELLS_MAX% ) then g.fight.shells = PL_SHELLS_MAX%
                     item(i).gone = -1
+                elseif ( item(i).kind = ENT_ITEM_NAILGUN ) then
+                    g.fight.items = g.fight.items or PL_IT_NAILGUN%
+                    g.fight.weapon = PL_IT_NAILGUN%
+                    g.fight.nails = g.fight.nails + item(i).amount
+                    if ( g.fight.nails > PL_NAILS_CAP% ) then g.fight.nails = PL_NAILS_CAP%
+                    item(i).gone = -1
+                elseif ( item(i).kind = ENT_ITEM_NAILS ) then
+                    if ( g.fight.nails < PL_NAILS_CAP% ) then
+                        g.fight.nails = g.fight.nails + item(i).amount
+                        if ( g.fight.nails > PL_NAILS_CAP% ) then g.fight.nails = PL_NAILS_CAP%
+                        item(i).gone = -1
+                    end if
                 elseif ( item(i).kind = ENT_ITEM_ARMOR1 or item(i).kind = ENT_ITEM_ARMOR2 ) then
                     '' armor_touch: only what beats the armor worn, type * value
                     atype = PL_ARMOR1_TYPE#

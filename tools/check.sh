@@ -354,6 +354,17 @@ PY
     else
         echo "FAIL  e1m1 ssg: pl_weapon ${nw:-none} pl_shells ${nsh:-none}, the super shotgun was not taken"; rc=1
     fi
+    # and weapon_nailgun at (112,2352,16), fire held a second: the first
+    # tick's shotgun, the pickup with its 30 nails, then a nail every 0.2
+    # from 0.5 -- three by tick 60
+    run_frame "-lm -nostats -noai -at 112 2352 16 -yaw 90 -fire -bench 400 -ticks 60" "$VBD_OUT/e1m1-nail.bmp" e1m1.bsp
+    nw=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_weapon"{print $2}')
+    nn=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_nails"{print $2}')
+    if [[ "$nw" == 4 && "$nn" == 27 ]]; then
+        echo "PASS  e1m1 nail: pl_weapon 4 pl_nails 27, the nailgun was taken and fired"
+    else
+        echo "FAIL  e1m1 nail: pl_weapon ${nw:-none} pl_nails ${nn:-none}, the nailgun was not taken or did not fire"; rc=1
+    fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc
 fi

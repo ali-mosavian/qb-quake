@@ -2143,6 +2143,19 @@ the frame's, where Quake's is the centre of the rows above the bar --
 8 rows higher on 100. Rendering above the bar instead of under it would
 move every reference; not done.
 
+**`weapon_nailgun` is v_nail and W_FireSpikes**: the pickup brings 30
+nails and `item_spikes` 25 or 50, capped at 200; `3` chooses it; a
+nail every 0.2 s leaves 16 up and 4 to alternating sides at 1000 u/s
+and lives in `nail()`, `PL_NAILS_MAX` of them (`Spike`, no gravity:
+MOVETYPE_FLYMISSILE). `pl_nails_tick` steps each along its velocity
+through `pl_trace` -- hull 1, so a wall stops it 16 early, as the
+pellets -- bites the first monster on the way for 9 (spike_touch),
+fires a shootable trigger or secret door, and ends it on a wall or at
+six seconds. In flight it is a two-unit box, no spike.mdl. The bar's
+ammo is the weapon in hand's, `SB_NAILS` cell 19. The e1m1 gate's
+fourteenth arm stands on the nailgun with fire held a second and wants
+27 nails: 30 less three shots.
+
 **Pickups are the map's own `item_health`/`item_shells`**, shipped in
 `ents.bin` after the hides, dropped to the hull floor at load, and drawn
 as flat boxes by `mdl_draw_box` in `d_alias.c` -- six quads, no clip
@@ -2163,7 +2176,7 @@ writes `sbar.raw` and `sbnum.raw` -- the bar, the digits, the shells
 icon and the five faces -- with the qpic's 255 kept transparent: the bar
 is textured differently under every slot, so nothing can be composited
 offline. Everything lives in ONE EMS surface, 512 wide because an EMS
-row must divide 16K: the untouched bar in rows 0..23, the nineteen
+row must divide 16K: the untouched bar in rows 0..23, the twenty
 cells side by side in 24..47, the composed bar in 48..71, which a
 320-wide view aimed at row 48 hands to the blit. `scr_sbar_paint`
 copies the bar band over the working band and pokes each cell's opaque
