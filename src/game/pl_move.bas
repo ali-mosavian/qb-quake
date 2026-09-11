@@ -149,6 +149,14 @@ declare sub pl_items_drop ( _
     planes() as Plane _
 )
 declare sub pl_items_touch ( g as Game, item() as ItemEnt )
+declare sub pl_boxes_sync ( g as Game, item() as ItemEnt )
+declare sub pl_box_solid ( _
+    byval i as integer, _
+    mins as Vec3, _
+    maxs as Vec3, _
+    byval solid as integer _
+)
+const PL_BOXES% = 8             '' pl_trace.c's solid-box table
 declare function pl_point_contents ( _
     p as Vec3, _
     nodes() as Node, _
@@ -2341,6 +2349,7 @@ sub pl_box_hit ( _
     item(i).amount = item(i).amount - dmg
     if ( item(i).amount > 0 ) then exit sub
     item(i).gone = -1
+    pl_boxes_sync g, item()
     g.fight.booms = g.fight.booms + 1
     c = item(i).pos
     snd_play g, SND_BOOM%, c
@@ -2523,6 +2532,7 @@ sub pl_game_reset ( _
     for i = 0 to g.item_count - 1
         item(i).gone = 0
     next i
+    pl_boxes_sync g, item()
     pl_reset_player g
 end sub
 
@@ -2546,6 +2556,29 @@ sub pl_items_drop ( _
         fin.z = fin.z - 256.0
         pl_trace item(i).pos, fin, tr, g.wld.count.models, models(), brush(), clp_buffer(), planes()
         if ( tr.frac < 1.0 and tr.all_solid = 0 ) then item(i).pos = tr.end_pos
+    next i
+    pl_boxes_sync g, item()
+end sub
+
+
+'' Every live exploding box into pl_trace's solid table, the rest of
+'' the table off: SOLID_BBOX, the player and the monsters walk round it
+sub pl_boxes_sync ( g as Game, item() as ItemEnt )
+    dim i as integer, n as integer
+    dim mins as Vec3, maxs as Vec3
+
+    n = 0
+    for i = 0 to g.item_count - 1
+        if ( item(i).kind = ENT_ITEM_EXPLOBOX and item(i).gone = 0 and n < PL_BOXES% ) then
+            mins.x = item(i).pos.x - ENT_BOX_HALF# : maxs.x = item(i).pos.x + ENT_BOX_HALF#
+            mins.y = item(i).pos.y - ENT_BOX_HALF# : maxs.y = item(i).pos.y + ENT_BOX_HALF#
+            mins.z = item(i).pos.z : maxs.z = item(i).pos.z + ENT_BOX_TOP#
+            pl_box_solid n, mins, maxs, -1
+            n = n + 1
+        end if
+    next i
+    for i = n to PL_BOXES% - 1
+        pl_box_solid i, mins, maxs, 0
     next i
 end sub
 

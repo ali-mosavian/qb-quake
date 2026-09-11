@@ -400,6 +400,18 @@ PY
     else
         echo "FAIL  e1m1 boom: pl_booms ${nb:-none}, health ${hp:-none} -- the box did not go off"; rc=1
     fi
+    # and the box is solid: two seconds' walk at it from 100 units stops
+    # at its face plus the player's half width, x 103.03; with no hull the
+    # walk went through it to the wall past -60. Placed 28 up: at the
+    # floor's own z the world hull holds the player's feet solid and
+    # nothing moves, box or no box
+    run_frame "-lm -nostats -noai -at 172 2056 -180 -yaw 180 -walk -bench 400 -ticks 120" "$VBD_OUT/e1m1-boxwall.bmp" e1m1.bsp
+    bx=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="px"{print $2}')
+    if awk -v x="${bx:-0}" 'BEGIN{exit !(x > 100)}'; then
+        echo "PASS  e1m1 boxwall: px $bx, the box stopped the walk"
+    else
+        echo "FAIL  e1m1 boxwall: px ${bx:-none}, the walk went through the box"; rc=1
+    fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc
 fi

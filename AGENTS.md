@@ -2170,8 +2170,10 @@ slime leaves and no lava. `misc_explobox` is an item that is shot, not
 taken: 20 health against the pellets and nails (`pl_box_ray`, its brush
 plus the touch slack), then barrel_explode -- 160 less half the
 distance to the player through the armor and to every monster standing,
-CanDamage's line not asked. Drawn as its 30x30x62 box; the player walks
-through it, no hull being there. Three more e1m1 arms: the quad taken,
+CanDamage's line not asked. Drawn as its 30x30x62 box, and solid:
+`pl_trace.c` keeps a table of up to eight boxes (`pl_boxes_sync`) and
+sweeps every trace against each one grown by the player's hull-1 box,
+so the monsters walk round it too. Four e1m1 arms: the quad taken,
 two seconds in the slime pool, the box shot from 100 units.
 
 **Pickups are the map's own `item_health`/`item_shells`**, shipped in
