@@ -22,6 +22,8 @@
 #   tools/check.sh --model      the alias model against -nomdl at two campath
 #                               ticks: one where it must draw nothing, one
 #                               where it must draw something.
+#   tools/check.sh --drown      fifteen seconds under dm3ish's pool: the breath
+#                               out at twelve, three bites, health 82
 #   tools/check.sh --fight      ten seconds next to a knight: it must reach
 #                               the player and strike, and nothing may crash
 #   tools/check.sh --e1m1       id's e1m1, from the shareware PAK: it must
@@ -211,6 +213,21 @@ fi
 # no infront: at 150 the knight has to happen to face them while it
 # wanders, and once it did not -- it walked to x 620 and health stayed
 # 100 for the whole 600 ticks.
+# --drown is WaterMove's air. Dropped into dm3ish's pool at (500,0,-60) the
+# player sinks to -104 with the eyes under; the breath runs out at 12 s
+# and the bites are 4, 6 and 8 by 15 s: health 82. Without the port it
+# reads 100.
+if [[ "${1:-}" == "--drown" ]]; then
+    build_exe
+    run_frame "-lm -nostats -noai -at 500 0 -60 -bench 2000 -ticks 900" "$VBD_OUT/drown.bmp"
+    hp=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_health"{print $2}')
+    if [[ -f "$VBD_OUT/ERROR.LOG" ]]; then echo "FAIL  drown: $(cat "$VBD_OUT/ERROR.LOG")"; exit 1; fi
+    if [[ "${hp:-100}" -ge 80 && "${hp:-100}" -le 90 ]]; then
+        echo "PASS  drown: health $hp after fifteen seconds under"; exit 0
+    fi
+    echo "FAIL  drown: health ${hp:-none}, want 80..90 (three bites from 100)"; exit 1
+fi
+
 if [[ "${1:-}" == "--fight" ]]; then
     build_exe
     run_frame "-lm -nostats -at 364 -48 48 -yaw 0 -bench 400 -ticks 600" "$VBD_OUT/fight.bmp"

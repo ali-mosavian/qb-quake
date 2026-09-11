@@ -2332,7 +2332,10 @@ off and lava down to a bite a second, the pentagram (`pent_until`)
 makes `pl_damage` return -- T_Damage's invincible_finished, protect3
 two seconds apart while it does; e1m8's gate stands on its own. Slime and lava hurt at all now,
 `pl_env_damage`, PlayerPreThink's 4 and 10 a water level; e1m1 has 112
-slime leaves and no lava. `misc_explobox` is an item that is shot, not
+slime leaves and no lava. Drowning is WaterMove's: `PL_AIR` seconds
+of breath from the last tick with the eyes out, then a bite a second,
+two more each time and back to 10 past 15; `tools/check.sh --drown`
+sits under dm3ish's pool fifteen seconds and wants health 82. `misc_explobox` is an item that is shot, not
 taken: 20 health against the pellets and nails (`pl_box_ray`, its brush
 plus the touch slack), then barrel_explode -- 160 less half the
 distance to the player through the armor and to every monster standing,

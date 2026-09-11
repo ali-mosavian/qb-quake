@@ -2925,6 +2925,17 @@ end sub
 '' PlayerPreThink's water: lava bites 10 a level each 0.2 s, a second
 '' in the suit; slime 4 a level each second, nothing in the suit
 sub pl_env_damage ( g as Game )
+    '' WaterMove's air: the breath lasts PL_AIR from the last tick with
+    '' the eyes out; under past it, a bite a second, two more each time
+    if ( g.pl.water_level <> 3 ) then
+        g.fight.air_until = g.rdr.anim_time + PL_AIR#
+        g.fight.air_dmg = 2
+    elseif ( g.rdr.anim_time > g.fight.air_until and g.rdr.anim_time >= g.fight.air_pain ) then
+        g.fight.air_dmg = g.fight.air_dmg + 2
+        if ( g.fight.air_dmg > 15 ) then g.fight.air_dmg = 10
+        pl_damage g, g.fight.air_dmg
+        g.fight.air_pain = g.rdr.anim_time + 1.0
+    end if
     if ( g.pl.water_level = 0 ) then exit sub
     if ( g.rdr.anim_time < g.fight.dmg_time ) then exit sub
     if ( g.pl.water_type = CONTENTS_LAVA ) then
@@ -3286,6 +3297,9 @@ sub pl_reset_player ( g as Game )
     g.fight.suit_until = 0.0
     g.fight.pent_until = 0.0
     g.fight.pent_at = 0.0
+    g.fight.air_until = g.rdr.anim_time + PL_AIR#
+    g.fight.air_dmg = 2
+    g.fight.air_pain = 0.0
     g.fight.dmg_time = 0.0
     g.fight.next_fire = 0.0
     g.fight.show_hostile = 0.0

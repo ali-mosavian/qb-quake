@@ -166,6 +166,9 @@ type PlayerCombat
     pent_until  as single      '' invincible_finished: T_Damage returns
     pent_at     as single      '' invincible_sound: the next protect3, two seconds apart
     dmg_time    as single      '' the next slime or lava bite
+    air_until   as single      '' air_finished: PL_AIR from the last tick with the eyes out
+    air_dmg     as integer     '' WaterMove's dmg: 2, two more a bite, back to 10 past 15
+    air_pain    as single      '' pain_finished: a bite a second
     booms       as integer     '' exploding boxes gone, for the bench
     fire_at     as single      '' anim_time of the last shot, the view weapon's frames run from it
     pain_at     as single      '' PainSound's pain_finished: one grunt a half second
@@ -317,6 +320,7 @@ const PL_HALF#         = 16.0
 const PL_ZLO#          = -24.0
 const PL_ZHI#          = 32.0
 const PL_DEATH_PAUSE#  = 1.5    '' seconds YOU DIED stays before the respawn
+const PL_AIR#          = 12.0   '' WaterMove: seconds of breath
 
 const GS_TITLE% = 0             '' fire starts the fight
 const GS_PLAY%  = 1
