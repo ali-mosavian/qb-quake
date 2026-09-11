@@ -525,6 +525,17 @@ if [[ "${1:-}" == "--e1m3" ]]; then
     run_frame "-lm -nostats -noai -bench 40 -ticks 60" "$VBD_OUT/e1m3-spawn.bmp" e1m3.bsp
     out=$(python3 "$ROOT/tools/imgdiff.py" "$ROOT/tools/ref/e1m3-spawn.bmp" "$VBD_OUT/e1m3-spawn.bmp" | tail -1)
     if [[ "$out" == IDENTICAL* ]]; then echo "PASS  e1m3 spawn: $out"; else echo "FAIL  e1m3 spawn: $out"; rc=1; fi
+    # the grenade launcher at (-408,-1800,88), fired straight down for four
+    # seconds: the five rockets it came with go, and the blasts hurt
+    run_frame "-lm -nostats -noai -at -408 -1800 88 -pitch 89 -fire -bench 400 -ticks 240" "$VBD_OUT/e1m3-gl.bmp" e1m3.bsp
+    rk=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_rockets"{print $2}')
+    hp=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_health"{print $2}')
+    deaths=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_deaths"{print $2}')
+    if [[ "${rk:-5}" -lt 5 && ( "${hp:-100}" -lt 100 || "${deaths:-0}" -gt 0 ) ]]; then
+        echo "PASS  e1m3 gl: rockets $rk, health $hp, deaths $deaths"
+    else
+        echo "FAIL  e1m3 gl: rockets ${rk:-none}, health ${hp:-none}, deaths ${deaths:-none}; want under 5 and a blast felt"; rc=1
+    fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc
 fi

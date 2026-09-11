@@ -121,7 +121,24 @@ declare sub mdl_leap ( _
     byval up as single _
 )
 declare function mdl_leap_height ( byval dz as single ) as integer
-declare sub pl_grenade_explode ( g as Game, s as Spike )
+declare sub pl_grenade_explode ( _
+    g as Game, _
+    s as Spike, _
+    mdl_ent() as MdlEnt, _
+    item() as ItemEnt _
+)
+declare sub pl_grenade_tick ( _
+    g as Game, _
+    s as Spike, _
+    byval dt as single, _
+    dir as Vec3, _
+    byval reach as single, _
+    mdl_ent() as MdlEnt, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane, _
+    item() as ItemEnt _
+)
 declare sub ent_use_targets ( _
     g as Game, _
     byval id as integer, _
@@ -130,6 +147,7 @@ declare sub ent_use_targets ( _
     plat() as PlatEnt _
 )
 declare sub pl_fire_nail ( g as Game, nail() as Spike )
+declare sub pl_fire_grenade ( g as Game, nail() as Spike )
 declare function pl_nail_free ( nail() as Spike ) as integer
 declare sub pl_box_hit ( _
     g as Game, _
@@ -2247,6 +2265,7 @@ sub pl_fire ( _
 
     if ( g.rdr.anim_time < g.fight.next_fire ) then exit sub
     if ( g.fight.weapon = PL_IT_NAILGUN% ) then pl_fire_nail g, nail() : exit sub
+    if ( g.fight.weapon = PL_IT_GL% ) then pl_fire_grenade g, nail() : exit sub
     if ( g.fight.shells <= 0 ) then exit sub
     npellet = PL_PELLETS% : sx = PL_SPREAD# : sy = PL_SPREAD# : rate = PL_FIRE_RATE#
     if ( g.fight.weapon = PL_IT_SSG% ) then
@@ -2494,7 +2513,7 @@ sub mdl_grenade ( _
     nail(n).die_at = g.rdr.anim_time + OGRE_GREN_FUSE#
     nail(n).hostile = -1
     nail(n).grenade = -1
-    nail(n).dmg = 0
+    nail(n).dmg = OGRE_GREN_DMG#
     nail(n).alive = -1
     snd_play g, SND_GRENADE%, ent.pos
 end sub
@@ -2559,6 +2578,7 @@ sub pl_select_weapon ( g as Game )
     if ( g.env.keyboard.one ) then g.fight.weapon = PL_IT_SHOTGUN%
     if ( g.env.keyboard.two and ( g.fight.items and PL_IT_SSG% ) ) then g.fight.weapon = PL_IT_SSG%
     if ( g.env.keyboard.three and ( g.fight.items and PL_IT_NAILGUN% ) ) then g.fight.weapon = PL_IT_NAILGUN%
+    if ( g.env.keyboard.four and ( g.fight.items and PL_IT_GL% ) ) then g.fight.weapon = PL_IT_GL%
 end sub
 
 '' a pellet or nail's line against the box standing at, its brush
@@ -2660,6 +2680,31 @@ sub pl_fire_nail ( g as Game, nail() as Spike )
     nail(i).alive = -1
 end sub
 
+'' W_FireGrenade: from the player's origin, 600 along the aim and 200
+'' up, the blast four times under the quad
+sub pl_fire_grenade ( g as Game, nail() as Spike )
+    dim i as integer
+
+    if ( g.fight.rockets <= 0 ) then exit sub
+    i = pl_nail_free( nail() )
+    if ( i < 0 ) then exit sub
+    g.fight.next_fire = g.rdr.anim_time + PL_GL_RATE#
+    g.fight.fire_at = g.rdr.anim_time
+    snd_play g, SND_GRENADE%, g.pl.pos
+    g.fight.show_hostile = g.rdr.anim_time + 1.0
+    g.fight.rockets = g.fight.rockets - 1
+    nail(i).pos = g.pl.pos
+    nail(i).vel.x = ( g.cam.look_at.x - g.cam.pos.x ) * PL_GL_SPEED#
+    nail(i).vel.y = ( g.cam.look_at.z - g.cam.pos.z ) * PL_GL_SPEED#
+    nail(i).vel.z = ( g.cam.look_at.y - g.cam.pos.y ) * PL_GL_SPEED# + PL_GL_UP#
+    nail(i).die_at = g.rdr.anim_time + PL_GL_FUSE#
+    nail(i).hostile = 0
+    nail(i).grenade = -1
+    nail(i).dmg = PL_GL_DMG#
+    if ( g.rdr.anim_time < g.fight.quad_until ) then nail(i).dmg = nail(i).dmg * PL_QUAD_MUL%
+    nail(i).alive = -1
+end sub
+
 function pl_nail_free ( nail() as Spike ) as integer
     dim n as integer
     pl_nail_free = -1
@@ -2696,17 +2741,85 @@ sub pl_traps_tick ( _
     next k
 end sub
 
-'' OgreGrenadeExplode: r_exp3 and T_RadiusDamage 40 from where it lies,
-'' 40 less half the distance, to the player through the armor -- the
-'' monsters are spared, the blast having no owner to spare from it
-sub pl_grenade_explode ( g as Game, s as Spike )
+'' GrenadeExplode: r_exp3 and T_RadiusDamage from where it lies, the
+'' blast less half the distance, to the player through the armor and,
+'' for the player's own, to every monster standing -- an ogre's spares
+'' them, the blast having no owner to spare from it
+sub pl_grenade_explode ( _
+    g as Game, _
+    s as Spike, _
+    mdl_ent() as MdlEnt, _
+    item() as ItemEnt _
+)
     dim dx as single, dy as single, dz as single, pts as single
+    dim m as integer
 
     s.alive = 0
     snd_play g, SND_BOOM%, s.pos
     dx = g.pl.pos.x - s.pos.x : dy = g.pl.pos.y - s.pos.y : dz = g.pl.pos.z + ( PL_ZLO# + PL_ZHI# ) * 0.5 - s.pos.z
-    pts = OGRE_GREN_DMG# - 0.5 * sqr( dx*dx + dy*dy + dz*dz )
+    pts = s.dmg - 0.5 * sqr( dx*dx + dy*dy + dz*dz )
     if ( pts > 0.0 ) then pl_damage g, int( pts )
+    if ( s.hostile ) then exit sub
+    for m = 0 to g.mdl_count - 1
+        if ( mdl_ent(m).state <> MDL_ST_DEAD% ) then
+            dx = mdl_ent(m).pos.x - s.pos.x : dy = mdl_ent(m).pos.y - s.pos.y
+            dz = mdl_ent(m).pos.z + ( MDL_ZLO# + MDL_ZHI# ) * 0.5 - s.pos.z
+            pts = s.dmg - 0.5 * sqr( dx*dx + dy*dy + dz*dz )
+            if ( pts > 0.0 ) then mdl_damage g, mdl_ent(m), int( pts ), item()
+        end if
+    next m
+end sub
+
+'' MOVETYPE_BOUNCE, either side's: what it can hurt over the step --
+'' the player's box for an ogre's, a monster's for the player's --
+'' blows it up (GrenadeTouch); else gravity, a hull-1 trace, the
+'' velocity off what it hits at ClipVelocity's 1.5 and bounce.wav,
+'' and SV_Physics_Toss lays it still on a floor under 60 up
+sub pl_grenade_tick ( _
+    g as Game, _
+    s as Spike, _
+    byval dt as single, _
+    dir as Vec3, _
+    byval reach as single, _
+    mdl_ent() as MdlEnt, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane, _
+    item() as ItemEnt _
+)
+    dim pmins as Vec3, pmaxs as Vec3, fin as Vec3, tr as TraceResult
+    dim t as single, backoff as single, i as integer
+
+    if ( s.hostile ) then
+        pmins.x = g.pl.pos.x - PL_HALF# : pmaxs.x = g.pl.pos.x + PL_HALF#
+        pmins.y = g.pl.pos.y - PL_HALF# : pmaxs.y = g.pl.pos.y + PL_HALF#
+        pmins.z = g.pl.pos.z - PL_FEET# : pmaxs.z = g.pl.pos.z + PL_ZHI#
+        t = pl_ray_box( pmins, pmaxs, s.pos, dir, reach )
+        if ( t >= 0.0 ) then pl_grenade_explode g, s, mdl_ent(), item() : exit sub
+    else
+        for i = 0 to g.mdl_count - 1
+            if ( mdl_ent(i).state <> MDL_ST_DEAD% ) then
+                t = mdl_ray_box( mdl_ent(i).pos, MDL_HALF#, MDL_ZLO#, MDL_ZHI#, s.pos, dir, reach )
+                if ( t >= 0.0 ) then pl_grenade_explode g, s, mdl_ent(), item() : exit sub
+            end if
+        next i
+    end if
+    s.vel.z = s.vel.z - PL_FALLACC# * dt
+    fin.x = s.pos.x + s.vel.x * dt
+    fin.y = s.pos.y + s.vel.y * dt
+    fin.z = s.pos.z + s.vel.z * dt
+    pl_trace s.pos, fin, tr, g.wld.count.models, models(), brush(), clp_buffer(), planes()
+    s.pos = tr.end_pos
+    if ( tr.frac >= 1.0 ) then exit sub
+    backoff = ( s.vel.x * tr.norm.x + s.vel.y * tr.norm.y + s.vel.z * tr.norm.z ) * PL_BOUNCE#
+    s.vel.x = s.vel.x - tr.norm.x * backoff
+    s.vel.y = s.vel.y - tr.norm.y * backoff
+    s.vel.z = s.vel.z - tr.norm.z * backoff
+    if ( tr.norm.z > 0.7 and s.vel.z < 60.0 ) then
+        s.vel.x = 0.0 : s.vel.y = 0.0 : s.vel.z = 0.0
+    else
+        snd_play g, SND_BOUNCE%, s.pos
+    end if
 end sub
 
 '' every nail a step along its velocity: the first monster on the way
@@ -2729,13 +2842,13 @@ sub pl_nails_tick ( _
     dim n as integer, i as integer, best as integer, ndmg as integer
     dim fin as Vec3, dir as Vec3, tr as TraceResult
     dim pmins as Vec3, pmaxs as Vec3
-    dim t as single, bt as single, reach as single, spd as single, backoff as single
+    dim t as single, bt as single, reach as single, spd as single
 
     for n = 0 to ubound( nail )
         if ( nail(n).alive ) then
             if ( g.rdr.anim_time >= nail(n).die_at ) then
                 nail(n).alive = 0
-                if ( nail(n).grenade ) then pl_grenade_explode g, nail(n)
+                if ( nail(n).grenade ) then pl_grenade_explode g, nail(n), mdl_ent(), item()
             else
                 fin.x = nail(n).pos.x + nail(n).vel.x * dt
                 fin.y = nail(n).pos.y + nail(n).vel.y * dt
@@ -2746,38 +2859,17 @@ sub pl_nails_tick ( _
                 dir.x = nail(n).vel.x / spd
                 dir.y = nail(n).vel.y / spd
                 dir.z = nail(n).vel.z / spd
+                if ( nail(n).grenade ) then
+                    pl_grenade_tick g, nail(n), dt, dir, reach, mdl_ent(), models(), brush(), planes(), item()
+                    goto nail_next
+                end if
                 if ( nail(n).hostile ) then
-                    '' the player's box over the step: spike_touch, or
-                    '' OgreGrenadeTouch on what takes damage
+                    '' the player's box over the step: spike_touch
                     pmins.x = g.pl.pos.x - PL_HALF# : pmaxs.x = g.pl.pos.x + PL_HALF#
                     pmins.y = g.pl.pos.y - PL_HALF# : pmaxs.y = g.pl.pos.y + PL_HALF#
                     pmins.z = g.pl.pos.z - PL_FEET# : pmaxs.z = g.pl.pos.z + PL_ZHI#
                     t = pl_ray_box( pmins, pmaxs, nail(n).pos, dir, reach )
-                    if ( nail(n).grenade ) then
-                        '' MOVETYPE_BOUNCE: gravity, a hull-1 trace, the
-                        '' velocity off what it hits at ClipVelocity's 1.5
-                        '' and bounce.wav; SV_Physics_Toss lays it still on
-                        '' a floor under 60 up
-                        if ( t >= 0.0 ) then
-                            pl_grenade_explode g, nail(n)
-                        else
-                            nail(n).vel.z = nail(n).vel.z - PL_FALLACC# * dt
-                            fin.z = nail(n).pos.z + nail(n).vel.z * dt
-                            pl_trace nail(n).pos, fin, tr, g.wld.count.models, models(), brush(), clp_buffer(), planes()
-                            nail(n).pos = tr.end_pos
-                            if ( tr.frac < 1.0 ) then
-                                backoff = ( nail(n).vel.x * tr.norm.x + nail(n).vel.y * tr.norm.y + nail(n).vel.z * tr.norm.z ) * PL_BOUNCE#
-                                nail(n).vel.x = nail(n).vel.x - tr.norm.x * backoff
-                                nail(n).vel.y = nail(n).vel.y - tr.norm.y * backoff
-                                nail(n).vel.z = nail(n).vel.z - tr.norm.z * backoff
-                                if ( tr.norm.z > 0.7 and nail(n).vel.z < 60.0 ) then
-                                    nail(n).vel.x = 0.0 : nail(n).vel.y = 0.0 : nail(n).vel.z = 0.0
-                                else
-                                    snd_play g, SND_BOUNCE%, nail(n).pos
-                                end if
-                            end if
-                        end if
-                    elseif ( pl_point_contents( fin, nodes(), planes() ) = CONTENTS_SOLID ) then
+                    if ( pl_point_contents( fin, nodes(), planes() ) = CONTENTS_SOLID ) then
                         '' A trap's spike leaves from a point 8 units off
                         '' its wall, inside hull 1's grown solid, so it is
                         '' walked as a point through hull 0: a step into
@@ -2839,6 +2931,7 @@ sub pl_reset_player ( g as Game )
     g.fight.items = PL_IT_SHOTGUN%
     g.fight.weapon = PL_IT_SHOTGUN%
     g.fight.nails = 0
+    g.fight.rockets = 0
     g.fight.quad_until = 0.0
     g.fight.suit_until = 0.0
     g.fight.dmg_time = 0.0
@@ -2862,6 +2955,7 @@ sub pl_carry_save ( g as Game )
     c.shells = g.fight.shells
     if ( c.shells < PL_SHELLS% ) then c.shells = PL_SHELLS%
     c.nails = g.fight.nails
+    c.rockets = g.fight.rockets
     c.weapon = g.fight.weapon
     f = freefile
     open "CARRY.BIN" for binary as #f
@@ -2885,6 +2979,7 @@ sub pl_carry_load ( g as Game )
     g.fight.armor_type = c.armor_type
     g.fight.shells = c.shells
     g.fight.nails = c.nails
+    g.fight.rockets = c.rockets
     g.fight.weapon = c.weapon
 end sub
 
@@ -3001,9 +3096,9 @@ function pl_item_sound ( g as Game, it as ItemEnt ) as integer
     select case it.kind
         case ENT_ITEM_KEY1, ENT_ITEM_KEY2
             pl_item_sound = SND_KEY% + wt
-        case ENT_ITEM_SHELLS, ENT_ITEM_NAILS
+        case ENT_ITEM_SHELLS, ENT_ITEM_NAILS, ENT_ITEM_ROCKETS
             pl_item_sound = SND_AMMO%
-        case ENT_ITEM_SSG, ENT_ITEM_NAILGUN
+        case ENT_ITEM_SSG, ENT_ITEM_NAILGUN, ENT_ITEM_GL
             pl_item_sound = SND_WEAPON%
         case ENT_ITEM_ARMOR1, ENT_ITEM_ARMOR2
             pl_item_sound = SND_ARMOR%
@@ -3068,6 +3163,18 @@ sub pl_items_touch ( _
                     if ( g.fight.nails < PL_NAILS_CAP% ) then
                         g.fight.nails = g.fight.nails + item(i).amount
                         if ( g.fight.nails > PL_NAILS_CAP% ) then g.fight.nails = PL_NAILS_CAP%
+                        item(i).gone = -1
+                    end if
+                elseif ( item(i).kind = ENT_ITEM_GL ) then
+                    g.fight.items = g.fight.items or PL_IT_GL%
+                    g.fight.weapon = PL_IT_GL%
+                    g.fight.rockets = g.fight.rockets + item(i).amount
+                    if ( g.fight.rockets > PL_ROCKETS_CAP% ) then g.fight.rockets = PL_ROCKETS_CAP%
+                    item(i).gone = -1
+                elseif ( item(i).kind = ENT_ITEM_ROCKETS ) then
+                    if ( g.fight.rockets < PL_ROCKETS_CAP% ) then
+                        g.fight.rockets = g.fight.rockets + item(i).amount
+                        if ( g.fight.rockets > PL_ROCKETS_CAP% ) then g.fight.rockets = PL_ROCKETS_CAP%
                         item(i).gone = -1
                     end if
                 elseif ( item(i).kind = ENT_ITEM_QUAD ) then

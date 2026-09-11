@@ -209,6 +209,7 @@ sub host_bench_report ( _
     print #benchf, "pl_weapon " + ltrim$(str$( g.fight.weapon ))
     print #benchf, "pl_items " + ltrim$(str$( g.fight.items ))
     print #benchf, "pl_nails " + ltrim$(str$( g.fight.nails ))
+    print #benchf, "pl_rockets " + ltrim$(str$( g.fight.rockets ))
     print #benchf, "pl_quad_left " + ltrim$(str$( g.fight.quad_until - g.rdr.anim_time ))
     print #benchf, "pl_suit_left " + ltrim$(str$( g.fight.suit_until - g.rdr.anim_time ))
     print #benchf, "pl_booms " + ltrim$(str$( g.fight.booms ))

@@ -420,8 +420,13 @@ sub ent_load_teleports ( _
     redim ent_corner( h.ncorner ) as PathCorner
     redim door( h.ndoor ) as DoorEnt
     redim trig( h.ntrig ) as TrigEnt
-    '' room after the map's items for one backpack a soldier
-    redim item( h.nitem + MDL_MAX_ENTS% ) as ItemEnt
+    '' room after the map's items for one backpack a monster, the crowd's
+    '' eight on a map with none
+    if ( h.nmon < MDL_CROWD% ) then
+        redim item( h.nitem + MDL_CROWD% ) as ItemEnt
+    else
+        redim item( h.nitem + h.nmon ) as ItemEnt
+    end if
 
     g.tele_count = 0
     g.plat_count = 0

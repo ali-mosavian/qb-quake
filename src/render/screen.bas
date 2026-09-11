@@ -493,15 +493,16 @@ const SBARC_CELL_Y = 24          '' band of the EMS surface holding the cells
 const SBARC_WORK_Y = 48          '' band the blit reads, composed per paint
 const SBARC_EMS_H  = 72
 const SBARC_CELL   = 24
-const SBARC_CELLS  = 20
+const SBARC_CELLS  = 21
 const SBARC_MINUS  = 10
 const SBARC_ICON   = 11          '' SB_SHELLS
 const SBARC_FACE   = 12          '' FACE1, the healthy one; FACE5 is +4
 const SBARC_ARMOR  = 17          '' SB_ARMOR1, green; yellow is +1
 const SBARC_NAILS  = 19          '' SB_NAILS, the nailgun's ammo
+const SBARC_ROCKETS = 20         '' SB_ROCKET, the grenade launcher's
 const SBARC_SPANS  = 6           '' opaque runs a cell row can have
 '' One EMS surface, 512 wide because a row must divide 16K: the untouched
-'' bar in rows 0..23, the 19 cells side by side in 24..47, the composed
+'' bar in rows 0..23, the 21 cells side by side in 24..47, the composed
 '' bar in 48..71. Nothing of it in the far heap -- e1m1 has none spare.
 dim shared sbar_work as long
 dim shared sbar_view as long            '' the 320 of the composed band
@@ -1382,6 +1383,7 @@ sub scr_sbar_paint ( g as Game )
     '' currentammo: what the weapon in hand fires
     sh = g.fight.shells : icon = SBARC_ICON
     if ( g.fight.weapon = PL_IT_NAILGUN% ) then sh = g.fight.nails : icon = SBARC_NAILS
+    if ( g.fight.weapon = PL_IT_GL% ) then sh = g.fight.rockets : icon = SBARC_ROCKETS
     ar = g.fight.armor
     f = hp \ 20
     if ( f > 4 ) then f = 4

@@ -815,7 +815,10 @@ sub r_load_portals ( byval leaf_count as long )
     pt_ok = 0
     '' seven shorts a ref: past 4,681 the array passes 64K and the redim
     '' itself is error 9. The flood refuses such a map's leaf count anyway.
-    if ( nrefs <= 0 or nrefs > 4681 ) then exit sub
+    if ( nrefs <= 0 or nrefs > 4681 ) then
+        redim pt_idx( 0 ) as integer    '' 3K on e1m3, read by nothing now
+        exit sub
+    end if
     pt_ok = -1
 
     redim pt_ref( nrefs*7 - 1 ) as integer

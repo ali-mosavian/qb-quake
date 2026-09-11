@@ -131,7 +131,7 @@ type Spike
     die_at      as single
     hostile     as integer     '' a trap's: it bites the player, not the monsters
     dmg         as integer     '' what a hostile one bites
-    grenade     as integer     '' an ogre's: gravity, a bounce, a fuse and a blast
+    grenade     as integer     '' an ogre's or the player's: gravity, a bounce, a fuse and a blast
 end type
 
 type PlayerCombat
@@ -160,6 +160,7 @@ type PlayerCombat
     weapon      as integer     '' the one in hand, a PL_IT_* bit
     nails       as integer
     nail_side   as integer     '' player_nail1/2: the barrel the next nail leaves
+    rockets     as integer     '' the grenade launcher's
     quad_until  as single      '' super_damage_finished: hits do four times
     suit_until  as single      '' radsuit_finished: slime does nothing, lava a fifth
     dmg_time    as single      '' the next slime or lava bite
@@ -187,6 +188,7 @@ type PlayerCarry
     shells      as integer
     nails       as integer
     weapon      as integer
+    rockets     as integer
 end type
 
 const PL_HEALTH%       = 100
@@ -201,6 +203,7 @@ const PL_IT_SSG%       = 2
 const PL_IT_NAILGUN%   = 4
 const PL_IT_KEY1%      = 8      '' the silver key, and the gold: this map's, never carried
 const PL_IT_KEY2%      = 16
+const PL_IT_GL%        = 32
 '' W_FireSpikes: a nail every 0.2 from 16 up and 4 aside, alternating,
 '' at 1000 for 9 (spike_touch), gone after 6 s (SUB_Remove)
 const PL_NG_RATE#      = 0.2
@@ -212,6 +215,14 @@ const PL_NG_LIFE#      = 6.0
 const PL_NAILS_CAP%    = 200
 const PL_NAILS_MAX%    = 24    '' in flight at once
 const PL_QUAD_MUL%     = 4
+'' W_FireGrenade: 600 along the aim and 200 up, a 2.5 s fuse, 120 less
+'' half the distance to everything round it (GrenadeExplode)
+const PL_GL_RATE#      = 0.6
+const PL_GL_SPEED#     = 600.0
+const PL_GL_UP#        = 200.0
+const PL_GL_FUSE#      = 2.5
+const PL_GL_DMG#       = 120.0
+const PL_ROCKETS_CAP%  = 100
 '' client.qc: lava 10 * waterlevel each 0.2 s (a second in the suit),
 '' slime 4 * waterlevel each second and none in the suit
 const PL_LAVA_DMG%     = 10

@@ -753,7 +753,7 @@ sub host_render ( _
             end if
         end if
     next mdl_i
-    '' the view weapon: v_shot, v_shot2 or v_nail by the weapon in hand,
+    '' the view weapon: v_shot, v_shot2, v_nail or v_rock by the weapon in hand,
     '' at the eye, turned with the view, last and with depth off, as Quake
     '' draws it. The fire animation is shot2.. at 10 Hz from the shot,
     '' the model's last frame held until it is ready again; the nailgun
@@ -776,6 +776,10 @@ sub host_render ( _
         '' looking down
         if ( g.fight.state = GS_EXIT% ) then
             '' no gun in the intermission's view
+        elseif ( g.fight.weapon = PL_IT_GL% and g.gmdl.loaded ) then
+            mdl_draw_view g, g.gmdl, vframe, bob, _
+                          vdx / vlen, vdz / vlen, vlen, -vdy, _
+                          mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
         elseif ( g.fight.weapon = PL_IT_NAILGUN% and g.nmdl.loaded ) then
             mdl_draw_view g, g.nmdl, vframe, bob, _
                           vdx / vlen, vdz / vlen, vlen, -vdy, _

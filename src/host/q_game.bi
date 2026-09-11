@@ -43,6 +43,7 @@ type Game
     vmdl        as MdlState       '' the view weapon, v_shot
     smdl        as MdlState       '' and v_shot2, the super shotgun's
     nmdl        as MdlState       '' and v_nail, the nailgun's
+    gmdl        as MdlState       '' and v_rock, the grenade launcher's
     snd         as SndState       '' the sound layer
 
     '' LAST, deliberately. r_walk.c and sb_build.c reach g.vis and

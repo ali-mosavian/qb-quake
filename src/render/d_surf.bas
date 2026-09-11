@@ -211,9 +211,10 @@ const SC_NHGT   = 5             '' the heights, one drawing view each
 '' How many surfaces may be resident at once. dm3ish settles at ~230 and a
 '' long walk reached 314, so 512 is real headroom -- and it is a HARD bound,
 '' which the bump allocator never had: past it the LRU evicts instead of the
-'' store filling. 10 bytes each, so the whole table is 5 KB.
+'' store filling. 14 bytes each, so the whole table is 7 KB; it was 1024
+'' until e1m3's grenade launcher ran the far heap out.
 ''
-const SC_NBLK   = 1024
+const SC_NBLK   = 512
 const SC_GRAN   = 256            '' smallest class, 16x16: the offset unit
 
 ''

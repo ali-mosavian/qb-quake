@@ -2182,6 +2182,26 @@ ammo is the weapon in hand's, `SB_NAILS` cell 19. The e1m1 gate's
 fourteenth arm stands on the nailgun with fire held a second and wants
 27 nails: 30 less three shots.
 
+**`weapon_grenadelauncher` is v_rock and W_FireGrenade**: the pickup
+brings five rockets and `item_rockets` 5 or 10, capped at 100; `4`
+chooses it; a grenade every 0.6 s leaves at 600 along the aim and 200
+up, the ogre's `Spike` with `grenade` set and `dmg` 120 -- the ogre's
+carries its own 40 in `dmg` now. `pl_grenade_tick` is either side's
+MOVETYPE_BOUNCE, split out of `pl_nails_tick`: what it can hurt over
+the step blows it up (the player's box for an ogre's, a monster's for
+the player's), else gravity, a hull-1 trace, the bounce; the fuse is
+2.5 s and `pl_grenade_explode` is T_RadiusDamage to the player and,
+for the player's own, every monster standing. `SB_ROCKET` is cell 20
+of the bar's band, the last that fits in 512. `tools/check.sh --e1m3`'s
+second arm stands on e1m3's launcher and fires straight down for four
+seconds: rockets under 5 and a blast felt (health -70 the first time,
+so a death counts too). The launcher's model and code ran e1m3 out
+of string space (3.2K after depth, error 14 in the first frame); cut:
+`SC_NBLK` 1024 to 512, the bound its own comment gave (7K), `pt_idx`
+freed when the portal table bails (3K on e1m3), `item()`'s backpack
+room the map's monster count instead of 48 (0.8K) -- 14.5K after
+depth on e1m3.
+
 **The powerups are thirty-second clocks on `fight`**: the quad
 (`quad_until`) makes every pellet and nail four times (T_Damage's
 super_damage_finished), the envirosuit (`suit_until`) turns the slime
