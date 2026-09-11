@@ -474,11 +474,17 @@ grep -qiE "^ *[1-9][0-9]* Severe" /tmp/check-build.log && {
 # The map argument comes FIRST. sys_parse_args takes argv(0) as the map
 # name and scans options from index 1, so `qrender.exe -qgldiff` makes
 # the flag the map name and the check silently never runs.
+#
+# They run from the oracle build, ORACLES=1 in its own directory: the
+# production EXE links qglstub in their place and refuses the flags.
+ORACLE_OUT="$VBD_OUT-oracle"
+make -C "$ROOT" build BUILD="$ORACLE_OUT" ORACLES=1 > /tmp/check-oracle.log 2>&1 || {
+    echo "ORACLE BUILD FAILED"; tail -20 /tmp/check-oracle.log; exit 1; }
 for pair in "qglcheck:QGLCHK.LOG" "qgldiff:QGLDIFF.LOG" "qglarr:QGLARR.LOG"; do
     f="${pair%%:*}"
-    log="$VBD_OUT/${pair##*:}"
+    log="$ORACLE_OUT/${pair##*:}"
     rm -f "$log"
-    QFLAGS="-$f" TIMEOUT=300 "$ROOT/tools/dosbox.sh" run > /dev/null 2>&1
+    VBD_OUT="$ORACLE_OUT" QFLAGS="-$f" TIMEOUT=300 "$ROOT/tools/dosbox.sh" run > /dev/null 2>&1
     if [[ "$(tr -d '\r' < "$log" 2>/dev/null | tail -1)" != "RESULT PASS" ]]; then
         echo "-$f FAILED"; tr -d '\r' < "$log" 2>/dev/null | grep -v '^ ' | head -10
         exit 1

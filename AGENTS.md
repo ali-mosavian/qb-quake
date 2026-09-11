@@ -2323,9 +2323,12 @@ ambients. A box
 only grows, so the walk marks a few more leaves: the world's pixels did
 not move on any reference, but a pickup in the far doorway of
 `tools/ref/bench.bmp` is drawn now and `hud.bmp`'s leaf counter reads
-391 for 376 -- both regenerated, 20 and 12 pixels. Next if it tightens:
-`sc_slot` at 33K, the oracle modules out of the production link (12K of
-code).
+391 for 376 -- both regenerated, 20 and 12 pixels. The oracles are out
+of the production link: `qglstub.bas` answers their flags with `0x0060`
+and `make ORACLES=1` builds the EXE `check.sh` runs them from, 13K of
+code. Next if it tightens: `sc_slot` at 33K. e1m2 is the next map and
+does not load yet: its clipnodes are 8,148 to e1m1's 5,408 and the
+first frame ran out of far heap with 6K left after the depth buffer.
 
 **A black lit world with every counter normal is a missing allocation.**
 The surface builder's 16K conventional scratch was taken at the first

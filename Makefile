@@ -51,6 +51,16 @@ vpath %.asm $(SRC_DIRS)
 # sort would alphabetise main to the middle of the list.
 BAS_SRC  := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.bas))
 BAS_MODS := main $(filter-out main,$(basename $(notdir $(BAS_SRC))))
+# The oracles -- -qglcheck, -qgldiff, -qglarr, -qglface -- are 13K of
+# code the far heap pays for on every map. ORACLES=1 links them in place
+# of qglstub, which refuses their flags; tools/check.sh builds that EXE
+# in its own directory for the gate.
+ORACLE_MODS := qglchk qgldiff qglarr qglface
+ifeq ($(ORACLES),1)
+BAS_MODS := $(filter-out qglstub,$(BAS_MODS))
+else
+BAS_MODS := $(filter-out $(ORACLE_MODS),$(BAS_MODS))
+endif
 HDRS     := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.bi))
 
 C_SRC  := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.c))
