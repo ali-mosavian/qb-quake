@@ -2406,6 +2406,19 @@ axis, so `BrushModel.ofs` carries all three: `d_faces.c` adds it to every
 vertex, `pl_trace.c` subtracts it from both ends of the sweep, and
 `ent_find_node` sorts the box where it is. Plats use `.ofs.z`.
 
+**`func_train` rides the plat array** (`PlatEnt.kind`), and the map's
+`path_corner`s are `ent_corner()` in ent.bas, each with its `nxt`.
+mkassets resolves the route offline; func_train_find puts the brush's
+mins on the first corner, a train with a targetname waits there for
+its trigger (train_use, from `ent_use_targets`), the rest go at once.
+`ent_move_train` is train_next/train_wait/SUB_CalcMove: a straight line
+to the next corner at speed, the corner's wait there (id's -1 is a wait
+of nothing: `ltime + wait` is past), and the rider carried sideways and
+up by the same delta (`ent_mover_ridden`). e1m2's two lifts end on a
+pair of corners at one point, and bounce between them standing still.
+`tools/check.sh --e1m2`'s first arm stands on their button and wants
+both at that corner. Not ported: the ratchet sounds, blocking damage.
+
 **BC miscompiles a store of a single into a member of an indexed
 element when it is the second such store in a row.** `door(k).model = m`
 then `door(k).speed = dr.speed`: the second keeps `k*70` cached in AX,

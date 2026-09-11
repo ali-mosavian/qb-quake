@@ -23,9 +23,24 @@ option explicit
 
 declare sub qglMousePos ( byval x as integer, byval y as integer )
 
+'' the map's path_corners, this module's: the trains ride them
+dim shared ent_corner() as PathCorner
+
 ''
 '' This module's own procedures.
 ''
+declare sub ent_train_init ( p as PlatEnt, brush() as BrushModel )
+declare sub ent_move_train ( _
+    g as Game, _
+    byval dt as single, _
+    p as PlatEnt, _
+    brush() as BrushModel _
+)
+declare function ent_mover_ridden ( _
+    g as Game, _
+    p as PlatEnt, _
+    brush() as BrushModel _
+) as integer
 declare function ent_find_node ( _
     byval m as integer, _
     models() as Submodel, _
@@ -140,7 +155,8 @@ declare sub ent_use_targets ( _
     g as Game, _
     byval id as integer, _
     door() as DoorEnt, _
-    trig() as TrigEnt _
+    trig() as TrigEnt, _
+    plat() as PlatEnt _
 )
 declare sub ent_kill_targets ( _
     g as Game, _
@@ -151,20 +167,23 @@ declare sub ent_trig_fire ( _
     g as Game, _
     byval k as integer, _
     door() as DoorEnt, _
-    trig() as TrigEnt _
+    trig() as TrigEnt, _
+    plat() as PlatEnt _
 )
 declare sub ent_move_trigs ( _
     g as Game, _
     byval dt as single, _
     brush() as BrushModel, _
     door() as DoorEnt, _
-    trig() as TrigEnt _
+    trig() as TrigEnt, _
+    plat() as PlatEnt _
 )
 declare sub ent_reset ( _
     g as Game, _
     brush() as BrushModel, _
     door() as DoorEnt, _
-    trig() as TrigEnt _
+    trig() as TrigEnt, _
+    plat() as PlatEnt _
 )
 declare sub ent_say ( _
     g as Game, _
@@ -352,6 +371,7 @@ sub ent_load_teleports ( _
     dim xr as EntsTrig
     dim mr as EntsMon
     dim ar as EntsAmb
+    dim nr as EntsTrain
     dim i as integer, j as integer, k as integer
     dim mdlnum as integer
 
@@ -365,7 +385,8 @@ sub ent_load_teleports ( _
     '' ent_place_models and pl_trace walk every one of them.
     redim brush( g.wld.count.models-1 ) as BrushModel
     redim tele( h.ntele ) as Teleporter
-    redim plat( h.nplat ) as PlatEnt
+    redim plat( h.nplat + h.ntrain ) as PlatEnt
+    redim ent_corner( h.ncorner ) as PathCorner
     redim door( h.ndoor ) as DoorEnt
     redim trig( h.ntrig ) as TrigEnt
     '' room after the map's items for one backpack a soldier
@@ -479,6 +500,28 @@ sub ent_load_teleports ( _
     for  i = 1 to h.namb
         ent_get u, clng( varseg( ar ) ) * 65536& + (clng( varptr( ar ) ) and 65535&), len( ar )
         snd_ambient g, ar.snd, ar.vol, ar.org
+    next i
+
+    '' the trains ride the plat array after the plats; the corners come last
+    for  i = 1 to h.ntrain
+        ent_get u, clng( varseg( nr ) ) * 65536& + (clng( varptr( nr ) ) and 65535&), len( nr )
+        mdlnum = nr.model
+        if ( mdlnum > 0 and mdlnum <= g.wld.count.models-1 ) then
+            plat( g.plat_count ).model    = mdlnum
+            plat( g.plat_count ).kind     = ENT_PLAT_KIND_TRAIN
+            plat( g.plat_count ).speed    = nr.speed
+            plat( g.plat_count ).targeted = nr.targeted
+            plat( g.plat_count ).first    = nr.first
+            plat( g.plat_count ).mins     = models(mdlnum).mins
+            plat( g.plat_count ).maxs     = models(mdlnum).maxs
+            g.plat_count = g.plat_count + 1
+        end if
+    next i
+    for  i = 0 to h.ncorner - 1
+        ent_get u, clng( varseg( ent_corner(i) ) ) * 65536& + (clng( varptr( ent_corner(i) ) ) and 65535&), len( ent_corner(i) )
+    next i
+    for  i = 0 to g.plat_count - 1
+        if ( plat(i).kind = ENT_PLAT_KIND_TRAIN ) then ent_train_init plat(i), brush()
     next i
 
     qglFileClose u
@@ -781,7 +824,8 @@ sub ent_reset ( _
     g as Game, _
     brush() as BrushModel, _
     door() as DoorEnt, _
-    trig() as TrigEnt _
+    trig() as TrigEnt, _
+    plat() as PlatEnt _
 )
     dim k as integer
     dim home as Vec3
@@ -798,8 +842,91 @@ sub ent_reset ( _
         trig(k).wait_left = 0.0
         if ( trig(k).kind = ENT_TRIG_BUTTON ) then brush( trig(k).model ).ofs = home
     next k
+    for  k = 0 to g.plat_count-1
+        if ( plat(k).kind = ENT_PLAT_KIND_TRAIN ) then ent_train_init plat(k), brush()
+    next k
     g.fight.msg_until = 0.0
 end sub
+
+'' func_train_find: the brush's mins to the first corner; one with a
+'' targetname waits there for its trigger, the rest go on at once
+sub ent_train_init ( p as PlatEnt, brush() as BrushModel )
+    p.corner = p.first
+    brush( p.model ).ofs.x = ent_corner( p.first ).org.x - p.mins.x
+    brush( p.model ).ofs.y = ent_corner( p.first ).org.y - p.mins.y
+    brush( p.model ).ofs.z = ent_corner( p.first ).org.z - p.mins.z
+    p.wait_left = 0.0
+    if ( p.targeted ) then
+        p.state = ENT_TRAIN_IDLE
+    else
+        p.state = ENT_TRAIN_WAIT
+    end if
+end sub
+
+'' train_wait then train_next then SUB_CalcMove: a straight line to the
+'' next corner at speed, wait there (id's -1 is a wait of nothing), on
+'' to the one after; the rider goes with it, upward and sideways
+sub ent_move_train ( _
+    g as Game, _
+    byval dt as single, _
+    p as PlatEnt, _
+    brush() as BrushModel _
+)
+    dim m as integer, riding as integer
+    dim goal as Vec3, d as Vec3, was as Vec3
+    dim dist as single, by as single
+
+    m = p.model
+    if ( p.state = ENT_TRAIN_IDLE ) then exit sub
+    if ( p.state = ENT_TRAIN_WAIT ) then
+        p.wait_left = p.wait_left - dt
+        if ( p.wait_left > 0.0 ) then exit sub
+        if ( ent_corner( p.corner ).nxt < 0 ) then exit sub
+        p.corner = ent_corner( p.corner ).nxt
+        p.state = ENT_TRAIN_MOVE
+    end if
+    goal.x = ent_corner( p.corner ).org.x - p.mins.x
+    goal.y = ent_corner( p.corner ).org.y - p.mins.y
+    goal.z = ent_corner( p.corner ).org.z - p.mins.z
+    riding = ent_mover_ridden( g, p, brush() )
+    was = brush(m).ofs
+    d.x = goal.x - was.x : d.y = goal.y - was.y : d.z = goal.z - was.z
+    dist = sqr( d.x * d.x + d.y * d.y + d.z * d.z )
+    by = p.speed * dt
+    if ( dist <= by ) then
+        brush(m).ofs = goal
+        p.state = ENT_TRAIN_WAIT
+        p.wait_left = ent_corner( p.corner ).wait
+        if ( p.wait_left <= 0.0 ) then p.wait_left = 0.1
+    else
+        brush(m).ofs.x = was.x + d.x / dist * by
+        brush(m).ofs.y = was.y + d.y / dist * by
+        brush(m).ofs.z = was.z + d.z / dist * by
+    end if
+    if ( riding = 0 ) then exit sub
+    g.pl.pos.x = g.pl.pos.x + brush(m).ofs.x - was.x
+    g.pl.pos.y = g.pl.pos.y + brush(m).ofs.y - was.y
+    if ( brush(m).ofs.z > was.z ) then g.pl.pos.z = g.pl.pos.z + brush(m).ofs.z - was.z
+end sub
+
+'' the player standing on a mover's brush where it is now
+function ent_mover_ridden ( _
+    g as Game, _
+    p as PlatEnt, _
+    brush() as BrushModel _
+) as integer
+    dim top as single
+
+    ent_mover_ridden = false
+    if ( g.pl.pos.x + 16.0 < p.mins.x + brush( p.model ).ofs.x ) then exit function
+    if ( g.pl.pos.x - 16.0 > p.maxs.x + brush( p.model ).ofs.x ) then exit function
+    if ( g.pl.pos.y + 16.0 < p.mins.y + brush( p.model ).ofs.y ) then exit function
+    if ( g.pl.pos.y - 16.0 > p.maxs.y + brush( p.model ).ofs.y ) then exit function
+    top = p.maxs.z + brush( p.model ).ofs.z
+    if ( g.pl.pos.z - PL_FEET# < top - 8.0  ) then exit function
+    if ( g.pl.pos.z - PL_FEET# > top + 64.0 ) then exit function
+    ent_mover_ridden = true
+end function
 
 
 '' centerprint: shown for ENT_MSG_TIME
@@ -846,7 +973,8 @@ sub ent_use_targets ( _
     g as Game, _
     byval id as integer, _
     door() as DoorEnt, _
-    trig() as TrigEnt _
+    trig() as TrigEnt, _
+    plat() as PlatEnt _
 )
     dim k as integer
 
@@ -854,16 +982,22 @@ sub ent_use_targets ( _
     for  k = 0 to g.door_count-1
         if ( door(k).targeted = id ) then ent_door_fire g, door(k).link, door()
     next k
+    '' train_use: once
+    for  k = 0 to g.plat_count-1
+        if ( plat(k).kind = ENT_PLAT_KIND_TRAIN and plat(k).targeted = id and plat(k).state = ENT_TRAIN_IDLE ) then
+            plat(k).state = ENT_TRAIN_WAIT
+        end if
+    next k
     for  k = 0 to g.trig_count-1
         if ( trig(k).name = id ) then
             select case trig(k).kind
                 case ENT_TRIG_COUNTER
                     if ( trig(k).state <> ENT_TRIG_DONE ) then
                         trig(k).left = trig(k).left - 1
-                        if ( trig(k).left <= 0 ) then ent_trig_fire g, k, door(), trig()
+                        if ( trig(k).left <= 0 ) then ent_trig_fire g, k, door(), trig(), plat()
                     end if
                 case ENT_TRIG_ONCE, ENT_TRIG_MULTI
-                    if ( trig(k).state = ENT_TRIG_READY ) then ent_trig_fire g, k, door(), trig()
+                    if ( trig(k).state = ENT_TRIG_READY ) then ent_trig_fire g, k, door(), trig(), plat()
             end select
         end if
     next k
@@ -876,7 +1010,8 @@ sub ent_trig_fire ( _
     g as Game, _
     byval k as integer, _
     door() as DoorEnt, _
-    trig() as TrigEnt _
+    trig() as TrigEnt, _
+    plat() as PlatEnt _
 )
     if ( trig(k).kind = ENT_TRIG_SECRET ) then g.fight.secrets = g.fight.secrets + 1
     if ( trig(k).snd = 1 ) then
@@ -892,7 +1027,7 @@ sub ent_trig_fire ( _
         trig(k).wait_left = trig(k).wait
     end if
     ent_kill_targets g, trig(k).kill, trig()
-    ent_use_targets g, trig(k).target, door(), trig()
+    ent_use_targets g, trig(k).target, door(), trig(), plat()
 end sub
 
 '' execute_changelevel's intermission: the view from the map's
@@ -942,7 +1077,8 @@ sub ent_move_trigs ( _
     byval dt as single, _
     brush() as BrushModel, _
     door() as DoorEnt, _
-    trig() as TrigEnt _
+    trig() as TrigEnt, _
+    plat() as PlatEnt _
 )
     dim k as integer, m as integer
     dim home as Vec3
@@ -962,7 +1098,7 @@ sub ent_move_trigs ( _
                             trig(k).state = ENT_TRIG_HELD
                             trig(k).wait_left = trig(k).wait
                             ent_talk g, trig(k).msg
-                            ent_use_targets g, trig(k).target, door(), trig()
+                            ent_use_targets g, trig(k).target, door(), trig(), plat()
                         end if
                     case ENT_TRIG_HELD
                         if ( trig(k).wait >= 0.0 ) then
@@ -994,7 +1130,7 @@ sub ent_move_trigs ( _
                     case ENT_TRIG_READY
                         if ( trig(k).kind <> ENT_TRIG_SHOOT ) then
                             if ( ent_box_touched( g, trig(k).mins, trig(k).maxs, 0.0 ) ) then
-                                ent_trig_fire g, k, door(), trig()
+                                ent_trig_fire g, k, door(), trig(), plat()
                             end if
                         end if
                     case ENT_TRIG_HELD
@@ -1119,6 +1255,10 @@ sub ent_move_plats ( _
 
     for  p = 0 to g.plat_count-1
         m = plat(p).model
+        if ( plat(p).kind = ENT_PLAT_KIND_TRAIN ) then
+            ent_move_train g, dt, plat(p), brush()
+            goto next_plat
+        end if
 
         riding = ent_plat_touched ( g, p, brush(), plat() )
 
@@ -1157,6 +1297,7 @@ sub ent_move_plats ( _
         if ( riding and moved > 0.0 ) then
             g.pl.pos.z = g.pl.pos.z + moved
         end if
+next_plat:
     next p
 
 end sub

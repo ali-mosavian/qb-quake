@@ -441,6 +441,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
     names: dict[str, int] = {}
     mons: list[tuple[int, tuple[float, float, float], float]] = []
     ambs: list[tuple[int, int, tuple[float, float, float]]] = []
+    corners: list[tuple[str, tuple[float, float, float], float, str]] = []   # targetname, origin, wait, target
+    trains: list[tuple[int, float, int, str]] = []                           # model, speed, targetname id, first corner
     # misc.qc's ambientsound calls: the wav and its volume, ATTN_STATIC
     amb_kind = {'ambient_comp_hum': ('ambience/comp1', 1.0), 'ambient_drone': ('ambience/drone6', 0.5)}
     mon_kind = {'monster_army': 0, 'monster_knight': 1, 'monster_dog': 2}   # MDL_KIND_*; no model for the rest
@@ -602,6 +604,13 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
                 doors.append(door_record(model(kv['model']), kv, boxes[model(kv['model'])]))
             case 'func_door_secret' if model(kv.get('model', '')):
                 doors.append(secret_record(model(kv['model']), kv, boxes[model(kv['model'])]))
+            case 'path_corner':
+                corners.append((kv.get('targetname', ''), vec(kv.get('origin', '0 0 0')), float(kv.get('wait', '0')),
+                                kv.get('target', '')))
+            case 'func_train' if model(kv.get('model', '')):
+                # func_train: speed 100; a targetname waits for its trigger
+                trains.append((model(kv['model']), float(kv.get('speed', '0')) or 100.0,
+                               name_id(kv.get('targetname', '')), kv.get('target', '')))
             case 'func_plat' if model(kv.get('model', '')):
                 plats.append((model(kv['model']),
                               float(kv.get('speed', '0')),
@@ -620,9 +629,12 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
 
     if inter is None:
         inter = (spawn, 0.0, angle)   # no info_intermission: the start, as Quake does
-    buf = bytearray(struct.pack('<4f3fff9h8s', *spawn, angle, *inter[0], inter[1], inter[2], nmodels,
+    # corners by index, each pointing at the next; a train at one with no target stays
+    corner_at = {name: i for i, (name, _, _, _) in reversed(list(enumerate(corners))) if name}
+    trains = [(m, speed, targeted, corner_at[first]) for m, speed, targeted, first in trains if first in corner_at]
+    buf = bytearray(struct.pack('<4f3fff11h8s', *spawn, angle, *inter[0], inter[1], inter[2], nmodels,
                                 len(teles), len(plats), len(hides), len(items), len(doors), len(uses), len(mons),
-                                len(ambs), next_map[:8].encode('latin1').ljust(8)))
+                                len(ambs), len(trains), len(corners), next_map[:8].encode('latin1').ljust(8)))
     for kind, org, yaw in mons:
         buf += struct.pack('<h3ff', kind, *org, yaw)
     for m, org, yaw in teles:
@@ -640,6 +652,10 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
         buf += struct.pack('<6hff3fh40s', m, kind, target, name, kill, count, wait, speed, *travel, snd, msg)
     for snd, vol, org in ambs:
         buf += struct.pack('<hh3f', snd, vol, *org)
+    for m, speed, targeted, first in trains:
+        buf += struct.pack('<hfhh', m, speed, targeted, first)
+    for _, org, wait, target in corners:
+        buf += struct.pack('<3ffh', *org, wait, corner_at.get(target, -1))
     return bytes(buf)
 
 

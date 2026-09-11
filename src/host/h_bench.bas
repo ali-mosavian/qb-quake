@@ -313,6 +313,12 @@ sub host_bench_report ( _
         print #benchf, "plat_zofs " + ltrim$(str$( brush( plat(0).model ).ofs.z ))
         print #benchf, "plat_state " + ltrim$(str$( plat(0).state ))
     end if
+    for  mi = 0 to g.plat_count-1
+        print #benchf, "plat_" + ltrim$(str$( mi )) + " " + ltrim$(str$( plat(mi).model )) + " " + _
+            ltrim$(str$( plat(mi).kind )) + " " + ltrim$(str$( plat(mi).state )) + " " + _
+            ltrim$(str$( brush( plat(mi).model ).ofs.x )) + " " + ltrim$(str$( brush( plat(mi).model ).ofs.y )) + " " + _
+            ltrim$(str$( brush( plat(mi).model ).ofs.z ))
+    next mi
     close #benchf
 
 end sub

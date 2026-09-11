@@ -55,7 +55,27 @@ type EntsHead
     ntrig       as integer
     nmon        as integer
     namb        as integer
+    ntrain      as integer
+    ncorner     as integer
     next_map    as string * 8   '' trigger_changelevel's map, space padded; blank for none
+end type
+
+'' A func_train, after the ambients: it rides the plat array. first is
+'' its first path_corner, where it spawns; targeted its name's id, 0
+'' starts by itself.
+type EntsTrain
+    model       as integer
+    speed       as single
+    targeted    as integer
+    first       as integer
+end type
+
+'' A path_corner, last in the file: the train's mins go here, wait
+'' seconds (0 none), then on to nxt (-1 stays)
+type PathCorner
+    org         as Vec3
+    wait        as single
+    nxt         as integer
 end type
 
 '' A monster where the map put it, first in the file so host_init can
@@ -148,6 +168,11 @@ end type
 
 const ENT_PLAT_DOWN = 0
 const ENT_PLAT_UP   = 1
+const ENT_TRAIN_IDLE = 2        '' a train with a targetname, before its trigger
+const ENT_TRAIN_WAIT = 3        '' train_wait: at a corner for wait_left
+const ENT_TRAIN_MOVE = 4        '' SUB_CalcMove to corner
+const ENT_PLAT_KIND_PLAT  = 0
+const ENT_PLAT_KIND_TRAIN = 1
 
 ''
 '' A func_plat. Quake puts the brush at the top of its travel, so a lowered
@@ -157,9 +182,14 @@ type PlatEnt
     model       as integer
     travel      as single       '' how far down it goes
     speed       as single       '' units per second
-    state       as integer      '' heading down, or up
+    state       as integer      '' heading down, or up; a train's ENT_TRAIN_*
     mins        as Vec3         '' its volume at the map position
     maxs        as Vec3
+    kind        as integer      '' ENT_PLAT_KIND_*: a func_train shares the array
+    targeted    as integer      '' a train's name id; 0 starts by itself
+    first       as integer      '' its first corner, and corner the one it is at or bound for
+    corner      as integer
+    wait_left   as single
 end type
 
 const ENT_DOOR_SHUT    = 0

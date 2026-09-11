@@ -37,7 +37,8 @@ declare sub ent_trig_fire ( _
     g as Game, _
     byval k as integer, _
     door() as DoorEnt, _
-    trig() as TrigEnt _
+    trig() as TrigEnt, _
+    plat() as PlatEnt _
 )
 declare sub ent_door_fire ( _
     g as Game, _
@@ -2073,7 +2074,8 @@ sub pl_fire ( _
     item() as ItemEnt, _
     door() as DoorEnt, _
     trig() as TrigEnt, _
-    nail() as Spike _
+    nail() as Spike, _
+    plat() as PlatEnt _
 )
     dim org as Vec3, fin as Vec3, aim as Vec3, dir as Vec3
     dim tr as TraceResult
@@ -2148,7 +2150,7 @@ sub pl_fire ( _
         for i = 0 to g.trig_count - 1
             if ( trig(i).kind = ENT_TRIG_SHOOT and trig(i).state = ENT_TRIG_READY ) then
                 t = pl_ray_box( trig(i).mins, trig(i).maxs, org, dir, bt + PL_HALF# )
-                if ( t >= 0.0 ) then ent_trig_fire g, i, door(), trig()
+                if ( t >= 0.0 ) then ent_trig_fire g, i, door(), trig(), plat()
             end if
         next i
         '' a secret door takes damage: the first pellet on it sends it out
@@ -2435,7 +2437,8 @@ sub pl_nails_tick ( _
     planes() as Plane, _
     item() as ItemEnt, _
     door() as DoorEnt, _
-    trig() as TrigEnt _
+    trig() as TrigEnt, _
+    plat() as PlatEnt _
 )
     dim n as integer, i as integer, best as integer, ndmg as integer
     dim fin as Vec3, dir as Vec3, tr as TraceResult
@@ -2477,7 +2480,7 @@ sub pl_nails_tick ( _
                 for i = 0 to g.trig_count - 1
                     if ( trig(i).kind = ENT_TRIG_SHOOT and trig(i).state = ENT_TRIG_READY ) then
                         t = pl_ray_box( trig(i).mins, trig(i).maxs, nail(n).pos, dir, bt + PL_HALF# )
-                        if ( t >= 0.0 ) then ent_trig_fire g, i, door(), trig() : nail(n).alive = 0
+                        if ( t >= 0.0 ) then ent_trig_fire g, i, door(), trig(), plat() : nail(n).alive = 0
                     end if
                 next i
                 for i = 0 to g.door_count - 1

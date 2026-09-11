@@ -106,14 +106,16 @@ declare sub ent_reset ( _
     g as Game, _
     brush() as BrushModel, _
     door() as DoorEnt, _
-    trig() as TrigEnt _
+    trig() as TrigEnt, _
+    plat() as PlatEnt _
 )
 declare sub ent_move_trigs ( _
     g as Game, _
     byval dt as single, _
     brush() as BrushModel, _
     door() as DoorEnt, _
-    trig() as TrigEnt _
+    trig() as TrigEnt, _
+    plat() as PlatEnt _
 )
 declare sub in_handle_toggles ( _
     g as Game _
@@ -147,7 +149,8 @@ declare sub pl_fire ( _
     item() as ItemEnt, _
     door() as DoorEnt, _
     trig() as TrigEnt, _
-    nail() as Spike _
+    nail() as Spike, _
+    plat() as PlatEnt _
 )
 declare sub pl_nails_tick ( _
     g as Game, _
@@ -159,7 +162,8 @@ declare sub pl_nails_tick ( _
     planes() as Plane, _
     item() as ItemEnt, _
     door() as DoorEnt, _
-    trig() as TrigEnt _
+    trig() as TrigEnt, _
+    plat() as PlatEnt _
 )
 declare sub pl_items_touch ( g as Game, item() as ItemEnt )
 declare sub pl_env_damage ( g as Game )
@@ -401,8 +405,8 @@ sub host_tick ( _
     select case g.fight.state
     case GS_PLAY%
         pl_select_weapon g
-        if ( fire ) then pl_fire g, mdl_ent(), models(), brush(), planes(), item(), door(), trig(), nail()
-        pl_nails_tick g, dt, nail(), mdl_ent(), models(), brush(), planes(), item(), door(), trig()
+        if ( fire ) then pl_fire g, mdl_ent(), models(), brush(), planes(), item(), door(), trig(), nail(), plat()
+        pl_nails_tick g, dt, nail(), mdl_ent(), models(), brush(), planes(), item(), door(), trig(), plat()
         pl_items_touch g, item()
         pl_env_damage g
         '' every soldier's own think -- Quake's 10 Hz, gated inside
@@ -440,7 +444,7 @@ sub host_tick ( _
                 host_next_level g
             else
                 pl_game_reset g, mdl_ent(), item(), models(), brush(), planes()
-                ent_reset g, brush(), door(), trig()
+                ent_reset g, brush(), door(), trig(), plat()
                 g.fight.state = GS_PLAY%
             end if
         end if
@@ -448,7 +452,7 @@ sub host_tick ( _
         if ( fire and g.fight.fire_prev = 0 ) then
             if ( g.fight.state = GS_WON% ) then
                 pl_game_reset g, mdl_ent(), item(), models(), brush(), planes()
-                ent_reset g, brush(), door(), trig()
+                ent_reset g, brush(), door(), trig(), plat()
             end if
             g.fight.state = GS_PLAY%
         end if
@@ -461,7 +465,7 @@ sub host_tick ( _
     '' movers, after the player has moved and before anything is drawn
     ent_move_plats g, dt, brush(), plat()
     ent_move_doors g, dt, brush(), door()
-    ent_move_trigs g, dt, brush(), door(), trig()
+    ent_move_trigs g, dt, brush(), door(), trig(), plat()
 
     '' where each mover ended up, so the draw order can place it
     ent_place_models g.wld.count.models, models(), nodes(), planes(), brush()

@@ -26,6 +26,7 @@
 #                               the player and strike, and nothing may crash
 #   tools/check.sh --e1m1       id's e1m1, from the shareware PAK: it must
 #                               load and draw polygons at the spawn
+#   tools/check.sh --e1m2       e1m2's own entities, from the build's MAPS\
 #
 # -nostats is not optional. The overlay prints live fps and frame time, so
 # two runs of the SAME build differ by ~28 pixels in the digits, and a
@@ -429,6 +430,28 @@ PY
         echo "PASS  e1m1 chain: the bench is $cm's, health $hp carried over"
     else
         echo "FAIL  e1m1 chain: map ${cm:-none}, health ${hp:-none}; want e1m2.bsp under 100"; rc=1
+    fi
+    for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
+    exit $rc
+fi
+
+# e1m2, from the build's own MAPS\e1m2 staging (make maps): the things
+# e1m1 has none of. The two func_trains *17 and *18 start by the floor
+# button *16 (t71 -> t65) and run their path_corners: six seconds after
+# the player lands on the button both must stand at their last corner,
+# t64 and t68, which is (corner - mins): *17 (-10,263,-82), *18 (-26,263,-82).
+if [[ "${1:-}" == "--e1m2" ]]; then
+    build_exe
+    [[ -f "$VBD_OUT/MAPS/e1m2/assets.zip" ]] || { echo "SKIP  e1m2: no MAPS/e1m2 in the build (needs the PAK)"; exit 0; }
+    for f in assets.zip texr.raw texs.raw pal.raw e1m2.bsp; do cp "$VBD_OUT/MAPS/e1m2/$f" "$VBD_OUT/$f"; done
+    rc=0
+    run_frame "-lm -nostats -noai -at -96 288 327 -yaw 0 -bench 400 -ticks 360" "$VBD_OUT/e1m2-train.bmp" e1m2.bsp
+    t17=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="plat_1"{print $2,$5,$6,$7}')
+    t18=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="plat_2"{print $2,$5,$6,$7}')
+    if [[ "$t17" == "17 -10 263 -82" && "$t18" == "18 -26 263 -82" ]]; then
+        echo "PASS  e1m2 train: *17 and *18 at their last corners"
+    else
+        echo "FAIL  e1m2 train: *17 at (${t17:-none}), *18 at (${t18:-none}); want 17 -10 263 -82 and 18 -26 263 -82"; rc=1
     fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc
