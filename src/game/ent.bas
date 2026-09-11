@@ -808,6 +808,7 @@ sub ent_trig_fire ( _
     trig() as TrigEnt _
 )
     ent_say g, trig(k).msg
+    if ( trig(k).kind = ENT_TRIG_SECRET ) then g.fight.secrets = g.fight.secrets + 1
     if ( trig(k).kind = ENT_TRIG_COUNTER or trig(k).wait < 0.0 ) then
         trig(k).state = ENT_TRIG_DONE
     else
@@ -892,7 +893,7 @@ sub ent_move_trigs ( _
                         trig(k).state = ENT_TRIG_DONE
                     end if
                 end if
-            case ENT_TRIG_ONCE, ENT_TRIG_MULTI, ENT_TRIG_SHOOT
+            case ENT_TRIG_ONCE, ENT_TRIG_MULTI, ENT_TRIG_SHOOT, ENT_TRIG_SECRET
                 select case trig(k).state
                     case ENT_TRIG_READY
                         if ( trig(k).kind <> ENT_TRIG_SHOOT ) then

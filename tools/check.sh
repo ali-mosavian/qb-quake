@@ -327,6 +327,23 @@ PY
     else
         echo "FAIL  e1m1 leap: pl_leaps ${nl:-none}, the dog kept its feet"; rc=1
     fi
+    # and trigger_secret *44, the area behind the shot door: standing in
+    # it counts one secret
+    run_frame "-lm -nostats -noai -at 688 40 60 -yaw 90 -bench 400 -ticks 30" "$VBD_OUT/e1m1-secret-area.bmp" e1m1.bsp
+    ns=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_secrets"{print $2}')
+    if [[ "$ns" == 1 ]]; then
+        echo "PASS  e1m1 secrets: pl_secrets 1, the secret area counted"
+    else
+        echo "FAIL  e1m1 secrets: pl_secrets ${ns:-none}, the secret area did not count"; rc=1
+    fi
+    # and item_armor1 at (688,480,80): standing on it is 100 of green armor
+    run_frame "-lm -nostats -noai -at 688 480 80 -yaw 90 -bench 400 -ticks 30" "$VBD_OUT/e1m1-armor.bmp" e1m1.bsp
+    na=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_armor"{print $2}')
+    if [[ "$na" == 100 ]]; then
+        echo "PASS  e1m1 armor: pl_armor 100, the green armor was taken"
+    else
+        echo "FAIL  e1m1 armor: pl_armor ${na:-none}, the armor was not taken"; rc=1
+    fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc
 fi

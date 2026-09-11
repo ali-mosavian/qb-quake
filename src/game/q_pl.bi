@@ -141,9 +141,14 @@ type PlayerCombat
     msg         as string * 40 '' centerprint, shown until msg_until
     msg_until   as single
     leaps       as integer     '' dogs that left the ground, for the bench
+    secrets     as integer     '' trigger_secrets found
+    armor       as integer     '' armorvalue
+    armor_type  as single      '' armortype: the share of a hit it takes, 0 none
 end type
 
 const PL_HEALTH%       = 100
+const PL_ARMOR1_TYPE#  = 0.3    '' armor_touch: green, and yellow
+const PL_ARMOR2_TYPE#  = 0.6
 const PL_SHELLS%       = 25     '' Quake's starting shells
 const PL_FIRE_RATE#    = 0.5    '' the shotgun's attack_finished
 const PL_SHOT_RANGE#   = 2048.0

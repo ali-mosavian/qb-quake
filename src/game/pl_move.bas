@@ -2179,7 +2179,17 @@ end sub
 ''       V_ParseDamage's shift.
 ''::::::::::::::
 sub pl_damage ( g as Game, byval dmg as integer )
-    g.fight.health = g.fight.health - dmg
+    dim save as integer
+
+    '' T_Damage: the armor takes ceil(type * damage) first, and the last
+    '' of it takes the type with it
+    save = -int( -g.fight.armor_type * dmg )
+    if ( save >= g.fight.armor ) then
+        save = g.fight.armor
+        g.fight.armor_type = 0.0
+    end if
+    g.fight.armor = g.fight.armor - save
+    g.fight.health = g.fight.health - ( dmg - save )
     g.fight.hurt_until = g.rdr.anim_time + 0.3
     g.fight.dmg_pct = g.fight.dmg_pct + dmg * PL_DMG_SHIFT#
     if ( g.fight.dmg_pct > PL_DMG_SHIFT_MAX# ) then g.fight.dmg_pct = PL_DMG_SHIFT_MAX#
@@ -2230,6 +2240,9 @@ end sub
 sub pl_reset_player ( g as Game )
     g.fight.health = PL_HEALTH%
     g.fight.shells = PL_SHELLS%
+    g.fight.armor = 0
+    g.fight.armor_type = 0.0
+    g.fight.secrets = 0
     g.fight.next_fire = 0.0
     g.fight.show_hostile = 0.0
     g.pl.pos.x = g.fight.spawn.x : g.pl.pos.y = g.fight.spawn.y : g.pl.pos.z = g.fight.spawn.z
@@ -2293,7 +2306,7 @@ end sub
 ''::::::::::::::
 sub pl_items_touch ( g as Game, item() as ItemEnt )
     dim i as integer
-    dim dz as single, cap as integer
+    dim dz as single, cap as integer, atype as single
 
     '' item_megahealth_rot: over 100, a point a second after five
     if ( g.fight.health > PL_HEALTH% and g.rdr.anim_time >= g.fight.rot_at ) then
@@ -2312,6 +2325,15 @@ sub pl_items_touch ( g as Game, item() as ItemEnt )
                     if ( g.fight.shells < PL_SHELLS_MAX% ) then
                         g.fight.shells = g.fight.shells + item(i).amount
                         if ( g.fight.shells > PL_SHELLS_MAX% ) then g.fight.shells = PL_SHELLS_MAX%
+                        item(i).gone = -1
+                    end if
+                elseif ( item(i).kind = ENT_ITEM_ARMOR1 or item(i).kind = ENT_ITEM_ARMOR2 ) then
+                    '' armor_touch: only what beats the armor worn, type * value
+                    atype = PL_ARMOR1_TYPE#
+                    if ( item(i).kind = ENT_ITEM_ARMOR2 ) then atype = PL_ARMOR2_TYPE#
+                    if ( g.fight.armor_type * g.fight.armor < atype * item(i).amount ) then
+                        g.fight.armor_type = atype
+                        g.fight.armor = item(i).amount
                         item(i).gone = -1
                     end if
                 else

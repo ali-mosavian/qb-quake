@@ -80,6 +80,8 @@ end type
 
 const ENT_ITEM_HEALTH   = 0
 const ENT_ITEM_SHELLS   = 1
+const ENT_ITEM_ARMOR1   = 2      '' green, 100 at 0.3; amount is the value
+const ENT_ITEM_ARMOR2   = 3      '' yellow, 150 at 0.6
 const ENT_ITEM_HALF#    = 10.0   '' the box's half width
 const ENT_ITEM_TOP#     = 20.0   '' and its height
 const ENT_ITEM_REACH#   = 32.0   '' Quake's touch: item box against the player's
@@ -179,6 +181,7 @@ const ENT_TRIG_COUNTER = 2
 const ENT_TRIG_BUTTON  = 3
 const ENT_TRIG_EXIT    = 4      '' trigger_changelevel: the level ends
 const ENT_TRIG_SHOOT   = 5      '' a trigger with health: pl_fire's pellets fire it
+const ENT_TRIG_SECRET  = 6      '' trigger_secret: a once that counts
 
 '' Anything that fires a target, resolved offline: a trigger's volume, a
 '' button's travel. Names are ids -- a door's targeted, a trigger's name

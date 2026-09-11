@@ -2134,14 +2134,22 @@ Both references carry the gun now.
 as flat boxes by `mdl_draw_box` in `d_alias.c` -- six quads, no clip
 beyond "any corner behind the near plane drops the box", which at ten
 units wide means the player is in it. A box far down the hall is in
-the bench frame: 24 pixels at the centre.
+the bench frame: 24 pixels at the centre. `item_armor1` and `item_armor2`
+are two more kinds, 100 at 0.3 and 150 at 0.6: armor_touch takes one
+only when type * value beats what is worn, and `pl_damage` is T_Damage's
+split, the armor taking ceil(type * damage) and losing its type with its
+last point. The bar shows the icon and the count at 0 and 24 while any is
+worn -- Quake draws a 0 there too, left out so the references stand.
+`trigger_secret` is a once with "You found a secret area!" unless the map
+says, counted in `fight.secrets`; six on e1m1. The e1m1 gate's last two
+arms stand in `*44` and on the green armor.
 
 **The status bar is Quake's own, out of gfx.wad.** `tools/mkgfx.py`
 writes `sbar.raw` and `sbnum.raw` -- the bar, the digits, the shells
 icon and the five faces -- with the qpic's 255 kept transparent: the bar
 is textured differently under every slot, so nothing can be composited
 offline. Everything lives in ONE EMS surface, 512 wide because an EMS
-row must divide 16K: the untouched bar in rows 0..23, the seventeen
+row must divide 16K: the untouched bar in rows 0..23, the nineteen
 cells side by side in 24..47, the composed bar in 48..71, which a
 320-wide view aimed at row 48 hands to the blit. `scr_sbar_paint`
 copies the bar band over the working band and pokes each cell's opaque

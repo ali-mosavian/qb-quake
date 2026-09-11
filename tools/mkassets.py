@@ -397,7 +397,7 @@ def convert_lightmaps(d, lumps, out):
 
 
 ENT_PAIR = re.compile(r'"([^"]*)"\s*"([^"]*)"')
-TRIG_ONCE, TRIG_MULTI, TRIG_COUNTER, TRIG_BUTTON, TRIG_EXIT, TRIG_SHOOT = 0, 1, 2, 3, 4, 5   # ENT_TRIG_*
+TRIG_ONCE, TRIG_MULTI, TRIG_COUNTER, TRIG_BUTTON, TRIG_EXIT, TRIG_SHOOT, TRIG_SECRET = 0, 1, 2, 3, 4, 5, 6   # ENT_TRIG_*
 
 
 def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skill: int) -> bytes:
@@ -420,15 +420,18 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
     names: dict[str, int] = {}
     mons: list[tuple[int, tuple[float, float, float], float]] = []
     mon_kind = {'monster_army': 0, 'monster_knight': 1, 'monster_dog': 2}   # MDL_KIND_*; no model for the rest
-    item_kind = {'item_health': 0, 'item_shells': 1}
+    item_kind = {'item_health': 0, 'item_shells': 1, 'item_armor1': 2, 'item_armor2': 3}
 
     def vec(v: str) -> tuple[float, float, float]:
         x, y, z = (float(t) for t in v.split())
         return (x, y, z)
 
     def item_amount(classname: str, flags: int) -> int:
-        # items.qc: H_ROTTEN 15, H_MEGA 100, else 25; WEAPON_BIG2 40 shells, else 20
+        # items.qc: H_ROTTEN 15, H_MEGA 100, else 25; WEAPON_BIG2 40 shells,
+        # else 20; armor_touch's 100 green, 150 yellow
         match classname, flags & 1, flags & 2:
+            case 'item_armor1', _, _: return 100
+            case 'item_armor2', _, _: return 150
             case 'item_health', 1, _: return 15
             case 'item_health', _, 2: return 100
             case 'item_health', _, _: return 25
@@ -487,13 +490,17 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
         # trigger_once is a multiple with wait -1; a multiple re-arms after
         # wait, 0.2 unless the map says; a counter fires at count, 2
         match kv['classname']:
+            case 'trigger_secret': kind, wait, count = TRIG_SECRET, -1.0, 0
             case 'trigger_once': kind, wait, count = TRIG_ONCE, -1.0, 0
             case 'trigger_multiple': kind, wait, count = TRIG_MULTI, float(kv.get('wait', '0')) or 0.2, 0
             case _: kind, wait, count = TRIG_COUNTER, -1.0, int(kv.get('count', '0')) or 2
         if int(kv.get('health', '0')) > 0:
             kind = TRIG_SHOOT   # multi_killed: shot, not touched; wait as above
+        msg = msg_of(kv)
+        if kind == TRIG_SECRET and not kv.get('message'):
+            msg = b'You found a secret area!'.ljust(40)
         return (m, kind, name_id(kv.get('target', '')), name_id(kv.get('targetname', '')),
-                name_id(kv.get('killtarget', '')), count, wait, 0.0, (0.0, 0.0, 0.0), msg_of(kv))
+                name_id(kv.get('killtarget', '')), count, wait, 0.0, (0.0, 0.0, 0.0), msg)
 
     def button_record(m: int, kv: dict[str, str], box: tuple[float, ...]) -> tuple:
         # func_button: speed 40, wait 1, lip 4; wait -1 stays pressed
@@ -528,6 +535,9 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
                 trigs.append((kv.get('target', ''), model(kv['model'])))
                 hides.append(model(kv['model']))
             case 'trigger_once' | 'trigger_multiple' if model(kv.get('model', '')):
+                hides.append(model(kv['model']))
+                uses.append(trig_record(model(kv['model']), kv))
+            case 'trigger_secret' if model(kv.get('model', '')):
                 hides.append(model(kv['model']))
                 uses.append(trig_record(model(kv['model']), kv))
             case 'trigger_counter':

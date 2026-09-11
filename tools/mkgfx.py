@@ -24,7 +24,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mdlview as mdl  # noqa: E402
 
-CELLS = [*(f"NUM_{d}" for d in range(10)), "NUM_MINUS", "SB_SHELLS", "FACE1", "FACE2", "FACE3", "FACE4", "FACE5"]
+CELLS = [*(f"NUM_{d}" for d in range(10)), "NUM_MINUS", "SB_SHELLS", "FACE1", "FACE2", "FACE3", "FACE4", "FACE5",
+         "SB_ARMOR1", "SB_ARMOR2"]
 CELL = 24
 
 
