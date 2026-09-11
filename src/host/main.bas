@@ -843,6 +843,7 @@ sub host_init ( _
     if ( mon_kinds and 16 ) then mdl_load g, mon( MDL_KIND_DEMON% ), "demon"
     if ( mon_kinds and 32 ) then mdl_load g, mon( MDL_KIND_ZOMBIE% ), "zombie"
     if ( mon_kinds and 64 ) then mdl_load g, mon( MDL_KIND_WIZARD% ), "wizard"
+    if ( mon_kinds and 128 ) then mdl_load g, mon( MDL_KIND_SHAMBLER% ), "shambler"
     snd_init g
     '' mdl_pick_section places every model from rnd, so a clock
     '' seed leaves the saved frame unrepeatable. Bench only.

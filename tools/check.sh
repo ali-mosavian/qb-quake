@@ -29,6 +29,7 @@
 #   tools/check.sh --e1m2       e1m2's own entities, from the build's MAPS\
 #   tools/check.sh --e1m3       e1m3, the first map with no soldier: its spawn frame
 #   tools/check.sh --e1m4       e1m4's spawn frame, the super nailgun
+#   tools/check.sh --e1m5       e1m5's spawn frame, the shambler, the rocket launcher
 #
 # -nostats is not optional. The overlay prints live fps and frame time, so
 # two runs of the SAME build differ by ~28 pixels in the digits, and a
@@ -526,8 +527,9 @@ if [[ "${1:-}" == "--e1m3" ]]; then
     run_frame "-lm -nostats -noai -bench 40 -ticks 60" "$VBD_OUT/e1m3-spawn.bmp" e1m3.bsp
     out=$(python3 "$ROOT/tools/imgdiff.py" "$ROOT/tools/ref/e1m3-spawn.bmp" "$VBD_OUT/e1m3-spawn.bmp" | tail -1)
     if [[ "$out" == IDENTICAL* ]]; then echo "PASS  e1m3 spawn: $out"; else echo "FAIL  e1m3 spawn: $out"; rc=1; fi
-    # the grenade launcher at (-408,-1800,88), fired straight down for four
-    # seconds: the five rockets it came with go, and the blasts hurt
+    # the grenade launcher at (-408,-1800,88), fired at the ceiling (-pitch
+    # 89 looks up) for four seconds: the five rockets it came with go, and
+    # the grenades fall back and their blasts hurt
     run_frame "-lm -nostats -noai -at -408 -1800 88 -pitch 89 -fire -bench 400 -ticks 240" "$VBD_OUT/e1m3-gl.bmp" e1m3.bsp
     rk=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_rockets"{print $2}')
     hp=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_health"{print $2}')
@@ -585,6 +587,49 @@ if [[ "${1:-}" == "--e1m4" ]]; then
         echo "PASS  e1m4 sng: weapon $wp, nails $nl"
     else
         echo "FAIL  e1m4 sng: weapon ${wp:-none}, nails ${nl:-none}; want 64 and 49"; rc=1
+    fi
+    for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
+    exit $rc
+fi
+
+# e1m5: knights, ogres, demons, a wizard and the shambler; the rocket
+# launcher's first single-player map. The spawn frame against
+# tools/ref/e1m5-spawn.bmp.
+if [[ "${1:-}" == "--e1m5" ]]; then
+    build_exe
+    [[ -f "$VBD_OUT/MAPS/e1m5/assets.zip" ]] || { echo "SKIP  e1m5: no MAPS/e1m5 in the build (needs the PAK)"; exit 0; }
+    for f in assets.zip texr.raw texs.raw pal.raw e1m5.bsp; do cp "$VBD_OUT/MAPS/e1m5/$f" "$VBD_OUT/$f"; done
+    rc=0
+    run_frame "-lm -nostats -noai -bench 40 -ticks 60" "$VBD_OUT/e1m5-spawn.bmp" e1m5.bsp
+    out=$(python3 "$ROOT/tools/imgdiff.py" "$ROOT/tools/ref/e1m5-spawn.bmp" "$VBD_OUT/e1m5-spawn.bmp" | tail -1)
+    if [[ "$out" == IDENTICAL* ]]; then echo "PASS  e1m5 spawn: $out"; else echo "FAIL  e1m5 spawn: $out"; rc=1; fi
+    # the shambler at (712,1908): 128 units before it, past the shut door *22
+    # that hides it from farther off, facing it for six seconds: outside
+    # RANGE_MELEE its lightning comes first, then it closes and smashes; a
+    # hit must land and it must be hunting
+    run_frame "-lm -nostats -at 712 1780 48 -yaw 270 -bench 400 -ticks 360" "$VBD_OUT/e1m5-sham.bmp" e1m5.bsp
+    hp=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_health"{print $2}')
+    deaths=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_deaths"{print $2}')
+    hunt=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1 ~ /^ent[0-9]/ && $2 == 7 && $4 == -1' | wc -l | tr -d ' ')
+    if [[ ( "${hp:-100}" -lt 100 || "${deaths:-0}" -gt 0 ) && "${hunt:-0}" -ge 1 ]]; then
+        echo "PASS  e1m5 shambler: health $hp, deaths $deaths, $hunt hunting"
+    else
+        echo "FAIL  e1m5 shambler: health ${hp:-none}, deaths ${deaths:-none}, ${hunt:-0} hunting; want a hit and one"; rc=1
+        tr -d '\r' < "$VBD_OUT/bench.txt" | grep '^ent[0-9]'
+    fi
+    # the rocket launcher at (-544,1368,128), on its floor, fired straight
+    # down (-pitch -89) from 160 for a second: the first tick's shotgun,
+    # the pickup, one rocket at 0.5 that stops on hull 1's floor at the
+    # origin -- 118 halved for its owner, 59
+    run_frame "-lm -nostats -noai -at -544 1368 160 -pitch -89 -fire -bench 400 -ticks 60" "$VBD_OUT/e1m5-rl.bmp" e1m5.bsp
+    wp=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_weapon"{print $2}')
+    rk=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_rockets"{print $2}')
+    hp=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_health"{print $2}')
+    deaths=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_deaths"{print $2}')
+    if [[ "${wp:-0}" -eq 128 && "${rk:-5}" -eq 4 && "${hp:-100}" -lt 100 && "${deaths:-0}" -eq 0 ]]; then
+        echo "PASS  e1m5 rl: weapon $wp, rockets $rk, health $hp"
+    else
+        echo "FAIL  e1m5 rl: weapon ${wp:-none}, rockets ${rk:-none}, health ${hp:-none}, deaths ${deaths:-none}; want 128, 4, a blast felt and no death"; rc=1
     fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc

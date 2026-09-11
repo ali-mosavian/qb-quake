@@ -101,7 +101,7 @@ ASSETS := data/assets/assets.zip
 # how it went missing: data/assets is generated, not tracked, and nothing
 # regenerated these. Only reachable with the PAK; wildcard-guarded so a
 # tree without it is not a build failure.
-MDL_ASSETS := $(if $(wildcard $(PAK)),data/assets/$(MDL).geo data/assets/knight.geo data/assets/dog.geo data/assets/ogre.geo data/assets/demon.geo data/assets/zombie.geo data/assets/wizard.geo data/assets/v_shot.geo data/assets/v_shot2.geo data/assets/v_nail.geo data/assets/v_rock.geo data/assets/v_nail2.geo data/assets/v_rock2.geo)
+MDL_ASSETS := $(if $(wildcard $(PAK)),data/assets/$(MDL).geo data/assets/knight.geo data/assets/dog.geo data/assets/ogre.geo data/assets/demon.geo data/assets/zombie.geo data/assets/wizard.geo data/assets/shambler.geo data/assets/v_shot.geo data/assets/v_shot2.geo data/assets/v_nail.geo data/assets/v_rock.geo data/assets/v_nail2.geo data/assets/v_rock2.geo)
 # The status bar's pictures, out of the PAK's gfx.wad.
 GFX_ASSETS := $(if $(wildcard $(PAK)),data/assets/sbar.raw data/assets/snd.raw)
 # The A* flight path -bench -campath walks. Generated, untracked, and it
@@ -115,7 +115,7 @@ ASSET_FILES := $(wildcard data/assets/*)
 # asset files under data/maps/<map>/, staged to $(BUILD)/MAPS/<map>/.
 # trigger_changelevel writes NEXT.BAT, GOMAP.BAT copies the next map's
 # files over the ones beside the exe and dosbox.sh's run.bat loops.
-MAPS       ?= e1m1 e1m2 e1m3 e1m4
+MAPS       ?= e1m1 e1m2 e1m3 e1m4 e1m5
 MAP_ASSETS := $(if $(wildcard $(PAK)),$(foreach m,$(MAPS),data/maps/$(m)/assets.zip))
 EXE  := $(BUILD)/qrender.exe
 
@@ -167,6 +167,11 @@ data/assets/zombie.geo: $(PAK) tools/mkmdl.py
 # the wizard: 80 vertices, all 54 frames
 data/assets/wizard.geo: $(PAK) tools/mkmdl.py
 	@python3 tools/mkmdl.py $(PAK) wizard data/assets hover,fly,death,pain,magatt
+
+# 144 vertices, 37 frames fit: the lightning is the attack set, the smash
+# lands from the run cycle
+data/assets/shambler.geo: $(PAK) tools/mkmdl.py
+	@python3 tools/mkmdl.py $(PAK) shambler data/assets stand:1,run,death,pain,magic
 
 # the view weapon: shot1..7, the fire animation
 data/assets/v_shot.geo: $(PAK) tools/mkmdl.py

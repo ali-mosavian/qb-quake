@@ -34,7 +34,8 @@ const MDL_KIND_OGRE%   = 3
 const MDL_KIND_DEMON%  = 4
 const MDL_KIND_ZOMBIE% = 5
 const MDL_KIND_WIZARD% = 6
-const MDL_KINDS%       = 7       '' mon() in main.bas: one MdlState a kind
+const MDL_KIND_SHAMBLER% = 7
+const MDL_KINDS%       = 8       '' mon() in main.bas: one MdlState a kind
 const MDL_HEALTH%       = 30  '' monster_army's health
 '' army_fire: FireBullets (4, dir, '0.1 0.1 0'), 4 damage a pellet, aimed
 '' 0.2 s behind the player's velocity
@@ -150,6 +151,25 @@ const WIZARD_ATK_MELEE#   = 0.9
 const WIZARD_ATK_NEAR#    = 0.6
 const WIZARD_ATK_MID#     = 0.2
 const WIZARD_ATK_WAIT#    = 2.0
+'' shambler.qc: 600 health; sham_pain flinches only when random() * 400
+'' is under the hit, two seconds. ShamCheckAttack smashes in RANGE_MELEE
+'' -- sham_smash10's (r+r+r)*40, no smash frames on the page -- and past
+'' it, ready, visible and within 600, casts the lightning, 2 + 2 * random
+'' to be ready again: magic6, 9 and 10 are CastLightning, a line from 40
+'' up toward 16 above the player's origin for LightningDamage's 10
+const SHAMBLER_HEALTH%     = 600
+const SHAMBLER_PAIN#       = 2.0
+const SHAMBLER_PAIN_ROLL#  = 400.0
+const SHAMBLER_SMASH_DMG#  = 40.0
+const SHAMBLER_SMASH#      = 1.2   '' sham_smash1..12 at 10 Hz
+const SHAMBLER_BOLT_RANGE# = 600.0
+const SHAMBLER_BOLT_DMG%   = 10
+const SHAMBLER_BOLT_UP#    = 40.0
+const SHAMBLER_BOLT_AIM#   = 16.0
+const SHAMBLER_BOLT_A%     = 5     '' 0-based magic frames
+const SHAMBLER_BOLT_B%     = 8
+const SHAMBLER_BOLT_C%     = 9
+const SHAMBLER_ATK_WAIT#   = 2.0   '' + 2 * random
 
 '' NOT in stock Quake: a walkmonster with no path_corner target just
 '' stands forever (see the note above) -- there is no explore state to

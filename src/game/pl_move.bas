@@ -112,6 +112,13 @@ declare sub mdl_grenade ( _
     ent as MdlEnt, _
     nail() as Spike _
 )
+declare sub mdl_bolt ( _
+    g as Game, _
+    ent as MdlEnt, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+)
 declare sub mdl_leap ( _
     g as Game, _
     ent as MdlEnt, _
@@ -473,6 +480,7 @@ dim shared ogre_run_dist() as integer    '' ogre_run1..8's ai_run
 dim shared demon_run_dist() as integer   '' demon1_run1..6's ai_run
 dim shared demon_atk_dist() as integer   '' demon1_atta1..15's ai_charge
 dim shared zombie_run_dist() as integer  '' zombie_run1..8's ai_run
+dim shared shambler_run_dist() as integer '' sham_run1..6's ai_run
 
 '' sv_move.c's own STEPSIZE -- see mdl_movestep.
 const MDL_STEPSIZE# = 18.0
@@ -1337,6 +1345,7 @@ sub mdl_spawn ( _
     case MDL_KIND_DEMON%  : ent.health = DEMON_HEALTH%
     case MDL_KIND_ZOMBIE% : ent.health = ZOMBIE_HEALTH%
     case MDL_KIND_WIZARD% : ent.health = WIZARD_HEALTH%
+    case MDL_KIND_SHAMBLER% : ent.health = SHAMBLER_HEALTH%
     case else             : ent.health = MDL_HEALTH%
     end select
     ent.hunting = 0
@@ -1394,6 +1403,9 @@ sub mdl_spawn ( _
     redim zombie_run_dist( 7 ) as integer
     zombie_run_dist(0) = 1 : zombie_run_dist(1) = 1 : zombie_run_dist(2) = 0 : zombie_run_dist(3) = 1
     zombie_run_dist(4) = 2 : zombie_run_dist(5) = 3 : zombie_run_dist(6) = 4 : zombie_run_dist(7) = 4
+    redim shambler_run_dist( 5 ) as integer
+    shambler_run_dist(0) = 20 : shambler_run_dist(1) = 24 : shambler_run_dist(2) = 20
+    shambler_run_dist(3) = 20 : shambler_run_dist(4) = 24 : shambler_run_dist(5) = 20
 end sub
 
 '' a kind's sight (0), attack, pain or death (3): the first five kinds'
@@ -1984,7 +1996,7 @@ sub mdl_think ( _
     dim fin as Vec3, tr as TraceResult, dz as single
     dim corner as PathCorner
     dim ogre as integer, demon as integer, thr as single
-    dim zombie as integer, wizard as integer
+    dim zombie as integer, wizard as integer, shambler as integer
 
     if ( m.loaded = 0 ) then exit sub
     knight = ( ent.kind = MDL_KIND_KNIGHT% )
@@ -1993,6 +2005,7 @@ sub mdl_think ( _
     demon = ( ent.kind = MDL_KIND_DEMON% )
     zombie = ( ent.kind = MDL_KIND_ZOMBIE% )
     wizard = ( ent.kind = MDL_KIND_WIZARD% )
+    shambler = ( ent.kind = MDL_KIND_SHAMBLER% )
     if ( g.rdr.anim_time < ent.next_think ) then exit sub
     ent.next_think = g.rdr.anim_time + 0.1
 
@@ -2034,6 +2047,9 @@ sub mdl_think ( _
         if ( ogre and ent.anim_frame = OGRE_GREN_FRAME% ) then mdl_grenade g, ent, nail()
         if ( zombie and ent.anim_frame = ZOMBIE_GIB_FRAME% ) then mdl_gib g, ent, nail()
         if ( wizard and ( ent.anim_frame = WIZARD_FIRE_A% or ent.anim_frame = WIZARD_FIRE_B% ) ) then mdl_spike g, ent, nail()
+        if ( shambler and ( ent.anim_frame = SHAMBLER_BOLT_A% or ent.anim_frame = SHAMBLER_BOLT_B% or ent.anim_frame = SHAMBLER_BOLT_C% ) ) then
+            mdl_bolt g, ent, models(), brush(), planes()
+        end if
         ent.anim_frame = ent.anim_frame + 1
         '' knight_atk10 is the last frame id uses; attackb11 is in the file
         if ( ent.anim_frame >= m.natk or ( knight and ent.anim_frame > ubound( knight_atk_dist ) ) ) then
@@ -2111,6 +2127,7 @@ sub mdl_think ( _
     case MDL_KIND_DEMON%  : dist = demon_run_dist( ent.anim_frame )
     case MDL_KIND_ZOMBIE% : dist = zombie_run_dist( ent.anim_frame )
     case MDL_KIND_WIZARD% : dist = WIZARD_FLY_DIST#
+    case MDL_KIND_SHAMBLER% : dist = shambler_run_dist( ent.anim_frame )
     case else             : dist = mdl_run_dist( ent.anim_frame )
     end select
     if ( ent.hunting and knight ) then
@@ -2204,6 +2221,29 @@ sub mdl_think ( _
                         exit sub
                     end if
                 end if
+            end if
+        end if
+        goal.x = g.pl.pos.x : goal.y = g.pl.pos.y : goal.z = g.pl.pos.z
+    elseif ( ent.hunting and shambler ) then
+        '' ShamCheckAttack: in RANGE_MELEE with a clear line the smash,
+        '' its (r+r+r)*40 landed as the swing starts; past it, ready and
+        '' within 600, the lightning set
+        if ( mdl_find_target( g, ent, models(), brush(), planes() ) ) then
+            dx = g.pl.pos.x - ent.pos.x : dy = g.pl.pos.y - ent.pos.y
+            d2 = dx*dx + dy*dy + ( g.pl.pos.z - ent.pos.z ) * ( g.pl.pos.z - ent.pos.z )
+            if ( d2 < MDL_RANGE_MELEE# * MDL_RANGE_MELEE# ) then
+                if ( g.rdr.anim_time >= ent.next_attack ) then
+                    ent.next_attack = g.rdr.anim_time + SHAMBLER_SMASH#
+                    snd_play g, SND_SHAM_MELEE%, ent.pos
+                    dmg = int( ( rnd + rnd + rnd ) * SHAMBLER_SMASH_DMG# )
+                    if ( dmg > 0 ) then pl_damage g, dmg : snd_play g, SND_SHAM_SMACK%, ent.pos
+                end if
+            elseif ( g.rdr.anim_time >= ent.next_attack and d2 < SHAMBLER_BOLT_RANGE# * SHAMBLER_BOLT_RANGE# ) then
+                ent.next_attack = g.rdr.anim_time + SHAMBLER_ATK_WAIT# + 2.0 * rnd
+                ent.state = MDL_ST_ATTACK%
+                ent.anim_frame = 0
+                mdl_say g, ent, 1
+                exit sub
             end if
         end if
         goal.x = g.pl.pos.x : goal.y = g.pl.pos.y : goal.z = g.pl.pos.z
@@ -2572,6 +2612,8 @@ sub mdl_damage ( _
     select case ent.kind
     case MDL_KIND_KNIGHT%, MDL_KIND_OGRE%, MDL_KIND_DEMON%
         ent.pain_finished = g.rdr.anim_time + KNIGHT_PAIN#
+    case MDL_KIND_SHAMBLER%
+        ent.pain_finished = g.rdr.anim_time + SHAMBLER_PAIN#
     case else
         if ( rnd < MDL_PAIN_SHORT_P# ) then
             ent.pain_finished = g.rdr.anim_time + MDL_PAIN_SHORT#
@@ -2583,6 +2625,10 @@ sub mdl_damage ( _
     '' demon1_pain: a hit under random() * 200 does not flinch
     if ( ent.kind = MDL_KIND_DEMON% ) then
         if ( rnd * 200.0 > dmg ) then exit sub
+    end if
+    '' sham_pain: under random() * 400
+    if ( ent.kind = MDL_KIND_SHAMBLER% ) then
+        if ( rnd * SHAMBLER_PAIN_ROLL# > dmg ) then exit sub
     end if
     ent.state = MDL_ST_PAIN%
     ent.anim_frame = 0
@@ -2717,6 +2763,37 @@ sub mdl_grenade ( _
     nail(n).dmg = OGRE_GREN_DMG#
     nail(n).alive = -1
     snd_play g, SND_GRENADE%, ent.pos
+end sub
+
+'' CastLightning: from 40 up toward 16 above the player's origin, the
+'' world traced 600 along it, and LightningDamage's 10 where the line
+'' runs through the player's box. No bolt is drawn; sboom marks the first
+sub mdl_bolt ( _
+    g as Game, _
+    ent as MdlEnt, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+)
+    dim org as Vec3, fin as Vec3, d as Vec3, tr as TraceResult
+    dim pmins as Vec3, pmaxs as Vec3
+    dim l as single
+
+    if ( ent.anim_frame = SHAMBLER_BOLT_A% ) then snd_play g, SND_SHAM_BOOM%, ent.pos
+    org = ent.pos
+    org.z = org.z + SHAMBLER_BOLT_UP#
+    d.x = g.pl.pos.x - org.x : d.y = g.pl.pos.y - org.y : d.z = g.pl.pos.z + SHAMBLER_BOLT_AIM# - org.z
+    l = sqr( d.x*d.x + d.y*d.y + d.z*d.z )
+    if ( l < 1.0 ) then exit sub
+    d.x = d.x / l : d.y = d.y / l : d.z = d.z / l
+    fin.x = org.x + d.x * SHAMBLER_BOLT_RANGE#
+    fin.y = org.y + d.y * SHAMBLER_BOLT_RANGE#
+    fin.z = org.z + d.z * SHAMBLER_BOLT_RANGE#
+    pl_trace org, fin, tr, g.wld.count.models, models(), brush(), clp_buffer(), planes()
+    pmins.x = g.pl.pos.x - PL_HALF# : pmaxs.x = g.pl.pos.x + PL_HALF#
+    pmins.y = g.pl.pos.y - PL_HALF# : pmaxs.y = g.pl.pos.y + PL_HALF#
+    pmins.z = g.pl.pos.z - PL_FEET# : pmaxs.z = g.pl.pos.z + PL_ZHI#
+    if ( pl_ray_box( pmins, pmaxs, org, d, SHAMBLER_BOLT_RANGE# * tr.frac ) >= 0.0 ) then pl_damage g, SHAMBLER_BOLT_DMG%
 end sub
 
 '' dog_leap2 and demon1_jump4: ai_face, a unit up, and the velocity
@@ -2915,8 +2992,10 @@ sub pl_fire_grenade ( g as Game, nail() as Spike )
     nail(i).alive = -1
 end sub
 
-'' W_FireRocket: straight along the aim at 1000 from 8 before the
-'' origin; dmg is the direct hit, the tick quads it and sets the blast
+'' W_FireRocket: straight along the aim at 1000 from the origin -- id's
+'' 8 forward starts a rocket aimed at the floor inside hull 1's grown
+'' solid, and the trace then carries it through the floor unstopped;
+'' dmg is the direct hit, the tick quads it and sets the blast
 sub pl_fire_rocket ( g as Game, nail() as Spike )
     dim i as integer, aim as Vec3
 
@@ -2932,9 +3011,7 @@ sub pl_fire_rocket ( g as Game, nail() as Spike )
     aim.x = g.cam.look_at.x - g.cam.pos.x
     aim.y = g.cam.look_at.z - g.cam.pos.z
     aim.z = g.cam.look_at.y - g.cam.pos.y
-    nail(i).pos.x = g.pl.pos.x + aim.x * PL_RL_FWD#
-    nail(i).pos.y = g.pl.pos.y + aim.y * PL_RL_FWD#
-    nail(i).pos.z = g.pl.pos.z + aim.z * PL_RL_FWD#
+    nail(i).pos = g.pl.pos
     nail(i).vel.x = aim.x * PL_RL_SPEED#
     nail(i).vel.y = aim.y * PL_RL_SPEED#
     nail(i).vel.z = aim.z * PL_RL_SPEED#
@@ -3003,6 +3080,8 @@ sub pl_grenade_explode ( _
     snd_play g, SND_BOOM%, s.pos
     dx = g.pl.pos.x - s.pos.x : dy = g.pl.pos.y - s.pos.y : dz = g.pl.pos.z + ( PL_ZLO# + PL_ZHI# ) * 0.5 - s.pos.z
     pts = s.dmg - 0.5 * sqr( dx*dx + dy*dy + dz*dz )
+    '' head == attacker: the player's own blast hurts them half
+    if ( s.hostile = 0 ) then pts = pts * 0.5
     if ( pts > 0.0 ) then pl_damage g, int( pts )
     if ( s.hostile ) then exit sub
     for m = 0 to g.mdl_count - 1

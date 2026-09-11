@@ -2224,8 +2224,9 @@ the player's), else gravity, a hull-1 trace, the bounce; the fuse is
 2.5 s and `pl_grenade_explode` is T_RadiusDamage to the player and,
 for the player's own, every monster standing. `SB_ROCKET` is cell 20
 of the bar's band, the last that fits in 512. `tools/check.sh --e1m3`'s
-second arm stands on e1m3's launcher and fires straight down for four
-seconds: rockets under 5 and a blast felt (health -70 the first time,
+second arm stands on e1m3's launcher and fires at the ceiling (`-pitch
+89` looks up) for four seconds: rockets under 5 and a blast felt from
+the grenades falling back (health -70 the first time,
 so a death counts too). The launcher's model and code ran e1m3 out
 of string space (3.2K after depth, error 14 in the first frame); cut:
 `SC_NBLK` 1024 to 512, the bound its own comment gave (7K), `pt_idx`
@@ -2257,6 +2258,27 @@ dropped from higher stopped 24 above the floor and floated. It
 traces from `PL_FEET` above the origin now, SV_ClipMoveToEntity's
 offset of the hull's clip_mins against the item's mins, and lands
 the origin on the floor.
+
+**The shambler is kind 7**, `stand:1,run,death,pain,magic` on its
+page (144 vertices, 36 of the 37 frames that fit), health 600. It
+smashes on the run in RANGE_MELEE, sham_smash10's (r+r+r)*40 landed
+as the swing starts, once per 1.2 s, and past that -- ready, a clear
+line, within 600 -- runs the magic set: `mdl_bolt` on frames 5, 8
+and 9 is CastLightning, a line from 40 up toward 16 above the
+player's origin traced 600 through the world and LightningDamage's 10
+where it crosses the player's box; nothing is drawn for it. sham_pain
+flinches only when random() * 400 is under the hit. Its four sounds
+sit at SND_MON2 + 8; melee1, smack and sboom follow the rocket's
+sgun1. e1m5 is in `MAPS`: `tools/check.sh --e1m5` is its spawn
+frame, the shambler arm (128 units before it, past the shut door that
+hides it from farther off: the lightning, then the smash, a hit and
+hunting) and the rocket launcher arm (on it, one rocket fired straight
+down). That rocket stops on hull 1's floor at the origin -- a rocket
+is traced as the nails are, and id's 8 forward would start one aimed
+at the floor inside the grown solid and carry it through unstopped,
+so it leaves from the origin -- and its blast is T_RadiusDamage's,
+halved for its owner (`head == attacker`): 59 at the feet, health 41,
+as the gate reads. The rule reaches the grenade launcher too.
 
 **The powerups are thirty-second clocks on `fight`**: the quad
 (`quad_until`) makes every pellet and nail four times (T_Damage's

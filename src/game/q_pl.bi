@@ -228,12 +228,11 @@ const PL_GL_FUSE#      = 2.5
 const PL_GL_DMG#       = 120.0
 '' W_FireSuperSpikes: two nails from the middle for 18 (superspike_touch)
 const PL_SNG_DMG%      = 18
-'' W_FireRocket: 1000 straight along the aim from 8 before the origin,
-'' 0.8 to be ready; T_MissileTouch is 100 + 20 * random on what it hits
+'' W_FireRocket: 1000 straight along the aim from the origin, 0.8 to be
+'' ready; T_MissileTouch is 100 + 20 * random on what it hits
 '' and a blast of 120 where it stopped; one that hits nothing goes at 5 s
 const PL_RL_RATE#      = 0.8
 const PL_RL_SPEED#     = 1000.0
-const PL_RL_FWD#       = 8.0
 const PL_RL_HIT%       = 100
 const PL_RL_HIT_RND%   = 20
 const PL_RL_DMG#       = 120.0
@@ -248,7 +247,7 @@ const PL_LAND_SOFT#    = -300.0 '' PlayerPreThink: land.wav below this fall spee
 const PL_LAND_HARD#    = -650.0 '' land2.wav and five points
 '' the sounds, in tools/mksnd.py's SOUNDS order; SND_MON + kind * 4 is
 '' a monster's sight, then attack, pain, death
-const SND_COUNT%       = 91
+const SND_COUNT%       = 98
 const SND_SHOTGUN%     = 0
 const SND_SSG%         = 1
 const SND_NAIL%        = 2
@@ -282,7 +281,10 @@ const SND_DJUMP%       = 79    '' the demon's leap
 const SND_GRENADE%     = 80    '' the ogre's grenade thrown, and bounced
 const SND_BOUNCE%      = 81
 const SND_MON2%        = 82    '' the zombie's and the wizard's four, kinds 5 up
-const SND_ROCKET%      = 90    '' weapons/sgun1, the rocket launcher
+const SND_ROCKET%      = 94    '' weapons/sgun1, the rocket launcher
+const SND_SHAM_MELEE%  = 95    '' the shambler's smash, its hit, its lightning
+const SND_SHAM_SMACK%  = 96
+const SND_SHAM_BOOM%   = 97
 '' 57, 58 are comp1 and drone6, the ambient_* points; mkassets writes
 '' their ids into ents.bin, so nothing here names them -- and a const
 '' SND_AMBIENT% is the sub snd_ambient to BC, sigil or not
