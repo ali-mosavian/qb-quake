@@ -87,78 +87,40 @@ extern void pascal far r_emit_entities(
    this file: nothing else needs it. */
 typedef struct { float x, y, z; } DiskVertex;
 
-/* Transcribed from r_bsp.bas's r_cull_box, not reimagined: same 8-way
-   branch on the frustum plane's normal sign to pick the box's near
-   corner, same y/z swap copying from bbox (BSP, z-up) into near_point
-   (renderer, y-up) -- near_point.y = bbox micro.z, near_point.z = bbox
-   corner.y, matching r_cam_plane_dist's own swap below. The box comes
-   packed, a byte a coordinate: unpacked to floats once, up front. */
-static int near r_cull_box_c( PackedBounds far *bbox, DiskPlane far *frustum )
+/* r_bsp.bas's r_cull_box with Quake's clip flags (R_RecursiveWorldNode):
+   mask holds the frustum planes the box may still cross. The near corner
+   outside a plane rejects the box, -1; the far corner inside it too means
+   every box below this one is inside, so the plane leaves the mask its
+   children get. A child's box lies in its parent's, so a dropped test
+   could only have passed. The box comes packed, a byte a coordinate, and
+   the y/z swap is r_cam_plane_dist's: renderer y is bsp z. */
+#define CLIP_ALL 0x3f
+
+static int near r_cull_box_c( PackedBounds far *bbox, DiskPlane far *frustum, int mask )
 {
-    DiskVertex near_point;
-    float dp;
+    DiskVertex n, f;
+    float lo[3], hi[3], dp;
     int i;
-    float mnx = (float) bbox->q[0] * BOUND_Q + BOUND_BASE;
-    float mny = (float) bbox->q[1] * BOUND_Q + BOUND_BASE;
-    float mnz = (float) bbox->q[2] * BOUND_Q + BOUND_BASE;
-    float mxx = (float) bbox->q[3] * BOUND_Q + BOUND_BASE;
-    float mxy = (float) bbox->q[4] * BOUND_Q + BOUND_BASE;
-    float mxz = (float) bbox->q[5] * BOUND_Q + BOUND_BASE;
+
+    if ( !mask ) return 0;
+    lo[0] = (float) bbox->q[0] * BOUND_Q + BOUND_BASE;
+    lo[1] = (float) bbox->q[2] * BOUND_Q + BOUND_BASE;
+    lo[2] = (float) bbox->q[1] * BOUND_Q + BOUND_BASE;
+    hi[0] = (float) bbox->q[3] * BOUND_Q + BOUND_BASE;
+    hi[1] = (float) bbox->q[5] * BOUND_Q + BOUND_BASE;
+    hi[2] = (float) bbox->q[4] * BOUND_Q + BOUND_BASE;
 
     for ( i = 0; i < 6; i++ ) {
-        if ( frustum[i].norm.x > 0.0 ) {
-            if ( frustum[i].norm.y > 0.0 ) {
-                if ( frustum[i].norm.z > 0.0 ) {
-                    near_point.x = mnx;
-                    near_point.y = mnz;
-                    near_point.z = mny;
-                } else {
-                    near_point.x = mnx;
-                    near_point.y = mnz;
-                    near_point.z = mxy;
-                }
-            } else {
-                if ( frustum[i].norm.z > 0.0 ) {
-                    near_point.x = mnx;
-                    near_point.y = mxz;
-                    near_point.z = mny;
-                } else {
-                    near_point.x = mnx;
-                    near_point.y = mxz;
-                    near_point.z = mxy;
-                }
-            }
-        } else {
-            if ( frustum[i].norm.y > 0.0 ) {
-                if ( frustum[i].norm.z > 0.0 ) {
-                    near_point.x = mxx;
-                    near_point.y = mnz;
-                    near_point.z = mny;
-                } else {
-                    near_point.x = mxx;
-                    near_point.y = mnz;
-                    near_point.z = mxy;
-                }
-            } else {
-                if ( frustum[i].norm.z > 0.0 ) {
-                    near_point.x = mxx;
-                    near_point.y = mxz;
-                    near_point.z = mny;
-                } else {
-                    near_point.x = mxx;
-                    near_point.y = mxz;
-                    near_point.z = mxy;
-                }
-            }
-        }
-
-        dp = frustum[i].norm.x * near_point.x + frustum[i].norm.y * near_point.y +
-             frustum[i].norm.z * near_point.z;
-
-        if ( (dp + frustum[i].dist) > 0 ) return 0;
+        if ( !( mask & ( 1 << i ) ) ) continue;
+        if ( frustum[i].norm.x > 0.0 ) { n.x = lo[0]; f.x = hi[0]; } else { n.x = hi[0]; f.x = lo[0]; }
+        if ( frustum[i].norm.y > 0.0 ) { n.y = lo[1]; f.y = hi[1]; } else { n.y = hi[1]; f.y = lo[1]; }
+        if ( frustum[i].norm.z > 0.0 ) { n.z = lo[2]; f.z = hi[2]; } else { n.z = hi[2]; f.z = lo[2]; }
+        dp = frustum[i].norm.x * n.x + frustum[i].norm.y * n.y + frustum[i].norm.z * n.z;
+        if ( (dp + frustum[i].dist) > 0 ) return -1;
+        dp = frustum[i].norm.x * f.x + frustum[i].norm.y * f.y + frustum[i].norm.z * f.z;
+        if ( (dp + frustum[i].dist) <= 0 ) mask &= ~( 1 << i );
     }
-
-    return -1;
+    return mask;
 }
 
 /* Transcribed from r_bsp.bas's r_cam_plane_dist: same y/z swap dotting a
@@ -215,7 +177,7 @@ static void near r_walk_emit( WalkCtx *ctx, int nodenr )
                       ctx->fru_dsc );
 }
 
-static void near r_walk_leaf( WalkCtx *ctx, int nodenr )
+static void near r_walk_leaf( WalkCtx *ctx, int nodenr, int mask )
 {
     Leaf      far *lef   = ctx->lef;
     short     far *lfc   = ctx->lfc;
@@ -224,7 +186,7 @@ static void near r_walk_leaf( WalkCtx *ctx, int nodenr )
 
     leafnr = ~nodenr;
     if ( (ctx->ign || ctx->pvsb[leafnr]) &&
-         r_cull_box_c( &lef[leafnr].bound, ctx->fru ) ) {
+         r_cull_box_c( &lef[leafnr].bound, ctx->fru, mask ) >= 0 ) {
         frst = lef[leafnr].lface_id;
         last = frst + lef[leafnr].lface_num;
         for ( i = frst; i < last; i++ )
@@ -238,30 +200,31 @@ static void near r_walk_leaf( WalkCtx *ctx, int nodenr )
     }
 }
 
-static void near r_walk_rec( WalkCtx *ctx, int nodenr )
+static void near r_walk_rec( WalkCtx *ctx, int nodenr, int mask )
 {
     Node far *nds = ctx->nds;
     int side;
 
     if ( nodenr & 0x8000 ) {
-        r_walk_leaf( ctx, nodenr );
+        r_walk_leaf( ctx, nodenr, mask );
         return;
     }
 
-    if ( !r_cull_box_c( &nds[nodenr].bound, ctx->fru ) ) return;
+    mask = r_cull_box_c( &nds[nodenr].bound, ctx->fru, mask );
+    if ( mask < 0 ) return;
 
     side = ( r_cam_plane_dist_c( &ctx->cpos, &ctx->pln[ nds[nodenr].plane_id ] ) >= 0.0 );
 
     if ( side ) {
-        r_walk_rec( ctx, nds[nodenr].child1 );
+        r_walk_rec( ctx, nds[nodenr].child1, mask );
         if ( ctx->vis->ent_left ) r_walk_emit( ctx, nodenr );
         ctx->ord[ ctx->vis->ord_count++ ] = nodenr;
-        r_walk_rec( ctx, nds[nodenr].child0 );
+        r_walk_rec( ctx, nds[nodenr].child0, mask );
     } else {
-        r_walk_rec( ctx, nds[nodenr].child0 );
+        r_walk_rec( ctx, nds[nodenr].child0, mask );
         if ( ctx->vis->ent_left ) r_walk_emit( ctx, nodenr );
         ctx->ord[ ctx->vis->ord_count++ ] = nodenr;
-        r_walk_rec( ctx, nds[nodenr].child1 );
+        r_walk_rec( ctx, nds[nodenr].child1, mask );
     }
 }
 
@@ -308,7 +271,7 @@ void pascal far r_recursive_world_node(
     ctx.pflag_dsc   = pflag_dsc;
     ctx.ord_dsc     = ord_dsc;
 
-    r_walk_rec( &ctx, nodenr );
+    r_walk_rec( &ctx, nodenr, CLIP_ALL );
 }
 
 /* Called once at startup (see main.bas) with off = varptr(g.vis)-varptr(g):
