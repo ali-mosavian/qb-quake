@@ -2278,6 +2278,18 @@ comes back; a touch while closing sends it out again, which is also what
 keeps it off a player standing in the way. 14 doors on e1m1, four by
 touch.
 
+`func_door_secret` is the same array with two legs: back `t_width`
+along the angle's right (or down), a second's pause, then `t_length`
+along its forward, resolved offline as `mid` and `travel`; speed 50,
+wait 5, open_once stays, and the way home is the same legs reversed
+with the same pause. It fires only from rest (fd_secret_use), a touch
+says its message and nothing else (secret_touch), and one without a
+targetname takes damage: `pl_fire` runs each pellet against its brush
+as it does the shootable switch. Seven on e1m1, four of them shot, the
+rest by their triggers. Not ported: its own targets, blocking damage.
+`tools/check.sh --e1m1`'s eighth arm shoots `*43` level from 60 units
+and wants its brush 60 aside.
+
 **The brush offset is a `Vec3` now, not a z.** Doors slide along any
 axis, so `BrushModel.ofs` carries all three: `d_faces.c` adds it to every
 vertex, `pl_trace.c` subtracts it from both ends of the sweep, and

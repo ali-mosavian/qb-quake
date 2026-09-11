@@ -481,6 +481,10 @@ sub ent_door_init ( _
     d.hold_left = 0.0
     d.nolink    = dr.nolink
     d.targeted  = dr.targeted
+    d.secret    = dr.secret
+    d.shoot     = dr.shoot
+    d.ofs_mid   = dr.mid
+    d.pause_left = 0.0
     d.msg       = dr.msg
     d.state     = ENT_DOOR_SHUT
     d.link      = k
@@ -499,10 +503,10 @@ sub ent_door_init ( _
     brush(m).ofs = d.ofs_shut
 
     '' spawn_field: the brush's box where it sits, grown 60 in x and y, 8
-    '' in z. A targeted door has no field; touching the brush itself says
-    '' its message (door_touch)
+    '' in z. A targeted or secret door has no field; touching the brush
+    '' itself says its message (door_touch, secret_touch)
     fx = ENT_DOOR_FIELD# : fz = ENT_DOOR_FIELDZ#
-    if ( d.targeted ) then fx = ENT_TOUCH_SLACK# : fz = ENT_TOUCH_SLACK#
+    if ( d.targeted or d.secret ) then fx = ENT_TOUCH_SLACK# : fz = ENT_TOUCH_SLACK#
     d.mins.x = models(m).mins.x + d.ofs_shut.x - fx
     d.mins.y = models(m).mins.y + d.ofs_shut.y - fx
     d.mins.z = models(m).mins.z + d.ofs_shut.z - fz
@@ -584,12 +588,17 @@ sub ent_door_fire ( _
 
     for  k = 0 to g.door_count-1
         if ( door(k).link = grp ) then
-            select case door(k).state
-                case ENT_DOOR_SHUT, ENT_DOOR_CLOSING
-                    door(k).state = ENT_DOOR_OPENING
-                case ENT_DOOR_OPEN
-                    door(k).hold_left = door(k).hold
-            end select
+            if ( door(k).secret ) then
+                '' fd_secret_use: nothing while it is anywhere but home
+                if ( door(k).state = ENT_DOOR_SHUT ) then door(k).state = ENT_DOOR_OUT1
+            else
+                select case door(k).state
+                    case ENT_DOOR_SHUT, ENT_DOOR_CLOSING
+                        door(k).state = ENT_DOOR_OPENING
+                    case ENT_DOOR_OPEN
+                        door(k).hold_left = door(k).hold
+                end select
+            end if
         end if
     next k
 end sub
@@ -635,7 +644,7 @@ sub ent_move_doors ( _
 
     for  k = 0 to g.door_count-1
         if ( ent_door_touched( g, door(k) ) ) then
-            if ( door(k).targeted = 0 ) then
+            if ( door(k).targeted = 0 and door(k).secret = 0 ) then
                 ent_door_fire g, door(k).link, door()
             else
                 ent_say g, door(k).msg
@@ -657,6 +666,26 @@ sub ent_move_doors ( _
                     if ( door(k).hold_left <= 0.0 ) then door(k).state = ENT_DOOR_CLOSING
                 end if
             case ENT_DOOR_CLOSING
+                if ( door(k).secret ) then
+                    if ( ent_door_step( brush(m).ofs, door(k).ofs_mid, door(k).speed * dt ) ) then
+                        door(k).state = ENT_DOOR_PAUSE_BACK
+                        door(k).pause_left = ENT_DOOR_PAUSE#
+                    end if
+                elseif ( ent_door_step( brush(m).ofs, door(k).ofs_shut, door(k).speed * dt ) ) then
+                    door(k).state = ENT_DOOR_SHUT
+                end if
+            case ENT_DOOR_OUT1
+                if ( ent_door_step( brush(m).ofs, door(k).ofs_mid, door(k).speed * dt ) ) then
+                    door(k).state = ENT_DOOR_PAUSE_OUT
+                    door(k).pause_left = ENT_DOOR_PAUSE#
+                end if
+            case ENT_DOOR_PAUSE_OUT
+                door(k).pause_left = door(k).pause_left - dt
+                if ( door(k).pause_left <= 0.0 ) then door(k).state = ENT_DOOR_OPENING
+            case ENT_DOOR_PAUSE_BACK
+                door(k).pause_left = door(k).pause_left - dt
+                if ( door(k).pause_left <= 0.0 ) then door(k).state = ENT_DOOR_BACK2
+            case ENT_DOOR_BACK2
                 if ( ent_door_step( brush(m).ofs, door(k).ofs_shut, door(k).speed * dt ) ) then
                     door(k).state = ENT_DOOR_SHUT
                 end if
@@ -711,6 +740,7 @@ sub ent_reset ( _
     for  k = 0 to g.door_count-1
         door(k).state = ENT_DOOR_SHUT
         door(k).hold_left = 0.0
+        door(k).pause_left = 0.0
         brush( door(k).model ).ofs = door(k).ofs_shut
     next k
     for  k = 0 to g.trig_count-1

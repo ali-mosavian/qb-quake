@@ -298,6 +298,17 @@ PY
     else
         echo "FAIL  e1m1 shoot: door 15 at z ${dz:-none}, the switch took no shot"; rc=1
     fi
+    # and the secret door *43, "Shoot this secret door...": shot level from
+    # 60 units -- the default 11 degrees down puts the pellet on the hull's
+    # floor first -- it slides 14 back in y, waits a second, then 62 aside
+    # in x, and open_once keeps it there
+    run_frame "-lm -nostats -noai -at 688 120 60 -yaw 90 -pitch 0 -fire -bench 400 -ticks 240" "$VBD_OUT/e1m1-secret.bmp" e1m1.bsp
+    sx=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1 ~ /^door_/ && $2==43 {print $4}')
+    if awk -v x="${sx:-0}" 'BEGIN{exit !(x > 60)}'; then
+        echo "PASS  e1m1 secret: door 43 at x $sx, the secret door slid aside"
+    else
+        echo "FAIL  e1m1 secret: door 43 at x ${sx:-none}, the secret door stayed"; rc=1
+    fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc
 fi

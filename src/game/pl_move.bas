@@ -39,6 +39,11 @@ declare sub ent_trig_fire ( _
     door() as DoorEnt, _
     trig() as TrigEnt _
 )
+declare sub ent_door_fire ( _
+    g as Game, _
+    byval grp as integer, _
+    door() as DoorEnt _
+)
 declare function qglArLoadBas ( _
     flname as string, _
     byval typ as integer, _
@@ -2028,6 +2033,13 @@ sub pl_fire ( _
             if ( trig(i).kind = ENT_TRIG_SHOOT and trig(i).state = ENT_TRIG_READY ) then
                 t = pl_ray_box( trig(i).mins, trig(i).maxs, org, dir, bt + PL_HALF# )
                 if ( t >= 0.0 ) then ent_trig_fire g, i, door(), trig()
+            end if
+        next i
+        '' a secret door takes damage: the first pellet on it sends it out
+        for i = 0 to g.door_count - 1
+            if ( door(i).shoot and door(i).state = ENT_DOOR_SHUT ) then
+                t = pl_ray_box( door(i).mins, door(i).maxs, org, dir, bt + PL_HALF# )
+                if ( t >= 0.0 ) then ent_door_fire g, door(i).link, door()
             end if
         next i
     next p

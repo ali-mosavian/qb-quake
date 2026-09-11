@@ -108,11 +108,14 @@ end type
 type EntsDoor
     model       as integer
     travel      as Vec3
+    mid         as Vec3         '' a secret door's first leg; travel is the second's end
     speed       as single
     hold        as single       '' "wait": seconds open; below zero stays
     start_open  as integer
     nolink      as integer
     targeted    as integer      '' its targetname's id: opens by trigger, not touch
+    secret      as integer      '' func_door_secret: touch says the message only
+    shoot       as integer      '' a pellet opens it
     msg         as string * 40  '' centerprint on touch, space padded
 end type
 
@@ -136,6 +139,11 @@ const ENT_DOOR_SHUT    = 0
 const ENT_DOOR_OPENING = 1
 const ENT_DOOR_OPEN    = 2
 const ENT_DOOR_CLOSING = 3
+const ENT_DOOR_OUT1    = 4      '' a secret door's first leg, to ofs_mid
+const ENT_DOOR_PAUSE_OUT  = 5   '' the second it stands there before the second leg
+const ENT_DOOR_PAUSE_BACK = 6   '' and on the way back, CLOSING having reached ofs_mid
+const ENT_DOOR_BACK2   = 7      '' the last leg home
+const ENT_DOOR_PAUSE#  = 1.0
 const ENT_DOOR_FIELD#  = 60.0   '' spawn_field: the touch box grows this much in x and y
 const ENT_DOOR_FIELDZ# = 8.0    '' and this much in z
 
@@ -149,10 +157,14 @@ type DoorEnt
     model       as integer
     ofs_shut    as Vec3         '' brush offset at each end of the travel
     ofs_open    as Vec3
+    ofs_mid     as Vec3         '' a secret door's corner
     speed       as single
     hold        as single
     hold_left   as single
+    pause_left  as single
     state       as integer
+    secret      as integer
+    shoot       as integer
     link        as integer      '' lowest door index of its group
     nolink      as integer
     targeted    as integer

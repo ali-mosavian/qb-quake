@@ -460,8 +460,28 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
         lip = float(kv.get('lip', '0')) or 8.0
         flags = int(kv.get('spawnflags', '0'))
         travel = travel_of(float(kv.get('angle', '0')), box, lip)
-        return (m, travel, speed, hold, 1 if flags & 1 else 0, 1 if flags & 4 else 0,
-                name_id(kv.get('targetname', '')), msg_of(kv))
+        return (m, travel, (0.0, 0.0, 0.0), speed, hold, 1 if flags & 1 else 0, 1 if flags & 4 else 0,
+                name_id(kv.get('targetname', '')), 0, 0, msg_of(kv))
+
+    def secret_record(m: int, kv: dict[str, str], box: tuple[float, ...]) -> tuple:
+        # func_door_secret, fd_secret_use: back t_width along v_right (or
+        # down), then t_length along v_forward; speed 50, wait 5, open_once
+        # stays; shot open unless named, or no_shoot, or always_shoot
+        flags = int(kv.get('spawnflags', '0'))
+        yaw = math.radians(float(kv.get('angle', '0')))
+        fwd = (math.cos(yaw), math.sin(yaw), 0.0)
+        right = (math.sin(yaw), -math.cos(yaw), 0.0)
+        size = [box[k + 3] - box[k] for k in range(3)]
+        width = float(kv.get('t_width', '0')) or (size[2] if flags & 4 else abs(sum(right[k] * size[k] for k in range(3))))
+        length = float(kv.get('t_length', '0')) or abs(sum(fwd[k] * size[k] for k in range(3)))
+        temp = 1.0 - (flags & 2)
+        mid = (0.0, 0.0, -width) if flags & 4 else tuple(right[k] * width * temp for k in range(3))
+        travel = tuple(mid[k] + fwd[k] * length for k in range(3))
+        speed = float(kv.get('speed', '0')) or 50.0
+        hold = -1.0 if flags & 1 else (float(kv.get('wait', '0')) or 5.0)
+        name = name_id(kv.get('targetname', ''))
+        shoot = 0 if flags & 8 else (1 if not name or flags & 16 else 0)
+        return (m, travel, mid, speed, hold, 0, 1, name, 1, shoot, msg_of(kv))
 
     def trig_record(m: int, kv: dict[str, str]) -> tuple:
         # trigger_once is a multiple with wait -1; a multiple re-arms after
@@ -522,6 +542,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
                 hides.append(model(kv['model']))
             case 'func_door' if model(kv.get('model', '')):
                 doors.append(door_record(model(kv['model']), kv, boxes[model(kv['model'])]))
+            case 'func_door_secret' if model(kv.get('model', '')):
+                doors.append(secret_record(model(kv['model']), kv, boxes[model(kv['model'])]))
             case 'func_plat' if model(kv.get('model', '')):
                 plats.append((model(kv['model']),
                               float(kv.get('speed', '0')),
@@ -548,8 +570,9 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
         buf += struct.pack('<h', m)
     for kind, amount, org in items:
         buf += struct.pack('<hh3f', kind, amount, *org)
-    for m, travel, speed, hold, start_open, nolink, targeted, msg in doors:
-        buf += struct.pack('<h3fffhhh40s', m, *travel, speed, hold, start_open, nolink, targeted, msg)
+    for m, travel, mid, speed, hold, start_open, nolink, targeted, secret, shoot, msg in doors:
+        buf += struct.pack('<h3f3fffhhhhh40s', m, *travel, *mid, speed, hold, start_open, nolink, targeted,
+                           secret, shoot, msg)
     for m, kind, target, name, count, wait, speed, travel, msg in uses:
         buf += struct.pack('<5hff3f40s', m, kind, target, name, count, wait, speed, *travel, msg)
     return bytes(buf)
