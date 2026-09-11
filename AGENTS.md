@@ -2678,7 +2678,8 @@ vertex, `pl_trace.c` subtracts it from both ends of the sweep, and
 
 **Placement is cached.** `ent_find_node` for every brush model every tick
 was 81 of e1m3's 131 ms frame. `BrushModel.node` now holds
-`ENT_NODE_DIRTY` until `ent_place_models` recomputes it, and only load,
+`ENT_NODE_DIRTY` until `ent_place_models` recomputes it, once a frame
+before the draw. Only load,
 `ent_reset` and a mover whose `ofs` changed that tick set it. A new mover
 must do the same. `place_stale` in bench.txt re-derives every placement
 at exit and counts the ones that disagree; `check.sh --e1m1` wants 0.

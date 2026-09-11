@@ -193,7 +193,6 @@ type PhaseTimes
     tk_doors   as TickTimer
     tk_trigs   as TickTimer
     tk_traps   as TickTimer
-    tk_place   as TickTimer
     tk_ls      as TickTimer
     '' pt_mdl's parts, microseconds a frame
     md_mon   as TickTimer

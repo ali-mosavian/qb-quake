@@ -153,7 +153,6 @@ sub host_bench_report ( _
         host_pt_put benchf, "pt_tk_doors", g.pt.tk_doors.lo, g.pt.tk_doors.sum, g.pt.tk_doors.hi, g.pt.tk_doors.n, 0.001
         host_pt_put benchf, "pt_tk_trigs", g.pt.tk_trigs.lo, g.pt.tk_trigs.sum, g.pt.tk_trigs.hi, g.pt.tk_trigs.n, 0.001
         host_pt_put benchf, "pt_tk_traps", g.pt.tk_traps.lo, g.pt.tk_traps.sum, g.pt.tk_traps.hi, g.pt.tk_traps.n, 0.001
-        host_pt_put benchf, "pt_tk_place", g.pt.tk_place.lo, g.pt.tk_place.sum, g.pt.tk_place.hi, g.pt.tk_place.n, 0.001
         host_pt_put benchf, "pt_tk_ls", g.pt.tk_ls.lo, g.pt.tk_ls.sum, g.pt.tk_ls.hi, g.pt.tk_ls.n, 0.001
         host_pt_put benchf, "pt_md_mon", g.pt.md_mon.lo, g.pt.md_mon.sum, g.pt.md_mon.hi, g.pt.md_mon.n, 0.001
         host_pt_put benchf, "pt_md_item", g.pt.md_item.lo, g.pt.md_item.sum, g.pt.md_item.hi, g.pt.md_item.n, 0.001
@@ -299,7 +298,6 @@ sub host_pt_init ( g as Game )
     g.pt.tk_doors.lo = 1E+09
     g.pt.tk_trigs.lo = 1E+09
     g.pt.tk_traps.lo = 1E+09
-    g.pt.tk_place.lo = 1E+09
     g.pt.tk_ls.lo = 1E+09
     g.pt.md_mon.lo = 1E+09
     g.pt.md_item.lo = 1E+09

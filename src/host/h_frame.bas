@@ -526,10 +526,6 @@ sub host_tick ( _
     pl_traps_tick g, trig(), nail()
     host_tk g.ft.n > 0, t0, g.pt.tk_traps
 
-    '' where each mover ended up, so the draw order can place it
-    ent_place_models g.wld.count.models, models(), nodes(), planes(), brush()
-    host_tk g.ft.n > 0, t0, g.pt.tk_place
-
     '' map time, which drives every texture animation
     g.rdr.anim_time = g.rdr.anim_time + dt
 
@@ -622,6 +618,10 @@ sub host_render ( _
     dim dparm as DrawParams
 
     pt0 = sys_now()
+    '' where each mover ended up, for the draw order: once a frame, since
+    '' only the draw reads it -- a train re-placed every tick paid for
+    '' ticks no frame showed
+    ent_place_models g.wld.count.models, mdl_buffer(), nds_buffer(), pln_buffer(), brush()
     qglM4LookAt mtx_mdl, g.cam.pos, g.cam.look_at, cam_up
     qglM4Conc mtx_fin, mtx_mdl, mtx_prj
     r_set_frustum frustum(), mtx_fin
