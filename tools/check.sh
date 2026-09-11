@@ -639,8 +639,8 @@ if [[ "${1:-}" == "--e1m5" ]]; then
 fi
 
 # e1m6, e1m7 and e1m8: the shareware's last three, spawn frames against
-# tools/ref/<map>-spawn.bmp. e1m7's Chthon is not ported (no monster_boss
-# kind; mkassets ships the map without it). e1m8 is world.qc's sv_gravity
+# tools/ref/<map>-spawn.bmp. e1m7's Chthon is a trigger, unseen: the rune
+# wakes him and the bolt kills him, see AGENTS. e1m8 is world.qc's sv_gravity
 # 100: the spawn hangs 630 over its floor, -jump lands at -736 and goes
 # 364 up by v^2/2g against 48 under 800, so at tick 400 the body is still
 # 300 up. peak_z is the spawn, -104: it read 0 on any map under z 0
@@ -680,6 +680,16 @@ if [[ "${1:-}" == "--e1m6" || "${1:-}" == "--e1m7" || "${1:-}" == "--e1m8" || "$
         run_frame "-lm -nostats -noai -at -160 2368 128 -yaw 270 -bench 40 -ticks 60" "$VBD_OUT/start-reg.bmp" start.bsp
         out=$(python3 "$ROOT/tools/imgdiff.py" "$ROOT/tools/ref/start-reg.bmp" "$VBD_OUT/start-reg.bmp" | tail -1)
         if [[ "$out" == IDENTICAL* ]]; then echo "PASS  start registered: $out"; else echo "FAIL  start registered: $out"; rc=1; fi
+    fi
+    if [[ "$m" == e1m7 ]]; then
+        # on the rune at (8,64,24): sigil_touch fires t4 and Chthon (kind 9) wakes to ARMED, 5
+        run_frame "-lm -nostats -noai -at 8 64 24 -bench 40 -ticks 30" "$VBD_OUT/e1m7-rune.bmp" e1m7.bsp
+        st=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1 ~ /^trig_[0-9]+$/ && $3==9 {print $4}')
+        if [[ "${st:-0}" -eq 5 ]]; then
+            echo "PASS  e1m7 rune: Chthon woken, state $st"
+        else
+            echo "FAIL  e1m7 rune: Chthon's state ${st:-none}, want 5 (ARMED)"; rc=1
+        fi
     fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc

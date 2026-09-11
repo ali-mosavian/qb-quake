@@ -420,6 +420,7 @@ def convert_lightmaps(d, lumps, out):
 ENT_PAIR = re.compile(r'"([^"]*)"\s*"([^"]*)"')
 TRIG_ONCE, TRIG_MULTI, TRIG_COUNTER, TRIG_BUTTON, TRIG_EXIT, TRIG_SHOOT, TRIG_SECRET = 0, 1, 2, 3, 4, 5, 6   # ENT_TRIG_*
 TRIG_SHOOTER = 7
+TRIG_RELAY, TRIG_BOSS, TRIG_BOLT = 8, 9, 10   # a use passed on; Chthon, unseen; event_lightning
 KEY_NAMES = ('key', 'runekey', 'keycard')   # items.qc's netname by worldtype
 
 
@@ -566,6 +567,7 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
     dests: dict[str, tuple[tuple[float, float, float], float]] = {}
     trigs: list[tuple[str, int]] = []
     hides: list[int] = []
+    bolt_doors: list[int] = []   # the electrode doors, target "lightning"
     plats: list[tuple[int, float, float]] = []
     doors: list[tuple[int, tuple[float, float, float], float, float, int, int, int]] = []
     items: list[tuple[int, int, tuple[float, float, float]]] = []
@@ -586,7 +588,7 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
                  'item_artifact_super_damage': 7, 'item_artifact_envirosuit': 8, 'misc_explobox': 9,
                  'item_key1': 10, 'item_key2': 11, 'weapon_grenadelauncher': 12, 'item_rockets': 13,
                  'weapon_supernailgun': 14, 'weapon_rocketlauncher': 15,
-                 'item_artifact_invulnerability': 16}
+                 'item_artifact_invulnerability': 16, 'item_sigil': 17}
 
     def vec(v: str) -> tuple[float, float, float]:
         x, y, z = (float(t) for t in v.split())
@@ -758,6 +760,20 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
                 next_map = kv.get('map', '')
             case 'func_button' if model(kv.get('model', '')):
                 uses.append(button_record(model(kv['model']), kv, boxes[model(kv['model'])]))
+            case 'trigger_relay':
+                # SUB_UseTargets passed on, at once: delay is not ported
+                uses.append((0, TRIG_RELAY, name_id(kv.get('target', '')), name_id(kv.get('targetname', '')),
+                             name_id(kv.get('killtarget', '')), 0, 0.0, 0.0, (0.0, 0.0, 0.0), 0, msg_of(kv)))
+            case 'monster_boss':
+                # Chthon, unseen (boss.mdl is past MDL_MAXV): the rune wakes him, his
+                # health boss_awake's 1 on easy else 3, a bolt a point, dead his target fires
+                uses.append((0, TRIG_BOSS, name_id(kv.get('target', '')), name_id(kv.get('targetname', '')),
+                             0, 1 if skill == 0 else 3, 0.0, 0.0, (0.0, 0.0, 0.0), 0, b''.ljust(40)))
+            case 'event_lightning':
+                # lightning_use: a point off Chthon with both electrode doors up; travel
+                # carries the doors' indices, patched below once every door is read
+                uses.append((0, TRIG_BOLT, 0, name_id(kv.get('targetname', '')),
+                             0, 0, 0.0, 0.0, (0.0, 0.0, 0.0), 0, b''.ljust(40)))
             case 'trigger_onlyregistered' if model(kv.get('model', '')) and kv.get('message'):
                 # OnlyRegisteredTouch on the shareware: the message and misc/talk
                 # every two seconds, its target never fired -- a multiple with no target
@@ -773,6 +789,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
                 # func_bossgate is the reverse, gone with all four, so it stays
                 hides.append(model(kv['model']))
             case 'func_door' if model(kv.get('model', '')):
+                if kv.get('target') == 'lightning':
+                    bolt_doors.append(len(doors))
                 doors.append(door_record(model(kv['model']), kv, boxes[model(kv['model'])]))
             case 'func_door_secret' if model(kv.get('model', '')):
                 doors.append(secret_record(model(kv['model']), kv, boxes[model(kv['model'])]))
@@ -806,6 +824,10 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
     # corners by index, each pointing at the next; a train at one with no target stays
     corner_at = {name: i for i, (name, _, _, _) in reversed(list(enumerate(corners))) if name}
     trains = [(m, speed, targeted, corner_at[first]) for m, speed, targeted, first in trains if first in corner_at]
+    if any(u[1] == TRIG_BOLT for u in uses):
+        assert len(bolt_doors) == 2, bolt_doors
+        uses = [(*u[:8], (float(bolt_doors[0]), float(bolt_doors[1]), 0.0), *u[9:]) if u[1] == TRIG_BOLT else u
+                for u in uses]
     buf = bytearray(struct.pack('<4f3fff13hf8s', *spawn, angle, *inter[0], inter[1], inter[2], nmodels,
                                 len(teles), len(plats), len(hides), len(items), len(doors), len(uses), len(mons),
                                 len(ambs), len(trains), len(corners), worldtype, len(crates.used), gravity,

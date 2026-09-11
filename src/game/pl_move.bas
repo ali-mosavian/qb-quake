@@ -3465,6 +3465,8 @@ function pl_item_sound ( g as Game, it as ItemEnt ) as integer
             pl_item_sound = SND_SUIT%
         case ENT_ITEM_PENT
             pl_item_sound = SND_PENT%
+        case ENT_ITEM_SIGIL
+            pl_item_sound = SND_KEY% + 1    '' misc/runekey
         case else
             if ( it.amount = ENT_ITEM_MEGA% ) then
                 pl_item_sound = SND_HEALTH_MEGA%
@@ -3560,6 +3562,10 @@ sub pl_items_touch ( _
                     item(i).gone = -1
                 elseif ( item(i).kind = ENT_ITEM_EXPLOBOX ) then
                     '' shot, never taken
+                elseif ( item(i).kind = ENT_ITEM_SIGIL ) then
+                    '' sigil_touch: no serverflags here; its target is the point
+                    ent_say g, "You got the rune!"
+                    item(i).gone = -1
                 elseif ( item(i).kind = ENT_ITEM_KEY1 or item(i).kind = ENT_ITEM_KEY2 ) then
                     '' key_touch: one of each; the name is the worldtype's
                     bit = PL_IT_KEY1%

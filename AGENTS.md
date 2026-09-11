@@ -2294,10 +2294,23 @@ and a grenade all read it. The e1m8 gate holds jump from the spawn,
 which hangs 630 over its floor, and at tick 400 wants the body over
 -600: the jump goes 364 up by v^2/2g against 48 under 800. `peak_z`
 read 0 on any map under z 0 -- nothing set it -- so `pl_init` starts
-it at the spawn, and the gate wants e1m8's -104. Not ported: Chthon (`monster_boss`, no kind; e1m7 ships
-without it), `trigger_monsterjump` -- e1m6's one sits at the foot of a
-targeted door and no easy-skill monster can reach it, so no arm;
-`func_wall` draws as any solid brush model.
+it at the spawn, and the gate wants e1m8's -104. Not ported:
+`trigger_monsterjump` -- e1m6's one sits at the foot of a targeted
+door and no easy-skill monster can reach it, so no arm; `func_wall`
+draws as any solid brush model.
+
+**Chthon is a trigger, unseen.** boss.mdl has over a thousand vertices
+against `MDL_MAXV`'s 236, so `monster_boss` is `ENT_TRIG_BOSS`: the
+rune (`item_sigil`, "You got the rune!", its target fired as any
+pickup's) wakes him to ARMED with boss_awake's health, 1 on easy and 3
+above; `event_lightning` is `ENT_TRIG_BOLT`, lightning_use with both
+electrode doors up -- the doors whose target is `lightning`, their
+indices in the bolt's `ofs_out` -- taking a point, and at none his
+target fires: the relay that opens e1m7's exit. `trigger_relay` is
+`ENT_TRIG_RELAY`, a use passed on at once; `delay` is not ported.
+e1m7's gate stands on the rune and wants Chthon ARMED; the bolt is
+read, not run -- its buttons cannot be pressed headlessly. The chain
+closes: e1m7 exits to start, e1m8 to e1m5.
 
 **start, the hub, is in `MAPS`** with its spawn frame as the gate.
 Its four `func_episodegate` ship hidden -- draw off, solid off, as a

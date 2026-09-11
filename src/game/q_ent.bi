@@ -145,6 +145,7 @@ const ENT_ITEM_ROCKETS  = 13     '' item_rockets, 5 or 10
 const ENT_ITEM_SNG      = 14     '' weapon_supernailgun, 30 nails
 const ENT_ITEM_RL       = 15     '' weapon_rocketlauncher, 5 rockets
 const ENT_ITEM_PENT     = 16     '' item_artifact_invulnerability; amount is its seconds
+const ENT_ITEM_SIGIL    = 17     '' item_sigil, the rune: its target wakes Chthon
 const ENT_BOX_HALF#     = 15.0   '' b_explob.bsp, 30 by 30 by 62
 const ENT_BOX_TOP#      = 62.0
 const ENT_BOX_DMG#      = 160.0  '' barrel_explode: T_RadiusDamage 160
@@ -266,6 +267,9 @@ const ENT_TRIG_EXIT    = 4      '' trigger_changelevel: the level ends
 const ENT_TRIG_SHOOT   = 5      '' a trigger with health: pl_fire's pellets fire it
 const ENT_TRIG_SECRET  = 6      '' trigger_secret: a once that counts
 const ENT_TRIG_SHOOTER = 7      '' trap_spikeshooter: used, it fires a spike; mins is its origin, count its damage
+const ENT_TRIG_RELAY   = 8      '' trigger_relay: used, it fires its target
+const ENT_TRIG_BOSS    = 9      '' Chthon, unseen: the rune wakes him, left is his health, dead his target fires
+const ENT_TRIG_BOLT    = 10     '' event_lightning: both electrode doors up, a point off Chthon; ofs_out.x/.y are the doors
 
 '' Anything that fires a target, resolved offline: a trigger's volume, a
 '' button's travel. Names are ids -- a door's targeted, a trigger's name

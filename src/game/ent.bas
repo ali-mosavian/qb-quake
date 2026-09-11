@@ -166,6 +166,13 @@ declare sub ent_use_targets ( _
     trig() as TrigEnt, _
     plat() as PlatEnt _
 )
+declare sub ent_bolt_use ( _
+    g as Game, _
+    byval k as integer, _
+    door() as DoorEnt, _
+    trig() as TrigEnt, _
+    plat() as PlatEnt _
+)
 declare sub ent_kill_targets ( _
     g as Game, _
     byval id as integer, _
@@ -1091,9 +1098,42 @@ sub ent_use_targets ( _
                     if ( trig(k).state = ENT_TRIG_READY ) then ent_trig_fire g, k, door(), trig(), plat()
                 case ENT_TRIG_SHOOTER
                     trig(k).state = ENT_TRIG_ARMED
+                case ENT_TRIG_RELAY
+                    ent_trig_fire g, k, door(), trig(), plat()
+                case ENT_TRIG_BOSS
+                    '' boss_awake
+                    if ( trig(k).state = ENT_TRIG_READY ) then trig(k).state = ENT_TRIG_ARMED
+                case ENT_TRIG_BOLT
+                    ent_bolt_use g, k, door(), trig(), plat()
             end select
         end if
     next k
+end sub
+
+
+'' lightning_use: with both electrode doors up the bolt takes a point off
+'' a woken Chthon, and at none his target fires (boss_death10). Both
+'' down bolts nothing, as id's does.
+sub ent_bolt_use ( _
+    g as Game, _
+    byval k as integer, _
+    door() as DoorEnt, _
+    trig() as TrigEnt, _
+    plat() as PlatEnt _
+)
+    dim j as integer
+
+    if ( door( cint( trig(k).ofs_out.x ) ).state <> ENT_DOOR_OPEN ) then exit sub
+    if ( door( cint( trig(k).ofs_out.y ) ).state <> ENT_DOOR_OPEN ) then exit sub
+    for  j = 0 to g.trig_count-1
+        if ( trig(j).kind = ENT_TRIG_BOSS and trig(j).state = ENT_TRIG_ARMED ) then
+            trig(j).left = trig(j).left - 1
+            if ( trig(j).left <= 0 ) then
+                trig(j).state = ENT_TRIG_DONE
+                ent_use_targets g, trig(j).target, door(), trig(), plat()
+            end if
+        end if
+    next j
 end sub
 
 
