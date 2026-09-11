@@ -64,6 +64,7 @@ declare sub pl_items_drop ( _
     brush() as BrushModel, _
     planes() as Plane _
 )
+declare sub host_pt_init ( g as Game )
 declare sub host_bench_report ( _
     g as Game, _
     frame_no as long, _
@@ -74,7 +75,10 @@ declare sub host_bench_report ( _
     trig() as TrigEnt, _
     mdl_ent() as MdlEnt, _
     byval host_ticks as long, _
-    mon() as MdlState _
+    mon() as MdlState, _
+    models() as Submodel, _
+    nodes() as Node, _
+    planes() as Plane _
 )
 declare sub host_view_load ( g as Game )
 declare sub host_render ( _
@@ -1097,6 +1101,7 @@ sub host_main ( _
         '' the first surface builds, which no later frame repeats.
         if ( frame_no > 3 and g.ft.raw_dt > 0.0 ) then
             if ( g.ft.n = 0 ) then
+                host_pt_init g
                 g.ft.min = g.ft.raw_dt
                 g.ft.max = g.ft.raw_dt
             else
@@ -1115,6 +1120,7 @@ sub host_main ( _
             ptd = sys_now() - pt0
             g.pt.tick_sum = g.pt.tick_sum + ptd
             if ( ptd > g.pt.tick_max ) then g.pt.tick_max = ptd
+            if ( ptd < g.pt.tick_min ) then g.pt.tick_min = ptd
         end if
 
         snd_frame g
@@ -1154,15 +1160,15 @@ sub host_main ( _
         end if
         '' -campath ends when the route does, whatever -bench says
         if ( g.env.cam_path and g.cp.done ) then
-            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), door(), trig(), mdl_ent(), host_ticks, mon()
+            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), door(), trig(), mdl_ent(), host_ticks, mon(), mdl_buffer(), nds_buffer(), pln_buffer()
             exit do
         end if
         if ( g.env.bench_ticks > 0 and host_ticks >= g.env.bench_ticks ) then
-            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), door(), trig(), mdl_ent(), host_ticks, mon()
+            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), door(), trig(), mdl_ent(), host_ticks, mon(), mdl_buffer(), nds_buffer(), pln_buffer()
             exit do
         end if
         if ( g.env.bench_frames > 0 and frame_no >= g.env.bench_frames ) then
-            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), door(), trig(), mdl_ent(), host_ticks, mon()
+            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), door(), trig(), mdl_ent(), host_ticks, mon(), mdl_buffer(), nds_buffer(), pln_buffer()
             exit do
         end if
 
@@ -1193,6 +1199,7 @@ sub host_main ( _
                 htd = sys_now() - ht0
                 g.pt.hud_sum = g.pt.hud_sum + htd
                 if ( htd > g.pt.hud_max ) then g.pt.hud_max = htd
+                if ( htd < g.pt.hud_min ) then g.pt.hud_min = htd
             end if
             qglDrBlit qglVgaScreen(), 0, 0, g.env.h_comp_dc
         end if
@@ -1202,12 +1209,14 @@ sub host_main ( _
                 ptd = prd / 1000000.0
                 g.pt.present_sum = g.pt.present_sum + ptd
                 if ( ptd > g.pt.present_max ) then g.pt.present_max = ptd
+                if ( ptd < g.pt.present_min ) then g.pt.present_min = ptd
             end if
         end if
         if ( g.ft.n > 0 ) then
             lpd = sys_now() - lp0
             g.pt.loop_sum = g.pt.loop_sum + lpd
             if ( lpd > g.pt.loop_max ) then g.pt.loop_max = lpd
+            if ( lpd < g.pt.loop_min ) then g.pt.loop_min = lpd
         end if
         scr_count_frame g
 
@@ -1217,7 +1226,7 @@ sub host_main ( _
         '' scr_count_frame just above, so this must run after it.
         ''
         if ( g.env.bench_secs > 0 and g.scr.bench_secs >= g.env.bench_secs ) then
-            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), door(), trig(), mdl_ent(), host_ticks, mon()
+            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), door(), trig(), mdl_ent(), host_ticks, mon(), mdl_buffer(), nds_buffer(), pln_buffer()
             exit do
         end if
 

@@ -157,19 +157,64 @@ end type
 type PhaseTimes
     tick_sum    as single     '' host_advance: simulation
     tick_max    as single
+    tick_min    as single
     cull_sum    as single     '' r_set_frustum + r_draw_world: BSP walk
     cull_max    as single
+    cull_min    as single
     draw_sum    as single     '' d_draw_faces: cache lookup, builds, AND
     draw_max    as single     '' raster together -- see raster_sum below
+    draw_min    as single
     hud_sum     as single     '' scr_draw_hud: the stats overlay
     hud_max     as single
+    hud_min     as single
     mdl_sum     as single     '' mdl_draw, every spawned model
     mdl_max     as single
+    mdl_min     as single
     loop_sum    as single     '' the loop body, frame clock to frame count;
     loop_max    as single     '' ft minus this is what the loop's own edges cost
+    loop_min    as single
     mtri_n      as long       '' triangles handed to qglRsPoly
+    place_stale as integer    '' ent_place_stale at the report: must read 0
+    tk_ticks    as long       '' the ticks the tk_ timers sampled
+    tk_cam      as single     '' host_tick: microseconds in the cam calls
+    tk_cam_min as single
+    tk_cam_max as single
+    tk_fire     as single     '' host_tick: microseconds in the fire calls
+    tk_fire_min as single
+    tk_fire_max as single
+    tk_nails    as single     '' host_tick: microseconds in the nails calls
+    tk_nails_min as single
+    tk_nails_max as single
+    tk_items    as single     '' host_tick: microseconds in the items calls
+    tk_items_min as single
+    tk_items_max as single
+    tk_think    as single     '' host_tick: microseconds in the think calls
+    tk_think_min as single
+    tk_think_max as single
+    tk_tele     as single     '' host_tick: microseconds in the tele calls
+    tk_tele_min as single
+    tk_tele_max as single
+    tk_plats    as single     '' host_tick: microseconds in the plats calls
+    tk_plats_min as single
+    tk_plats_max as single
+    tk_doors    as single     '' host_tick: microseconds in the doors calls
+    tk_doors_min as single
+    tk_doors_max as single
+    tk_trigs    as single     '' host_tick: microseconds in the trigs calls
+    tk_trigs_min as single
+    tk_trigs_max as single
+    tk_traps    as single     '' host_tick: microseconds in the traps calls
+    tk_traps_min as single
+    tk_traps_max as single
+    tk_place    as single     '' host_tick: microseconds in the place calls
+    tk_place_min as single
+    tk_place_max as single
+    tk_ls       as single     '' host_tick: microseconds in the ls calls
+    tk_ls_min as single
+    tk_ls_max as single
     present_sum as single     '' vid_update: blit to the screen
     present_max as single
+    present_min as single
 
     ''
     '' Nested inside draw, not subtracted from it: draw_sum is measured by
@@ -207,6 +252,7 @@ type PhaseTimes
     ''
     build_sum   as single
     build_max   as single
+    build_min   as single
 
     ''
     '' Nested inside cull, not subtracted from it, same reasoning as
@@ -221,8 +267,10 @@ type PhaseTimes
     ''
     mark_sum    as single
     mark_max    as single
+    mark_min    as single
     walk_sum    as single
     walk_max    as single
+    walk_min    as single
 end type
 
 '' The path itself stays loose: arrays cannot be TYPE members.

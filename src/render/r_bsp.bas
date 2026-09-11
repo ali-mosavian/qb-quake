@@ -186,7 +186,6 @@ dim shared r_ignore_pvs as integer
 '$dynamic
 dim shared pvs_leaf as integer
 dim shared dbg_camleaf as integer
-dim shared dbg_pvscnt as integer   '' leaves the last decode marked visible
 dim shared dbg_pvscull as integer
 
 ''
@@ -388,6 +387,7 @@ sub r_draw_world ( _
         ptd = sys_now() - pt0
         g.pt.mark_sum = g.pt.mark_sum + ptd
         if ( ptd > g.pt.mark_max ) then g.pt.mark_max = ptd
+        if ( ptd < g.pt.mark_min ) then g.pt.mark_min = ptd
     end if
 
     ''
@@ -435,6 +435,7 @@ sub r_draw_world ( _
         ptd = sys_now() - pt0
         g.pt.walk_sum = g.pt.walk_sum + ptd
         if ( ptd > g.pt.walk_max ) then g.pt.walk_max = ptd
+        if ( ptd < g.pt.walk_min ) then g.pt.walk_min = ptd
     end if
 
     ''
@@ -696,7 +697,6 @@ sub r_mark_leaves ( _
     dbg_camleaf = not nodenr
     if ( nodenr = pvs_leaf ) then exit sub
     pvs_leaf = nodenr
-    dbg_pvscnt = 0
 
     ''
     '' Setup
@@ -755,7 +755,6 @@ sub r_mark_leaves ( _
 
                 if ( byte and bit_array(bit) ) then
                     pvsb(l) = 1
-                    dbg_pvscnt = dbg_pvscnt + 1
                 else
                     pvsb(l) = 0
                 end if
@@ -920,15 +919,3 @@ sub r_leaf_bound ( byval leafnr as integer, b as Bounds )
     b.max.z = asc( mid$( q, 6, 1 ) ) * BOUND_Q + BOUND_BASE
 end sub
 
-''::::::::::
-'' name: rb_dbg_camleaf
-'' desc: The leaf r_mark_leaves resolved the camera into. Temporary:
-''       it checks the one assumption the PVS analysis rests on.
-''::::::::::
-function rb_dbg_camleaf ( ) as integer
-    rb_dbg_camleaf = dbg_camleaf
-end function
-
-function rb_dbg_pvscnt ( ) as integer
-    rb_dbg_pvscnt = dbg_pvscnt
-end function

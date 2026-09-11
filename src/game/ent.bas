@@ -236,6 +236,14 @@ declare function ent_load_monsters ( _
     planes() as Plane, _
     mon() as MdlState _
 ) as integer
+declare function ent_place_stale ( _
+    byval model_count as integer, _
+    models() as Submodel, _
+    nodes() as Node, _
+    planes() as Plane, _
+    brush() as BrushModel _
+) as integer
+declare function ent_moved ( a as Vec3, b as Vec3 ) as integer
 declare sub ent_place_models ( _
     byval model_count as integer, _
     models() as Submodel, _
@@ -464,6 +472,7 @@ sub ent_load_teleports ( _
         brush(i).ofs.x = 0.0
         brush(i).ofs.y = 0.0
         brush(i).ofs.z = 0.0
+        brush(i).node  = ENT_NODE_DIRTY
     next i
 
     ''
@@ -815,6 +824,7 @@ sub ent_move_doors ( _
     door() as DoorEnt _
 )
     dim k as integer, m as integer
+    dim start as Vec3
 
     for  k = 0 to g.door_count-1
         if ( ent_door_touched( g, door(k) ) ) then
@@ -830,6 +840,7 @@ sub ent_move_doors ( _
 
     for  k = 0 to g.door_count-1
         m = door(k).model
+        start = brush(m).ofs
         select case door(k).state
             case ENT_DOOR_OPENING
                 if ( ent_door_step( brush(m).ofs, door(k).ofs_open, door(k).speed * dt ) ) then
@@ -878,6 +889,7 @@ sub ent_move_doors ( _
                     ent_door_sound g, door(k), 0
                 end if
         end select
+        if ( ent_moved( start, brush(m).ofs ) ) then brush(m).node = ENT_NODE_DIRTY
     next k
 end sub
 
@@ -949,6 +961,9 @@ sub ent_reset ( _
         if ( plat(k).kind = ENT_PLAT_KIND_TRAIN ) then ent_train_init plat(k), brush()
     next k
     g.fight.msg_until = 0.0
+    for  k = 1 to g.wld.count.models-1
+        brush(k).node = ENT_NODE_DIRTY
+    next k
 end sub
 
 '' the corner table for the other modules: a monster's patrol
@@ -1230,9 +1245,11 @@ sub ent_move_trigs ( _
 )
     dim k as integer, m as integer
     dim home as Vec3
+    dim start as Vec3
 
     for  k = 0 to g.trig_count-1
         m = trig(k).model
+        start = brush(m).ofs
         if ( trig(k).delay_left > 0.0 ) then
             trig(k).delay_left = trig(k).delay_left - dt
             if ( trig(k).delay_left <= 0.0 ) then
@@ -1300,6 +1317,7 @@ sub ent_move_trigs ( _
                         if ( trig(k).wait_left <= 0.0 ) then trig(k).state = ENT_TRIG_READY
                 end select
         end select
+        if ( ent_moved( start, brush(m).ofs ) ) then brush(m).node = ENT_NODE_DIRTY
     next k
 end sub
 
@@ -1414,9 +1432,11 @@ sub ent_move_plats ( _
     dim m as integer
     dim goal as single, step_z as single, moved as single, was as single
     dim riding as integer
+    dim start as Vec3
 
     for  p = 0 to g.plat_count-1
         m = plat(p).model
+        start = brush(m).ofs
         if ( plat(p).kind = ENT_PLAT_KIND_TRAIN ) then
             ent_move_train g, dt, plat(p), brush()
             goto next_plat
@@ -1460,6 +1480,7 @@ sub ent_move_plats ( _
             g.pl.pos.z = g.pl.pos.z + moved
         end if
 next_plat:
+        if ( ent_moved( start, brush(m).ofs ) ) then brush(m).node = ENT_NODE_DIRTY
     next p
 
 end sub
@@ -1505,10 +1526,33 @@ sub ent_place_models ( _
     dim m as integer
 
     for  m = 1 to model_count-1
-        brush(m).node = ent_find_node( m, models(), nodes(), planes(), brush() )
+        if ( brush(m).node = ENT_NODE_DIRTY ) then brush(m).node = ent_find_node( m, models(), nodes(), planes(), brush() )
     next m
 
 end sub
+
+
+'' ent_place_models' check: submodels whose cached node is not what a fresh
+'' descent gives. A brush moved by a writer that forgot to mark it reads
+'' here, and is drawn in the wrong place in the painter's order.
+function ent_place_stale ( _
+    byval model_count as integer, _
+    models() as Submodel, _
+    nodes() as Node, _
+    planes() as Plane, _
+    brush() as BrushModel _
+) as integer
+    dim m as integer, n as integer
+
+    for  m = 1 to model_count-1
+        if ( brush(m).node <> ent_find_node( m, models(), nodes(), planes(), brush() ) ) then n = n + 1
+    next m
+    ent_place_stale = n
+end function
+
+function ent_moved ( a as Vec3, b as Vec3 ) as integer
+    ent_moved = ( a.x <> b.x or a.y <> b.y or a.z <> b.z )
+end function
 
 
 

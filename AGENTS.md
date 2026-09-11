@@ -2676,6 +2676,18 @@ axis, so `BrushModel.ofs` carries all three: `d_faces.c` adds it to every
 vertex, `pl_trace.c` subtracts it from both ends of the sweep, and
 `ent_find_node` sorts the box where it is. Plats use `.ofs.z`.
 
+**Placement is cached.** `ent_find_node` for every brush model every tick
+was 81 of e1m3's 131 ms frame. `BrushModel.node` now holds
+`ENT_NODE_DIRTY` until `ent_place_models` recomputes it, and only load,
+`ent_reset` and a mover whose `ofs` changed that tick set it. A new mover
+must do the same. `place_stale` in bench.txt re-derives every placement
+at exit and counts the ones that disagree; `check.sh --e1m1` wants 0.
+
+**bench.txt timers are `name min mean max`, three decimals.** `pt_<phase>`
+is ms a frame; `pt_tk_<call>` is one `host_tick` call in ms a tick, over
+the ticks of timed frames. `sys_rdtsc` wraps about once a minute, and
+`host_lap` drops a lap that runs backwards.
+
 **`func_train` rides the plat array** (`PlatEnt.kind`), and the map's
 `path_corner`s are `ent_corner()` in ent.bas, each with its `nxt`.
 mkassets resolves the route offline; func_train_find puts the brush's

@@ -300,6 +300,15 @@ PY
     else
         echo "FAIL  e1m1 button: pz ${pz:-none}, the button did nothing"; rc=1
     fi
+    # Placement is cached per brush model and redone only for one a mover
+    # marked. A mover that forgets to mark leaves its model drawn at the
+    # node it left: with the doors' mark removed this scene read 1.
+    ps=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="place_stale"{print $2}')
+    if [[ "$ps" == 0 ]]; then
+        echo "PASS  e1m1 placement: place_stale 0 after the lift moved"
+    else
+        echo "FAIL  e1m1 placement: place_stale ${ps:-none}, a moved model kept a stale node"; rc=1
+    fi
     # and the map's own monsters: nine soldiers and a dog on easy, from ents.bin
     nent=$(tr -d '\r' < "$VBD_OUT/bench.txt" | grep -c '^ent[0-9]' || true)
     ndog=$(tr -d '\r' < "$VBD_OUT/bench.txt" | grep -c '^ent[0-9]* 2 ' || true)

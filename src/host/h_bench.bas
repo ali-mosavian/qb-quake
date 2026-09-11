@@ -22,14 +22,32 @@ option explicit
 '$include: 'q_game.bi'
 '$include: 'qgl.bi'
 
-declare function rb_dbg_camleaf ( ) as integer
-declare function rb_dbg_pvscnt ( ) as integer
+declare sub host_kv ( _
+    byval f as integer, _
+    nm as string, _
+    v as string _
+)
+declare function host_fmt3 ( byval v as single ) as string
+declare sub host_pt_put ( _
+    byval f as integer, _
+    nm as string, _
+    byval mn as single, _
+    byval sum as single, _
+    byval mx as single, _
+    byval n as long, _
+    byval scale as single _
+)
+declare function ent_place_stale ( _
+    byval model_count as integer, _
+    models() as Submodel, _
+    nodes() as Node, _
+    planes() as Plane, _
+    brush() as BrushModel _
+) as integer
 
-declare function dbg_lm_want ( ) as integer
-declare function dbg_lm_fall ( ) as integer
+
 declare function dbg_qgl_faces ( ) as integer
 declare function dbg_qgl_drop ( ) as integer
-declare function dbg_keys ( byval which as integer ) as long
 
 '' scr_screenshot comes from q_game.bi above; everything below is
 '' declared here rather than in a shared header because this is the
@@ -42,18 +60,6 @@ declare function sys_mem_tag ( byval i as integer ) as string
 declare function sys_mem_val ( byval i as integer ) as long
 declare function pl_hull_rec ( ) as integer
 declare function sys_rdtsc_hz ( ) as single
-'' drawPoly_tp2d QR_PROFILE counters (uglplxtp.asm). All five read 0
-'' in a uglv.lib that was not built with QR_PROFILE defined.
-declare function qrProfRdAccess ( ) as long
-declare function qrProfWrBegin ( ) as long
-declare function qrProfWSwitchSum ( ) as long
-declare function qrProfWSwitchCnt ( ) as long
-declare function qrProfPolyCnt ( ) as long
-declare function qrProfFillSum ( ) as long
-declare function qrProfScanCnt ( ) as long
-declare function qrProfOuterSum ( ) as long
-declare function qrProfZSetSum ( ) as long
-declare function qrProfEdgeSum ( ) as long
 declare function sys_tick_hz ( ) as single
 '' qgl/mem.asm -- DOS's own numbers, not BASIC's. See the use site.
 declare function qglMemAvail ( byval what as integer ) as long
@@ -81,7 +87,10 @@ sub host_bench_report ( _
     trig() as TrigEnt, _
     mdl_ent() as MdlEnt, _
     byval host_ticks as long, _
-    mon() as MdlState _
+    mon() as MdlState, _
+    models() as Submodel, _
+    nodes() as Node, _
+    planes() as Plane _
 )
     dim scs as CacheStats
     dim dv as long
@@ -90,194 +99,130 @@ sub host_bench_report ( _
     dim ddf as long
     dim mi as integer
     dim benchf as integer
-    dim qr_hz as single, qr_ms_per_cyc as single
 
     scr_screenshot g, "bench.bmp", h_dst_dc
 
     benchf = freefile
     open "bench.txt" for output as #benchf
-    print #benchf, "frames " + ltrim$(str$( frame_no ))
-    print #benchf, "seconds " + ltrim$(str$( g.scr.bench_secs ))
-    print #benchf, "last_fps " + ltrim$(str$( g.scr.fps ))
-    print #benchf, "peak_fps " + ltrim$(str$( g.scr.fps_peak ))
-    print #benchf, "low_fps " + ltrim$(str$( g.ft.fps_low ))
-    print #benchf, "cp_pts " + ltrim$(str$( g.cp.n ))
+    host_kv benchf, "frames", str$( frame_no )
+    host_kv benchf, "seconds", str$( g.scr.bench_secs )
+    host_kv benchf, "last_fps", str$( g.scr.fps )
+    host_kv benchf, "peak_fps", str$( g.scr.fps_peak )
+    host_kv benchf, "low_fps", str$( g.ft.fps_low )
+    host_kv benchf, "cp_pts", str$( g.cp.n )
     ''
     '' Frame times in milliseconds, and the rates they imply. These are the
     '' numbers to compare: fastest frame, slowest frame, mean over the run.
     ''
     if ( g.ft.n > 0 ) then
-        print #benchf, "ft_min " + ltrim$(str$( g.ft.min * 1000.0 ))
-        print #benchf, "ft_max " + ltrim$(str$( g.ft.max * 1000.0 ))
-        print #benchf, "ft_mean " + ltrim$(str$( (g.ft.sum / g.ft.n) * 1000.0 ))
-        print #benchf, "ft_n " + ltrim$(str$( g.ft.n ))
+        print #benchf, "ft_min " + host_fmt3( g.ft.min * 1000.0 )
+        print #benchf, "ft_max " + host_fmt3( g.ft.max * 1000.0 )
+        print #benchf, "ft_mean " + host_fmt3( (g.ft.sum / g.ft.n) * 1000.0 )
+        host_kv benchf, "ft_n", str$( g.ft.n )
         if ( g.ft.min > 0.0 ) then _
-            print #benchf, "fps_best " + ltrim$(str$( 1.0 / g.ft.min ))
+            print #benchf, "fps_best " + host_fmt3( 1.0 / g.ft.min )
         if ( g.ft.max > 0.0 ) then _
-            print #benchf, "fps_worst " + ltrim$(str$( 1.0 / g.ft.max ))
+            print #benchf, "fps_worst " + host_fmt3( 1.0 / g.ft.max )
         if ( g.ft.sum > 0.0 ) then _
-            print #benchf, "fps_mean " + ltrim$(str$( g.ft.n / g.ft.sum ))
+            print #benchf, "fps_mean " + host_fmt3( g.ft.n / g.ft.sum )
         ''
-        '' Where the frame above actually went. Same milliseconds, same
-        '' g.ft.n sample count -- pt_tick_mean + pt_cull_mean + pt_draw_mean
-        '' + pt_hud_mean + pt_present_mean should land close to ft_mean;
-        '' the gap is whatever this pass did not bother to time (see
-        '' PhaseTimes in q_scr.bi for exactly what that is).
+        '' Where the frame went: min, mean and max in ms a frame, one line
+        '' each. pt_tk_* are host_tick's calls in ms a TICK, over the ticks
+        '' timed. PhaseTimes in q_scr.bi says what each phase covers.
         ''
-        print #benchf, "pt_tick_mean " + ltrim$(str$( (g.pt.tick_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_tick_max " + ltrim$(str$( g.pt.tick_max * 1000.0 ))
-        print #benchf, "pt_cull_mean " + ltrim$(str$( (g.pt.cull_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_cull_max " + ltrim$(str$( g.pt.cull_max * 1000.0 ))
-        print #benchf, "pt_draw_mean " + ltrim$(str$( (g.pt.draw_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_draw_max " + ltrim$(str$( g.pt.draw_max * 1000.0 ))
-        print #benchf, "pt_hud_mean " + ltrim$(str$( (g.pt.hud_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_hud_max " + ltrim$(str$( g.pt.hud_max * 1000.0 ))
-        print #benchf, "pt_present_mean " + ltrim$(str$( (g.pt.present_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_present_max " + ltrim$(str$( g.pt.present_max * 1000.0 ))
-        ''
-        '' Nested inside pt_draw, not subtracted from it -- see PhaseTimes
-        '' in q_scr.bi. pt_draw_mean minus these two is cache lookup and
-        '' per-face UV setup: whatever neither rebuilding nor rasterising
-        '' accounts for.
-        ''
-        print #benchf, "pt_raster_mean " + ltrim$(str$( (g.pt.raster_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_raster_max " + ltrim$(str$( g.pt.raster_max * 1000.0 ))
-        ''
-        '' Nested inside pt_raster, not subtracted from it -- see
-        '' PhaseTimes. pt_raster_mean minus this is the triangle mappers.
-        ''
-        print #benchf, "pt_aim_mean " + ltrim$(str$( (g.pt.aim_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_aim_max " + ltrim$(str$( g.pt.aim_max * 1000.0 ))
-        print #benchf, "pt_build_mean " + ltrim$(str$( (g.pt.build_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_build_max " + ltrim$(str$( g.pt.build_max * 1000.0 ))
-        qr_hz = sys_rdtsc_hz()
-        print #benchf, "rdtsc_hz " + ltrim$(str$( qr_hz ))
-        ''
-        '' QR_PROFILE: raw TSC cycle sums from inside drawPoly_tp2d itself
-        '' (see uglplxtp.asm), converted here the same way sys_rdtsc's own
-        '' callers do -- there is no cyc_per_us inside the assembly, only
-        '' the raw counter, so the division happens once, on the way out,
-        '' against this same run's own rdtsc_hz. All five read 0 in a
-        '' uglv.lib that was not built with QR_PROFILE defined.
-        ''
-        if ( qr_hz > 0.0 ) then
-            qr_ms_per_cyc = 1000.0 / qr_hz
-        else
-            qr_ms_per_cyc = 0.0
-        end if
-        print #benchf, "qr_poly_cnt " + ltrim$(str$( qrProfPolyCnt() ))
-        print #benchf, "qr_rdaccess_ms " + ltrim$(str$( qrProfRdAccess() * qr_ms_per_cyc ))
-        print #benchf, "qr_wrbegin_ms " + ltrim$(str$( qrProfWrBegin() * qr_ms_per_cyc ))
-        print #benchf, "qr_wswitch_ms " + ltrim$(str$( qrProfWSwitchSum() * qr_ms_per_cyc ))
-        print #benchf, "qr_wswitch_cnt " + ltrim$(str$( qrProfWSwitchCnt() ))
-        print #benchf, "qr_fill_ms " + ltrim$(str$( qrProfFillSum() * qr_ms_per_cyc ))
-        print #benchf, "qr_scan_cnt " + ltrim$(str$( qrProfScanCnt() ))
-        print #benchf, "qr_outer_ms " + ltrim$(str$( qrProfOuterSum() * qr_ms_per_cyc ))
-        print #benchf, "qr_zset_ms " + ltrim$(str$( qrProfZSetSum() * qr_ms_per_cyc ))
-        print #benchf, "qr_edge_ms " + ltrim$(str$( qrProfEdgeSum() * qr_ms_per_cyc ))
-        ''
-        '' Nested inside pt_cull, not subtracted from it -- see PhaseTimes
-        '' in q_scr.bi. pt_cull_mean minus these two is frustum extraction
-        '' and the two lookat/concat matrix builds.
-        ''
-        print #benchf, "pt_mark_mean " + ltrim$(str$( (g.pt.mark_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_mark_max " + ltrim$(str$( g.pt.mark_max * 1000.0 ))
-        print #benchf, "portal_culled " + ltrim$(str$( g.vis.pt_culled ))
-        print #benchf, "pt_walk_mean " + ltrim$(str$( (g.pt.walk_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_walk_max " + ltrim$(str$( g.pt.walk_max * 1000.0 ))
-        print #benchf, "pt_mdl_mean " + ltrim$(str$( (g.pt.mdl_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_mdl_max " + ltrim$(str$( g.pt.mdl_max * 1000.0 ))
-        print #benchf, "pt_loop_mean " + ltrim$(str$( (g.pt.loop_sum / g.ft.n) * 1000.0 ))
-        print #benchf, "pt_loop_max " + ltrim$(str$( g.pt.loop_max * 1000.0 ))
-        print #benchf, "mtri_per_frame " + ltrim$(str$( g.pt.mtri_n / g.ft.n ))
+        host_pt_put benchf, "pt_tick", g.pt.tick_min, g.pt.tick_sum, g.pt.tick_max, g.ft.n, 1000.0
+        host_pt_put benchf, "pt_cull", g.pt.cull_min, g.pt.cull_sum, g.pt.cull_max, g.ft.n, 1000.0
+        host_pt_put benchf, "pt_draw", g.pt.draw_min, g.pt.draw_sum, g.pt.draw_max, g.ft.n, 1000.0
+        host_pt_put benchf, "pt_build", g.pt.build_min, g.pt.build_sum, g.pt.build_max, g.ft.n, 1000.0
+        host_pt_put benchf, "pt_hud", g.pt.hud_min, g.pt.hud_sum, g.pt.hud_max, g.ft.n, 1000.0
+        host_pt_put benchf, "pt_present", g.pt.present_min, g.pt.present_sum, g.pt.present_max, g.ft.n, 1000.0
+        host_pt_put benchf, "pt_mark", g.pt.mark_min, g.pt.mark_sum, g.pt.mark_max, g.ft.n, 1000.0
+        host_pt_put benchf, "pt_walk", g.pt.walk_min, g.pt.walk_sum, g.pt.walk_max, g.ft.n, 1000.0
+        host_pt_put benchf, "pt_mdl", g.pt.mdl_min, g.pt.mdl_sum, g.pt.mdl_max, g.ft.n, 1000.0
+        host_pt_put benchf, "pt_loop", g.pt.loop_min, g.pt.loop_sum, g.pt.loop_max, g.ft.n, 1000.0
+        host_kv benchf, "rdtsc_hz", str$( sys_rdtsc_hz() )
+        host_kv benchf, "portal_culled", str$( g.vis.pt_culled )
+        print #benchf, "mtri_per_frame " + host_fmt3( g.pt.mtri_n / g.ft.n )
+        host_pt_put benchf, "pt_tk_cam", g.pt.tk_cam_min, g.pt.tk_cam, g.pt.tk_cam_max, g.pt.tk_ticks, 0.001
+        host_pt_put benchf, "pt_tk_fire", g.pt.tk_fire_min, g.pt.tk_fire, g.pt.tk_fire_max, g.pt.tk_ticks, 0.001
+        host_pt_put benchf, "pt_tk_nails", g.pt.tk_nails_min, g.pt.tk_nails, g.pt.tk_nails_max, g.pt.tk_ticks, 0.001
+        host_pt_put benchf, "pt_tk_items", g.pt.tk_items_min, g.pt.tk_items, g.pt.tk_items_max, g.pt.tk_ticks, 0.001
+        host_pt_put benchf, "pt_tk_think", g.pt.tk_think_min, g.pt.tk_think, g.pt.tk_think_max, g.pt.tk_ticks, 0.001
+        host_pt_put benchf, "pt_tk_tele", g.pt.tk_tele_min, g.pt.tk_tele, g.pt.tk_tele_max, g.pt.tk_ticks, 0.001
+        host_pt_put benchf, "pt_tk_plats", g.pt.tk_plats_min, g.pt.tk_plats, g.pt.tk_plats_max, g.pt.tk_ticks, 0.001
+        host_pt_put benchf, "pt_tk_doors", g.pt.tk_doors_min, g.pt.tk_doors, g.pt.tk_doors_max, g.pt.tk_ticks, 0.001
+        host_pt_put benchf, "pt_tk_trigs", g.pt.tk_trigs_min, g.pt.tk_trigs, g.pt.tk_trigs_max, g.pt.tk_ticks, 0.001
+        host_pt_put benchf, "pt_tk_traps", g.pt.tk_traps_min, g.pt.tk_traps, g.pt.tk_traps_max, g.pt.tk_ticks, 0.001
+        host_pt_put benchf, "pt_tk_place", g.pt.tk_place_min, g.pt.tk_place, g.pt.tk_place_max, g.pt.tk_ticks, 0.001
+        host_pt_put benchf, "pt_tk_ls", g.pt.tk_ls_min, g.pt.tk_ls, g.pt.tk_ls_max, g.pt.tk_ticks, 0.001
     end if
-    print #benchf, "polys " + ltrim$(str$( g.rdr.polys ))
-    print #benchf, "mdl_drawn " + ltrim$(str$( g.mdl_drawn ))
-    print #benchf, "vmdl_loaded " + ltrim$(str$( g.vmdl.loaded ))
-    print #benchf, "smdl_loaded " + ltrim$(str$( g.smdl.loaded ))
-    print #benchf, "nmdl_loaded " + ltrim$(str$( g.nmdl.loaded ))
-    print #benchf, "kmdl_loaded " + ltrim$(str$( mon( MDL_KIND_KNIGHT% ).loaded ))
-    print #benchf, "dmdl_loaded " + ltrim$(str$( mon( MDL_KIND_DOG% ).loaded ))
+    g.pt.place_stale = ent_place_stale( g.wld.count.models, models(), nodes(), planes(), brush() )
+    host_kv benchf, "place_stale", str$( g.pt.place_stale )
+    host_kv benchf, "polys", str$( g.rdr.polys )
+    host_kv benchf, "mdl_drawn", str$( g.mdl_drawn )
     print #benchf, "map " + lcase$( rtrim$( g.env.map_name ) )
-    print #benchf, "gs_state " + ltrim$(str$( g.fight.state ))
-    print #benchf, "pl_health " + ltrim$(str$( g.fight.health ))
-    print #benchf, "pl_shells " + ltrim$(str$( g.fight.shells ))
-    print #benchf, "pl_kills " + ltrim$(str$( g.fight.kills ))
-    print #benchf, "pl_leaps " + ltrim$(str$( g.fight.leaps ))
-    print #benchf, "pl_secrets " + ltrim$(str$( g.fight.secrets ))
-    print #benchf, "pl_armor " + ltrim$(str$( g.fight.armor ))
-    print #benchf, "pl_weapon " + ltrim$(str$( g.fight.weapon ))
-    print #benchf, "pl_items " + ltrim$(str$( g.fight.items ))
-    print #benchf, "pl_nails " + ltrim$(str$( g.fight.nails ))
-    print #benchf, "pl_rockets " + ltrim$(str$( g.fight.rockets ))
-    print #benchf, "pl_quad_left " + ltrim$(str$( g.fight.quad_until - g.rdr.anim_time ))
-    print #benchf, "pl_suit_left " + ltrim$(str$( g.fight.suit_until - g.rdr.anim_time ))
-    print #benchf, "pl_pent_left " + ltrim$(str$( g.fight.pent_until - g.rdr.anim_time ))
-    print #benchf, "pl_booms " + ltrim$(str$( g.fight.booms ))
-    print #benchf, "snd_on " + ltrim$(str$( g.snd.on ))
-    print #benchf, "snd_started " + ltrim$(str$( g.snd.started ))
-    print #benchf, "snd_under " + ltrim$(str$( g.snd.under ))
-    print #benchf, "snd_loops " + ltrim$(str$( g.snd.loops ))
-    print #benchf, "pl_deaths " + ltrim$(str$( g.fight.deaths ))
+    host_kv benchf, "gs_state", str$( g.fight.state )
+    host_kv benchf, "pl_health", str$( g.fight.health )
+    host_kv benchf, "pl_shells", str$( g.fight.shells )
+    host_kv benchf, "pl_kills", str$( g.fight.kills )
+    host_kv benchf, "pl_leaps", str$( g.fight.leaps )
+    host_kv benchf, "pl_secrets", str$( g.fight.secrets )
+    host_kv benchf, "pl_armor", str$( g.fight.armor )
+    host_kv benchf, "pl_weapon", str$( g.fight.weapon )
+    host_kv benchf, "pl_items", str$( g.fight.items )
+    host_kv benchf, "pl_nails", str$( g.fight.nails )
+    host_kv benchf, "pl_rockets", str$( g.fight.rockets )
+    host_kv benchf, "pl_quad_left", str$( g.fight.quad_until - g.rdr.anim_time )
+    host_kv benchf, "pl_pent_left", str$( g.fight.pent_until - g.rdr.anim_time )
+    host_kv benchf, "pl_booms", str$( g.fight.booms )
+    host_kv benchf, "snd_loops", str$( g.snd.loops )
+    host_kv benchf, "pl_deaths", str$( g.fight.deaths )
     '' the crowd, one line each: kind state hunting frame x y z
     for mi = 0 to g.mdl_count - 1
         print #benchf, "ent" + ltrim$(str$( mi )) + " " + ltrim$(str$( mdl_ent(mi).kind )) + " " + ltrim$(str$( mdl_ent(mi).state )) + " " + _
             ltrim$(str$( mdl_ent(mi).hunting )) + " " + ltrim$(str$( mdl_ent(mi).anim_frame )) + " " + _
             ltrim$(str$( mdl_ent(mi).pos.x )) + " " + ltrim$(str$( mdl_ent(mi).pos.y )) + " " + ltrim$(str$( mdl_ent(mi).pos.z ))
     next mi
-    print #benchf, "tris " + ltrim$(str$( g.rdr.tris ))
-    print #benchf, "qgl_faces " + ltrim$(str$( dbg_qgl_faces() ))
-    print #benchf, "qgl_drop " + ltrim$(str$( dbg_qgl_drop() ))
-    print #benchf, "cam_leaf " + ltrim$(str$( rb_dbg_camleaf ))
-    print #benchf, "pvs_count " + ltrim$(str$( rb_dbg_pvscnt ))
-    print #benchf, "lm_want " + ltrim$(str$( dbg_lm_want ))
-    print #benchf, "lm_fallback " + ltrim$(str$( dbg_lm_fall ))
-    print #benchf, "k_mip " + ltrim$(str$( dbg_keys(0) ))
-    print #benchf, "k_sw " + ltrim$(str$( dbg_keys(1) ))
-    print #benchf, "k_sh " + ltrim$(str$( dbg_keys(2) ))
-    print #benchf, "k_stag " + ltrim$(str$( dbg_keys(3) ))
-    print #benchf, "k_n " + ltrim$(str$( dbg_keys(4) ))
-    print #benchf, "k_hdr " + ltrim$(str$( dbg_keys(5) ))
-    print #benchf, "k_ext " + ltrim$(str$( dbg_keys(6) ))
-    print #benchf, "k_v0 " + ltrim$(str$( dbg_keys(7) ))
-    print #benchf, "k_lm " + ltrim$(str$( dbg_keys(8) ))
-    print #benchf, "px " + ltrim$(str$( g.pl.pos.x ))
-    print #benchf, "py " + ltrim$(str$( g.pl.pos.y ))
-    print #benchf, "pz " + ltrim$(str$( g.pl.pos.z ))
-    print #benchf, "on_ground " + ltrim$(str$( g.pl.on_ground ))
-    print #benchf, "vz " + ltrim$(str$( g.pl.vel.z ))
-    print #benchf, "dt " + ltrim$(str$( g.scr.frame_time ))
-    print #benchf, "tick_hz " + ltrim$(str$( sys_tick_hz ))
+    host_kv benchf, "tris", str$( g.rdr.tris )
+    host_kv benchf, "qgl_faces", str$( dbg_qgl_faces() )
+    host_kv benchf, "qgl_drop", str$( dbg_qgl_drop() )
+    host_kv benchf, "px", str$( g.pl.pos.x )
+    host_kv benchf, "py", str$( g.pl.pos.y )
+    host_kv benchf, "pz", str$( g.pl.pos.z )
+    host_kv benchf, "on_ground", str$( g.pl.on_ground )
+    host_kv benchf, "vz", str$( g.pl.vel.z )
+    host_kv benchf, "dt", str$( g.scr.frame_time )
+    host_kv benchf, "tick_hz", str$( sys_tick_hz )
     '' Asked of DOS, not BASIC: mgl's memAvail returned MAX(largest free
     '' block, BASIC's far-heap SIZE), a heap's extent rather than its free
     '' space -- a live MCB walk once found 9,312 bytes free where it said
     '' ~260,000. qgl_avail is what an allocation can actually get;
     '' qgl_free_sum is every free block added up, so the gap between the
     '' two is the fragmentation.
-    print #benchf, "qgl_avail " + ltrim$(str$( qglMemAvail&( QGL_MEM_LARGEST ) ))
-    print #benchf, "qgl_free_sum " + ltrim$(str$( qglMemAvail&( QGL_MEM_TOTAL ) ))
-    print #benchf, "lm_size " + ltrim$(str$( mod_lm_bytes( g ) ))
-    print #benchf, "lm_read " + ltrim$(str$( mod_lm_got( g ) ))
-    print #benchf, "geom_rows " + ltrim$(str$( mod_geom_rows( g ) ))
-    print #benchf, "cm_size " + ltrim$(str$( mod_cm_bytes( g ) ))
+    host_kv benchf, "qgl_avail", str$( qglMemAvail&( QGL_MEM_LARGEST ) )
+    host_kv benchf, "qgl_free_sum", str$( qglMemAvail&( QGL_MEM_TOTAL ) )
+    host_kv benchf, "lm_size", str$( mod_lm_bytes( g ) )
+    host_kv benchf, "lm_read", str$( mod_lm_got( g ) )
+    host_kv benchf, "geom_rows", str$( mod_geom_rows( g ) )
+    host_kv benchf, "cm_size", str$( mod_cm_bytes( g ) )
         sc_stats scs
-    print #benchf, "sc_made " + ltrim$(str$( scs.made ))
-    print #benchf, "sc_ems " + ltrim$(str$( scs.peak ))
+    host_kv benchf, "sc_made", str$( scs.made )
+    host_kv benchf, "sc_ems", str$( scs.peak )
     ''
     '' Cache behaviour. scworst is the most surfaces built in any ONE
     '' frame, which is what a hitch is made of -- a run-wide total says
     '' nothing about whether they arrived together or spread out.
     ''
-    print #benchf, "sc_built " + ltrim$(str$( scs.total_builds ))
-    print #benchf, "sc_dlit " + ltrim$(str$( scs.dlit ))
-    print #benchf, "sc_worst " + ltrim$(str$( scs.bpeak ))
-    print #benchf, "sc_live " + ltrim$(str$( scs.live ))
-    print #benchf, "sc_evict " + ltrim$(str$( scs.evict ))
-    print #benchf, "sc_flush " + ltrim$(str$( scs.flushes ))
-    print #benchf, "sc_test " + ltrim$(str$( sc_selftest( g ) ))
-    print #benchf, "ls_test " + ltrim$(str$( ls_selftest() ))
-    print #benchf, "peak_z " + ltrim$(str$( g.pl.peak_z ))
-    print #benchf, "ticks " + ltrim$(str$( host_ticks ))
+    host_kv benchf, "sc_built", str$( scs.total_builds )
+    host_kv benchf, "sc_dlit", str$( scs.dlit )
+    host_kv benchf, "sc_worst", str$( scs.bpeak )
+    host_kv benchf, "sc_live", str$( scs.live )
+    host_kv benchf, "sc_evict", str$( scs.evict )
+    host_kv benchf, "sc_flush", str$( scs.flushes )
+    host_kv benchf, "sc_test", str$( sc_selftest( g ) )
+    host_kv benchf, "ls_test", str$( ls_selftest() )
+    host_kv benchf, "peak_z", str$( g.pl.peak_z )
+    host_kv benchf, "ticks", str$( host_ticks )
     ''
     '' Where conventional memory went. Deltas, not absolutes: what matters
     '' is which stage took the bite, and a running total drifts with DOS's
@@ -297,25 +242,25 @@ sub host_bench_report ( _
                        " " + ltrim$(str$( dv )) + " " + ltrim$(str$( ddv )) + _
                        " " + ltrim$(str$( df )) + " " + ltrim$(str$( ddf ))
     next mi
-    print #benchf, "clp_rec " + ltrim$(str$( pl_hull_rec ))
-    print #benchf, "clp_cnt " + ltrim$(str$( g.wld.count.clips ))
-    print #benchf, "water_level " + ltrim$(str$( g.pl.water_level ))
-    print #benchf, "water_type " + ltrim$(str$( g.pl.water_type ))
-    print #benchf, "anim_time " + ltrim$(str$( g.rdr.anim_time ))
-    print #benchf, "door_count " + ltrim$(str$( g.door_count ))
+    host_kv benchf, "clp_rec", str$( pl_hull_rec )
+    host_kv benchf, "clp_cnt", str$( g.wld.count.clips )
+    host_kv benchf, "water_level", str$( g.pl.water_level )
+    host_kv benchf, "water_type", str$( g.pl.water_type )
+    host_kv benchf, "anim_time", str$( g.rdr.anim_time )
+    host_kv benchf, "door_count", str$( g.door_count )
     for  mi = 0 to g.door_count-1
         print #benchf, "door_" + ltrim$(str$( mi )) + " " + ltrim$(str$( door(mi).model )) + " " + _
             ltrim$(str$( door(mi).state )) + " " + ltrim$(str$( brush( door(mi).model ).ofs.x )) + " " + _
             ltrim$(str$( brush( door(mi).model ).ofs.y )) + " " + ltrim$(str$( brush( door(mi).model ).ofs.z ))
     next mi
-    print #benchf, "trig_count " + ltrim$(str$( g.trig_count ))
+    host_kv benchf, "trig_count", str$( g.trig_count )
     for  mi = 0 to g.trig_count-1
         print #benchf, "trig_" + ltrim$(str$( mi )) + " " + ltrim$(str$( trig(mi).model )) + " " + _
             ltrim$(str$( trig(mi).kind )) + " " + ltrim$(str$( trig(mi).state )) + " " + ltrim$(str$( trig(mi).left ))
     next mi
     if ( g.plat_count > 0 ) then
-        print #benchf, "plat_zofs " + ltrim$(str$( brush( plat(0).model ).ofs.z ))
-        print #benchf, "plat_state " + ltrim$(str$( plat(0).state ))
+        host_kv benchf, "plat_zofs", str$( brush( plat(0).model ).ofs.z )
+        host_kv benchf, "plat_state", str$( plat(0).state )
     end if
     for  mi = 0 to g.plat_count-1
         print #benchf, "plat_" + ltrim$(str$( mi )) + " " + ltrim$(str$( plat(mi).model )) + " " + _
@@ -327,3 +272,63 @@ sub host_bench_report ( _
 
 end sub
 
+
+'' The first timed frame: every min starts past anything a timer reads.
+sub host_pt_init ( g as Game )
+    g.pt.tick_min = 1E+09
+    g.pt.cull_min = 1E+09
+    g.pt.draw_min = 1E+09
+    g.pt.hud_min = 1E+09
+    g.pt.mdl_min = 1E+09
+    g.pt.loop_min = 1E+09
+    g.pt.build_min = 1E+09
+    g.pt.present_min = 1E+09
+    g.pt.mark_min = 1E+09
+    g.pt.walk_min = 1E+09
+    g.pt.tk_cam_min = 1E+09
+    g.pt.tk_fire_min = 1E+09
+    g.pt.tk_nails_min = 1E+09
+    g.pt.tk_items_min = 1E+09
+    g.pt.tk_think_min = 1E+09
+    g.pt.tk_tele_min = 1E+09
+    g.pt.tk_plats_min = 1E+09
+    g.pt.tk_doors_min = 1E+09
+    g.pt.tk_trigs_min = 1E+09
+    g.pt.tk_traps_min = 1E+09
+    g.pt.tk_place_min = 1E+09
+    g.pt.tk_ls_min = 1E+09
+end sub
+
+'' One 'name value' line. The caller's str$ keeps each type's own format.
+sub host_kv ( _
+    byval f as integer, _
+    nm as string, _
+    v as string _
+)
+    print #f, nm + " " + ltrim$( v )
+end sub
+
+'' v rounded to three decimals at most, as text.
+function host_fmt3 ( byval v as single ) as string
+    dim r as long, s as string
+    r = clng( abs( v ) * 1000.0 )
+    s = ltrim$( str$( r \ 1000 ) ) + "." + right$( "00" + ltrim$( str$( r mod 1000 ) ), 3 )
+    if ( v < 0.0 and r > 0 ) then s = "-" + s
+    host_fmt3 = s
+end function
+
+'' One timer's line: name, then min, mean and max, each times scale. A
+'' min never sampled still holds host_pt_init's sentinel and reads 0.
+sub host_pt_put ( _
+    byval f as integer, _
+    nm as string, _
+    byval mn as single, _
+    byval sum as single, _
+    byval mx as single, _
+    byval n as long, _
+    byval scale as single _
+)
+    if ( n < 1 ) then n = 1
+    if ( mn >= 1E+09 ) then mn = 0.0
+    print #f, nm + " " + host_fmt3( mn * scale ) + " " + host_fmt3( sum / n * scale ) + " " + host_fmt3( mx * scale )
+end sub

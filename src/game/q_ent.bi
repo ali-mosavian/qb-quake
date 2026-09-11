@@ -219,6 +219,10 @@ type PlatEnt
     wait_left   as single
 end type
 
+'' BrushModel.node for a brush that moved since it was placed: leaf 32767,
+'' which no map has. ent_place_models descends only for these.
+const ENT_NODE_DIRTY   = -1
+
 const ENT_DOOR_SHUT    = 0
 const ENT_DOOR_OPENING = 1
 const ENT_DOOR_OPEN    = 2

@@ -43,15 +43,8 @@ declare sub qglM4Conc ( _
     seg b as Mat4 _
 )
 
-dim shared lm_want_dbg as integer
-dim shared lm_fall_dbg as integer
 dim shared qgl_faces_dbg as integer
 dim shared qgl_drop_dbg as integer
-dim shared k_mip_dbg as long, k_sw_dbg as long
-dim shared k_sh_dbg as long, k_stag_dbg as long
-dim shared k_n_dbg as long
-dim shared k_hdr_dbg as long, k_ext_dbg as long
-dim shared k_v0_dbg as long, k_lm_dbg as long
 
 const DL_RADIUS# = 200.0#   '' Quake's own rocket dlight radius
 
@@ -246,11 +239,8 @@ declare function d_turb_ptr ( ) as long
 '' Temporary instrumentation: how many faces asked for a cached surface
 '' and how many fell back to unlit. NOT in Game -- adding a field there
 '' shifts the offsets sb_build.c and r_walk.c hard-code.
-declare function dbg_lm_want ( ) as integer
 declare function dbg_qgl_faces ( ) as integer
 declare function dbg_qgl_drop ( ) as integer
-declare function dbg_lm_fall ( ) as integer
-declare function dbg_keys ( byval which as integer ) as long
 '' The whole face loop, in C, once per frame -- see d_faces.c.
 '' `z`, not `val`: VAL is a BASIC intrinsic and BC rejects it as a
 '' formal parameter name.
@@ -292,6 +282,15 @@ declare sub r_portal_outline ( _
     mtx_fin as Mat4 _
 )
 declare function sys_now ( ) as single
+declare function sys_rdtsc ( ) as long
+declare function host_lap ( t0 as long ) as single
+declare sub host_tk ( _
+    byval timing as integer, _
+    t0 as long, _
+    sum as single, _
+    mn as single, _
+    mx as single _
+)
 
 
 ''::::::::::
@@ -443,12 +442,15 @@ sub host_tick ( _
 )
     dim mdl_i as integer
     dim fire as integer, ndead as integer
+    dim t0 as long
 
     '' what the player asked for
     in_handle_toggles g
 
     '' and what the world does about it: camera, and the physics under it
+    t0 = sys_rdtsc()
     v_update_camera g, dt, cp_x(), cp_y(), cp_z(), brush(), models(), planes(), nodes()
+    host_tk g.ft.n > 0, t0, g.pt.tk_cam, g.pt.tk_cam_min, g.pt.tk_cam_max
 
     '' the fight. Fire is mouse 1 or ctrl; outside GS_PLAY a fresh press
     '' is the only input that matters, and the world stands still.
@@ -457,8 +459,11 @@ sub host_tick ( _
     case GS_PLAY%
         pl_select_weapon g
         if ( fire ) then pl_fire g, mdl_ent(), models(), brush(), planes(), item(), door(), trig(), nail(), plat()
+        host_tk g.ft.n > 0, t0, g.pt.tk_fire, g.pt.tk_fire_min, g.pt.tk_fire_max
         pl_nails_tick g, dt, nail(), mdl_ent(), models(), brush(), planes(), nodes(), item(), door(), trig(), plat()
+        host_tk g.ft.n > 0, t0, g.pt.tk_nails, g.pt.tk_nails_min, g.pt.tk_nails_max
         pl_items_touch g, item(), door(), trig(), plat()
+        host_tk g.ft.n > 0, t0, g.pt.tk_items, g.pt.tk_items_min, g.pt.tk_items_max
         host_view_load g
         pl_env_damage g
         '' every soldier's own think -- Quake's 10 Hz, gated inside
@@ -472,6 +477,7 @@ sub host_tick ( _
             end if
             if ( mdl_ent( mdl_i ).state = MDL_ST_DEAD% ) then ndead = ndead + 1
         next mdl_i
+        host_tk g.ft.n > 0, t0, g.pt.tk_think, g.pt.tk_think_min, g.pt.tk_think_max
         if ( g.fight.health <= 0 ) then
             g.fight.state = GS_DEAD%
             snd_play g, SND_DEATH%, g.pl.pos
@@ -508,22 +514,31 @@ sub host_tick ( _
     g.fight.fire_prev = fire
 
     '' and anything the world does to the player as a result of moving
+    t0 = sys_rdtsc()
     ent_check_teleport g, tele()
+    host_tk g.ft.n > 0, t0, g.pt.tk_tele, g.pt.tk_tele_min, g.pt.tk_tele_max
 
     '' movers, after the player has moved and before anything is drawn
     ent_move_plats g, dt, brush(), plat()
+    host_tk g.ft.n > 0, t0, g.pt.tk_plats, g.pt.tk_plats_min, g.pt.tk_plats_max
     ent_move_doors g, dt, brush(), door()
+    host_tk g.ft.n > 0, t0, g.pt.tk_doors, g.pt.tk_doors_min, g.pt.tk_doors_max
     ent_move_trigs g, dt, brush(), door(), trig(), plat()
+    host_tk g.ft.n > 0, t0, g.pt.tk_trigs, g.pt.tk_trigs_min, g.pt.tk_trigs_max
     pl_traps_tick g, trig(), nail()
+    host_tk g.ft.n > 0, t0, g.pt.tk_traps, g.pt.tk_traps_min, g.pt.tk_traps_max
 
     '' where each mover ended up, so the draw order can place it
     ent_place_models g.wld.count.models, models(), nodes(), planes(), brush()
+    host_tk g.ft.n > 0, t0, g.pt.tk_place, g.pt.tk_place_min, g.pt.tk_place_max
 
     '' map time, which drives every texture animation
     g.rdr.anim_time = g.rdr.anim_time + dt
 
     '' light styles: fixed 10 Hz off the same clock, not framerate
     ls_animate g.rdr.anim_time
+    host_tk g.ft.n > 0, t0, g.pt.tk_ls, g.pt.tk_ls_min, g.pt.tk_ls_max
+    if ( g.ft.n > 0 ) then g.pt.tk_ticks = g.pt.tk_ticks + 1
 
     '' the test dynamic light, following the player -- field by field,
     '' not a whole-UDT assignment, matching how every other Vec3 copy in
@@ -535,6 +550,32 @@ sub host_tick ( _
     '' and the muzzle flash, which is the same light, wider
     if ( g.rdr.anim_time < g.fight.flash_until ) then g.rdr.dlight.radius = DL_RADIUS# * 2.0
 
+end sub
+
+
+'' Microseconds since t0, and t0 moved on. sys_rdtsc wraps every minute
+'' or so as a negative jump; that sample is dropped, as its docstring says.
+function host_lap ( t0 as long ) as single
+    dim t1 as long
+    t1 = sys_rdtsc()
+    if ( t1 > t0 ) then host_lap = t1 - t0
+    t0 = t1
+end function
+
+'' One call's lap into its sum, min and max, once the frame clock counts.
+sub host_tk ( _
+    byval timing as integer, _
+    t0 as long, _
+    sum as single, _
+    mn as single, _
+    mx as single _
+)
+    dim d as single
+    d = host_lap( t0 )
+    if ( timing = 0 ) then exit sub
+    sum = sum + d
+    if ( d < mn ) then mn = d
+    if ( d > mx ) then mx = d
 end sub
 
 
@@ -632,6 +673,7 @@ sub host_render ( _
         ptd = sys_now() - pt0
         g.pt.cull_sum = g.pt.cull_sum + ptd
         if ( ptd > g.pt.cull_max ) then g.pt.cull_max = ptd
+        if ( ptd < g.pt.cull_min ) then g.pt.cull_min = ptd
     end if
 
     ''
@@ -682,19 +724,8 @@ sub host_render ( _
 
     g.rdr.polys = g.rdr.polys + dparm.polys
     g.rdr.tris  = g.rdr.tris + dparm.tris
-    lm_want_dbg = dparm.lm_want
-    lm_fall_dbg = dparm.lm_fallback
     qgl_faces_dbg = dparm.qgl_faces
     qgl_drop_dbg = dparm.qgl_drop
-    k_mip_dbg = k_mip_dbg + dparm.k_mip
-    k_sw_dbg = k_sw_dbg + dparm.k_sw
-    k_sh_dbg = k_sh_dbg + dparm.k_sh
-    k_stag_dbg = k_stag_dbg + dparm.k_stag
-    k_n_dbg = k_n_dbg + dparm.k_n
-    k_hdr_dbg = k_hdr_dbg + dparm.k_hdr
-    k_ext_dbg = k_ext_dbg + dparm.k_ext
-    k_v0_dbg = k_v0_dbg + dparm.k_v0
-    k_lm_dbg = k_lm_dbg + dparm.k_lm
 
     '' Only the surface BUILD is still timed inside the loop -- a build
     '' is a cache miss, so its bracket is rare. The per-face raster/aim
@@ -703,11 +734,14 @@ sub host_render ( _
     '' measuring at that grain. pt_raster/pt_aim/pt_emit read 0 now.
     if ( g.ft.n > 0 ) then
         g.pt.build_sum = g.pt.build_sum + dparm.build_us / 1000000.0
+        if ( dparm.build_us / 1000000.0 > g.pt.build_max ) then g.pt.build_max = dparm.build_us / 1000000.0
+        if ( dparm.build_us / 1000000.0 < g.pt.build_min ) then g.pt.build_min = dparm.build_us / 1000000.0
     end if
     if ( g.ft.n > 0 ) then
         ptd = sys_now() - pt0
         g.pt.draw_sum = g.pt.draw_sum + ptd
         if ( ptd > g.pt.draw_max ) then g.pt.draw_max = ptd
+        if ( ptd < g.pt.draw_min ) then g.pt.draw_min = ptd
     end if
 
     '' Every spawned model, real geometry, while depth is still on -- it
@@ -872,6 +906,7 @@ sub host_render ( _
         ptd = sys_now() - pt0
         g.pt.mdl_sum = g.pt.mdl_sum + ptd
         if ( ptd > g.pt.mdl_max ) then g.pt.mdl_max = ptd
+        if ( ptd < g.pt.mdl_min ) then g.pt.mdl_min = ptd
     end if
 
     if ( g.scr.portal_wire ) then
@@ -890,17 +925,10 @@ sub host_render ( _
         ptd = sys_now() - pt0
         g.pt.hud_sum = g.pt.hud_sum + ptd
         if ( ptd > g.pt.hud_max ) then g.pt.hud_max = ptd
+        if ( ptd < g.pt.hud_min ) then g.pt.hud_min = ptd
     end if
 
 end sub
-
-function dbg_lm_want ( ) as integer
-    dbg_lm_want = lm_want_dbg
-end function
-
-function dbg_lm_fall ( ) as integer
-    dbg_lm_fall = lm_fall_dbg
-end function
 
 ''
 '' Faces the -qgl slice actually drew. Without it a slice that fell
@@ -914,27 +942,4 @@ end function
 
 function dbg_qgl_drop ( ) as integer
     dbg_qgl_drop = qgl_drop_dbg
-end function
-
-function dbg_keys ( byval which as integer ) as long
-    select case which
-        case 0
-            dbg_keys = k_mip_dbg
-        case 1
-            dbg_keys = k_sw_dbg
-        case 2
-            dbg_keys = k_sh_dbg
-        case 3
-            dbg_keys = k_stag_dbg
-        case 4
-            dbg_keys = k_n_dbg
-        case 5
-            dbg_keys = k_hdr_dbg
-        case 6
-            dbg_keys = k_ext_dbg
-        case 7
-            dbg_keys = k_v0_dbg
-        case else
-            dbg_keys = k_lm_dbg
-    end select
 end function
