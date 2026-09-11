@@ -74,7 +74,8 @@ declare sub host_tick ( _
     trig() as TrigEnt, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt, _
-    nail() as Spike _
+    nail() as Spike, _
+    mon() as MdlState _
 )
 
 '' Declared here, not in a header: this module is the only caller of
@@ -308,7 +309,8 @@ sub host_advance ( _
     host_ticks as long, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt, _
-    nail() as Spike _
+    nail() as Spike, _
+    mon() as MdlState _
 )
     dim steps as integer
 
@@ -328,7 +330,7 @@ sub host_advance ( _
             exit do
         end if
         host_tick g, HOST_DT#, brush(), models(), planes(), nodes(), cp_x(), cp_y(), _
-                   cp_z(), tele(), plat(), door(), trig(), mdl_ent(), item(), nail()
+                   cp_z(), tele(), plat(), door(), trig(), mdl_ent(), item(), nail(), mon()
         host_accum = host_accum - HOST_DT#
         host_ticks = host_ticks + 1
         steps = steps + 1
@@ -400,7 +402,8 @@ sub host_tick ( _
     trig() as TrigEnt, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt, _
-    nail() as Spike _
+    nail() as Spike, _
+    mon() as MdlState _
 )
     dim mdl_i as integer
     dim fire as integer, ndead as integer
@@ -427,12 +430,8 @@ sub host_tick ( _
         for mdl_i = 0 to g.mdl_count - 1
             if ( g.env.no_ai ) then
                 '' held at the spawn: the model gate's away arm
-            elseif ( mdl_ent( mdl_i ).kind = MDL_KIND_KNIGHT% ) then
-                mdl_think g, mdl_ent( mdl_i ), g.kmdl, -1, models(), brush(), planes()
-            elseif ( mdl_ent( mdl_i ).kind = MDL_KIND_DOG% ) then
-                mdl_think g, mdl_ent( mdl_i ), g.dmdl, -1, models(), brush(), planes()
             else
-                mdl_think g, mdl_ent( mdl_i ), g.mdl, -1, models(), brush(), planes()
+                mdl_think g, mdl_ent( mdl_i ), mon( mdl_ent( mdl_i ).kind ), -1, models(), brush(), planes()
             end if
             if ( mdl_ent( mdl_i ).state = MDL_ST_DEAD% ) then ndead = ndead + 1
         next mdl_i
@@ -530,14 +529,15 @@ sub host_render ( _
     cam_up as Vec3, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt, _
-    nail() as Spike _
+    nail() as Spike, _
+    mon() as MdlState _
 )
     dim mtx_mdl as Mat4
     dim bob as Vec3
     dim nbox as integer
     dim vlen as single, vframe as integer
     dim vdx as single, vdy as single, vdz as single
-    dim mdl_i as integer
+    dim mdl_i as integer, k as integer
     dim mtx_fin as Mat4
     dim cam_pos_b as Vec3
     dim bm as integer
@@ -681,37 +681,26 @@ sub host_render ( _
     '' drawing reads them, same split host_tick/host_render already keep
     '' for the player.
     pt0 = sys_now()
-    g.mdl.drawn = 0
-    if ( g.mdl.loaded and (g.env.no_mdl = 0) ) then
+    g.mdl_drawn = 0
+    if ( g.env.no_mdl = 0 ) then
         for mdl_i = 0 to g.mdl_count - 1
-            if ( mdl_ent( mdl_i ).kind = MDL_KIND_KNIGHT% ) then
-                if ( r_mdl_visible( mdl_ent( mdl_i ).pos, g.kmdl.radius, g.kmdl.zlo, g.kmdl.zhi, _
+            k = mdl_ent( mdl_i ).kind
+            if ( mon( k ).loaded ) then
+                if ( r_mdl_visible( mdl_ent( mdl_i ).pos, mon( k ).radius, mon( k ).zlo, mon( k ).zhi, _
                                     nds_buffer(), pln_buffer(), frustum() ) ) then
-                    mdl_draw g, g.kmdl, mdl_ent( mdl_i ), _
+                    mdl_draw g, mon( k ), mdl_ent( mdl_i ), _
                              mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
-                    g.mdl.drawn = g.mdl.drawn + 1
-                end if
-            elseif ( mdl_ent( mdl_i ).kind = MDL_KIND_DOG% ) then
-                if ( r_mdl_visible( mdl_ent( mdl_i ).pos, g.dmdl.radius, g.dmdl.zlo, g.dmdl.zhi, _
-                                    nds_buffer(), pln_buffer(), frustum() ) ) then
-                    mdl_draw g, g.dmdl, mdl_ent( mdl_i ), _
-                             mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
-                    g.mdl.drawn = g.mdl.drawn + 1
-                end if
-            elseif ( r_mdl_visible( mdl_ent( mdl_i ).pos, g.mdl.radius, g.mdl.zlo, g.mdl.zhi, _
-                                nds_buffer(), pln_buffer(), frustum() ) ) then
-                mdl_draw g, g.mdl, mdl_ent( mdl_i ), _
-                         mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
-                g.mdl.drawn = g.mdl.drawn + 1
-                '' the volley has no frames, so it has a flash: a small
-                '' box at the muzzle, the frame it fires
-                if ( g.rdr.anim_time < mdl_ent( mdl_i ).flash_until ) then
-                    bob = mdl_ent( mdl_i ).pos
-                    bob.x = bob.x + cos( mdl_ent( mdl_i ).yaw * 0.017453293 ) * MDL_GUN_FWD#
-                    bob.y = bob.y + sin( mdl_ent( mdl_i ).yaw * 0.017453293 ) * MDL_GUN_FWD#
-                    bob.z = bob.z + MDL_GUN_UP#
-                    nbox = mdl_draw_box( bob, 3.0, 6.0, 1.0, 0.0, mtx_fin, xresh, yresh, g.env.z_near, _
-                                         h_dst_dc, ENT_COL_YELLOW%, ENT_COL_WHITE% )
+                    g.mdl_drawn = g.mdl_drawn + 1
+                    '' the volley has no frames, so it has a flash: a small
+                    '' box at the muzzle, the frame it fires
+                    if ( g.rdr.anim_time < mdl_ent( mdl_i ).flash_until ) then
+                        bob = mdl_ent( mdl_i ).pos
+                        bob.x = bob.x + cos( mdl_ent( mdl_i ).yaw * 0.017453293 ) * MDL_GUN_FWD#
+                        bob.y = bob.y + sin( mdl_ent( mdl_i ).yaw * 0.017453293 ) * MDL_GUN_FWD#
+                        bob.z = bob.z + MDL_GUN_UP#
+                        nbox = mdl_draw_box( bob, 3.0, 6.0, 1.0, 0.0, mtx_fin, xresh, yresh, g.env.z_near, _
+                                             h_dst_dc, ENT_COL_YELLOW%, ENT_COL_WHITE% )
+                    end if
                 end if
             end if
         next mdl_i

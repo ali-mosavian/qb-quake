@@ -33,7 +33,7 @@ type Game
     pt          as PhaseTimes     '' where inside the frame it went
     tele_count  as integer        '' entities: filled by ent_load_teleports
     plat_count  as integer
-    mdl         as MdlState       '' the one loaded model asset, shared by every spawned instance
+    mdl_drawn   as integer        '' monsters drawn this frame, after the cull
     mdl_count   as integer        '' how many of mdl_ent() are actually spawned
     fight       as PlayerCombat   '' health, shells, kills, the shotgun's timers
     item_count  as integer        '' pickups in item(): the map's, then dropped backpacks
@@ -43,8 +43,6 @@ type Game
     vmdl        as MdlState       '' the view weapon, v_shot
     smdl        as MdlState       '' and v_shot2, the super shotgun's
     nmdl        as MdlState       '' and v_nail, the nailgun's
-    kmdl        as MdlState       '' the knight
-    dmdl        as MdlState       '' the dog
     snd         as SndState       '' the sound layer
 
     '' LAST, deliberately. r_walk.c and sb_build.c reach g.vis and

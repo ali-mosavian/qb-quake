@@ -13,7 +13,7 @@ import io, re, glob, sys
 def definitions():
     """name -> declare text, from every .bas."""
     out = {}
-    for f in glob.glob('src/*.bas'):
+    for f in glob.glob('src/**/*.bas', recursive=True):
         s = io.open(f, 'rb').read().decode('latin-1').replace('\r\n', '\n')
         for m in re.finditer(
                 r'^(sub|function) (\w+) \( _\n(.*?)^\)( as \w+)?( static)?$',
@@ -53,7 +53,7 @@ def refresh(path, defs):
 if __name__ == '__main__':
     defs = definitions()
     total = 0
-    for p in sorted(glob.glob('src/*.bi')) + sorted(glob.glob('src/*.bas')):
+    for p in sorted(glob.glob('src/**/*.bi', recursive=True)) + sorted(glob.glob('src/**/*.bas', recursive=True)):
         k = refresh(p, defs)
         total += k
         if k:

@@ -73,7 +73,8 @@ declare sub host_bench_report ( _
     door() as DoorEnt, _
     trig() as TrigEnt, _
     mdl_ent() as MdlEnt, _
-    byval host_ticks as long _
+    byval host_ticks as long, _
+    mon() as MdlState _
 )
 declare sub host_render ( _
     g as Game, _
@@ -96,7 +97,8 @@ declare sub host_render ( _
     cam_up as Vec3, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt, _
-    nail() as Spike _
+    nail() as Spike, _
+    mon() as MdlState _
 )
 declare sub host_advance ( _
     g as Game, _
@@ -116,7 +118,8 @@ declare sub host_advance ( _
     host_ticks as long, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt, _
-    nail() as Spike _
+    nail() as Spike, _
+    mon() as MdlState _
 )
 declare function qglCheckAll () as integer
 declare function qglDiffAll () as integer
@@ -170,7 +173,8 @@ declare sub host_init ( _
     trig() as TrigEnt, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt, _
-    nail() as Spike _
+    nail() as Spike, _
+    mon() as MdlState _
 )
 declare sub host_main ( _
     g as Game, _
@@ -195,7 +199,8 @@ declare sub host_main ( _
     tele() as Teleporter, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt, _
-    nail() as Spike _
+    nail() as Spike, _
+    mon() as MdlState _
 )
 
 ''
@@ -343,7 +348,8 @@ declare function ent_load_monsters ( _
     mdl_ent() as MdlEnt, _
     models() as Submodel, _
     brush() as BrushModel, _
-    planes() as Plane _
+    planes() as Plane, _
+    mon() as MdlState _
 ) as integer
 declare sub mdl_spawn ( _
     g as Game, _
@@ -446,9 +452,11 @@ dim gv_buf() as integer
 '' these are named mdltri/mdlvert to not collide with it.
 
 '' One spawned instance per element -- the asset (mdltri_buffer, above,
-'' and g.mdl) is shared; only per-monster position/state lives here.
+'' and mon()) is shared; only per-monster position/state lives here.
 '' Sized in host_init, once, to MDL_MAX_ENTS%.
 dim mdl_ent() as MdlEnt
+'' the asset a kind's spawns share, indexed MDL_KIND_*
+dim mon() as MdlState
 
 ''
 '' view.bas. Declared here rather than in a header: main is the only
@@ -524,7 +532,7 @@ dim shared z_dc as long
               mdl_buffer(), order_list(), poly_flag(), gv_buf(), bit_array(), _
               cp_x(), cp_y(), cp_z(), mip_buff_inf(), _
               frustum(), brush(), tele(), plat(), door(), trig(), _
-              mdl_ent(), item(), nail()
+              mdl_ent(), item(), nail(), mon()
     if ( g.env.dump_tex ) then
         mod_tex_dump g
     elseif ( g.env.dump_set ) then
@@ -536,7 +544,7 @@ dim shared z_dc as long
                   mdl_buffer(), order_list(), poly_flag(), gv_buf(), brush(), _
                   frustum(), bit_array(), _
                   mip_buff_inf(), plat(), door(), trig(), tele(), _
-                  mdl_ent(), item(), nail()
+                  mdl_ent(), item(), nail(), mon()
     end if
     host_shutdown
     
@@ -657,7 +665,8 @@ sub host_init ( _
     trig() as TrigEnt, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt, _
-    nail() as Spike _
+    nail() as Spike, _
+    mon() as MdlState _
 )
     ''
     '' Load profiling. A 1 kHz AUTOINIT timer counts milliseconds, and the
@@ -809,15 +818,16 @@ sub host_init ( _
     '' vid_init, above) already applies -- the skin's indices come from
     '' the same Quake palette mkmdl.py baked them from, so nothing extra
     '' to install here.
-    mdl_load g, g.mdl, "soldier"
+    redim mon( MDL_KINDS% - 1 ) as MdlState
+    mdl_load g, mon( MDL_KIND_ARMY% ), "soldier"
     mdl_load g, g.vmdl, "v_shot"
     mdl_load g, g.smdl, "v_shot2"
     mdl_load g, g.nmdl, "v_nail"
-    mdl_load g, g.kmdl, "knight"
-    mdl_load g, g.dmdl, "dog"
+    mdl_load g, mon( MDL_KIND_KNIGHT% ), "knight"
+    mdl_load g, mon( MDL_KIND_DOG% ), "dog"
     snd_init g
     g.mdl_count = 0
-    if ( g.mdl.loaded ) then
+    if ( mon( MDL_KIND_ARMY% ).loaded ) then
         '' mdl_pick_section places every model from rnd, so a clock
         '' seed leaves the saved frame unrepeatable. Bench only.
         if ( g.env.bench_frames > 0 or g.env.bench_ticks > 0 ) then
@@ -830,7 +840,7 @@ sub host_init ( _
         redim mdl_ent( MDL_MAX_ENTS% - 1 ) as MdlEnt
         redim nail( PL_NAILS_MAX% - 1 ) as Spike
         '' the map's own, where it put them; a deathmatch map has none
-        g.mdl_count = ent_load_monsters( g, mdl_ent(), mdl_buffer(), brush(), pln_buffer() )
+        g.mdl_count = ent_load_monsters( g, mdl_ent(), mdl_buffer(), brush(), pln_buffer(), mon() )
         if ( g.mdl_count = 0 ) then
         for mdl_i = 0 to MDL_CROWD% - 1
             '' the old ring around the player, kept as mdl_pick_section's
@@ -847,7 +857,7 @@ sub host_init ( _
             '' every other one a knight, when its model loaded
             mdl_ent( mdl_i ).kind = MDL_KIND_ARMY%
             mdl_ent( mdl_i ).patrol = -1
-            if ( g.kmdl.loaded and ( mdl_i and 1 ) ) then mdl_ent( mdl_i ).kind = MDL_KIND_KNIGHT%
+            if ( mon( MDL_KIND_KNIGHT% ).loaded and ( mdl_i and 1 ) ) then mdl_ent( mdl_i ).kind = MDL_KIND_KNIGHT%
             mdl_pick_section g, mdl_ent(), mdl_i, mdl_spawn_fallback, mdl_spawn_org
             mdl_spawn g, mdl_ent( mdl_i ), mdl_spawn_org, mdl_buffer(), brush(), pln_buffer()
         next mdl_i
@@ -909,7 +919,8 @@ sub host_main ( _
     tele() as Teleporter, _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt, _
-    nail() as Spike _
+    nail() as Spike, _
+    mon() as MdlState _
 )
     dim mtx_prj as Mat4
     dim aspect as single
@@ -1084,7 +1095,7 @@ sub host_main ( _
         pt0 = sys_now()
         host_advance g, g.scr.frame_time, brush(), mdl_buffer(), pln_buffer(), _
                       nds_buffer(), cp_x(), cp_y(), cp_z(), tele(), plat(), door(), trig(), _
-                      host_accum, host_ticks, mdl_ent(), item(), nail()
+                      host_accum, host_ticks, mdl_ent(), item(), nail(), mon()
         if ( g.ft.n > 0 ) then
             ptd = sys_now() - pt0
             g.pt.tick_sum = g.pt.tick_sum + ptd
@@ -1104,7 +1115,7 @@ sub host_main ( _
                      pln_buffer(), nds_buffer(), mdl_buffer(), order_list(), poly_flag(), _
                      gv_buf(), brush(), frustum(), bit_array(), _
                      mip_buff_inf(), cam_up, _
-                     mdl_ent(), item(), nail()
+                     mdl_ent(), item(), nail(), mon()
 
 
         ''
@@ -1128,15 +1139,15 @@ sub host_main ( _
         end if
         '' -campath ends when the route does, whatever -bench says
         if ( g.env.cam_path and g.cp.done ) then
-            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), door(), trig(), mdl_ent(), host_ticks
+            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), door(), trig(), mdl_ent(), host_ticks, mon()
             exit do
         end if
         if ( g.env.bench_ticks > 0 and host_ticks >= g.env.bench_ticks ) then
-            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), door(), trig(), mdl_ent(), host_ticks
+            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), door(), trig(), mdl_ent(), host_ticks, mon()
             exit do
         end if
         if ( g.env.bench_frames > 0 and frame_no >= g.env.bench_frames ) then
-            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), door(), trig(), mdl_ent(), host_ticks
+            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), door(), trig(), mdl_ent(), host_ticks, mon()
             exit do
         end if
 
@@ -1191,7 +1202,7 @@ sub host_main ( _
         '' scr_count_frame just above, so this must run after it.
         ''
         if ( g.env.bench_secs > 0 and g.scr.bench_secs >= g.env.bench_secs ) then
-            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), door(), trig(), mdl_ent(), host_ticks
+            host_bench_report g, frame_no, h_dst_dc, brush(), plat(), door(), trig(), mdl_ent(), host_ticks, mon()
             exit do
         end if
 

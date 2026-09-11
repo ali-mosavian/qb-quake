@@ -4,7 +4,7 @@
 '' Triangle/vertex data stays in module-level arrays (arrays cannot be TYPE
 '' members) -- MdlState only holds what a UDT can: counts and the skin dc.
 ''
-'' Must be included before q_game.bi, which embeds MdlState as g.mdl.
+'' Must be included before q_game.bi, which embeds MdlState as g.vmdl.
 '' Needs u3dVector3f (u3d.bi) seen already -- every module that reaches
 '' this far already has it, the same way q_cam.bi's CamState does.
 ''
@@ -30,6 +30,7 @@ const MDL_ST_LEAP%     = 5    '' the dog in the air, on its velocity
 const MDL_KIND_ARMY%   = 0
 const MDL_KIND_KNIGHT% = 1
 const MDL_KIND_DOG%    = 2
+const MDL_KINDS%       = 3       '' mon() in main.bas: one MdlState a kind
 const MDL_HEALTH%       = 30  '' monster_army's health
 '' army_fire: FireBullets (4, dir, '0.1 0.1 0'), 4 damage a pellet, aimed
 '' 0.2 s behind the player's velocity
@@ -117,7 +118,6 @@ type MdlState
     radius      as single      '' the box any frame at any yaw fits in,
     zlo         as single      '' from the header: horizontal reach about
     zhi         as single      '' the origin, and the z span
-    drawn       as integer     '' models drawn this frame, after the cull
     nstand      as integer     '' the frame sets, in this order
     nrun        as integer
     ndeath      as integer

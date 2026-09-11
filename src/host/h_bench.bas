@@ -80,7 +80,8 @@ sub host_bench_report ( _
     door() as DoorEnt, _
     trig() as TrigEnt, _
     mdl_ent() as MdlEnt, _
-    byval host_ticks as long _
+    byval host_ticks as long, _
+    mon() as MdlState _
 )
     dim scs as CacheStats
     dim dv as long
@@ -191,12 +192,12 @@ sub host_bench_report ( _
         print #benchf, "mtri_per_frame " + ltrim$(str$( g.pt.mtri_n / g.ft.n ))
     end if
     print #benchf, "polys " + ltrim$(str$( g.rdr.polys ))
-    print #benchf, "mdl_drawn " + ltrim$(str$( g.mdl.drawn ))
+    print #benchf, "mdl_drawn " + ltrim$(str$( g.mdl_drawn ))
     print #benchf, "vmdl_loaded " + ltrim$(str$( g.vmdl.loaded ))
     print #benchf, "smdl_loaded " + ltrim$(str$( g.smdl.loaded ))
     print #benchf, "nmdl_loaded " + ltrim$(str$( g.nmdl.loaded ))
-    print #benchf, "kmdl_loaded " + ltrim$(str$( g.kmdl.loaded ))
-    print #benchf, "dmdl_loaded " + ltrim$(str$( g.dmdl.loaded ))
+    print #benchf, "kmdl_loaded " + ltrim$(str$( mon( MDL_KIND_KNIGHT% ).loaded ))
+    print #benchf, "dmdl_loaded " + ltrim$(str$( mon( MDL_KIND_DOG% ).loaded ))
     print #benchf, "map " + lcase$( rtrim$( g.env.map_name ) )
     print #benchf, "gs_state " + ltrim$(str$( g.fight.state ))
     print #benchf, "pl_health " + ltrim$(str$( g.fight.health ))

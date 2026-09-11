@@ -223,7 +223,8 @@ declare function ent_load_monsters ( _
     mdl_ent() as MdlEnt, _
     models() as Submodel, _
     brush() as BrushModel, _
-    planes() as Plane _
+    planes() as Plane, _
+    mon() as MdlState _
 ) as integer
 declare sub ent_place_models ( _
     byval model_count as integer, _
@@ -324,7 +325,8 @@ function ent_load_monsters ( _
     mdl_ent() as MdlEnt, _
     models() as Submodel, _
     brush() as BrushModel, _
-    planes() as Plane _
+    planes() as Plane, _
+    mon() as MdlState _
 ) as integer
     dim u as integer
     dim h as EntsHead
@@ -337,8 +339,8 @@ function ent_load_monsters ( _
         ent_get u, clng( varseg( mr ) ) * 65536& + (clng( varptr( mr ) ) and 65535&), len( mr )
         if ( n < MDL_MAX_ENTS% ) then
             mdl_ent( n ).kind = mr.kind
-            if ( mr.kind = MDL_KIND_KNIGHT% and g.kmdl.loaded = 0 ) then mdl_ent( n ).kind = MDL_KIND_ARMY%
-            if ( mr.kind = MDL_KIND_DOG% and g.dmdl.loaded = 0 ) then mdl_ent( n ).kind = MDL_KIND_ARMY%
+            if ( mr.kind >= MDL_KINDS% ) then mdl_ent( n ).kind = MDL_KIND_ARMY%
+            if ( mon( mdl_ent( n ).kind ).loaded = 0 ) then mdl_ent( n ).kind = MDL_KIND_ARMY%
             mdl_ent( n ).patrol = mr.first
             mdl_spawn g, mdl_ent( n ), mr.org, models(), brush(), planes()
             mdl_ent( n ).yaw = mr.angle
