@@ -206,6 +206,9 @@ sub host_bench_report ( _
     print #benchf, "pl_armor " + ltrim$(str$( g.fight.armor ))
     print #benchf, "pl_weapon " + ltrim$(str$( g.fight.weapon ))
     print #benchf, "pl_nails " + ltrim$(str$( g.fight.nails ))
+    print #benchf, "pl_quad_left " + ltrim$(str$( g.fight.quad_until - g.rdr.anim_time ))
+    print #benchf, "pl_suit_left " + ltrim$(str$( g.fight.suit_until - g.rdr.anim_time ))
+    print #benchf, "pl_booms " + ltrim$(str$( g.fight.booms ))
     print #benchf, "pl_deaths " + ltrim$(str$( g.fight.deaths ))
     '' the crowd, one line each: kind state hunting frame x y z
     for mi = 0 to g.mdl_count - 1

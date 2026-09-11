@@ -365,6 +365,33 @@ PY
     else
         echo "FAIL  e1m1 nail: pl_weapon ${nw:-none} pl_nails ${nn:-none}, the nailgun was not taken or did not fire"; rc=1
     fi
+    # the quad at (544,2480,-88): standing on it starts its thirty seconds
+    run_frame "-lm -nostats -noai -at 544 2480 -88 -yaw 90 -bench 400 -ticks 30" "$VBD_OUT/e1m1-quad.bmp" e1m1.bsp
+    nq=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_quad_left"{print int($2)}')
+    if [[ "${nq:-0}" -ge 28 ]]; then
+        echo "PASS  e1m1 quad: pl_quad_left $nq, the quad was taken"
+    else
+        echo "FAIL  e1m1 quad: pl_quad_left ${nq:-none}, the quad was not taken"; rc=1
+    fi
+    # the slime pool under the walkway at (1100,2280): two seconds in it,
+    # no suit, costs 12 a second
+    run_frame "-lm -nostats -noai -at 1100 2280 -500 -yaw 90 -bench 400 -ticks 120" "$VBD_OUT/e1m1-slime.bmp" e1m1.bsp
+    hp=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_health"{print $2}')
+    if [[ "${hp:-100}" -lt 100 ]]; then
+        echo "PASS  e1m1 slime: health $hp, the slime bit"
+    else
+        echo "FAIL  e1m1 slime: health ${hp:-none}, the slime did nothing"; rc=1
+    fi
+    # misc_explobox at (72,2056,-208), shot from 100 units: one volley
+    # takes its 20, and its 160 less half the distance reaches the shooter
+    run_frame "-lm -nostats -noai -at 172 2056 -208 -yaw 180 -pitch 0 -fire -bench 400 -ticks 30" "$VBD_OUT/e1m1-boom.bmp" e1m1.bsp
+    nb=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_booms"{print $2}')
+    hp=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_health"{print $2}')
+    if [[ "${nb:-0}" -ge 1 && "${hp:-100}" -lt 100 ]]; then
+        echo "PASS  e1m1 boom: pl_booms $nb, health $hp -- the box went off"
+    else
+        echo "FAIL  e1m1 boom: pl_booms ${nb:-none}, health ${hp:-none} -- the box did not go off"; rc=1
+    fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc
 fi

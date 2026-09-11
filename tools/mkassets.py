@@ -158,11 +158,28 @@ UA_WIN = 16384          # uglArr's page size (UA_WIN in src/ugl/uglarr.asm)
 
 # Element sizes for the paged lumps, so the padding lands where uGL puts it.
 PAGED_ELEM = {
-    'nodes.pag': 22,    # nodeb: planeid child0 child1 lfaceid lfacenum + 12
+    'nodes.pag': 16,    # Node: planeid child0 child1 lfaceid lfacenum + bound[6]
     'clip.pag':   6,    # ClipNode: planenum front back
-    'leaves.pag':22,    # leaf2: cont vislist bound[12] lfaceid lfacenum
+    'leaves.pag':16,    # Leaf: cont vislist bound[6] lfaceid lfacenum
     'faces.pag': 10,    # Face: planeid side geom_row geom_ofs texinfoid
 }
+
+
+# A node or leaf box in six bytes, (v + 4096) / 32 with the min rounded
+# down and the max up, so a box only ever grows: r_cull_box_c culls less
+# than it might, never more. bspfile.bi's PackedBounds, r_walk.c's unpack.
+BOUND_Q = 32
+BOUND_BASE = -4096
+
+
+def bound_bytes(bound: bytes) -> bytes:
+    mn = struct.unpack_from('<3h', bound, 0)
+    mx = struct.unpack_from('<3h', bound, 6)
+    lo = [(v - BOUND_BASE) // BOUND_Q for v in mn]
+    hi = [-((BOUND_BASE - v) // BOUND_Q) for v in mx]
+    if not all(0 <= q <= 255 for q in lo + hi):
+        raise SystemExit(f'a box past the packed range: {mn} {mx}')
+    return bytes(lo + hi)
 
 
 # Arrays the renderer backs with CONVENTIONAL memory are laid out FLAT --
@@ -421,7 +438,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
     mons: list[tuple[int, tuple[float, float, float], float]] = []
     mon_kind = {'monster_army': 0, 'monster_knight': 1, 'monster_dog': 2}   # MDL_KIND_*; no model for the rest
     item_kind = {'item_health': 0, 'item_shells': 1, 'item_armor1': 2, 'item_armor2': 3,
-                 'weapon_supershotgun': 4, 'item_spikes': 5, 'weapon_nailgun': 6}
+                 'weapon_supershotgun': 4, 'item_spikes': 5, 'weapon_nailgun': 6,
+                 'item_artifact_super_damage': 7, 'item_artifact_envirosuit': 8, 'misc_explobox': 9}
 
     def vec(v: str) -> tuple[float, float, float]:
         x, y, z = (float(t) for t in v.split())
@@ -431,8 +449,11 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
         # items.qc: H_ROTTEN 15, H_MEGA 100, else 25; WEAPON_BIG2 40 shells,
         # else 20; armor_touch's 100 green, 150 yellow; weapon_touch's
         # 5 shells with the super shotgun and 30 nails with the nailgun;
-        # item_spikes 25, WEAPON_BIG2 50
+        # item_spikes 25, WEAPON_BIG2 50; a powerup's 30 seconds; the
+        # exploding box's 20 health
         match classname, flags & 1, flags & 2:
+            case 'item_artifact_super_damage' | 'item_artifact_envirosuit', _, _: return 30
+            case 'misc_explobox', _, _: return 20
             case 'weapon_supershotgun', _, _: return 5
             case 'weapon_nailgun', _, _: return 30
             case 'item_spikes', 1, _: return 50
@@ -746,14 +767,14 @@ def convert_lumps(d, lumps, outdir, skill):
         buf += struct.pack('<hhhhh', planeid, side, grow, gofs, texinfoid)
     out['faces.pag'] = bytes(buf)
 
-    # leaves: leaf(28) -> leaf2(22), dropping the trailing 4 bytes and
+    # leaves: leaf(28) -> Leaf(16), dropping the trailing 4 bytes,
     # narrowing cont to an integer (always one of six small CONTENTS_*
-    # negatives -- see bspfile.bi's leaf2 comment)
+    # negatives -- see bspfile.bi's Leaf comment) and the box to bytes
     raw = lump(10)
     buf = bytearray()
     for k in range(0, len(raw), 28):
         cont, vislist = struct.unpack_from('<ii', raw, k)
-        bound = raw[k+8:k+20]                       # 6 int16, copied whole
+        bound = bound_bytes(raw[k+8:k+20])
         lfaceid, lfacenum = struct.unpack_from('<hh', raw, k+20)
         buf += struct.pack('<h', cont) + struct.pack('<i', vislist) + bound + struct.pack('<hh', lfaceid, lfacenum)
     out['leaves.pag'] = bytes(buf)
@@ -765,13 +786,13 @@ def convert_lumps(d, lumps, outdir, skill):
         buf += raw[k:k + 16]
     out['planes.bld'] = bytes(buf)
 
-    # nodes: node(24) -> nodeb(22). planeid narrows, and the bounding box
+    # nodes: node(24) -> Node(16). planeid narrows, the box packs, and it
     # moves to the end -- the two structures are not in the same order.
     raw = lump(5)
     buf = bytearray()
     for k in range(0, len(raw), 24):
         planeid, child0, child1 = struct.unpack_from('<ihh', raw, k)
-        bound = raw[k+8:k+20]
+        bound = bound_bytes(raw[k+8:k+20])
         lfaceid, lfacenum = struct.unpack_from('<hh', raw, k+20)
         buf += struct.pack('<hhhhh', planeid, child0, child1, lfaceid, lfacenum) + bound
     out['nodes.pag'] = bytes(buf)

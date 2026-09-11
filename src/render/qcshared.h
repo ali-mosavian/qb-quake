@@ -49,6 +49,13 @@ typedef struct { float x, y, z; } Vec3f;
 /* bspfile.bi's Bounds. */
 typedef struct { Vec3i min, max; } Bounds;
 
+/* bspfile.bi's PackedBounds: a node or leaf box in six bytes, min xyz
+   then max xyz, each (v - BOUND_BASE) / BOUND_Q, the min rounded down
+   and the max up. */
+typedef struct { unsigned char q[6]; } PackedBounds;
+#define BOUND_Q    32.0f
+#define BOUND_BASE (-4096.0f)
+
 /* bspfile.bi's Plane -- the map's own runtime plane record. */
 typedef struct { Vec3 norm; float dist; } Plane;
 
@@ -63,14 +70,14 @@ typedef struct {
     short child1;
     short lface_id;
     short lface_num;
-    Bounds bound;
+    PackedBounds bound;
 } Node;
 
 /* bspfile.bi's Leaf. */
 typedef struct {
     short cont;
     long  vis_list;
-    Bounds bound;
+    PackedBounds bound;
     short lface_id;
     short lface_num;
 } Leaf;

@@ -95,6 +95,19 @@ declare sub pl_spread_dir ( _
 )
 declare sub pl_damage ( g as Game, byval dmg as integer )
 declare sub pl_fire_nail ( g as Game, nail() as Spike )
+declare sub pl_box_hit ( _
+    g as Game, _
+    item() as ItemEnt, _
+    byval i as integer, _
+    byval dmg as integer, _
+    mdl_ent() as MdlEnt _
+)
+declare function pl_box_ray ( _
+    at as Vec3, _
+    org as Vec3, _
+    dir as Vec3, _
+    byval maxt as single _
+) as single
 declare sub mdl_melee ( g as Game, ent as MdlEnt )
 declare sub mdl_damage ( _
     g as Game, _
@@ -2045,6 +2058,7 @@ sub pl_fire ( _
     dim t as single, bt as single
     dim hit( MDL_MAX_ENTS% - 1 ) as integer
     dim npellet as integer, sx as single, sy as single, rate as single
+    dim pdmg as integer
 
     if ( g.rdr.anim_time < g.fight.next_fire ) then exit sub
     if ( g.fight.weapon = PL_IT_NAILGUN% ) then pl_fire_nail g, nail() : exit sub
@@ -2088,7 +2102,16 @@ sub pl_fire ( _
                 if ( t >= 0.0 and t < bt ) then bt = t : best = i
             end if
         next i
-        if ( best >= 0 ) then hit(best) = hit(best) + PL_PELLET_DMG%
+        pdmg = PL_PELLET_DMG%
+        if ( g.rdr.anim_time < g.fight.quad_until ) then pdmg = pdmg * PL_QUAD_MUL%
+        if ( best >= 0 ) then hit(best) = hit(best) + pdmg
+        '' an exploding box short of what the pellet stopped at
+        for i = 0 to g.item_count - 1
+            if ( item(i).kind = ENT_ITEM_EXPLOBOX and item(i).gone = 0 ) then
+                t = pl_box_ray( item(i).pos, org, dir, bt + PL_HALF# )
+                if ( t >= 0.0 ) then pl_box_hit g, item(), i, pdmg, mdl_ent()
+            end if
+        next i
         '' multi_killed: a trigger with health, in front of whatever the
         '' pellet stopped at -- plus PL_HALF, since pl_trace walks hull 1,
         '' the player's, and a wall stops the pellet that much early; e1m1's
@@ -2259,6 +2282,68 @@ sub pl_select_weapon ( g as Game )
     if ( g.env.keyboard.three and ( g.fight.items and PL_IT_NAILGUN% ) ) then g.fight.weapon = PL_IT_NAILGUN%
 end sub
 
+'' a pellet or nail's line against the box standing at, its brush
+'' plus ENT_TOUCH_SLACK as the shootable door's is
+function pl_box_ray ( _
+    at as Vec3, _
+    org as Vec3, _
+    dir as Vec3, _
+    byval maxt as single _
+) as single
+    dim mins as Vec3, maxs as Vec3
+    mins.x = at.x - ENT_BOX_HALF# - ENT_TOUCH_SLACK# : maxs.x = at.x + ENT_BOX_HALF# + ENT_TOUCH_SLACK#
+    mins.y = at.y - ENT_BOX_HALF# - ENT_TOUCH_SLACK# : maxs.y = at.y + ENT_BOX_HALF# + ENT_TOUCH_SLACK#
+    mins.z = at.z - ENT_TOUCH_SLACK# : maxs.z = at.z + ENT_BOX_TOP# + ENT_TOUCH_SLACK#
+    pl_box_ray = pl_ray_box( mins, maxs, org, dir, maxt )
+end function
+
+'' the box takes a hit; at none left, barrel_explode: T_RadiusDamage 160
+'' from its centre, 160 less half the distance, to the player through the
+'' armor and to every monster standing -- CanDamage's line not asked
+sub pl_box_hit ( _
+    g as Game, _
+    item() as ItemEnt, _
+    byval i as integer, _
+    byval dmg as integer, _
+    mdl_ent() as MdlEnt _
+)
+    dim c as Vec3, dx as single, dy as single, dz as single
+    dim pts as single, m as integer
+
+    item(i).amount = item(i).amount - dmg
+    if ( item(i).amount > 0 ) then exit sub
+    item(i).gone = -1
+    g.fight.booms = g.fight.booms + 1
+    c = item(i).pos
+    c.z = c.z + ENT_BOX_TOP# * 0.5
+    dx = g.pl.pos.x - c.x : dy = g.pl.pos.y - c.y : dz = g.pl.pos.z + ( PL_ZLO# + PL_ZHI# ) * 0.5 - c.z
+    pts = ENT_BOX_DMG# - 0.5 * sqr( dx*dx + dy*dy + dz*dz )
+    if ( pts > 0.0 ) then pl_damage g, int( pts )
+    for m = 0 to g.mdl_count - 1
+        if ( mdl_ent(m).state <> MDL_ST_DEAD% ) then
+            dx = mdl_ent(m).pos.x - c.x : dy = mdl_ent(m).pos.y - c.y
+            dz = mdl_ent(m).pos.z + ( MDL_ZLO# + MDL_ZHI# ) * 0.5 - c.z
+            pts = ENT_BOX_DMG# - 0.5 * sqr( dx*dx + dy*dy + dz*dz )
+            if ( pts > 0.0 ) then mdl_damage g, mdl_ent(m), int( pts ), item()
+        end if
+    next m
+end sub
+
+'' PlayerPreThink's water: lava bites 10 a level each 0.2 s, a second
+'' in the suit; slime 4 a level each second, nothing in the suit
+sub pl_env_damage ( g as Game )
+    if ( g.pl.water_level = 0 ) then exit sub
+    if ( g.rdr.anim_time < g.fight.dmg_time ) then exit sub
+    if ( g.pl.water_type = CONTENTS_LAVA ) then
+        g.fight.dmg_time = g.rdr.anim_time + 0.2
+        if ( g.rdr.anim_time < g.fight.suit_until ) then g.fight.dmg_time = g.rdr.anim_time + 1.0
+        pl_damage g, PL_LAVA_DMG% * g.pl.water_level
+    elseif ( g.pl.water_type = CONTENTS_SLIME and g.rdr.anim_time >= g.fight.suit_until ) then
+        g.fight.dmg_time = g.rdr.anim_time + 1.0
+        pl_damage g, PL_SLIME_DMG% * g.pl.water_level
+    end if
+end sub
+
 '' W_FireSpikes: the aim from the eye, the nail from 16 up and 4 to the
 '' side the last one did not leave; a free slot or nothing
 sub pl_fire_nail ( g as Game, nail() as Spike )
@@ -2310,7 +2395,7 @@ sub pl_nails_tick ( _
     door() as DoorEnt, _
     trig() as TrigEnt _
 )
-    dim n as integer, i as integer, best as integer
+    dim n as integer, i as integer, best as integer, ndmg as integer
     dim fin as Vec3, dir as Vec3, tr as TraceResult
     dim t as single, bt as single, reach as single
 
@@ -2335,10 +2420,18 @@ sub pl_nails_tick ( _
                         if ( t >= 0.0 and t < bt ) then bt = t : best = i
                     end if
                 next i
+                ndmg = PL_NG_DMG%
+                if ( g.rdr.anim_time < g.fight.quad_until ) then ndmg = ndmg * PL_QUAD_MUL%
                 if ( best >= 0 ) then
-                    mdl_damage g, mdl_ent(best), PL_NG_DMG%, item()
+                    mdl_damage g, mdl_ent(best), ndmg, item()
                     nail(n).alive = 0
                 end if
+                for i = 0 to g.item_count - 1
+                    if ( item(i).kind = ENT_ITEM_EXPLOBOX and item(i).gone = 0 ) then
+                        t = pl_box_ray( item(i).pos, nail(n).pos, dir, bt + PL_HALF# )
+                        if ( t >= 0.0 ) then pl_box_hit g, item(), i, ndmg, mdl_ent() : nail(n).alive = 0
+                    end if
+                next i
                 for i = 0 to g.trig_count - 1
                     if ( trig(i).kind = ENT_TRIG_SHOOT and trig(i).state = ENT_TRIG_READY ) then
                         t = pl_ray_box( trig(i).mins, trig(i).maxs, nail(n).pos, dir, bt + PL_HALF# )
@@ -2367,6 +2460,9 @@ sub pl_reset_player ( g as Game )
     g.fight.items = PL_IT_SHOTGUN%
     g.fight.weapon = PL_IT_SHOTGUN%
     g.fight.nails = 0
+    g.fight.quad_until = 0.0
+    g.fight.suit_until = 0.0
+    g.fight.dmg_time = 0.0
     g.fight.next_fire = 0.0
     g.fight.show_hostile = 0.0
     g.pl.pos.x = g.fight.spawn.x : g.pl.pos.y = g.fight.spawn.y : g.pl.pos.z = g.fight.spawn.z
@@ -2470,6 +2566,15 @@ sub pl_items_touch ( g as Game, item() as ItemEnt )
                         if ( g.fight.nails > PL_NAILS_CAP% ) then g.fight.nails = PL_NAILS_CAP%
                         item(i).gone = -1
                     end if
+                elseif ( item(i).kind = ENT_ITEM_QUAD ) then
+                    '' powerup_touch: thirty seconds from the pickup
+                    g.fight.quad_until = g.rdr.anim_time + item(i).amount
+                    item(i).gone = -1
+                elseif ( item(i).kind = ENT_ITEM_SUIT ) then
+                    g.fight.suit_until = g.rdr.anim_time + item(i).amount
+                    item(i).gone = -1
+                elseif ( item(i).kind = ENT_ITEM_EXPLOBOX ) then
+                    '' shot, never taken
                 elseif ( item(i).kind = ENT_ITEM_ARMOR1 or item(i).kind = ENT_ITEM_ARMOR2 ) then
                     '' armor_touch: only what beats the armor worn, type * value
                     atype = PL_ARMOR1_TYPE#

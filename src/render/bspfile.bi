@@ -23,6 +23,15 @@ type Bounds
     max         as Vec3i
 end type
 
+'' a node or leaf box in six bytes, min xyz then max xyz, each
+'' (v - BOUND_BASE) \ BOUND_Q with the min rounded down and the max up
+'' -- mkassets.py's bound_bytes; the C cull unpacks, r_leaf_bound too
+type PackedBounds
+    q           as string * 6
+end type
+const BOUND_Q    = 32
+const BOUND_BASE = -4096
+
 type LumpEntry
     offs        as long
     size        as long
@@ -231,7 +240,7 @@ end type
 type Leaf
     cont        as integer      '' CONTENTS_*: only hull 0 knows about water
     vis_list     as long
-    bound       as Bounds
+    bound       as PackedBounds
     lface_id     as integer
     lface_num    as integer
 end type
@@ -262,7 +271,7 @@ type Node
     child1      as integer
     lface_id     as integer
     lface_num    as integer
-    bound       as Bounds
+    bound       as PackedBounds
 end type
 
 type DiskTexInfo

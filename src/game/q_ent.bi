@@ -85,6 +85,12 @@ const ENT_ITEM_ARMOR2   = 3      '' yellow, 150 at 0.6
 const ENT_ITEM_SSG      = 4      '' weapon_supershotgun; amount is its shells
 const ENT_ITEM_NAILS    = 5      '' item_spikes, 25 or 50
 const ENT_ITEM_NAILGUN  = 6      '' weapon_nailgun; amount is its nails
+const ENT_ITEM_QUAD     = 7      '' item_artifact_super_damage; amount is its seconds
+const ENT_ITEM_SUIT     = 8      '' item_artifact_envirosuit
+const ENT_ITEM_EXPLOBOX = 9      '' misc_explobox; amount is its health, shot down
+const ENT_BOX_HALF#     = 15.0   '' b_explob.bsp, 30 by 30 by 62
+const ENT_BOX_TOP#      = 62.0
+const ENT_BOX_DMG#      = 160.0  '' barrel_explode: T_RadiusDamage 160
 const ENT_ITEM_HALF#    = 10.0   '' the box's half width
 const ENT_ITEM_TOP#     = 20.0   '' and its height
 const ENT_ITEM_REACH#   = 32.0   '' Quake's touch: item box against the player's
@@ -95,6 +101,8 @@ const ENT_COL_WHITE%    = 254
 const ENT_COL_RED%      = 251
 const ENT_COL_YELLOW%   = 111
 const ENT_COL_BROWN%    = 28
+const ENT_COL_BLUE%     = 210    '' the quad
+const ENT_COL_GREEN%    = 176    '' the suit
 
 type EntsTele
     model       as integer

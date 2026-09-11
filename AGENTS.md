@@ -1450,6 +1450,10 @@ with `\ 256` and `and 255` -- integer arithmetic, no string handling. That
 recovers `Leaf` 22->20 and nothing else, since no other pair of narrow fields
 shares a record. Three kilobytes on e1m1. Not worth the churn.
 
+The bounds half is done now, in C: `r_cull_box_c` unpacks six bytes to
+six floats once per call and no `asc()` runs anywhere hot. See the e1m1
+memory paragraph.
+
 The wider lesson: none of this addresses why e1m1 fails. It dies creating a
 64,048-byte backbuffer with **183,504 free**, and freeing another 5,776 did
 not change that. Shrinking records is not the blocker.
@@ -2156,6 +2160,19 @@ ammo is the weapon in hand's, `SB_NAILS` cell 19. The e1m1 gate's
 fourteenth arm stands on the nailgun with fire held a second and wants
 27 nails: 30 less three shots.
 
+**The powerups are thirty-second clocks on `fight`**: the quad
+(`quad_until`) makes every pellet and nail four times (T_Damage's
+super_damage_finished), the envirosuit (`suit_until`) turns the slime
+off and lava down to a bite a second. Slime and lava hurt at all now,
+`pl_env_damage`, PlayerPreThink's 4 and 10 a water level; e1m1 has 112
+slime leaves and no lava. `misc_explobox` is an item that is shot, not
+taken: 20 health against the pellets and nails (`pl_box_ray`, its brush
+plus the touch slack), then barrel_explode -- 160 less half the
+distance to the player through the armor and to every monster standing,
+CanDamage's line not asked. Drawn as its 30x30x62 box; the player walks
+through it, no hull being there. Three more e1m1 arms: the quad taken,
+two seconds in the slime pool, the box shot from 100 units.
+
 **Pickups are the map's own `item_health`/`item_shells`**, shipped in
 `ents.bin` after the hides, dropped to the hull floor at load, and drawn
 as flat boxes by `mdl_draw_box` in `d_alias.c` -- six quads, no clip
@@ -2259,12 +2276,20 @@ as `side >> 1` in `d_faces.c`, and `CacheSlot.cls` (11K), which only the
 selftest read and `sc_bord` already held per block. Then, for the dog:
 a model's triangles into page 1 of its EMS handle (20K, the four arrays
 and their plumbing gone), `Plane.ptype` (3.6K, never read), the campath
-arrays only under `-campath` (3K). 15.5K of far heap is free after the
-depth buffer with `MDL_MAX_ENTS` at 48 and both view models loaded,
-DOS's largest block 704 bytes. Next on the list if it tightens:
-the node and leaf bounds at 6 bytes instead of 12 -- the C cull unpacks
-them for nothing, unlike the BASIC attempt this file records -- and
-`sc_slot` at 33K.
+arrays only under `-campath` (3K). The nailgun and the powerups then ran
+the far heap to 7.9K and `Out of string space` -- every kilobyte of code
+is a kilobyte of far heap -- so the node and leaf bounds are six bytes:
+`mkassets.py`'s `bound_bytes` writes `(v + 4096) / 32` a coordinate, the
+min rounded down and the max up, `PackedBounds`; `r_cull_box_c` unpacks
+to six floats up front and `r_leaf_bound` for the spawn scatter. Node
+and Leaf are 16 bytes, 25.6K back: 33.5K of far heap after the depth
+buffer with `MDL_MAX_ENTS` at 48 and three view models loaded. A box
+only grows, so the walk marks a few more leaves: the world's pixels did
+not move on any reference, but a pickup in the far doorway of
+`tools/ref/bench.bmp` is drawn now and `hud.bmp`'s leaf counter reads
+391 for 376 -- both regenerated, 20 and 12 pixels. Next if it tightens:
+`sc_slot` at 33K, the oracle modules out of the production link (12K of
+code).
 
 **A black lit world with every counter normal is a missing allocation.**
 The surface builder's 16K conventional scratch was taken at the first

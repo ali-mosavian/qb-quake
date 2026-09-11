@@ -91,59 +91,63 @@ typedef struct { float x, y, z; } DiskVertex;
    branch on the frustum plane's normal sign to pick the box's near
    corner, same y/z swap copying from bbox (BSP, z-up) into near_point
    (renderer, y-up) -- near_point.y = bbox micro.z, near_point.z = bbox
-   corner.y, matching r_cam_plane_dist's own swap below. bbox.min/max are
-   Vec3i; the assignment into a float DiskVertex is BASIC's own implicit
-   int-to-single conversion, so this does the cast explicitly instead of
-   leaving it for the compiler to decide silently. */
-static int near r_cull_box_c( Bounds far *bbox, DiskPlane far *frustum )
+   corner.y, matching r_cam_plane_dist's own swap below. The box comes
+   packed, a byte a coordinate: unpacked to floats once, up front. */
+static int near r_cull_box_c( PackedBounds far *bbox, DiskPlane far *frustum )
 {
     DiskVertex near_point;
     float dp;
     int i;
+    float mnx = (float) bbox->q[0] * BOUND_Q + BOUND_BASE;
+    float mny = (float) bbox->q[1] * BOUND_Q + BOUND_BASE;
+    float mnz = (float) bbox->q[2] * BOUND_Q + BOUND_BASE;
+    float mxx = (float) bbox->q[3] * BOUND_Q + BOUND_BASE;
+    float mxy = (float) bbox->q[4] * BOUND_Q + BOUND_BASE;
+    float mxz = (float) bbox->q[5] * BOUND_Q + BOUND_BASE;
 
     for ( i = 0; i < 6; i++ ) {
         if ( frustum[i].norm.x > 0.0 ) {
             if ( frustum[i].norm.y > 0.0 ) {
                 if ( frustum[i].norm.z > 0.0 ) {
-                    near_point.x = (float) bbox->min.x;
-                    near_point.y = (float) bbox->min.z;
-                    near_point.z = (float) bbox->min.y;
+                    near_point.x = mnx;
+                    near_point.y = mnz;
+                    near_point.z = mny;
                 } else {
-                    near_point.x = (float) bbox->min.x;
-                    near_point.y = (float) bbox->min.z;
-                    near_point.z = (float) bbox->max.y;
+                    near_point.x = mnx;
+                    near_point.y = mnz;
+                    near_point.z = mxy;
                 }
             } else {
                 if ( frustum[i].norm.z > 0.0 ) {
-                    near_point.x = (float) bbox->min.x;
-                    near_point.y = (float) bbox->max.z;
-                    near_point.z = (float) bbox->min.y;
+                    near_point.x = mnx;
+                    near_point.y = mxz;
+                    near_point.z = mny;
                 } else {
-                    near_point.x = (float) bbox->min.x;
-                    near_point.y = (float) bbox->max.z;
-                    near_point.z = (float) bbox->max.y;
+                    near_point.x = mnx;
+                    near_point.y = mxz;
+                    near_point.z = mxy;
                 }
             }
         } else {
             if ( frustum[i].norm.y > 0.0 ) {
                 if ( frustum[i].norm.z > 0.0 ) {
-                    near_point.x = (float) bbox->max.x;
-                    near_point.y = (float) bbox->min.z;
-                    near_point.z = (float) bbox->min.y;
+                    near_point.x = mxx;
+                    near_point.y = mnz;
+                    near_point.z = mny;
                 } else {
-                    near_point.x = (float) bbox->max.x;
-                    near_point.y = (float) bbox->min.z;
-                    near_point.z = (float) bbox->max.y;
+                    near_point.x = mxx;
+                    near_point.y = mnz;
+                    near_point.z = mxy;
                 }
             } else {
                 if ( frustum[i].norm.z > 0.0 ) {
-                    near_point.x = (float) bbox->max.x;
-                    near_point.y = (float) bbox->max.z;
-                    near_point.z = (float) bbox->min.y;
+                    near_point.x = mxx;
+                    near_point.y = mxz;
+                    near_point.z = mny;
                 } else {
-                    near_point.x = (float) bbox->max.x;
-                    near_point.y = (float) bbox->max.z;
-                    near_point.z = (float) bbox->max.y;
+                    near_point.x = mxx;
+                    near_point.y = mxz;
+                    near_point.z = mxy;
                 }
             }
         }

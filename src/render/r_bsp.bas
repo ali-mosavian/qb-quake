@@ -906,7 +906,14 @@ end function
 ''       lef_buffer itself.
 ''::::::::::
 sub r_leaf_bound ( byval leafnr as integer, b as Bounds )
-    b = lef_buffer( leafnr ).bound
+    dim q as string * 6
+    q = lef_buffer( leafnr ).bound.q
+    b.min.x = asc( mid$( q, 1, 1 ) ) * BOUND_Q + BOUND_BASE
+    b.min.y = asc( mid$( q, 2, 1 ) ) * BOUND_Q + BOUND_BASE
+    b.min.z = asc( mid$( q, 3, 1 ) ) * BOUND_Q + BOUND_BASE
+    b.max.x = asc( mid$( q, 4, 1 ) ) * BOUND_Q + BOUND_BASE
+    b.max.y = asc( mid$( q, 5, 1 ) ) * BOUND_Q + BOUND_BASE
+    b.max.z = asc( mid$( q, 6, 1 ) ) * BOUND_Q + BOUND_BASE
 end sub
 
 ''::::::::::

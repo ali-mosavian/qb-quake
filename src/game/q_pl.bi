@@ -156,6 +156,10 @@ type PlayerCombat
     weapon      as integer     '' the one in hand, a PL_IT_* bit
     nails       as integer
     nail_side   as integer     '' player_nail1/2: the barrel the next nail leaves
+    quad_until  as single      '' super_damage_finished: hits do four times
+    suit_until  as single      '' radsuit_finished: slime does nothing, lava a fifth
+    dmg_time    as single      '' the next slime or lava bite
+    booms       as integer     '' exploding boxes gone, for the bench
     fire_at     as single      '' anim_time of the last shot, the view weapon's frames run from it
 end type
 
@@ -177,6 +181,11 @@ const PL_NG_UP#        = 16.0
 const PL_NG_LIFE#      = 6.0
 const PL_NAILS_CAP%    = 200
 const PL_NAILS_MAX%    = 24    '' in flight at once
+const PL_QUAD_MUL%     = 4
+'' client.qc: lava 10 * waterlevel each 0.2 s (a second in the suit),
+'' slime 4 * waterlevel each second and none in the suit
+const PL_LAVA_DMG%     = 10
+const PL_SLIME_DMG%    = 4
 '' W_FireSuperShotgun: FireBullets (14, dir, '0.14 0.08 0'), two shells,
 '' 0.7 to be ready; with one shell left it fires as the shotgun
 const PL_SSG_RATE#     = 0.7

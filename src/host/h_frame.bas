@@ -162,6 +162,7 @@ declare sub pl_nails_tick ( _
     trig() as TrigEnt _
 )
 declare sub pl_items_touch ( g as Game, item() as ItemEnt )
+declare sub pl_env_damage ( g as Game )
 declare sub pl_select_weapon ( g as Game )
 declare sub pl_respawn ( g as Game )
 declare sub pl_game_reset ( _
@@ -373,6 +374,7 @@ sub host_tick ( _
         if ( fire ) then pl_fire g, mdl_ent(), models(), brush(), planes(), item(), door(), trig(), nail()
         pl_nails_tick g, dt, nail(), mdl_ent(), models(), brush(), planes(), item(), door(), trig()
         pl_items_touch g, item()
+        pl_env_damage g
         '' every soldier's own think -- Quake's 10 Hz, gated inside
         '' mdl_think against g.rdr.anim_time
         ndead = 0
@@ -662,7 +664,20 @@ sub host_render ( _
                                 nds_buffer(), pln_buffer(), frustum() ) ) then
                 bob = item( mdl_i ).pos
                 bob.z = bob.z + 4.0 + 4.0 * sin( g.rdr.anim_time * 3.0 )
-                if ( item( mdl_i ).kind = ENT_ITEM_HEALTH ) then
+                if ( item( mdl_i ).kind = ENT_ITEM_EXPLOBOX ) then
+                    '' the box stands still, b_explob's size
+                    nbox = mdl_draw_box( item( mdl_i ).pos, ENT_BOX_HALF#, ENT_BOX_TOP#, 1.0, 0.0, _
+                                         mtx_fin, xresh, yresh, g.env.z_near, _
+                                         h_dst_dc, ENT_COL_YELLOW%, ENT_COL_BROWN% )
+                elseif ( item( mdl_i ).kind = ENT_ITEM_QUAD ) then
+                    nbox = mdl_draw_box( bob, ENT_ITEM_HALF#, ENT_ITEM_TOP#, cos( g.rdr.anim_time * 2.0 ), _
+                                         sin( g.rdr.anim_time * 2.0 ), mtx_fin, xresh, yresh, g.env.z_near, _
+                                         h_dst_dc, ENT_COL_BLUE%, ENT_COL_WHITE% )
+                elseif ( item( mdl_i ).kind = ENT_ITEM_SUIT ) then
+                    nbox = mdl_draw_box( bob, ENT_ITEM_HALF#, ENT_ITEM_TOP#, cos( g.rdr.anim_time * 2.0 ), _
+                                         sin( g.rdr.anim_time * 2.0 ), mtx_fin, xresh, yresh, g.env.z_near, _
+                                         h_dst_dc, ENT_COL_GREEN%, ENT_COL_WHITE% )
+                elseif ( item( mdl_i ).kind = ENT_ITEM_HEALTH ) then
                     nbox = mdl_draw_box( bob, ENT_ITEM_HALF#, ENT_ITEM_TOP#, cos( g.rdr.anim_time * 2.0 ), _
                                          sin( g.rdr.anim_time * 2.0 ), mtx_fin, xresh, yresh, g.env.z_near, _
                                          h_dst_dc, ENT_COL_RED%, ENT_COL_WHITE% )
