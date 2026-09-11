@@ -1210,6 +1210,7 @@ sub host_main ( _
                 g.pt.present_sum = g.pt.present_sum + ptd
                 if ( ptd > g.pt.present_max ) then g.pt.present_max = ptd
                 if ( ptd < g.pt.present_min ) then g.pt.present_min = ptd
+                g.pt.present_n = g.pt.present_n + 1
             end if
         end if
         if ( g.ft.n > 0 ) then
@@ -1217,6 +1218,7 @@ sub host_main ( _
             g.pt.loop_sum = g.pt.loop_sum + lpd
             if ( lpd > g.pt.loop_max ) then g.pt.loop_max = lpd
             if ( lpd < g.pt.loop_min ) then g.pt.loop_min = lpd
+            g.pt.loop_n = g.pt.loop_n + 1
         end if
         scr_count_frame g
 

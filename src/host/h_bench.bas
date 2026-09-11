@@ -135,11 +135,11 @@ sub host_bench_report ( _
         host_pt_put benchf, "pt_draw", g.pt.draw_min, g.pt.draw_sum, g.pt.draw_max, g.ft.n, 1000.0
         host_pt_put benchf, "pt_build", g.pt.build_min, g.pt.build_sum, g.pt.build_max, g.ft.n, 1000.0
         host_pt_put benchf, "pt_hud", g.pt.hud_min, g.pt.hud_sum, g.pt.hud_max, g.ft.n, 1000.0
-        host_pt_put benchf, "pt_present", g.pt.present_min, g.pt.present_sum, g.pt.present_max, g.ft.n, 1000.0
+        host_pt_put benchf, "pt_present", g.pt.present_min, g.pt.present_sum, g.pt.present_max, g.pt.present_n, 1000.0
         host_pt_put benchf, "pt_mark", g.pt.mark_min, g.pt.mark_sum, g.pt.mark_max, g.ft.n, 1000.0
         host_pt_put benchf, "pt_walk", g.pt.walk_min, g.pt.walk_sum, g.pt.walk_max, g.ft.n, 1000.0
         host_pt_put benchf, "pt_mdl", g.pt.mdl_min, g.pt.mdl_sum, g.pt.mdl_max, g.ft.n, 1000.0
-        host_pt_put benchf, "pt_loop", g.pt.loop_min, g.pt.loop_sum, g.pt.loop_max, g.ft.n, 1000.0
+        host_pt_put benchf, "pt_loop", g.pt.loop_min, g.pt.loop_sum, g.pt.loop_max, g.pt.loop_n, 1000.0
         host_kv benchf, "rdtsc_hz", str$( sys_rdtsc_hz() )
         host_kv benchf, "portal_culled", str$( g.vis.pt_culled )
         print #benchf, "mtri_per_frame " + host_fmt3( g.pt.mtri_n / g.ft.n )

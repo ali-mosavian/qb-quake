@@ -86,6 +86,11 @@ run_frame() {   # $1 = flags, $2 = where to keep BENCH.BMP, $3 = map (default dm
     done
     [[ -f "$VBD_OUT/BENCH.BMP" ]] || { echo "RUN PRODUCED NOTHING"; exit 1; }
     cp "$VBD_OUT/BENCH.BMP" "$2"
+    # A timer whose mean falls outside its own min and max divides by the
+    # wrong count: pt_present read min 0.982 mean 0.975, one frame short.
+    local bad
+    bad=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1 ~ /^pt_/ && ($3 < $2 - 0.001 || $3 > $4 + 0.001) {print $1, $2, $3, $4}')
+    [[ -z "$bad" ]] || { echo "FAIL  timer mean outside min..max: $bad"; exit 1; }
     echo "  $(tr -d '\r' < "$VBD_OUT/bench.txt" |
         awk '/^(frames|ticks|polys|sc_evict) /{printf "%s=%s ",$1,$2}')"
 }

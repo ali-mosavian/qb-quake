@@ -214,6 +214,8 @@ type PhaseTimes
     tk_ls_max as single
     present_sum as single     '' vid_update: blit to the screen
     present_max as single
+    present_n   as long       '' the last frame exits before present and loop
+    loop_n      as long
     present_min as single
 
     ''
