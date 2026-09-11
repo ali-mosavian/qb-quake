@@ -51,6 +51,8 @@ const DL_RADIUS# = 200.0#   '' Quake's own rocket dlight radius
 '' This module's own procedures -- host_advance calls host_tick before
 '' its definition appears below, so it needs a forward declare same as
 '' any cross-module call would.
+declare function qglPrfTake ( byval k as integer ) as long
+declare sub host_q_take ( byval timing as integer, pt as PhaseTimes )
 declare sub host_tick ( _
     g as Game, _
     byval dt as single, _
@@ -583,6 +585,32 @@ sub host_tk ( _
     host_tt_add tt, d
 end sub
 
+'' qglRsPoly's accumulators into their timers, zeroed every frame.
+sub host_q_take ( byval timing as integer, pt as PhaseTimes )
+    dim c(9) as single, cpu as single, k as integer
+    cpu = sys_rdtsc_hz() / 1000000.0
+    for k = 0 to 9
+        c(k) = qglPrfTake( k )
+    next k
+    if ( timing = 0 ) then exit sub
+    '' A lap across one of sys_rdtsc's glitches reads as a whole second
+    '' and would own the sum for the rest of the run. No frame's raster
+    '' is a second; drop the frame rather than the run.
+    for k = 0 to 4
+        if ( c(k) / cpu > 1000000.0 ) then exit sub
+    next k
+    host_tt_add pt.q_tex, c(0) / cpu
+    host_tt_add pt.q_grad, c(1) / cpu
+    host_tt_add pt.q_clip, c(2) / cpu
+    host_tt_add pt.q_fix, c(3) / cpu
+    host_tt_add pt.q_scan, c(4) / cpu
+    host_tt_add pt.q_n, c(5)
+    host_tt_add pt.q_lines, c(6)
+    host_tt_add pt.q_px, c(7)
+    host_tt_add pt.q_plines, c(8)
+    host_tt_add pt.q_ppx, c(9)
+end sub
+
 sub host_tt_add ( tt as TickTimer, byval v as single )
     tt.sum = tt.sum + v
     tt.n = tt.n + 1
@@ -951,6 +979,7 @@ sub host_render ( _
     end if
     host_tk g.ft.n > 0, t0, g.pt.md_view
     if ( g.ft.n > 0 ) then host_tt_add g.pt.md_vis, vis_us
+    host_q_take g.ft.n > 0, g.pt
     if ( g.ft.n > 0 ) then
         ptd = sys_now() - pt0
         g.pt.mdl_sum = g.pt.mdl_sum + ptd

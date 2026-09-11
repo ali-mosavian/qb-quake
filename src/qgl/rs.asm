@@ -247,11 +247,84 @@ qgl$fdzdx       real4   0.0                     ;; only qgl$drawP reads them
 
 
 
+;; qglRsPoly's phases in RDTSC cycles, and its calls: settex, gradients,
+;; clip, fixup-to-scan, scan, count; then scanlines and pixels filled,
+;; affine then perspective. qglPrfTake reads one and zeroes it.
+qgl_cy          dd      10 dup (0)
+
 .data?
 qgl$fx          QVertFx QGL_CLIPV dup (<>)
 qgl$src         QVert   QGL_CLIPV dup (<>)
 
 qgl$ztmp        dq      ?
+
+
+;; eax, edx gone. k -1 only starts the lap.
+CYLAP           macro   k
+                db      0Fh, 31h                ;; rdtsc
+                if      k GE 0
+                mov     edx, eax
+                sub     eax, cy0
+                add     D fs:qgl_cy+k*4, eax    ;; ds may be the texture's
+                mov     cy0, edx
+                else
+                mov     cy0, eax
+                endif
+endm
+
+;; dx:ax = surface sf's row y, for writing. A conventional surface's row
+;; is its table entry, read here; anything else goes through slow, the
+;; accessor -- two far calls deep, and most of a scanline's walk when it
+;; ran for every one. bx, es gone.
+WRROW           macro   sf, y, slow
+                local   acc, have
+                mov     es, W sf+2              ;; a Surface sits at offset 0
+                cmp     es:[Surface.typ], SF_MEM
+                jne     acc
+                mov     bx, y
+                add     bx, es:[Surface.startSL]
+                shl     bx, 2
+                mov     dx, W es:[SF_addrTB][bx]      ;; segment, then
+                mov     ax, W es:[SF_addrTB][bx]+2    ;; offset: the table's order
+                jmp     short have
+acc:            slow
+have:
+endm
+
+;; dx:ax = surface sf's row y through window slot: qglSfWrRowEx's
+;; dispatch without its two far frames. bx, cx gone.
+DCTROW          macro   sf, y, slot
+                local   dead, have
+                push    fs
+                push    di
+                mov     fs, W sf+2
+                mov     bx, fs:[Surface.typ]
+                CHECKKIND bx, dead
+                mov     di, y
+                add     di, fs:[Surface.startSL]
+                shl     di, 2
+                mov     cl, slot
+                call    qgl$dctTB[bx].wrAccessEx
+                jmp     short have
+dead:           xor     ax, ax
+                xor     dx, dx
+have:           pop     di
+                pop     fs
+endm
+
+;; the filler call, its scanline and pixels counted; ds is the texture's
+;; for it
+FILLCALL        macro   k
+                inc     D fs:qgl_cy+k*4
+                push    edx
+                movzx   edx, si
+                add     D fs:qgl_cy+(k+1)*4, edx
+                pop     edx
+                push    ds
+                mov     ds, qgl$tseg
+                call    bx
+                pop     ds
+endm
 
 
                 QGL_CODE
@@ -629,9 +702,11 @@ qglRsPoly     proc    public uses bx cx dx si di ds es,\
                 local   srcp:dword, ringp:dword
                 local   bestv:real4, curv:real4
                 local   vstep:word, vbase:word
+                local   cy0:dword
 
                 mov     ax, @data
                 mov     fs, ax                  ;; DGROUP, for every filler
+                CYLAP   -1
 
                 les     bx, d
                 mov     ax, es
@@ -695,7 +770,7 @@ qglRsPoly     proc    public uses bx cx dx si di ds es,\
                 mov     qgl$fcol, ax
                 mov     D qgl$twhole, 1
                 mov     D qgl$thwhole, 1
-@@havesrc:
+@@havesrc:      CYLAP   0
 
                 ;; whether this is the filler that wants the FPU triple,
                 ;; decided once rather than tested per scanline. The mode
@@ -837,6 +912,7 @@ qglRsPoly     proc    public uses bx cx dx si di ds es,\
                 mov     si, di
 @@:             add     di, T QVert
                 loop    @@top_loop
+                CYLAP   1
 
                 ;;
                 ;; CLIP, walking the ring from the topmost vertex in the
@@ -862,6 +938,7 @@ qglRsPoly     proc    public uses bx cx dx si di ds es,\
                 cmp     ax, 3
                 jl      @@done                  ;; not a polygon any more
                 mov     cnt, ax
+                CYLAP   2
 
                 call    qgl$Fixup               ;; ONCE per polygon
 
@@ -941,11 +1018,16 @@ qglRsPoly     proc    public uses bx cx dx si di ds es,\
                 ;; uglPolyT ends in drawPoly_t2d, uglPolyTP in
                 ;; drawPoly_tp2d, and they differ in how u and v are
                 ;; carried down an edge.
-@@rot_done:     cmp     persp, 0
+@@rot_done:     CYLAP   3
+                cmp     persp, 0
                 jne     @@drawp
                 invoke  qgl$drawA, d, cnt, fillp
-                ret
+                jmp     short @@scanned
 @@drawp:        invoke  qgl$drawP, d, cnt, fillp
+@@scanned:      push    ax
+                CYLAP   4
+                inc     D fs:qgl_cy+5*4
+                pop     ax
                 ret
 
 @@done:         xor     ax, ax
@@ -953,6 +1035,16 @@ qglRsPoly     proc    public uses bx cx dx si di ds es,\
 @@bad:          mov     ax, -1
                 ret
 qglRsPoly     endp
+
+;; qglPrfTake ( k ) -> dx:ax = qgl_cy[k], which is then zeroed
+qglPrfTake    proc    public uses bx, k:word
+                mov     bx, k
+                shl     bx, 2
+                mov     ax, W qgl_cy[bx]
+                mov     dx, W qgl_cy[bx]+2
+                mov     D qgl_cy[bx], 0
+                ret
+qglPrfTake    endp
 
 ;;::::::::::::::
 ;; qgl$drawA -- the scan, AFFINE.
@@ -1184,14 +1276,14 @@ qgl$drawA       proc    near private,\
 ;;
 ;; ---- one scanline ----------------------------------------------------
 ;;
-@@outer:        invoke  qglSfWrRow, d, yy
+@@outer:        WRROW   d, yy, <invoke qglSfWrRow, d, yy>
                 mov     rowo, ax
                 mov     rows, dx
                 mov     zsegv, dx               ;; harmless when depth is off
 
                 cmp     qgl$zmode, QGL_Z_OFF
                 je      @@nodepth
-                invoke  qglSfWrRowEx, qgl$zsf, yy, QGL_Z_SLOT
+                WRROW   qgl$zsf, yy, <DCTROW qgl$zsf, yy, QGL_Z_SLOT>
                 mov     qgl$zline, ax
                 mov     zsegv, dx
 
@@ -1251,10 +1343,7 @@ qgl$drawA       proc    near private,\
                 ;; for the filler. Two instructions a scanline against a
                 ;; table of row addresses that an EMS destination would
                 ;; invalidate the moment its window moved.
-                push    ds
-                mov     ds, qgl$tseg
-                call    bx
-                pop     ds
+                FILLCALL 6
 
                 inc     lines
 
@@ -1509,14 +1598,14 @@ qgl$drawP       proc    near private,\
 ;;
 ;; ---- one scanline ----------------------------------------------------
 ;;
-@@outer:        invoke  qglSfWrRow, d, yy
+@@outer:        WRROW   d, yy, <invoke qglSfWrRow, d, yy>
                 mov     rowo, ax
                 mov     rows, dx
                 mov     zsegv, dx               ;; harmless when depth is off
 
                 cmp     qgl$zmode, QGL_Z_OFF
                 je      @@nodepth
-                invoke  qglSfWrRowEx, qgl$zsf, yy, QGL_Z_SLOT
+                WRROW   qgl$zsf, yy, <DCTROW qgl$zsf, yy, QGL_Z_SLOT>
                 mov     qgl$zline, ax
                 mov     zsegv, dx
 
@@ -1595,10 +1684,7 @@ qgl$drawP       proc    near private,\
                 ;; ds is DGROUP for the walk -- qglSfRow above reaches its
                 ;; own dispatch table through it -- and the texture for the
                 ;; filler.
-                push    ds
-                mov     ds, qgl$tseg
-                call    bx
-                pop     ds
+                FILLCALL 8
 
                 inc     lines
 

@@ -164,6 +164,16 @@ sub host_bench_report ( _
         host_pt_put benchf, "pt_d_lm", g.pt.d_lm.lo, g.pt.d_lm.sum, g.pt.d_lm.hi, g.pt.d_lm.n, 0.001
         host_pt_put benchf, "pt_d_tex", g.pt.d_tex.lo, g.pt.d_tex.sum, g.pt.d_tex.hi, g.pt.d_tex.n, 0.001
         host_pt_put benchf, "pt_d_rast", g.pt.d_rast.lo, g.pt.d_rast.sum, g.pt.d_rast.hi, g.pt.d_rast.n, 0.001
+        host_pt_put benchf, "pt_q_tex", g.pt.q_tex.lo, g.pt.q_tex.sum, g.pt.q_tex.hi, g.pt.q_tex.n, 0.001
+        host_pt_put benchf, "pt_q_grad", g.pt.q_grad.lo, g.pt.q_grad.sum, g.pt.q_grad.hi, g.pt.q_grad.n, 0.001
+        host_pt_put benchf, "pt_q_clip", g.pt.q_clip.lo, g.pt.q_clip.sum, g.pt.q_clip.hi, g.pt.q_clip.n, 0.001
+        host_pt_put benchf, "pt_q_fix", g.pt.q_fix.lo, g.pt.q_fix.sum, g.pt.q_fix.hi, g.pt.q_fix.n, 0.001
+        host_pt_put benchf, "pt_q_scan", g.pt.q_scan.lo, g.pt.q_scan.sum, g.pt.q_scan.hi, g.pt.q_scan.n, 0.001
+        host_pt_put benchf, "pt_q_n", g.pt.q_n.lo, g.pt.q_n.sum, g.pt.q_n.hi, g.pt.q_n.n, 1.0
+        host_pt_put benchf, "pt_q_lines", g.pt.q_lines.lo, g.pt.q_lines.sum, g.pt.q_lines.hi, g.pt.q_lines.n, 1.0
+        host_pt_put benchf, "pt_q_px", g.pt.q_px.lo, g.pt.q_px.sum, g.pt.q_px.hi, g.pt.q_px.n, 1.0
+        host_pt_put benchf, "pt_q_plines", g.pt.q_plines.lo, g.pt.q_plines.sum, g.pt.q_plines.hi, g.pt.q_plines.n, 1.0
+        host_pt_put benchf, "pt_q_ppx", g.pt.q_ppx.lo, g.pt.q_ppx.sum, g.pt.q_ppx.hi, g.pt.q_ppx.n, 1.0
     end if
     g.pt.place_stale = ent_place_stale( g.wld.count.models, models(), nodes(), planes(), brush() )
     host_kv benchf, "place_stale", str$( g.pt.place_stale )
@@ -315,6 +325,16 @@ sub host_pt_init ( g as Game )
     g.pt.d_lm.lo = 1E+09
     g.pt.d_tex.lo = 1E+09
     g.pt.d_rast.lo = 1E+09
+    g.pt.q_tex.lo = 1E+09
+    g.pt.q_grad.lo = 1E+09
+    g.pt.q_clip.lo = 1E+09
+    g.pt.q_fix.lo = 1E+09
+    g.pt.q_scan.lo = 1E+09
+    g.pt.q_n.lo = 1E+09
+    g.pt.q_lines.lo = 1E+09
+    g.pt.q_px.lo = 1E+09
+    g.pt.q_plines.lo = 1E+09
+    g.pt.q_ppx.lo = 1E+09
 end sub
 
 '' One 'name value' line. The caller's str$ keeps each type's own format.

@@ -441,7 +441,38 @@ qglClPolyEx   proc    public uses bx cx dx si di ds es,\
                 push    es
                 pop     ds
 
-                mov     pass, 0
+                ;;
+                ;; WHOLLY INSIDE, the passes would copy the ring four times
+                ;; and change nothing, so it goes straight out. The test is
+                ;; the passes' own: in is x >= x0 and x < x1 -- a vertex ON
+                ;; x1 has distance (x1 - x1) * -1 = -0.0, sign set, out.
+                ;; With every bound >= 0 that is a signed integer compare
+                ;; on the float's bits, and -0.0 and NaN both land on the
+                ;; side the passes put them.
+                ;;
+                mov     si, offset qgl$buf0
+                mov     eax, D qgl$clx0
+                or      eax, D qgl$cly0
+                or      eax, D qgl$clx1
+                or      eax, D qgl$cly1
+                js      @@clip
+                mov     cx, cnt
+@@acc:          mov     eax, D [si].QVert.vx
+                cmp     eax, D qgl$clx0
+                jl      @@clip
+                cmp     eax, D qgl$clx1
+                jge     @@clip
+                mov     eax, D [si].QVert.vy
+                cmp     eax, D qgl$cly0
+                jl      @@clip
+                cmp     eax, D qgl$cly1
+                jge     @@clip
+                add     si, SIZEOF QVert
+                loop    @@acc
+                mov     si, offset qgl$buf0
+                jmp     @@out
+
+@@clip:         mov     pass, 0
                 mov     si, offset qgl$buf0
                 mov     di, offset qgl$buf1
 
@@ -465,7 +496,7 @@ qglClPolyEx   proc    public uses bx cx dx si di ds es,\
                 ;; si now points at the last pass's OUTPUT, because the
                 ;; xchg above ran after it
                 ;;
-                les     di, dst
+@@out:          les     di, dst
                 mov     cx, cnt
                 mov     ax, cx
 @@copy:         call    qgl$Copyv

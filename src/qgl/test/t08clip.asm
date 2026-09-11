@@ -37,6 +37,7 @@ n_bx1           db      'inside vertex untouched$'
 n_cn            db      'corner clip: 5 vertices$'
 n_c0            db      'rotated: first is 32,64$'
 n_c4            db      'and last is 48,64      $'
+n_bt            db      'bottom only: 4 vertices$'
 n_out           db      'wholly outside: none   $'
 n_few           db      'two vertices: none     $'
 n_many          db      'past the ceiling: none $'
@@ -55,6 +56,12 @@ sq_lf           QVert   <-20.0, 10.0, 1.0, 0.0, 0.0>
 tri_cn          QVert   <32.0, 32.0, 1.0, 0.0, 0.0>
                 QVert   <80.0, 32.0, 1.0, 0.0, 0.0>
                 QVert   <32.0, 80.0, 1.0, 0.0, 0.0>
+
+;; inside on x, past the bottom alone: the trivial accept has to look
+;; at every bound, not stop at the first that rules a vertex out
+tri_bt          QVert   <10.0, 10.0, 1.0, 0.0, 0.0>
+                QVert   <50.0, 10.0, 1.0, 0.0, 0.0>
+                QVert   <30.0, 80.0, 1.0, 0.0, 0.0>
 
 tri_out         QVert   <100.0, 10.0, 1.0, 0.0, 0.0>
                 QVert   <120.0, 10.0, 1.0, 0.0, 0.0>
@@ -139,6 +146,10 @@ tmain           proc    far public uses bx cx dx si di es
                 invoke  q_at, 4, QVert.vy, 1
                 add     ax, bx                  ;; 48 + 64
                 CHK     n_c4, ax, 112
+
+                mov     word ptr srcp, offset tri_bt
+                invoke  qglClPoly, srcp, 3, dstp, 0
+                CHK     n_bt, ax, 4
 
                 ;;
                 ;; 4. the refusals

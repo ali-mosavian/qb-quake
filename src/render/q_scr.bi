@@ -206,6 +206,17 @@ type PhaseTimes
     d_lm      as TickTimer
     d_tex     as TickTimer
     d_rast    as TickTimer
+    '' qglRsPoly's phases, every caller's, microseconds a frame; q_n calls
+    q_tex     as TickTimer
+    q_grad    as TickTimer
+    q_clip    as TickTimer
+    q_fix     as TickTimer
+    q_scan    as TickTimer
+    q_n       as TickTimer
+    q_lines   as TickTimer    '' scanlines and pixels filled: affine
+    q_px      as TickTimer
+    q_plines  as TickTimer    '' and perspective
+    q_ppx     as TickTimer
     present_sum as single     '' vid_update: blit to the screen
     present_max as single
     present_n   as long       '' the last frame exits before present and loop
