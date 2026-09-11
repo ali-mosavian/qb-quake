@@ -846,6 +846,7 @@ sub host_init ( _
 
             '' every other one a knight, when its model loaded
             mdl_ent( mdl_i ).kind = MDL_KIND_ARMY%
+            mdl_ent( mdl_i ).patrol = -1
             if ( g.kmdl.loaded and ( mdl_i and 1 ) ) then mdl_ent( mdl_i ).kind = MDL_KIND_KNIGHT%
             mdl_pick_section g, mdl_ent(), mdl_i, mdl_spawn_fallback, mdl_spawn_org
             mdl_spawn g, mdl_ent( mdl_i ), mdl_spawn_org, mdl_buffer(), brush(), pln_buffer()

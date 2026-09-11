@@ -99,6 +99,8 @@ declare sub pl_land ( g as Game )
 declare function pl_item_sound ( g as Game, it as ItemEnt ) as integer
 declare function pl_key_name ( byval wt as integer, byval kind as integer ) as string
 declare sub ent_say ( g as Game, msg as string )
+declare sub ent_corner_at ( byval i as integer, c as PathCorner )
+declare sub mdl_patrol_to ( ent as MdlEnt, byval i as integer )
 declare sub ent_use_targets ( _
     g as Game, _
     byval id as integer, _
@@ -1252,6 +1254,12 @@ sub mdl_spawn ( _
     ent.anim_frame = 0
     ent.goal.x = org.x : ent.goal.y = org.y : ent.goal.z = org.z
     ent.wander_ticks = 0
+    '' walkmonster_start_go: a target is a path_corner, and th_walk at once
+    ent.corner = ent.patrol
+    if ( ent.corner >= 0 ) then
+        mdl_patrol_to ent, ent.corner
+        ent.state = MDL_ST_RUN%
+    end if
     if ( ent.kind = MDL_KIND_KNIGHT% ) then
         ent.health = KNIGHT_HEALTH%
     elseif ( ent.kind = MDL_KIND_DOG% ) then
@@ -1709,6 +1717,15 @@ end function
 ''       goal just times out in mdl_think (MDL_WANDER_MAXTICKS%), the
 ''       same as a chase the compass search cannot route around.
 ''::::::::::::::
+'' the goal is corner i, and the face towards it (t_movetarget)
+sub mdl_patrol_to ( ent as MdlEnt, byval i as integer )
+    dim c as PathCorner
+    ent_corner_at i, c
+    ent.corner = i
+    ent.goal = c.org
+    ent.ideal_yaw = mdl_vectoyaw( c.org.x - ent.pos.x, c.org.y - ent.pos.y )
+end sub
+
 sub mdl_pick_goal ( ent as MdlEnt )
     dim ang as single, dist as single
 
@@ -1767,6 +1784,7 @@ sub mdl_think ( _
     dim knight as integer, stepped as integer
     dim dog as integer, dmg as integer
     dim fin as Vec3, tr as TraceResult, dz as single
+    dim corner as PathCorner
 
     if ( m.loaded = 0 ) then exit sub
     knight = ( ent.kind = MDL_KIND_KNIGHT% )
@@ -1851,8 +1869,12 @@ sub mdl_think ( _
             ent.anim_frame = 0
             ent.wander_ticks = 0
         elseif ( g.rdr.anim_time >= ent.stand_until ) then
-            mdl_pick_goal ent
-            ent.ideal_yaw = mdl_vectoyaw( ent.goal.x - ent.pos.x, ent.goal.y - ent.pos.y )
+            if ( ent.corner >= 0 ) then
+                mdl_patrol_to ent, ent.corner
+            else
+                mdl_pick_goal ent
+                ent.ideal_yaw = mdl_vectoyaw( ent.goal.x - ent.pos.x, ent.goal.y - ent.pos.y )
+            end if
             ent.state = MDL_ST_RUN%
             ent.anim_frame = 0
             ent.wander_ticks = 0
@@ -1951,9 +1973,32 @@ sub mdl_think ( _
             exit sub
         end if
         goal.x = ent.goal.x : goal.y = ent.goal.y : goal.z = ent.goal.z
+        if ( ent.corner >= 0 ) then dist = MDL_PATROL_STEP#
     end if
     mdl_move_to_goal g, ent, goal, dist, g.wld.count.models, models(), brush(), planes()
     ent.anim_frame = ( ent.anim_frame + 1 ) mod m.nrun
+
+    '' t_movetarget: at the corner, its wait standing, then the next; the
+    '' last corner is stood at for good (movetarget = world, th_stand)
+    if ( ent.hunting = 0 and ent.corner >= 0 ) then
+        dx = ent.pos.x - ent.goal.x : dy = ent.pos.y - ent.goal.y
+        if ( dx*dx + dy*dy < MDL_WANDER_ARRIVE#*MDL_WANDER_ARRIVE# ) then
+            ent_corner_at ent.corner, corner
+            if ( corner.nxt < 0 ) then
+                ent.corner = -1
+                ent.state = MDL_ST_STAND%
+                ent.stand_until = 1.0E+9
+            elseif ( corner.wait > 0.0 ) then
+                ent.corner = corner.nxt
+                ent.state = MDL_ST_STAND%
+                ent.stand_until = g.rdr.anim_time + corner.wait
+            else
+                mdl_patrol_to ent, corner.nxt
+            end if
+            ent.anim_frame = 0
+        end if
+        exit sub
+    end if
 
     '' Own-goal wandering rests on arrival (or gives up after a timeout,
     '' the same compass search a real chase can also fail to route

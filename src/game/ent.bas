@@ -30,6 +30,7 @@ dim shared ent_corner() as PathCorner
 '' This module's own procedures.
 ''
 declare sub ent_train_init ( p as PlatEnt, brush() as BrushModel )
+declare sub ent_corner_at ( byval i as integer, c as PathCorner )
 declare sub ent_door_key ( _
     g as Game, _
     byval k as integer, _
@@ -338,6 +339,7 @@ function ent_load_monsters ( _
             mdl_ent( n ).kind = mr.kind
             if ( mr.kind = MDL_KIND_KNIGHT% and g.kmdl.loaded = 0 ) then mdl_ent( n ).kind = MDL_KIND_ARMY%
             if ( mr.kind = MDL_KIND_DOG% and g.dmdl.loaded = 0 ) then mdl_ent( n ).kind = MDL_KIND_ARMY%
+            mdl_ent( n ).patrol = mr.first
             mdl_spawn g, mdl_ent( n ), mr.org, models(), brush(), planes()
             mdl_ent( n ).yaw = mr.angle
             mdl_ent( n ).ideal_yaw = mr.angle
@@ -885,6 +887,11 @@ sub ent_reset ( _
         if ( plat(k).kind = ENT_PLAT_KIND_TRAIN ) then ent_train_init plat(k), brush()
     next k
     g.fight.msg_until = 0.0
+end sub
+
+'' the corner table for the other modules: a monster's patrol
+sub ent_corner_at ( byval i as integer, c as PathCorner )
+    c = ent_corner( i )
 end sub
 
 '' func_train_find: the brush's mins to the first corner; one with a

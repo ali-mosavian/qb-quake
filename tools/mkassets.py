@@ -636,7 +636,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
                               float(kv.get('speed', '0')),
                               float(kv.get('height', '0'))))
             case str(c) if c in mon_kind:
-                mons.append((mon_kind[c], vec(kv.get('origin', '0 0 0')), float(kv.get('angle', '0'))))
+                mons.append((mon_kind[c], vec(kv.get('origin', '0 0 0')), float(kv.get('angle', '0')),
+                             kv.get('target', '')))
             case str(c) if c in item_kind:
                 items.append((item_kind[c], item_amount(c, int(kv.get('spawnflags', '0'))),
                               name_id(kv.get('target', '')), vec(kv.get('origin', '0 0 0'))))
@@ -656,8 +657,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
                                 len(teles), len(plats), len(hides), len(items), len(doors), len(uses), len(mons),
                                 len(ambs), len(trains), len(corners), worldtype,
                                 next_map[:8].encode('latin1').ljust(8)))
-    for kind, org, yaw in mons:
-        buf += struct.pack('<h3ff', kind, *org, yaw)
+    for kind, org, yaw, target in mons:
+        buf += struct.pack('<h3ffh', kind, *org, yaw, corner_at.get(target, -1))   # its patrol's first corner
     for m, org, yaw in teles:
         buf += struct.pack('<h3ff', m, *org, yaw)
     for m, speed, height in plats:

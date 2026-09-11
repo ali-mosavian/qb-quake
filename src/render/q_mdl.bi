@@ -92,6 +92,7 @@ const DOG_LEAP_DMG#      = 10.0  '' Dog_JumpTouch: 10 + 10 * random
 const MDL_WANDER_MIN#     = 64.0    '' shortest own-goal wander hop
 const MDL_WANDER_MAX#     = 256.0   '' longest own-goal wander hop
 const MDL_WANDER_ARRIVE#  = 24.0    '' close enough counts as arrived
+const MDL_PATROL_STEP#    = 2.0     '' ai_walk's stride a think: army_walk's average
 const MDL_WANDER_MAXTICKS% = 100    '' give up after 10s of think-ticks (10Hz)
 const MDL_STAND_MIN#      = 1.0     '' shortest idle pause between wanders
 const MDL_STAND_MAX#      = 4.0     '' longest idle pause between wanders
@@ -153,6 +154,8 @@ type MdlEnt
     kind        as integer     '' MDL_KIND_ARMY%, KNIGHT or DOG
     vel         as Vec3        '' a leaping dog's, MOVETYPE_STEP off the ground
     leapt       as integer     '' this leap's Dog_JumpTouch has landed its damage
+    patrol      as integer     '' the map's target path_corner, -1 none; corner the one bound for
+    corner      as integer
 end type
 
 '' A triangle on disk and in the model's page 1: three vertex indices and

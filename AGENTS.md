@@ -2447,6 +2447,18 @@ divides by each nail's own speed now, not the nailgun's 1000. The e1m2
 gate's fourth arm stands in the trap's trigger for 2.5 s and wants
 health under 100.
 
+**A monster with a `target` patrols** (walkmonster_start_go's
+th_walk): `EntsMon.first` is its path_corner in ent.bas's corner table,
+`MdlEnt.patrol` keeps it for the respawn and `corner` is the one bound
+for. `mdl_patrol_to` sets the goal and the facing (t_movetarget), the
+walk is the run cycle at `MDL_PATROL_STEP` a think -- army_walk's
+average stride, 18 u/s, since no walk frames fit the page -- and
+arrival within 24 takes the next corner, stands the corner's wait, or
+stands for good at a corner with no target. FindTarget runs every
+think of the walk as before, and a hunt ends the patrol. The e1m1
+gate's patrol arm runs ten seconds with the AI on and wants a soldier
+between (950,2048) and (1200,2048); the run read 1105.
+
 **BC miscompiles a store of a single into a member of an indexed
 element when it is the second such store in a row.** `door(k).model = m`
 then `door(k).speed = dr.speed`: the second keeps `k*70` cached in AX,

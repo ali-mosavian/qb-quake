@@ -419,6 +419,17 @@ PY
     else
         echo "FAIL  e1m1 boxwall: px ${bx:-none}, the walk went through the box"; rc=1
     fi
+    # the patrols, AI on from the spawn: the soldier at (1232,2088) walks
+    # its corners (1232,2048) then (880,2048) at ai_walk's pace, and ten
+    # seconds in some ent line stands on y 2048 between x 950 and 1200
+    run_frame "-lm -nostats -yaw 270 -bench 400 -ticks 600" "$VBD_OUT/e1m1-patrol.bmp" e1m1.bsp
+    np=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1 ~ /^ent[0-9]/ && $7 > 2040 && $7 < 2056 && $6 > 950 && $6 < 1200' | wc -l | tr -d ' ')
+    if [[ "${np:-0}" -ge 1 ]]; then
+        echo "PASS  e1m1 patrol: a soldier on its way along y 2048"
+    else
+        echo "FAIL  e1m1 patrol: no soldier between (950,2048) and (1200,2048) after 600 ticks"; rc=1
+        tr -d '\r' < "$VBD_OUT/bench.txt" | grep '^ent[0-9]'
+    fi
     # and the level after it. LAST: it leaves e1m2's assets staged. The
     # slipgate walk with fire held and the soldier behind the exit awake:
     # two seconds into the intermission the run writes NEXT.BAT, run.bat

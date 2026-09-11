@@ -86,6 +86,7 @@ type EntsMon
     kind        as integer      '' MDL_KIND_*
     org         as Vec3
     angle       as single       '' the map's, CCW from +x
+    first       as integer      '' its target path_corner, the patrol's start; -1 none
 end type
 
 type EntsItem
