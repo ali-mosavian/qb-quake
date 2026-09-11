@@ -2249,13 +2249,16 @@ monster ring `main.bas` scatters on a map with no monsters of its own
 is seeded from the map's angle as before, so the crowd the fight and
 model gates stand beside stays put. The gate aims with `-yaw 270`.
 
-**The map's monsters come from ents.bin.** mkassets emits every
-`monster_army` and `monster_knight` not flagged NOT_EASY (256) --
-easy is the skill played -- with origin and angle, first in the file;
+**The map's monsters come from ents.bin, and the skill is the assets'.**
+`mkassets.py map base out [skill]` keeps every entity its skill allows
+-- NOT_EASY 256, NOT_MEDIUM 512, NOT_HARD 1024, on monsters, items and
+triggers alike; nightmare is hard's set -- and `make assets SKILL=2`
+builds a hard dm3ish. Easy is the default and what every gate plays.
+e1m1 has 10 monsters on easy, 23 on normal, 42 on hard; `MDL_MAX_ENTS`
+is 48 for it. The monsters ship with origin and angle, first in the file;
 `ent_load_monsters` spawns them through `mdl_spawn` and faces them the
 map's way (a model's yaw is Quake's, CCW from +x, no mirror). Nine
-soldiers and a dog on e1m1. `MDL_MAX_ENTS`
-is 12; a map with none, dm3ish, still gets the scattered crowd of
+soldiers and a dog on e1m1. A map with none, dm3ish, still gets the scattered crowd of
 `MDL_CROWD`, eight. The e1m1 image arms run `-noai`: a soldier
 behind the exit camera shot the player inside the second and the
 health digits moved the frame. `tools/ref/e1m1-spawn.bmp` moved by 13

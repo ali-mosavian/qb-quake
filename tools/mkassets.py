@@ -400,7 +400,7 @@ ENT_PAIR = re.compile(r'"([^"]*)"\s*"([^"]*)"')
 TRIG_ONCE, TRIG_MULTI, TRIG_COUNTER, TRIG_BUTTON, TRIG_EXIT, TRIG_SHOOT = 0, 1, 2, 3, 4, 5   # ENT_TRIG_*
 
 
-def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> bytes:
+def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skill: int) -> bytes:
     # Resolved here, not on the target: BASIC strings cap at 32,767 bytes
     # and e1m3's entities lump is 45,762 -- mod_find_spawn died at error 5
     # before anything else could. The renderer wants four facts out of the
@@ -508,8 +508,13 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
         m = int(v[1:]) if v.startswith('*') and v[1:].isdigit() else 0
         return m if 0 < m < nmodels else 0
 
+    # NOT_EASY 256, NOT_MEDIUM 512, NOT_HARD 1024, on any entity -- e1m1's
+    # ambush hints exist only below hard; nightmare is hard's set
+    skip = 256 << min(skill, 2)
     for block in text.split('{')[1:]:
         kv = dict(ENT_PAIR.findall(block.split('}')[0]))
+        if int(kv.get('spawnflags', '0')) & skip:
+            continue
         match kv.get('classname'):
             case 'worldspawn':
                 title = kv.get('message', '')
@@ -548,8 +553,7 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
                 plats.append((model(kv['model']),
                               float(kv.get('speed', '0')),
                               float(kv.get('height', '0'))))
-            case str(c) if c in mon_kind and not int(kv.get('spawnflags', '0')) & 256:
-                # 256 is NOT_EASY, and easy is the skill played here
+            case str(c) if c in mon_kind:
                 mons.append((mon_kind[c], vec(kv.get('origin', '0 0 0')), float(kv.get('angle', '0'))))
             case str(c) if c in item_kind:
                 items.append((item_kind[c], item_amount(c, int(kv.get('spawnflags', '0'))),
@@ -578,7 +582,7 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
     return bytes(buf)
 
 
-def convert_lumps(d, lumps, outdir):
+def convert_lumps(d, lumps, outdir, skill):
     """Convert each lump from its on-disk layout to the renderer's own.
 
     model.bas did this per element, in BASIC, copying field by field -- and
@@ -676,7 +680,7 @@ def convert_lumps(d, lumps, outdir):
     ent_text = lump(0).split(b'\0')[0].decode('latin-1')
     nmodels = lumps[14][1] // 64
     boxes = [struct.unpack_from('<6f', lump(14), m * 64) for m in range(nmodels)]
-    out['ents.bin'] = parse_entities(ent_text, nmodels, boxes)
+    out['ents.bin'] = parse_entities(ent_text, nmodels, boxes, skill)
 
     # marksurfaces, models: identical either side
     out['lface.bld'] = lump(11)
@@ -778,8 +782,9 @@ def convert_lumps(d, lumps, outdir):
 
 def main():
     if len(sys.argv) < 4:
-        raise SystemExit("usage: mkassets.py <map.bsp> <base.dat> <outdir>")
+        raise SystemExit("usage: mkassets.py <map.bsp> <base.dat> <outdir> [skill 0..3, 0]")
     bsp, packpath, outdir = sys.argv[1], sys.argv[2], sys.argv[3]
+    skill = int(sys.argv[4]) if len(sys.argv) > 4 else 0
     os.makedirs(outdir, exist_ok=True)
     d   = open(bsp, 'rb').read()
     pal = load_palette(pack_read(packpath, 'color/palette.lmp'))
@@ -808,7 +813,7 @@ def main():
 
     lumps   = read_lumps(d)
     print("converting lumps ...", flush=True)
-    convert_lumps(d, lumps, outdir)
+    convert_lumps(d, lumps, outdir, skill)
 
     toff, _ = lumps[2]
     ntex    = struct.unpack_from('<i', d, toff)[0]

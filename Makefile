@@ -110,7 +110,7 @@ build: $(EXE)
 assets: $(ASSETS) $(MDL_ASSETS) $(GFX_ASSETS) $(CAM_ASSETS)   ## regenerate the preprocessed textures
 
 $(ASSETS): data/$(MAP) data/base.dat tools/mkassets.py tools/mkportals.py
-	@python3 tools/mkassets.py data/$(MAP) data/base.dat data/assets
+	@python3 tools/mkassets.py data/$(MAP) data/base.dat data/assets $(SKILL)
 
 # .geo stands in for the three files mkmdl.py writes, the way assets.zip
 # stands in for the texture set.
