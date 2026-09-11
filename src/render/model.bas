@@ -267,7 +267,7 @@ sub mod_open ( _
     g.wld.count.leaves = g.wld.file.head.leaves.size \ len( leaf_tmp )
     pln_count = g.wld.file.head.planes.size \ len( plane_tmp )
     g.wld.count.nodes = g.wld.file.head.nodes.size \ len( node_tmp )
-    g.wld.count.models = g.wld.file.head.models.size \ len( models(0) )
+    g.wld.count.models = g.wld.file.head.models.size \ 64    '' the disk record; Submodel is the narrowed one
     g.wld.count.tex_infos = g.wld.file.head.tex_info.size \ len( tex_info_tmp )
     g.wld.count.clips = g.wld.file.head.clip_node.size \ len( clip_tmp )
     seek #g.wld.file.handle, g.wld.file.head.mip_tex.offs+1

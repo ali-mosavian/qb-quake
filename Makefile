@@ -131,11 +131,11 @@ $(foreach m,$(MAPS),data/$(m).bsp): data/%.bsp: $(PAK) tools/pakget.py
 
 data/maps/%/assets.zip: data/%.bsp data/base.dat tools/mkassets.py tools/mkportals.py
 	@mkdir -p data/maps/$*
-	@python3 tools/mkassets.py data/$*.bsp data/base.dat data/maps/$* $(SKILL)
+	@python3 tools/mkassets.py data/$*.bsp data/base.dat data/maps/$* $(or $(SKILL),0) $(PAK)
 	@cp data/$*.bsp data/maps/$*/
 
 $(ASSETS): data/$(MAP) data/base.dat tools/mkassets.py tools/mkportals.py
-	@python3 tools/mkassets.py data/$(MAP) data/base.dat data/assets $(SKILL)
+	@python3 tools/mkassets.py data/$(MAP) data/base.dat data/assets $(or $(SKILL),0) $(PAK)
 
 # .geo stands in for the three files mkmdl.py writes, the way assets.zip
 # stands in for the texture set.

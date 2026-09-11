@@ -2840,6 +2840,7 @@ sub pl_item_add ( _
     item( g.item_count ).kind = kind
     item( g.item_count ).amount = amount
     item( g.item_count ).pos = org
+    item( g.item_count ).crate = -1
     item( g.item_count ).gone = 0
     g.item_count = g.item_count + 1
 end sub

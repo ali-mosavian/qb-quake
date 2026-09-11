@@ -25,6 +25,8 @@ declare sub qglMousePos ( byval x as integer, byval y as integer )
 
 '' the map's path_corners, this module's: the trains ride them
 dim shared ent_corner() as PathCorner
+'' the pickups' b_*.bsp boxes, copied out by ent_crate
+dim shared crate_tab() as CrateModel
 
 ''
 '' This module's own procedures.
@@ -258,6 +260,15 @@ end sub
 '' name: ent_open_bin
 '' desc: Opens the ents.bin member and validates it against this map.
 ''::::::::::
+'' A pickup's box, copied out: the table stays this module's, as the
+'' corners do, and h_frame draws from the copy.
+sub ent_crate ( _
+    byval k as integer, _
+    c as CrateModel _
+)
+    c = crate_tab( k )
+end sub
+
 sub ent_open_bin ( _
     g as Game, _
     u as integer, _
@@ -419,6 +430,7 @@ sub ent_load_teleports ( _
     redim tele( h.ntele ) as Teleporter
     redim plat( h.nplat + h.ntrain ) as PlatEnt
     redim ent_corner( h.ncorner ) as PathCorner
+    redim crate_tab( h.ncrate ) as CrateModel
     redim door( h.ndoor ) as DoorEnt
     redim trig( h.ntrig ) as TrigEnt
     '' room after the map's items for one backpack a monster, the crowd's
@@ -509,6 +521,7 @@ sub ent_load_teleports ( _
         item( g.item_count ).kind = ir.kind
         item( g.item_count ).amount = ir.amount
         item( g.item_count ).target = ir.target
+        item( g.item_count ).crate = ir.crate
         item( g.item_count ).pos  = ir.org
         item( g.item_count ).gone = 0
         g.item_count = g.item_count + 1
@@ -557,6 +570,9 @@ sub ent_load_teleports ( _
     next i
     for  i = 0 to h.ncorner - 1
         ent_get u, clng( varseg( ent_corner(i) ) ) * 65536& + (clng( varptr( ent_corner(i) ) ) and 65535&), len( ent_corner(i) )
+    next i
+    for  i = 0 to h.ncrate - 1
+        ent_get u, clng( varseg( crate_tab(i) ) ) * 65536& + (clng( varptr( crate_tab(i) ) ) and 65535&), len( crate_tab(i) )
     next i
     for  i = 0 to g.plat_count - 1
         if ( plat(i).kind = ENT_PLAT_KIND_TRAIN ) then ent_train_init plat(i), brush()

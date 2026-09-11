@@ -58,6 +58,7 @@ type EntsHead
     ntrain      as integer
     ncorner     as integer
     worldtype   as integer      '' worldspawn's: the keys' names and sounds
+    ncrate      as integer      '' the pickups' b_*.bsp boxes, after the corners
     gravity     as single       '' world.qc's sv_gravity: 100 on e1m8, 800 elsewhere
     next_map    as string * 8   '' trigger_changelevel's map, space padded; blank for none
 end type
@@ -94,6 +95,7 @@ type EntsItem
     kind        as integer
     amount      as integer
     target      as integer      '' SUB_UseTargets on the touch: a key opens its door
+    crate       as integer      '' its box in the crate table, or -1: a flat box
     org         as Vec3
 end type
 
@@ -104,8 +106,18 @@ type ItemEnt
     kind        as integer
     amount      as integer     '' healamount or aflag
     target      as integer     '' fired when taken
+    crate       as integer     '' CrateModel index, or -1: a flat box
     pos         as Vec3         '' BSP space, on the floor
     gone        as integer
+end type
+
+'' A pickup's b_*.bsp as tools/mkassets.py cut it: the box's size and
+'' five textured faces -- the bottom is on the floor -- each an atlas
+'' id past the map's textures, its +N frame count, and four corners as
+'' (corner bits, u*32, v*32) bytes. Only d_alias.c reads the faces.
+type CrateModel
+    size        as Vec3
+    faces       as string * 80  '' 5 x { tex, frames as integer; 12 bytes }
 end type
 
 '' An ambient_* point, last in the file: the SND_* it loops and 255

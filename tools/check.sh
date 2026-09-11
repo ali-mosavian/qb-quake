@@ -256,7 +256,7 @@ PY
     fi
     build_exe
     python3 "$ROOT/tools/mkassets.py" "$ROOT/data/e1m1.bsp" "$ROOT/data/base.dat" \
-        "$VBD_OUT/e1m1-assets" > /dev/null || { echo "FAIL  e1m1: mkassets"; exit 1; }
+        "$VBD_OUT/e1m1-assets" 0 "$PAK" > /dev/null || { echo "FAIL  e1m1: mkassets"; exit 1; }
     # the zip AND the flat atlases beside the exe: dm3ish's texr.raw under
     # e1m1's offset table drew every texture as some other one
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$VBD_OUT/e1m1-assets/$f" "$VBD_OUT/$f"; done

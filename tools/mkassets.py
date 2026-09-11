@@ -16,6 +16,8 @@ import hashlib
 import struct, sys, os, math
 import re
 import zlib
+from dataclasses import dataclass
+from dataclasses import field
 
 import mksnd
 
@@ -421,7 +423,134 @@ TRIG_SHOOTER = 7
 KEY_NAMES = ('key', 'runekey', 'keycard')   # items.qc's netname by worldtype
 
 
-def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skill: int, gravity: float) -> bytes:
+
+@dataclass(slots=True, frozen=True)
+class CrateSrc:
+    size: tuple[float, float, float]
+    faces: list[tuple[str, list[tuple[int, int, int]]]]   # texture, 4 x (corner bits, u*32, v*32)
+    textures: dict[str, tuple[bytes, int]]                # name -> (buffer, miptex offset)
+
+
+def pack_members(path: str, prefix: str) -> dict[str, bytes]:
+    d = open(path, 'rb').read()
+    magic, dirofs, dirlen = struct.unpack_from('<4sii', d, 0)
+    if magic != b'PACK':
+        raise SystemExit(f"{path} is not a PACK archive")
+    out: dict[str, bytes] = {}
+    for i in range(dirlen // 64):
+        e = dirofs + 64 * i
+        name = d[e:e + 56].split(b'\0')[0].decode('latin-1')
+        off, ln = struct.unpack_from('<ii', d, e + 56)
+        if name.startswith(prefix):
+            out[name[len(prefix):]] = d[off:off + ln]
+    return out
+
+
+def crate_src(b: bytes) -> CrateSrc:
+    # a b_*.bsp is one box from the origin: six faces, the bottom on the
+    # floor and never shipped. u,v are the face's own, shifted up by whole
+    # textures so the least is in [0,1) -- the filler wraps
+    h = struct.unpack_from('<i30i', b, 0)
+    lump = lambda k: (h[1 + 2 * k], h[2 + 2 * k])  # noqa: E731
+    vo, vl = lump(3)
+    verts = [struct.unpack_from('<3f', b, vo + j * 12) for j in range(vl // 12)]
+    eo, el = lump(12)
+    edges = [struct.unpack_from('<2H', b, eo + j * 4) for j in range(el // 4)]
+    so, sl = lump(13)
+    sedges = [struct.unpack_from('<i', b, so + j * 4)[0] for j in range(sl // 4)]
+    to, tl = lump(6)
+    tinf = [struct.unpack_from('<8fii', b, to + j * 40) for j in range(tl // 40)]
+    xo, _ = lump(2)
+    names: list[tuple[str, int, int]] = []
+    textures: dict[str, tuple[bytes, int]] = {}
+    for t in range(struct.unpack_from('<i', b, xo)[0]):
+        o = struct.unpack_from('<i', b, xo + 4 + t * 4)[0]
+        tn, w, hh = struct.unpack_from('<16sii', b, xo + o)
+        name = tn.split(b'\0')[0].decode('latin-1')
+        names.append((name, w, hh))
+        textures[name] = (b, xo + o)
+    size = tuple(max(v[i] for v in verts) for i in range(3))
+    faces: list[tuple[str, list[tuple[int, int, int]]]] = []
+    fo, fl = lump(7)
+    for j in range(fl // 20):
+        _, _, fe, ne, ti = struct.unpack_from('<hhihh', b, fo + j * 20)
+        vs = []
+        for k in range(ne):
+            e = sedges[fe + k]
+            vs.append(verts[edges[abs(e)][0 if e >= 0 else 1]])
+        if all(v[2] == 0.0 for v in vs):
+            continue
+        t = tinf[ti]
+        name, tw, th = names[t[8]]
+        uv = [((t[0] * x + t[1] * y + t[2] * z + t[3]) / tw, (t[4] * x + t[5] * y + t[6] * z + t[7]) / th)
+              for x, y, z in vs]
+        du = -math.floor(min(u for u, _ in uv))
+        dv = -math.floor(min(v for _, v in uv))
+        faces.append((name, [((x > 0) | (y > 0) << 1 | (z > 0) << 2, round((u + du) * 32), round((v + dv) * 32))
+                             for (x, y, z), (u, v) in zip(vs, uv)]))
+        if len(vs) != 4:
+            raise SystemExit(f"crate face {j} has {len(vs)} vertices")
+    if len(faces) != 5:
+        raise SystemExit(f"crate has {len(faces)} faces off the floor, not 5")
+    return CrateSrc(size, faces, textures)
+
+
+def load_crates(pak: str) -> dict[str, CrateSrc]:
+    if not pak or not os.path.exists(pak):
+        return {}
+    return {n[:-4]: crate_src(b) for n, b in pack_members(pak, 'maps/').items() if n.startswith('b_')}
+
+
+def crate_name(classname: str, amount: int) -> str | None:
+    # items.qc's setmodel by spawnflags, which item_amount already read
+    match classname, amount:
+        case 'item_health', 15: return 'b_bh10'
+        case 'item_health', 100: return 'b_bh100'
+        case 'item_health', _: return 'b_bh25'
+        case 'item_shells', 40: return 'b_shell1'
+        case 'item_shells', _: return 'b_shell0'
+        case 'item_spikes', 50: return 'b_nail1'
+        case 'item_spikes', _: return 'b_nail0'
+        case 'item_rockets', 10: return 'b_rock1'
+        case 'item_rockets', _: return 'b_rock0'
+        case 'misc_explobox', _: return 'b_explob'
+        case _: return None
+
+
+@dataclass(slots=True)
+class CrateSet:
+    src: dict[str, CrateSrc]
+    tex_base: int                                            # the map's own texture count
+    used: list[str] = field(default_factory=list)            # models in crate-index order
+    tex: list[tuple[str, bytes, int]] = field(default_factory=list)   # atlas cells after the map's
+
+    def crate(self, name: str | None) -> int:
+        if name is None or name not in self.src:
+            return -1
+        if name not in self.used:
+            self.used.append(name)
+        return self.used.index(name)
+
+    def tex_id(self, model: str, name: str) -> tuple[int, int]:
+        # a +0name face brings every +Nname frame, consecutive: the
+        # renderer steps them at 10 Hz as it does the world's chains
+        textures = self.src[model].textures
+        frames = sorted(n for n in textures if n[0] == '+' and n[2:] == name[2:]) if name[0] == '+' else [name]
+        ids = []
+        for n in frames:
+            if n not in [t[0] for t in self.tex]:
+                self.tex.append((n, *textures[n]))
+            ids.append(self.tex_base + [t[0] for t in self.tex].index(n))
+        if ids != list(range(ids[0], ids[0] + len(ids))):
+            raise SystemExit(f"{name}'s frames are not consecutive in the atlas: {ids}")
+        return ids[0], len(ids)
+
+    def cells(self) -> list[tuple[bytes, int]]:
+        return [(b, o) for _, b, o in self.tex]
+
+
+def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skill: int, gravity: float,
+                   crates: CrateSet) -> bytes:
     # Resolved here, not on the target: BASIC strings cap at 32,767 bytes
     # and e1m3's entities lump is 45,762 -- mod_find_spawn died at error 5
     # before anything else could. The renderer wants four facts out of the
@@ -648,8 +777,9 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
                 mons.append((mon_kind[c], vec(kv.get('origin', '0 0 0')), float(kv.get('angle', '0')),
                              kv.get('target', '')))
             case str(c) if c in item_kind:
-                items.append((item_kind[c], item_amount(c, int(kv.get('spawnflags', '0'))),
-                              name_id(kv.get('target', '')), vec(kv.get('origin', '0 0 0'))))
+                amount = item_amount(c, int(kv.get('spawnflags', '0')))
+                items.append((item_kind[c], amount, name_id(kv.get('target', '')),
+                              crates.crate(crate_name(c, amount)), vec(kv.get('origin', '0 0 0'))))
             case str(c) if c in amb_kind:
                 wav, fvol = amb_kind[c]
                 ambs.append((mksnd.SOUNDS.index(wav), int(255 * fvol), vec(kv.get('origin', '0 0 0'))))
@@ -662,9 +792,9 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
     # corners by index, each pointing at the next; a train at one with no target stays
     corner_at = {name: i for i, (name, _, _, _) in reversed(list(enumerate(corners))) if name}
     trains = [(m, speed, targeted, corner_at[first]) for m, speed, targeted, first in trains if first in corner_at]
-    buf = bytearray(struct.pack('<4f3fff12hf8s', *spawn, angle, *inter[0], inter[1], inter[2], nmodels,
+    buf = bytearray(struct.pack('<4f3fff13hf8s', *spawn, angle, *inter[0], inter[1], inter[2], nmodels,
                                 len(teles), len(plats), len(hides), len(items), len(doors), len(uses), len(mons),
-                                len(ambs), len(trains), len(corners), worldtype, gravity,
+                                len(ambs), len(trains), len(corners), worldtype, len(crates.used), gravity,
                                 next_map[:8].encode('latin1').ljust(8)))
     for kind, org, yaw, target in mons:
         buf += struct.pack('<h3ffh', kind, *org, yaw, corner_at.get(target, -1))   # its patrol's first corner
@@ -674,8 +804,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
         buf += struct.pack('<hff', m, speed, height)
     for m in hides:
         buf += struct.pack('<h', m)
-    for kind, amount, target, org in items:
-        buf += struct.pack('<hhh3f', kind, amount, target, *org)
+    for kind, amount, target, crate, org in items:
+        buf += struct.pack('<hhhh3f', kind, amount, target, crate, *org)
     for m, travel, mid, speed, hold, start_open, nolink, targeted, secret, shoot, snd, key, msg in doors:
         buf += struct.pack('<h3f3fffhhhhhhh40s', m, *travel, *mid, speed, hold, start_open, nolink, targeted,
                            secret, shoot, snd, key, msg)
@@ -688,10 +818,18 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
         buf += struct.pack('<hfhh', m, speed, targeted, first)
     for _, org, wait, target in corners:
         buf += struct.pack('<3ffh', *org, wait, corner_at.get(target, -1))
+    # q_ent.bi's CrateModel: the size, then five faces of atlas id,
+    # frame count and four (corner bits, u*32, v*32)
+    for name in crates.used:
+        src = crates.src[name]
+        buf += struct.pack('<3f', *src.size)
+        for tn, corners4 in src.faces:
+            tex, frames = crates.tex_id(name, tn)
+            buf += struct.pack('<hh12b', tex, frames, *(v for corner in corners4 for v in corner))
     return bytes(buf)
 
 
-def convert_lumps(d, lumps, outdir, skill, gravity):
+def convert_lumps(d, lumps, outdir, skill, gravity, crates):
     """Convert each lump from its on-disk layout to the renderer's own.
 
     model.bas did this per element, in BASIC, copying field by field -- and
@@ -789,11 +927,15 @@ def convert_lumps(d, lumps, outdir, skill, gravity):
     ent_text = lump(0).split(b'\0')[0].decode('latin-1')
     nmodels = lumps[14][1] // 64
     boxes = [struct.unpack_from('<6f', lump(14), m * 64) for m in range(nmodels)]
-    out['ents.bin'] = parse_entities(ent_text, nmodels, boxes, skill, gravity)
+    out['ents.bin'] = parse_entities(ent_text, nmodels, boxes, skill, gravity, crates)
 
-    # marksurfaces, models: identical either side
+    # marksurfaces: identical either side. models: 64 -> 32, bspfile.bi's
+    # Submodel -- the box, hulls 0 and 1, the face run
     out['lface.bld'] = lump(11)
-    out['models.bld'] = lump(14)
+    out['models.bld'] = b''.join(struct.pack('<6f4h', *struct.unpack_from('<6f', lump(14), m * 64),
+                                             *struct.unpack_from('<2i', lump(14), m * 64 + 36),
+                                             *struct.unpack_from('<2i', lump(14), m * 64 + 56))
+                                 for m in range(nmodels))
     # raw, not BLOAD: read by fileReadH into a memAlloc block, which puts
     # it in upper memory rather than the far heap. It is walked by a PEEK
     # loop over a byte offset and nothing indexes it as an array.
@@ -891,9 +1033,10 @@ def convert_lumps(d, lumps, outdir, skill, gravity):
 
 def main():
     if len(sys.argv) < 4:
-        raise SystemExit("usage: mkassets.py <map.bsp> <base.dat> <outdir> [skill 0..3, 0]")
+        raise SystemExit("usage: mkassets.py <map.bsp> <base.dat> <outdir> [skill 0..3, 0] [pak0.pak: the pickups' b_*.bsp]")
     bsp, packpath, outdir = sys.argv[1], sys.argv[2], sys.argv[3]
     skill = int(sys.argv[4]) if len(sys.argv) > 4 else 0
+    pak = sys.argv[5] if len(sys.argv) > 5 else ''
     os.makedirs(outdir, exist_ok=True)
     d   = open(bsp, 'rb').read()
     pal = load_palette(pack_read(packpath, 'color/palette.lmp'))
@@ -921,14 +1064,20 @@ def main():
     cube, bits = inverse_palette(pal)
 
     lumps   = read_lumps(d)
-    print("converting lumps ...", flush=True)
-    # world.qc: sv_gravity 100 on e1m8, 800 everywhere else
-    gravity = 100.0 if os.path.basename(bsp).lower() == 'e1m8.bsp' else 800.0
-    convert_lumps(d, lumps, outdir, skill, gravity)
-
     toff, _ = lumps[2]
     ntex    = struct.unpack_from('<i', d, toff)[0]
     offs    = [struct.unpack_from('<i', d, toff + 4 + 4*k)[0] for k in range(ntex)]
+    # the pickups' b_*.bsp boxes: their textures are cells after the map's
+    crates  = CrateSet(load_crates(pak), ntex)
+    print("converting lumps ...", flush=True)
+    # world.qc: sv_gravity 100 on e1m8, 800 everywhere else
+    gravity = 100.0 if os.path.basename(bsp).lower() == 'e1m8.bsp' else 800.0
+    convert_lumps(d, lumps, outdir, skill, gravity, crates)
+    cells = [(d, toff + o) if o >= 0 else None for o in offs] + crates.cells()
+    ntex  = len(cells)
+    if ntex * MIPS > 1024:
+        raise SystemExit(f"{ntex} textures with the pickups': q_map.bi's ofs(1023) holds 256")
+    print(f"  crates: {len(crates.used)} models, {len(crates.tex)} textures after the map's {len(offs)}")
 
     # ------------------------------------------------------------------
     # Two atlases, not 648 DCs.
@@ -977,20 +1126,20 @@ def main():
 
     for lvl in range(MIPS):
         cell = SIZES[lvl]
-        for k, o in enumerate(offs):
+        for k, cl in enumerate(cells):
             # A view must not straddle a 16K page (uglview.asm). Cells are
             # powers of two and packed largest-first, so every offset is a
             # multiple of its own size and none ever does.
             assert len(raw_at) % (cell * cell) == 0, "cell not self-aligned"
             place[k][lvl] = len(raw_at)
-            if o < 0:
+            if cl is None:
                 raw_at += bytes(cell * cell); shd_at += bytes(cell * cell)
                 continue
-            base = toff + o
-            w, h = struct.unpack_from('<ii', d, base + 16)
-            mo   = struct.unpack_from('<i',  d, base + 24 + 4*lvl)[0]
+            buf, base = cl
+            w, h = struct.unpack_from('<ii', buf, base + 16)
+            mo   = struct.unpack_from('<i',  buf, base + 24 + 4*lvl)[0]
             mw, mh = w >> lvl, h >> lvl
-            src  = d[base+mo : base+mo + mw*mh]
+            src  = buf[base+mo : base+mo + mw*mh]
             if len(src) < mw*mh:
                 print(f"  ! texture {k} mip {lvl} truncated, left blank")
                 raw_at += bytes(cell * cell); shd_at += bytes(cell * cell)

@@ -207,6 +207,22 @@ declare function mdl_draw_box ( _
     byval side_col as integer, _
     byval top_col as integer _
 ) as integer
+declare function mdl_draw_crate ( _
+    g as Game, _
+    org as Vec3, _
+    c as CrateModel, _
+    mtx_fin as Mat4, _
+    byval xresh as single, _
+    byval yresh as single, _
+    byval z_near as single, _
+    byval dst as long, _
+    byval mip as integer, _
+    byval anim_time as single _
+) as integer
+declare sub ent_crate ( _
+    byval k as integer, _
+    c as CrateModel _
+)
 declare sub ls_animate ( byval anim_time as single )
 declare sub r_set_frustum ( _
     frustum() as DiskPlane, _
@@ -556,6 +572,7 @@ sub host_render ( _
     dim mtx_mdl as Mat4
     dim bob as Vec3
     dim nbox as integer
+    dim crate as CrateModel, corg as Vec3, cdist as single, cmip as integer
     dim vlen as single, vframe as integer
     dim vdx as single, vdy as single, vdz as single
     dim mdl_i as integer, k as integer
@@ -730,11 +747,32 @@ sub host_render ( _
     '' as the liquids, flat colours the world's palette already has
     for mdl_i = 0 to g.item_count - 1
         if ( item( mdl_i ).gone = 0 ) then
-            if ( r_mdl_visible( item( mdl_i ).pos, ENT_ITEM_HALF# * 1.5, 0.0, ENT_ITEM_TOP# + 8.0, _
+            if ( r_mdl_visible( item( mdl_i ).pos, ENT_BOX_HALF# * 1.5, 0.0, ENT_BOX_TOP# + 8.0, _
                                 nds_buffer(), pln_buffer(), frustum() ) ) then
                 bob = item( mdl_i ).pos
                 bob.z = bob.z + 4.0 + 4.0 * sin( g.rdr.anim_time * 3.0 )
-                if ( item( mdl_i ).kind = ENT_ITEM_EXPLOBOX ) then
+                if ( item( mdl_i ).crate >= 0 ) then
+                    '' the map's b_*.bsp, still, centred on the origin as
+                    '' the touch and the explosive box's trace already are;
+                    '' the mip by distance, d_faces.c's thresholds
+                    ent_crate item( mdl_i ).crate, crate
+                    corg = item( mdl_i ).pos
+                    corg.x = corg.x - crate.size.x * 0.5
+                    corg.y = corg.y - crate.size.y * 0.5
+                    cdist = sqr( ( corg.x - g.pl.pos.x ) ^ 2 + ( corg.y - g.pl.pos.y ) ^ 2 + ( corg.z - g.pl.pos.z ) ^ 2 )
+                    cmip = 0
+                    if ( g.rdr.use_mips ) then
+                        if ( cdist >= 1400.0 ) then
+                            cmip = 3
+                        elseif ( cdist >= 560.0 ) then
+                            cmip = 2
+                        elseif ( cdist >= 280.0 ) then
+                            cmip = 1
+                        end if
+                    end if
+                    nbox = mdl_draw_crate( g, corg, crate, mtx_fin, xresh, yresh, g.env.z_near, _
+                                           h_dst_dc, cmip, g.rdr.anim_time )
+                elseif ( item( mdl_i ).kind = ENT_ITEM_EXPLOBOX ) then
                     '' the box stands still, b_explob's size
                     nbox = mdl_draw_box( item( mdl_i ).pos, ENT_BOX_HALF#, ENT_BOX_TOP#, 1.0, 0.0, _
                                          mtx_fin, xresh, yresh, g.env.z_near, _

@@ -91,9 +91,8 @@ typedef struct {
 
 /* bspfile.bi's Submodel. */
 typedef struct {
-    Vec3 mins, maxs, origin;
-    long head_node0, head_node1, head_node2, head_node3;
-    long vis_leafs, first_face, num_faces;
+    Vec3 mins, maxs;
+    short head_node0, head_node1, first_face, num_faces;
 } Submodel;
 
 /* bspfile.bi's BrushModel. */

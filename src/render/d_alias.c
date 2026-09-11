@@ -21,6 +21,7 @@ extern short pascal far qglRsPoly  ( long dst, void far *v, short cnt,
                                      short mode, long src );
 extern short pascal far qglSfZMode ( long surf, short mode );
 extern short pascal far qglGemMap  ( short h, short pg, short slot );
+extern long  pascal far mod_tex_shaded ( void *g, short k, short mip );
 
 #define QGL_M_TEX    2
 #define QGL_M_FLAT  1
@@ -279,4 +280,63 @@ short pascal far mdl_draw_box(
         qglRsPoly( dst, (void far *) qv, 4, QGL_M_FLAT, (long) ( i == 1 ? top_col : side_col ) );
     }
     return 6;
+}
+
+
+/* A pickup as its b_*.bsp: q_ent.bi's CrateModel, five textured quads
+   from org's corner -- the bottom is on the floor and never shipped --
+   each corner a bit per axis and its u,v in 32nds, as mkassets read
+   them off the model's faces. A +N chain steps at 10 Hz like the
+   world's. A face with a corner behind the near plane is dropped;
+   the rest of the box still draws. */
+typedef struct { short tex, frames; signed char v[12]; } CrateFace;
+typedef struct { Vec3 size; CrateFace f[5]; } CrateModel;
+
+short pascal far mdl_draw_crate(
+    void       *g,
+    Vec3       *org,
+    CrateModel *c,
+    float      *m,
+    float       xresh,
+    float       yresh,
+    float       z_near,
+    long        dst,
+    short       mip,
+    float       anim_time )
+{
+    float bx[8], by[8], bw[8];
+    float rx, ry, rz, rw;
+    long  src, step;
+    short i, k, ci, drawn = 0;
+    const CrateFace *cf;
+
+    step = (long) ( anim_time * 10.0f );
+    for ( i = 0; i < 8; i++ ) {
+        rx = org->x + ( (i & 1) ? c->size.x : 0.0f );
+        rz = org->y + ( (i & 2) ? c->size.y : 0.0f );
+        ry = org->z + ( (i & 4) ? c->size.z : 0.0f );
+        bw[i] = rx*m[3] + ry*m[7] + rz*m[11] + m[15];
+        bx[i] = rx*m[0] + ry*m[4] + rz*m[ 8] + m[12];
+        by[i] = rx*m[1] + ry*m[5] + rz*m[ 9] + m[13];
+    }
+    qglSfZMode( dst, QGL_Z_TEST );
+    for ( i = 0; i < 5; i++ ) {
+        cf = &c->f[i];
+        for ( k = 0; k < 4; k++ ) if ( bw[ cf->v[k*3] ] < z_near ) break;
+        if ( k < 4 ) continue;
+        src = mod_tex_shaded( g, (short) ( cf->tex + ( cf->frames > 1 ? step % cf->frames : 0 ) ), mip );
+        if ( src == 0 ) continue;
+        for ( k = 0; k < 4; k++ ) {
+            ci = cf->v[k*3];
+            rw = 1.0f / bw[ci];
+            qv[k].x = xresh + bx[ci] * rw * xresh;
+            qv[k].y = yresh - by[ci] * rw * yresh;
+            qv[k].z = rw;
+            qv[k].u = (float) cf->v[k*3+1] / 32.0f;
+            qv[k].v = (float) cf->v[k*3+2] / 32.0f;
+        }
+        qglRsPoly( dst, (void far *) qv, 4, QGL_M_TEX, src );
+        drawn++;
+    }
+    return drawn;
 }

@@ -2328,6 +2328,25 @@ worn -- Quake draws a 0 there too, left out so the references stand.
 says, counted in `fight.secrets`; six on e1m1. The e1m1 gate's last two
 arms stand in `*44` and on the green armor.
 
+**The b_*.bsp pickups are textured crates.** Health, shells, nails,
+rockets and the exploding box are Quake's own brush models, six-face
+boxes from the origin with two to five 32-pixel textures; mkassets
+(`crate_src`, given the PAK as its fifth argument) cuts each one the
+map uses into a `CrateModel` in ents.bin -- the size and five faces,
+the bottom left on the floor, each an atlas id, a +N frame count and
+four corners as (axis bits, u*32, v*32) bytes -- and appends the
+textures to the map's atlas after its own, frames consecutive, so
+`mod_tex_shaded` aims at them as at any cell (q_map.bi's `ofs(1023)`
+holds 256; e1m1 uses 81 + 23). `mdl_draw_crate` in d_alias.c draws
+the five quads through the mip views, affine as the models are, the
+chain stepped at 10 Hz; an item's `crate` is -1 for the kinds Quake
+draws as alias models -- armor, keys, weapons, powerups -- which stay
+flat spinning boxes. A crate stands still, centred on the origin as
+the touch and the exploding box's trace already are, where Quake's
+spans origin to origin + size. Its cost is the record, 92 bytes a
+model used, and the cells in EMS. Every image reference moved with
+it, the crates being in most of them.
+
 **The status bar is Quake's own, out of gfx.wad.** `tools/mkgfx.py`
 writes `sbar.raw` and `sbnum.raw` -- the bar, the digits, the shells
 icon and the five faces -- with the qpic's 255 kept transparent: the bar

@@ -77,17 +77,15 @@ type BrushModel
                                 '' the box fell inside one leaf.
 end type
 
+'' 32 bytes of the disk record's 64: origin, hulls 2 and 3 and the
+'' leaf count are never read, and mkassets narrows the rest.
 type Submodel
     mins        as Vec3
     maxs        as Vec3
-	origin      as Vec3
-	head_node0   as long
-	head_node1   as long
-	head_node2   as long
-	head_node3   as long
-	vis_leafs    as long
-	first_face   as long
-	num_faces    as long
+    head_node0  as integer      '' hull 0, the render tree
+    head_node1  as integer      '' hull 1, the player's clip tree
+    first_face  as integer
+    num_faces   as integer
 end type
 
 type DiskVertex
