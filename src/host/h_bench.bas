@@ -158,6 +158,11 @@ sub host_bench_report ( _
         host_pt_put benchf, "pt_md_item", g.pt.md_item.lo, g.pt.md_item.sum, g.pt.md_item.hi, g.pt.md_item.n, 0.001
         host_pt_put benchf, "pt_md_nail", g.pt.md_nail.lo, g.pt.md_nail.sum, g.pt.md_nail.hi, g.pt.md_nail.n, 0.001
         host_pt_put benchf, "pt_md_view", g.pt.md_view.lo, g.pt.md_view.sum, g.pt.md_view.hi, g.pt.md_view.n, 0.001
+        host_pt_put benchf, "pt_d_geom", g.pt.d_geom.lo, g.pt.d_geom.sum, g.pt.d_geom.hi, g.pt.d_geom.n, 0.001
+        host_pt_put benchf, "pt_d_xf", g.pt.d_xf.lo, g.pt.d_xf.sum, g.pt.d_xf.hi, g.pt.d_xf.n, 0.001
+        host_pt_put benchf, "pt_d_lm", g.pt.d_lm.lo, g.pt.d_lm.sum, g.pt.d_lm.hi, g.pt.d_lm.n, 0.001
+        host_pt_put benchf, "pt_d_tex", g.pt.d_tex.lo, g.pt.d_tex.sum, g.pt.d_tex.hi, g.pt.d_tex.n, 0.001
+        host_pt_put benchf, "pt_d_rast", g.pt.d_rast.lo, g.pt.d_rast.sum, g.pt.d_rast.hi, g.pt.d_rast.n, 0.001
     end if
     g.pt.place_stale = ent_place_stale( g.wld.count.models, models(), nodes(), planes(), brush() )
     host_kv benchf, "place_stale", str$( g.pt.place_stale )
@@ -303,6 +308,11 @@ sub host_pt_init ( g as Game )
     g.pt.md_item.lo = 1E+09
     g.pt.md_nail.lo = 1E+09
     g.pt.md_view.lo = 1E+09
+    g.pt.d_geom.lo = 1E+09
+    g.pt.d_xf.lo = 1E+09
+    g.pt.d_lm.lo = 1E+09
+    g.pt.d_tex.lo = 1E+09
+    g.pt.d_rast.lo = 1E+09
 end sub
 
 '' One 'name value' line. The caller's str$ keeps each type's own format.

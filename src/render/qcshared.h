@@ -192,16 +192,12 @@ typedef struct {
     short lm_want;          /* faces that asked for a cached surface */
     short lm_fallback;      /* ...and did not get one, so drew unlit */
     short qgl_faces;        /* out: faces that went through qgl */
-    long  k_mip;            /* sums of the sc_find key inputs, for a  */
-    long  k_sw;             /* two-sided trace against the BASIC      */
-    long  k_sh;             /* original: if these match, the keys do  */
-    long  k_stag;           /* and the divergence is downstream       */
-    long  k_v0;             /* sum of gv[0], the vertex count          */
-    long  k_lm;             /* sum of gv[GEOM_LMOFS], the lightmap row  */
-    long  k_hdr;            /* faces whose record HAS a lightmap       */
-    long  k_ext;            /* ...and whose extents are non-zero       */
-    long  k_n;              /* sc_find CALLS -- without this the sums */
-                            /* are not comparable between arms        */
+    /* raw RDTSC cycles this frame, when prof */
+    long  cy_geom;   /* mod_geom_map and the record copy */
+    long  cy_xf;     /* UVs, transform, clip, project */
+    long  cy_lm;     /* the surface-cache key and lookup, builds included */
+    long  cy_tex;    /* mod_tex_shaded, unlit faces */
+    long  cy_rast;   /* qglSfZMode and qglRsPoly */
     short qgl_drop;         /* out: faces qglRsPoly refused. Non-zero */
                             /* is a fault, not a fallback: there is   */
                             /* no mgl path left behind it.            */

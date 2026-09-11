@@ -114,15 +114,19 @@ extern long  pascal far mod_geom_map   ( void *g, short row );
 extern long  pascal far mod_tex_raw    ( void *g, short k, short mip );
 extern long  pascal far mod_tex_shaded ( void *g, short k, short mip );
 extern short pascal far sc_ready       ( void );
-extern short pascal far sc_mipfloor    ( short extw, short exth );
 extern short pascal far sc_held        ( short face );
-extern short pascal far sc_shift       ( short v );
-extern long  pascal far sc_find        ( short face, short mip, short w, short h, short stag );
+extern long  pascal far sc_find        ( short face, short mip, short a, short b, short stag );
 extern long  pascal far sc_alloc       ( void *g, short face, short mip, short w, short h,
                                          short fw, short fh, short stag );
 extern long  pascal far sc_view_ofs    ( void );
 extern short pascal far ls_epoch       ( short style );
 extern long  pascal far sys_rdtsc      ( void );
+extern long  pascal far qglTmrCycles   ( void );
+
+/* A section's cycles since the last lap, when the frame is timed: one far
+   call and no divide, so five a face cost about 1% of the draw. */
+#define CY_LAP( acc ) do { if ( dp->prof ) { unsigned long t_ = qglTmrCycles(); \
+                               dp->acc += (long) ( t_ - cy_t ); cy_t = t_; } } while ( 0 )
 
 extern void pascal far sb_build( void *g, long lm_dc, long tex_dc, short face, short mip,
                                  short pw, short ph,
@@ -212,6 +216,34 @@ static float near cam_plane_dist( Vec3f *pt, Plane far *pl )
 /* Sutherland-Hodgman on w against one bound. keep_ge selects the side:
    near keeps w >= bound, far keeps w <= bound. z rides along without
    being interpolated, exactly as d_clip_z did. */
+/* d_surf.bas's sc_shift and sc_mipfloor, which stay there for its own
+   callers: pure integer functions, so asked here without a BASIC call --
+   sc_mipfloor paid two B$POW4 and two nested calls a step, every lit
+   face. The class bounds are d_surf.bas's SC_MINSH/SC_MAXSH/SC_MAXSUM. */
+#define SC_MINSH  4
+#define SC_MAXSH  8
+#define SC_MAXSUM 14
+
+static short near sc_shift_c( short v )
+{
+    short s = SC_MINSH, p = 16;
+
+    while ( p < v && s < SC_MAXSH ) { p <<= 1; s++; }
+    return s;
+}
+
+static short near sc_mipfloor_c( short extw, short exth )
+{
+    short m, w, h;
+
+    for ( m = 0; m <= 3; m++ ) {
+        w = extw >> m; if ( w < 1 ) w = 1;
+        h = exth >> m; if ( h < 1 ) h = 1;
+        if ( sc_shift_c( w ) + sc_shift_c( h ) <= SC_MAXSUM ) return m;
+    }
+    return 3;
+}
+
 static short near clip_w(
     float *ix, float *iy, float *iz, float *iw, float *iu, float *iv, short icnt,
     float *ox, float *oy, float *oz, float *ow, float *ou, float *ov,
@@ -302,10 +334,11 @@ void pascal far d_draw_faces(
     short q_ok = 0;             /* and whether the setup stood up */
     short q_gate = 0;
     short lm_tms, lm_tmt, lm_extw, lm_exth, lm_stag;
-    short lm_mip, lm_floor, lm_sw, lm_sh, lm_fw, lm_fh, lm_cm;
+    short lm_mip, lm_floor, lm_sw, lm_sh, lm_fw, lm_fh, lm_cm, lm_sa, lm_sb;
     short leaf_indx, leaf_end;
     long  gp, lm_dc, src_dc, tex_dc, texofs;
     long  bt0, bface, build_cyc = 0;
+    unsigned long cy_t = 0;
     float su0, su1, su2, su3, sv0, sv1, sv2, sv3;
     float tw, th, ox, oy, oz, dp_dist, turbph, zl, zsum;
     float vx, vy, vz, tu, tv, rw, lm_su, lm_sv;
@@ -324,7 +357,7 @@ void pascal far d_draw_faces(
        for the whole run: two yaws 34 degrees apart, and frame 1 against
        frame 40, all froze the same face. */
     fp_area = 0.0f;
-    dp->k_mip = 0; dp->k_sw = 0; dp->k_sh = 0; dp->k_stag = 0; dp->k_n = 0; dp->k_hdr = 0; dp->k_ext = 0; dp->k_v0 = 0; dp->k_lm = 0;
+    dp->cy_geom = 0; dp->cy_xf = 0; dp->cy_lm = 0; dp->cy_tex = 0; dp->cy_rast = 0;
     dp->build_us = 0;
 
     /* Asked once: which depth buffer, if any, cannot change inside a
@@ -377,6 +410,7 @@ void pascal far d_draw_faces(
                tris identical at 365 -- the same geometry, a different
                tally. */
             dp->polys++;
+            if ( dp->prof ) cy_t = qglTmrCycles();
 
             /*
              * This face's corners, out of the geometry store. Copied
@@ -398,8 +432,6 @@ void pascal far d_draw_faces(
              */
             gv = (short far *)a_gv->farptr;
             gp = mod_geom_map( g, tri[i].geom_row );
-            gn = GEOM_MAXREC;
-            if ( tri[i].geom_ofs + gn > GEOM_W ) gn = GEOM_W - tri[i].geom_ofs;
             {
                 /*
                  * Destination is BASIC's gv_buf, NOT a private buffer:
@@ -416,10 +448,18 @@ void pascal far d_draw_faces(
                  * face for exactly this reason, and hoisting it is the
                  * bug that once made every face share one cached surface.
                  */
-                char far *src = (char far *)( gp + (long)tri[i].geom_ofs );
-                char far *dst = (char far *)gv;
-                for ( j = 0; j < gn; j++ ) dst[j] = src[j];
+                /* The record's own length, header and corners, and a word
+                   at a time: a GEOM_MAXREC byte loop moved 216 bytes a
+                   face where a quad needs 42. */
+                short far *src = (short far *)( gp + (long)tri[i].geom_ofs );
+                gn = src[0];
+                if ( gn > GEOM_MAXVTX ) gn = GEOM_MAXVTX;
+                if ( gn < 0 ) gn = 0;
+                gn = GEOM_VTX0 + gn * 3;
+                if ( tri[i].geom_ofs + gn * 2 > GEOM_W ) gn = ( GEOM_W - tri[i].geom_ofs ) >> 1;
+                for ( j = 0; j < gn; j++ ) gv[j] = src[j];
             }
+            CY_LAP( cy_geom );
 
             vcnt   = gv[0];
             tex    = tri[i].tex_info_id;
@@ -478,17 +518,14 @@ void pascal far d_draw_faces(
             lm_extw = lm_exth = 0;
             lm_tms = lm_tmt = 0;
             D_ARRAYS_REFRESH();
-            dp->k_v0 += vcnt;
-            dp->k_lm += gv[GEOM_LMOFS];
 
             if ( lm_use && liquid == 0 && mipinf[tex_id].anim_count <= 1 ) {
                 if ( gv[GEOM_LMOFS] >= 0 ) {
-                    dp->k_hdr++;
                     lm_tms  = gv[GEOM_LMOFS + 2];
                     lm_tmt  = gv[GEOM_LMOFS + 3];
                     lm_extw = ( gv[GEOM_LMOFS + 4] - 1 ) * 16;
                     lm_exth = ( gv[GEOM_LMOFS + 5] - 1 ) * 16;
-                    if ( lm_extw > 0 && lm_exth > 0 ) { lm_on = 1; dp->lm_want++; dp->k_ext++; }
+                    if ( lm_extw > 0 && lm_exth > 0 ) { lm_on = 1; dp->lm_want++; }
 
                     lm_stag = ls_epoch( gv[GEOM_LMOFS + 6] & 255 );
 
@@ -575,11 +612,18 @@ void pascal far d_draw_faces(
                 vt_w[j] = vx*m[3] + vy*m[7] + vz*m[11] + m[15];
             }
 
-            cnt = clip_w( vt_x, vt_y, vt_z, vt_w, vt_u, vt_v, vcnt,
-                          cl_x, cl_y, cl_z, cl_w, cl_u, cl_v, dp->z_near, 1 );
-            if ( cnt < 3 ) continue;
-            cnt = clip_w( cl_x, cl_y, cl_z, cl_w, cl_u, cl_v, cnt,
-                          vt_x, vt_y, vt_z, vt_w, vt_u, vt_v, dp->z_far, 0 );
+            /* Most faces lie between the two planes, and clip_w would copy
+               them through twice unchanged. */
+            for ( j = 0; j < vcnt; j++ )
+                if ( vt_w[j] < dp->z_near || vt_w[j] > dp->z_far ) break;
+            cnt = vcnt;
+            if ( j < vcnt ) {
+                cnt = clip_w( vt_x, vt_y, vt_z, vt_w, vt_u, vt_v, vcnt,
+                              cl_x, cl_y, cl_z, cl_w, cl_u, cl_v, dp->z_near, 1 );
+                if ( cnt < 3 ) continue;
+                cnt = clip_w( cl_x, cl_y, cl_z, cl_w, cl_u, cl_v, cnt,
+                              vt_x, vt_y, vt_z, vt_w, vt_u, vt_v, dp->z_far, 0 );
+            }
             if ( cnt < 3 ) continue;
 
             /*
@@ -598,6 +642,7 @@ void pascal far d_draw_faces(
                 zsum += vt_w[j];
             }
             zl = zsum / cnt;
+            CY_LAP( cy_xf );
 
             /*
              * Mip per surface, never per triangle: every fan triangle
@@ -617,7 +662,7 @@ void pascal far d_draw_faces(
 
             if ( lm_on ) {
                 lm_mip   = dp->use_mips ? mip_level : 0;
-                lm_floor = sc_mipfloor( lm_extw, lm_exth );
+                lm_floor = sc_mipfloor_c( lm_extw, lm_exth );
                 if ( lm_mip < lm_floor ) lm_mip = lm_floor;
 
                 /*
@@ -644,13 +689,9 @@ void pascal far d_draw_faces(
                 lm_fw = lm_extw >> lm_floor; if ( lm_fw < 1 ) lm_fw = 1;
                 lm_fh = lm_exth >> lm_floor; if ( lm_fh < 1 ) lm_fh = 1;
 
-                dp->k_mip  += lm_mip;
-                dp->k_sw   += lm_sw;
-                dp->k_sh   += lm_sh;
-                dp->k_stag += lm_stag;
-                dp->k_n++;
-
-                lm_dc = sc_find( i, lm_mip, lm_sw, lm_sh, lm_stag );
+                lm_sa = sc_shift_c( lm_sw );
+                lm_sb = sc_shift_c( lm_sh );
+                lm_dc = sc_find( i, lm_mip, lm_sa, lm_sb, lm_stag );
                 if ( lm_dc == 0 ) {
                     bt0 = dp->prof ? sys_rdtsc() : 0;
                     lm_dc = sc_alloc( g, i, lm_mip, lm_sw, lm_sh, lm_fw, lm_fh, lm_stag );
@@ -664,8 +705,8 @@ void pascal far d_draw_faces(
                          */
                         tex_dc = mod_tex_raw( g, tex_id, lm_mip );
                         sb_build( g, lm_dc, tex_dc, i, lm_mip,
-                                  (short)(1 << sc_shift( lm_sw )),
-                                  (short)(1 << sc_shift( lm_sh )),
+                                  (short)(1 << lm_sa),
+                                  (short)(1 << lm_sb),
                                   a_tri, a_texinf, a_gv, a_mipinf, a_planes );
                     }
                     if ( dp->prof ) {
@@ -681,8 +722,8 @@ void pascal far d_draw_faces(
                      * coordinates are already over w, so the origin has to
                      * be scaled by w to match.
                      */
-                    lm_su = 1.0f / (float)( (1L << lm_mip) * (1L << sc_shift( lm_sw )) );
-                    lm_sv = 1.0f / (float)( (1L << lm_mip) * (1L << sc_shift( lm_sh )) );
+                    lm_su = 1.0f / (float)( (1L << lm_mip) * (1L << lm_sa) );
+                    lm_sv = 1.0f / (float)( (1L << lm_mip) * (1L << lm_sb) );
                     if ( dp->rend_mode == 0 ) {
                         for ( j = 0; j < cnt; j++ ) {
                             pu[j] = ( pu[j] - lm_tms*pw[j] ) * lm_su;
@@ -704,6 +745,7 @@ void pascal far d_draw_faces(
                     lm_on = 0;
                     dp->lm_fallback++;
                 }
+                CY_LAP( cy_lm );
             }
 
             D_ARRAYS_REFRESH();
@@ -714,6 +756,7 @@ void pascal far d_draw_faces(
                    the view at another cell entirely -- coherent geometry
                    wearing noise. */
                 texofs = tex_ofs[ tex_id*4 + draw_mip ];
+                CY_LAP( cy_tex );
             }
 
             /*
@@ -788,6 +831,7 @@ void pascal far d_draw_faces(
                         if ( dp->qgl_faces < 0 ) dp->qgl_faces = 0;
                         dp->qgl_faces++;
                         dp->tris += cnt - 2;
+                        CY_LAP( cy_rast );
                         continue;
                     }
                 }

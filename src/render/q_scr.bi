@@ -199,6 +199,12 @@ type PhaseTimes
     md_item  as TickTimer
     md_nail  as TickTimer
     md_view  as TickTimer
+    '' pt_draw's parts, microseconds a frame: d_faces.c's DrawParams.cy_*
+    d_geom    as TickTimer
+    d_xf      as TickTimer
+    d_lm      as TickTimer
+    d_tex     as TickTimer
+    d_rast    as TickTimer
     present_sum as single     '' vid_update: blit to the screen
     present_max as single
     present_n   as long       '' the last frame exits before present and loop

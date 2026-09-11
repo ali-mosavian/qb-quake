@@ -65,15 +65,12 @@ type DrawParams
     lm_want     as integer   '' out: faces that asked for a surface
     lm_fallback as integer   '' out: ...and did not get one
     qgl_faces   as integer   '' out: faces that went through qgl
-    k_mip       as long      '' out: sums of the sc_find key inputs
-    k_sw        as long
-    k_sh        as long
-    k_stag      as long
-    k_v0        as long
-    k_lm        as long
-    k_hdr       as long      '' faces whose record has a lightmap
-    k_ext       as long      '' ...and non-zero extents
-    k_n         as long      '' sc_find calls
+    '' out, raw RDTSC cycles this frame when prof: d_faces.c says which
+    cy_geom     as long
+    cy_xf       as long
+    cy_lm       as long
+    cy_tex      as long
+    cy_rast     as long
     qgl_drop    as integer   '' out: faces qglRsPoly refused -- a fault,
                              '' not a fallback; nothing stands behind it
 end type

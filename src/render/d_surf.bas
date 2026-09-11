@@ -81,8 +81,8 @@ declare function sc_mipfloor ( _
 declare function sc_find ( _
     byval face as integer, _
     byval mip as integer, _
-    byval w as integer, _
-    byval h as integer, _
+    byval a as integer, _
+    byval b as integer, _
     byval stag as integer _
 ) as long
 declare function sc_alloc ( _
@@ -1025,12 +1025,12 @@ end sub
 function sc_find ( _
     byval face as integer, _
     byval mip as integer, _
-    byval w as integer, _
-    byval h as integer, _
+    byval a as integer, _
+    byval b as integer, _
     byval stag as integer _
 ) as long
     dim dc as long
-    dim a as integer, b as integer, blk as integer
+    dim blk as integer, span as integer, k as integer
 
     if ( sc_ok = 0 ) then
         sc_find = 0
@@ -1058,8 +1058,6 @@ function sc_find ( _
     '' uses less of it. Aiming a smaller view at a larger block's offset is
     '' safe -- the bigger alignment implies the smaller one.
     ''
-    a = sc_shift( w )
-    b = sc_shift( h )
     if ( a + b > SC_MAXSUM ) then
         sc_find = 0
         exit function
@@ -1067,7 +1065,11 @@ function sc_find ( _
     dc = sc_desc( b - SC_MINSH )
     if ( dc <> 0 ) then
         sc_aim_ofs = clng( sc_bgrn( blk ) ) * SC_GRAN
-        if ( qglSfViewShape%( dc, 2 ^ a, sc_aim_ofs ) = 0 ) then dc = 0
+        span = 16
+        for k = SC_MINSH + 1 to a
+            span = span + span
+        next k
+        if ( qglSfViewShape%( dc, span, sc_aim_ofs ) = 0 ) then dc = 0
     end if
     if ( dc <> 0 ) then
         sc_hits = sc_hits + 1
@@ -1348,9 +1350,9 @@ function sc_selftest ( _
     if ( sc_mipfloor( 224, 224 ) <> 1 ) then sc_selftest = -19 : exit function
     if ( sc_mipfloor( 112, 112 ) <> 0 ) then sc_selftest = -20 : exit function
 
-    if ( sc_find( 0, 0, 112, 112, 0 ) <> d0 ) then sc_selftest = -9 : exit function
-    if ( sc_find( 1, 0, 112, 96, 0 ) <> d1 ) then sc_selftest = -10 : exit function
-    if ( sc_find( 1, 1, 112, 96, 0 ) <> 0 ) then sc_selftest = -11 : exit function
+    if ( sc_find( 0, 0, 7, 7, 0 ) <> d0 ) then sc_selftest = -9 : exit function
+    if ( sc_find( 1, 0, 7, 7, 0 ) <> d1 ) then sc_selftest = -10 : exit function
+    if ( sc_find( 1, 1, 7, 7, 0 ) <> 0 ) then sc_selftest = -11 : exit function
 
     '' a write into the last row of the largest class, the 16K page edge,
     '' through the write window, read back through the read window. This
@@ -1378,7 +1380,7 @@ function sc_selftest ( _
     made0 = sc_made
     sc_flush g
     if ( sc_gen = gen0 ) then sc_selftest = -13 : exit function
-    if ( sc_find( 0, 0, 112, 112, 0 ) <> 0 ) then sc_selftest = -14 : exit function
+    if ( sc_find( 0, 0, 7, 7, 0 ) <> 0 ) then sc_selftest = -14 : exit function
 
     '' a flush rewinds the store and makes no new view
     d2 = sc_alloc ( g, 5, 0, 112, 112, 112, 112, 0 )
@@ -1410,7 +1412,7 @@ function sc_selftest ( _
     if ( sc_slot(1) = sc_slot(2) ) then sc_selftest = -26 : exit function
 
     '' face 0 is the oldest, so touching it must make face 1 the victim
-    if ( sc_find( 0, 0, 112, 112, 0 ) = 0 ) then sc_selftest = -27 : exit function
+    if ( sc_find( 0, 0, 7, 7, 0 ) = 0 ) then sc_selftest = -27 : exit function
     if ( sc_lhead( sc_bord( sc_slot(0) ) ) < 0 ) then sc_selftest = -28 : exit function
     if ( sc_bown( sc_lhead( sc_bord( sc_slot(0) ) ) ) <> 1 ) then _
         sc_selftest = -(4000 + sc_bown( sc_lhead( sc_bord( sc_slot(0) ) ) )) : exit function
@@ -1474,14 +1476,14 @@ function sc_selftest ( _
     ''
     sc_reset g
     if ( sc_alloc( g, 0, 0, 112, 112, 112, 112, 5 ) = 0 ) then sc_selftest = -50 : exit function
-    if ( sc_find( 0, 0, 112, 112, 5 ) = 0 ) then sc_selftest = -51 : exit function
-    if ( sc_find( 0, 0, 112, 112, 6 ) <> 0 ) then sc_selftest = -52 : exit function
+    if ( sc_find( 0, 0, 7, 7, 5 ) = 0 ) then sc_selftest = -51 : exit function
+    if ( sc_find( 0, 0, 7, 7, 6 ) <> 0 ) then sc_selftest = -52 : exit function
 
     '' rebuilding at the new stag must overwrite the slot's stag, not
     '' just its tag -- a second style change has to miss again too
     if ( sc_alloc( g, 0, 0, 112, 112, 112, 112, 6 ) = 0 ) then sc_selftest = -53 : exit function
-    if ( sc_find( 0, 0, 112, 112, 5 ) <> 0 ) then sc_selftest = -54 : exit function
-    if ( sc_find( 0, 0, 112, 112, 6 ) = 0 ) then sc_selftest = -55 : exit function
+    if ( sc_find( 0, 0, 7, 7, 5 ) <> 0 ) then sc_selftest = -54 : exit function
+    if ( sc_find( 0, 0, 7, 7, 6 ) = 0 ) then sc_selftest = -55 : exit function
 
     sc_reset g
     sc_selftest = 1

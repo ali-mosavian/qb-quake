@@ -284,6 +284,8 @@ declare sub r_portal_outline ( _
 declare function sys_now ( ) as single
 declare function sys_rdtsc ( ) as long
 declare function host_lap ( t0 as long ) as single
+declare sub host_tt_add ( tt as TickTimer, byval v as single )
+declare function sys_rdtsc_hz ( ) as single
 declare sub host_tk ( _
     byval timing as integer, _
     t0 as long, _
@@ -568,10 +570,14 @@ sub host_tk ( _
     dim d as single
     d = host_lap( t0 )
     if ( timing = 0 or d < 0.0 ) then exit sub
-    tt.sum = tt.sum + d
+    host_tt_add tt, d
+end sub
+
+sub host_tt_add ( tt as TickTimer, byval v as single )
+    tt.sum = tt.sum + v
     tt.n = tt.n + 1
-    if ( d < tt.lo ) then tt.lo = d
-    if ( d > tt.hi ) then tt.hi = d
+    if ( v < tt.lo ) then tt.lo = v
+    if ( v > tt.hi ) then tt.hi = v
 end sub
 
 
@@ -607,6 +613,7 @@ sub host_render ( _
     mon() as MdlState _
 )
     dim t0 as long
+    dim cpu as single
     dim mtx_mdl as Mat4
     dim bob as Vec3
     dim nbox as integer
@@ -737,6 +744,12 @@ sub host_render ( _
         g.pt.build_sum = g.pt.build_sum + dparm.build_us / 1000000.0
         if ( dparm.build_us / 1000000.0 > g.pt.build_max ) then g.pt.build_max = dparm.build_us / 1000000.0
         if ( dparm.build_us / 1000000.0 < g.pt.build_min ) then g.pt.build_min = dparm.build_us / 1000000.0
+        cpu = sys_rdtsc_hz() / 1000000.0
+        host_tt_add g.pt.d_geom, dparm.cy_geom / cpu
+        host_tt_add g.pt.d_xf, dparm.cy_xf / cpu
+        host_tt_add g.pt.d_lm, dparm.cy_lm / cpu
+        host_tt_add g.pt.d_tex, dparm.cy_tex / cpu
+        host_tt_add g.pt.d_rast, dparm.cy_rast / cpu
     end if
     if ( g.ft.n > 0 ) then
         ptd = sys_now() - pt0
