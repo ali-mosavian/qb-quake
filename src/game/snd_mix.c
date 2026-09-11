@@ -24,6 +24,7 @@ extern short pascal far qglGemMap( short h, short pg, short slot );
 #define SND_STATICS 32              /* the ambients', looping; a silent one costs its pointer arithmetic */
 #define SND_ALL     (SND_CHANS + SND_STATICS)
 #define SND_CHUNK   512
+#define SND_TAB     1024            /* 128 (offset, length) records */
 #define SND_AHEAD   2756L           /* a quarter second at 11025 */
 #define EMS_PAGE    16384L
 #define SND_ATTN_STATIC 3L          /* ATTN_STATIC, per sound_nominal_clip_dist */
@@ -69,22 +70,26 @@ short pascal far snd_mix_loops( void )
     return snd_loops;
 }
 
-/* hnd: the samples' EMS handle; ring: the DMA ring; scratch: 1792 bytes
-   for the paint buffer, the table and the channels; tab: count records
-   of (offset, length) to copy in. Starts every recorded ambient on its
-   own static channel. */
-short pascal far snd_mix_setup( short hnd, long ring, long scratch, long tab, short count )
+/* hnd: the samples' EMS handle; ring: the DMA ring; scratch: scratch_bytes
+   for the paint buffer, the table and the channels, -1 when that is short
+   -- the channels ran 304 bytes past dsp.asm's 1792 once the statics
+   came, and e1m2 hung in the heap compactor; tab: count records of
+   (offset, length) to copy in. Starts every recorded ambient on its own
+   static channel. */
+short pascal far snd_mix_setup( short hnd, long ring, long scratch, long tab, short count, short scratch_bytes )
 {
     SndRec far *src = (SndRec far *) tab;
     SndChan far *ch;
     short i;
 
+    if ( count * 8 > SND_TAB || SND_CHUNK * 2 + SND_TAB + SND_ALL * (short) sizeof(SndChan) > scratch_bytes )
+        return -1;
     snd_hnd     = hnd;
     snd_count   = count;
     snd_ring    = (unsigned char far *) ring;
     snd_paint   = (int far *) scratch;
     snd_tab     = (SndRec far *) ((char far *) scratch + SND_CHUNK * 2);
-    snd_chan    = (SndChan far *) ((char far *) snd_tab + 512);
+    snd_chan    = (SndChan far *) ((char far *) snd_tab + SND_TAB);
     for ( i = 0; i < count; i++ )
         snd_tab[i] = src[i];
     for ( i = 0; i < SND_ALL; i++ )

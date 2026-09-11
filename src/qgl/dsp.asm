@@ -50,7 +50,9 @@ PIC_CMD         equ     20h
 PIC_EOI         equ     20h
 
 DSP_RING        equ     4096
-DSP_SCRATCH     equ     1792                    ;; the mixer's, after the ring
+DSP_SCRATCH     equ     2608                    ;; the mixer's, after the ring: snd_mix.c's
+                                                ;; 1024-byte paint buffer, 128 (offset, length)
+                                                ;; records and 40 channels of 14 bytes
 DSP_ALLOC       equ     DSP_RING*2 + DSP_SCRATCH
 
 .code
@@ -270,7 +272,8 @@ qglDspPos       endp
 
 ;;::::::::::::::
 ;; qglDspBuf () -> dx:ax = the ring, 4096 bytes
-;; qglDspScratch () -> dx:ax = 1792 bytes after it, the mixer's own
+;; qglDspScratch () -> dx:ax = DSP_SCRATCH bytes after it, the mixer's own
+;; qglDspScratchBytes () -> ax = how many, for the mixer to check its layout
 ;;::::::::::::::
 qglDspBuf       proc    public
                 mov     dx, cs:qgl$dsp_ring
@@ -284,6 +287,11 @@ qglDspScratch   proc    public
                 xor     ax, ax
                 ret
 qglDspScratch   endp
+
+qglDspScratchBytes proc public
+                mov     ax, DSP_SCRATCH
+                ret
+qglDspScratchBytes endp
 
 
 ;;::::::::::::::

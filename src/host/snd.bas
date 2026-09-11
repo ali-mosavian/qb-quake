@@ -27,6 +27,7 @@ declare function qglDspInit ( byval rate as integer ) as integer
 declare function qglDspPos ( ) as integer
 declare function qglDspBuf ( ) as long
 declare function qglDspScratch ( ) as long
+declare function qglDspScratchBytes ( ) as integer
 declare sub qglDspShutdown ( )
 declare function qglGemAlloc ( byval nbytes as long ) as integer
 declare function qglGemMap ( byval h as integer, byval pg as integer, _
@@ -45,7 +46,8 @@ declare function snd_mix_setup ( _
     byval ring as long, _
     byval scratch as long, _
     byval sndtab as long, _
-    byval count as integer _
+    byval count as integer, _
+    byval scratch_bytes as integer _
 ) as integer
 declare function snd_mix_start ( _
     byval id as integer, _
@@ -109,7 +111,9 @@ sub snd_init ( g as Game )
     qglFileClose u
 
     n = snd_mix_setup( g.snd.hnd, qglDspBuf(), qglDspScratch(), _
-                       clng( varseg( sndtab ) ) * 65536& + ( clng( varptr( sndtab ) ) and 65535& ), SND_COUNT% )
+                       clng( varseg( sndtab ) ) * 65536& + ( clng( varptr( sndtab ) ) and 65535& ), SND_COUNT%, _
+                       qglDspScratchBytes() )
+    if ( n < 0 ) then sys_error "0x0053, dsp.asm's DSP_SCRATCH is short of snd_mix.c's table and channels"
     g.snd.on = -1
     g.snd.loops = snd_mix_loops()
     sys_mem_mark "snd"
