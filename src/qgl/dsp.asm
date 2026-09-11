@@ -50,7 +50,7 @@ PIC_CMD         equ     20h
 PIC_EOI         equ     20h
 
 DSP_RING        equ     4096
-DSP_SCRATCH     equ     1664                    ;; the mixer's, after the ring
+DSP_SCRATCH     equ     1792                    ;; the mixer's, after the ring
 DSP_ALLOC       equ     DSP_RING*2 + DSP_SCRATCH
 
 .code
@@ -270,7 +270,7 @@ qglDspPos       endp
 
 ;;::::::::::::::
 ;; qglDspBuf () -> dx:ax = the ring, 4096 bytes
-;; qglDspScratch () -> dx:ax = 1664 bytes after it, the mixer's own
+;; qglDspScratch () -> dx:ax = 1792 bytes after it, the mixer's own
 ;;::::::::::::::
 qglDspBuf       proc    public
                 mov     dx, cs:qgl$dsp_ring

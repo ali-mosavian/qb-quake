@@ -212,6 +212,7 @@ sub host_bench_report ( _
     print #benchf, "snd_on " + ltrim$(str$( g.snd.on ))
     print #benchf, "snd_started " + ltrim$(str$( g.snd.started ))
     print #benchf, "snd_under " + ltrim$(str$( g.snd.under ))
+    print #benchf, "snd_loops " + ltrim$(str$( g.snd.loops ))
     print #benchf, "pl_deaths " + ltrim$(str$( g.fight.deaths ))
     '' the crowd, one line each: kind state hunting frame x y z
     for mi = 0 to g.mdl_count - 1

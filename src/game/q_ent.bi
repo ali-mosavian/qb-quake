@@ -51,6 +51,7 @@ type EntsHead
     ndoor       as integer
     ntrig       as integer
     nmon        as integer
+    namb        as integer
 end type
 
 '' A monster where the map put it, first in the file so host_init can
@@ -76,6 +77,14 @@ type ItemEnt
     amount      as integer     '' healamount or aflag
     pos         as Vec3         '' BSP space, on the floor
     gone        as integer
+end type
+
+'' An ambient_* point, last in the file: the SND_* it loops and 255
+'' times misc.qc's volume. snd_mix.c holds them; nothing here does.
+type EntsAmb
+    snd         as integer
+    vol         as integer
+    org         as Vec3
 end type
 
 const ENT_ITEM_HEALTH   = 0

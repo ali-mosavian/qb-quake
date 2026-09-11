@@ -53,8 +53,15 @@ declare function snd_mix_start ( _
 ) as integer
 declare function snd_mix_frame ( _
     byval dma_pos as integer, _
-    byval adv as long _
+    byval adv as long, _
+    byval ear as long _
 ) as integer
+declare function snd_mix_ambient ( _
+    byval id as integer, _
+    byval vol as integer, _
+    byval org as long _
+) as integer
+declare function snd_mix_loops ( ) as integer
 
 const SND_RATE%      = 11025
 const SND_TAB_BYTES% = SND_COUNT% * 8   '' sndtab.raw after its count
@@ -104,7 +111,23 @@ sub snd_init ( g as Game )
     n = snd_mix_setup( g.snd.hnd, qglDspBuf(), qglDspScratch(), _
                        clng( varseg( sndtab ) ) * 65536& + ( clng( varptr( sndtab ) ) and 65535& ), SND_COUNT% )
     g.snd.on = -1
+    g.snd.loops = snd_mix_loops()
     sys_mem_mark "snd"
+end sub
+
+
+'' ambientsound: recorded at map load, started with the card, looped
+'' for good; the mixer places it from the player each frame
+sub snd_ambient ( _
+    g as Game, _
+    byval id as integer, _
+    byval vol as integer, _
+    org as Vec3 _
+)
+    dim c as integer
+
+    if ( g.snd.off ) then exit sub
+    c = snd_mix_ambient( id, vol, clng( varseg( org ) ) * 65536& + ( clng( varptr( org ) ) and 65535& ) )
 end sub
 
 
@@ -131,7 +154,8 @@ end sub
 '' window then, and the mixer takes PAGE_SLOT
 sub snd_frame ( g as Game )
     if ( g.snd.on = 0 ) then exit sub
-    g.snd.under = snd_mix_frame( qglDspPos(), clng( g.scr.frame_time * SND_RATE% ) )
+    g.snd.under = snd_mix_frame( qglDspPos(), clng( g.scr.frame_time * SND_RATE% ), _
+                                 clng( varseg( g.pl.pos ) ) * 65536& + ( clng( varptr( g.pl.pos ) ) and 65535& ) )
 end sub
 
 

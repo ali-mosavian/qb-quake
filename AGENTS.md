@@ -2228,6 +2228,11 @@ through `PAGE_SLOT`; `sndtab.raw` is the (offset, length) table in the
 order of `q_pl.bi`'s `SND_*`, and `snd_init` refuses a count that
 disagrees. A sound starts at Quake's distance falloff from where it
 began, once, mono; eight channels, the one with least left is stolen.
+The map's `ambient_*` points -- e1m1 has four comp_hum and a drone --
+ship last in ents.bin and loop from sample 0 on eight static channels,
+placed from the player every frame at ATTN_STATIC, three a thousand
+units; `snd_loops` counts them. mksnd refuses a wav whose cue point
+is not 0, since the mixer knows no other loop start.
 The ring and the mixer's scratch are one DOS block, not DGROUP -- that
 is BASIC's string space -- and with the code they cost the e1m1 far
 heap 16K. `-nosound` leaves the card alone; a machine without one fails
@@ -2311,7 +2316,8 @@ min rounded down and the max up, `PackedBounds`; `r_cull_box_c` unpacks
 to six floats up front and `r_leaf_bound` for the spawn scatter. Node
 and Leaf are 16 bytes, 25.6K back: 33.5K of far heap after the depth
 buffer with `MDL_MAX_ENTS` at 48 and three view models loaded, 17.6K
-once the sound layer took its ring and its code. A box
+once the sound layer took its ring and its code, 16.3K with the
+ambients. A box
 only grows, so the walk marks a few more leaves: the world's pixels did
 not move on any reference, but a pickup in the far doorway of
 `tools/ref/bench.bmp` is drawn now and `hud.bmp`'s leaf counter reads

@@ -318,6 +318,14 @@ PY
     else
         echo "FAIL  e1m1 kill: trigger 51 state ${ks:-none}, the hint survived"; rc=1
     fi
+    # the same run carries the map's five ambient_* points, looping on
+    # the static channels from the moment the card came up
+    na=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="snd_loops"{print $2}')
+    if [[ "$na" == 5 ]]; then
+        echo "PASS  e1m1 ambient: snd_loops 5, four hums and a drone"
+    else
+        echo "FAIL  e1m1 ambient: snd_loops ${na:-none}, want 5"; rc=1
+    fi
     # and the dog's leap: 120 units from e1m1's dog at (88,1520,-200), in
     # its sight and on its level, it must leave the ground within 3 s
     run_frame "-lm -nostats -at 208 1520 -200 -yaw 180 -bench 400 -ticks 180" "$VBD_OUT/e1m1-leap.bmp" e1m1.bsp

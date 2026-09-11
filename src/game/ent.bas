@@ -346,6 +346,7 @@ sub ent_load_teleports ( _
     dim dr as EntsDoor
     dim xr as EntsTrig
     dim mr as EntsMon
+    dim ar as EntsAmb
     dim i as integer, j as integer, k as integer
     dim mdlnum as integer
 
@@ -463,6 +464,11 @@ sub ent_load_teleports ( _
         if ( xr.model >= 0 and xr.model <= g.wld.count.models-1 ) then
             ent_trig_init g, xr, models(), trig()
         end if
+    next i
+
+    for  i = 1 to h.namb
+        ent_get u, clng( varseg( ar ) ) * 65536& + (clng( varptr( ar ) ) and 65535&), len( ar )
+        snd_ambient g, ar.snd, ar.vol, ar.org
     next i
 
     qglFileClose u

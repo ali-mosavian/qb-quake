@@ -17,6 +17,7 @@ type SndState
     hnd         as integer      '' the samples' EMS handle
     started     as integer      '' sounds begun, for the bench
     under       as integer      '' frames the DMA got ahead of the mixer
+    loops       as integer      '' ambients looping on the static channels
 end type
 
 type Game
@@ -70,6 +71,12 @@ declare function mod_geom_map ( _
 declare sub snd_init ( g as Game )
 declare sub snd_frame ( g as Game )
 declare sub snd_shutdown ( g as Game )
+declare sub snd_ambient ( _
+    g as Game, _
+    byval id as integer, _
+    byval vol as integer, _
+    org as Vec3 _
+)
 declare sub snd_play ( _
     g as Game, _
     byval id as integer, _

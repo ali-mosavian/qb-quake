@@ -17,6 +17,8 @@ import struct, sys, os, math
 import re
 import zlib
 
+import mksnd
+
 # every output lands here and becomes one assets.zip member
 OUT: dict[str, bytes] = {}
 
@@ -436,6 +438,9 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
     uses: list[tuple] = []
     names: dict[str, int] = {}
     mons: list[tuple[int, tuple[float, float, float], float]] = []
+    ambs: list[tuple[int, int, tuple[float, float, float]]] = []
+    # misc.qc's ambientsound calls: the wav and its volume, ATTN_STATIC
+    amb_kind = {'ambient_comp_hum': ('ambience/comp1', 1.0), 'ambient_drone': ('ambience/drone6', 0.5)}
     mon_kind = {'monster_army': 0, 'monster_knight': 1, 'monster_dog': 2}   # MDL_KIND_*; no model for the rest
     item_kind = {'item_health': 0, 'item_shells': 1, 'item_armor1': 2, 'item_armor2': 3,
                  'weapon_supershotgun': 4, 'item_spikes': 5, 'weapon_nailgun': 6,
@@ -599,12 +604,16 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
             case str(c) if c in item_kind:
                 items.append((item_kind[c], item_amount(c, int(kv.get('spawnflags', '0'))),
                               vec(kv.get('origin', '0 0 0'))))
+            case str(c) if c in amb_kind:
+                wav, fvol = amb_kind[c]
+                ambs.append((mksnd.SOUNDS.index(wav), int(255 * fvol), vec(kv.get('origin', '0 0 0'))))
 
     # a teleporter with no destination still hides its brush
     teles = [(m, *dests[t]) for t, m in trigs if t in dests]
 
-    buf = bytearray(struct.pack('<4f8h', *spawn, angle, nmodels,
-                                len(teles), len(plats), len(hides), len(items), len(doors), len(uses), len(mons)))
+    buf = bytearray(struct.pack('<4f9h', *spawn, angle, nmodels,
+                                len(teles), len(plats), len(hides), len(items), len(doors), len(uses), len(mons),
+                                len(ambs)))
     for kind, org, yaw in mons:
         buf += struct.pack('<h3ff', kind, *org, yaw)
     for m, org, yaw in teles:
@@ -620,6 +629,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
                            secret, shoot, snd, msg)
     for m, kind, target, name, kill, count, wait, speed, travel, snd, msg in uses:
         buf += struct.pack('<6hff3fh40s', m, kind, target, name, kill, count, wait, speed, *travel, snd, msg)
+    for snd, vol, org in ambs:
+        buf += struct.pack('<hh3f', snd, vol, *org)
     return bytes(buf)
 
 

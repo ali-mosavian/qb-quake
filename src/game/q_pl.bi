@@ -192,7 +192,7 @@ const PL_LAND_SOFT#    = -300.0 '' PlayerPreThink: land.wav below this fall spee
 const PL_LAND_HARD#    = -650.0 '' land2.wav and five points
 '' the sounds, in tools/mksnd.py's SOUNDS order; SND_MON + kind * 4 is
 '' a monster's sight, then attack, pain, death
-const SND_COUNT%       = 57
+const SND_COUNT%       = 59
 const SND_SHOTGUN%     = 0
 const SND_SSG%         = 1
 const SND_NAIL%        = 2
@@ -218,6 +218,9 @@ const SND_MON%         = 24
 const SND_DOOR%        = 36    '' doors.qc's sounds 1..4: stop, move
 const SND_SECRET1%     = 44    '' func_door_secret's 1..3: noise1..3
 const SND_BUTTON%      = 53    '' func_button's 0..3
+'' 57, 58 are comp1 and drone6, the ambient_* points; mkassets writes
+'' their ids into ents.bin, so nothing here names them -- and a const
+'' SND_AMBIENT% is the sub snd_ambient to BC, sigil or not
 '' W_FireSuperShotgun: FireBullets (14, dir, '0.14 0.08 0'), two shells,
 '' 0.7 to be ready; with one shell left it fires as the shotgun
 const PL_SSG_RATE#     = 0.7

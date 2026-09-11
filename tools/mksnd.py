@@ -48,13 +48,14 @@ SOUNDS = [
     "doors/basesec1", "doors/basesec2", "doors/basesec2",                           # 50..52
     # func_button's sounds 0..3
     "buttons/airbut1", "buttons/switch21", "buttons/switch02", "buttons/switch04",  # 53..56
+    "ambience/comp1", "ambience/drone6",                                            # 57, 58 the ambients
 ]
 
 
 def wav_samples(name: str, wav: bytes) -> bytes:
     if wav[:4] != b"RIFF" or wav[8:12] != b"WAVE":
         raise SystemExit(f"{name}: not a wav")
-    at, fmt, data = 12, None, None
+    at, fmt, data, loop = 12, None, None, 0
     while at + 8 <= len(wav):
         cid, size = struct.unpack_from("<4sI", wav, at)
         body = wav[at + 8 : at + 8 + size]
@@ -63,9 +64,15 @@ def wav_samples(name: str, wav: bytes) -> bytes:
                 fmt = struct.unpack_from("<HHIIHH", body, 0)
             case b"data":
                 data = body
+            case b"cue ":
+                # the first cue point's sample offset, where Quake's loop rejoins
+                loop = struct.unpack_from("<I", body, 24)[0]
         at += 8 + size + (size & 1)
     if fmt is None or data is None:
         raise SystemExit(f"{name}: no fmt or data chunk")
+    if loop and name.startswith("ambience/"):
+        # doors/doormv1 and the like loop too, in Quake; here they play once
+        raise SystemExit(f"{name}: loops from sample {loop}; snd_mix.c loops an ambient from 0")
     tag, channels, rate, _, _, bits = fmt
     if (tag, channels, rate, bits) != (1, 1, RATE, 8):
         raise SystemExit(f"{name}: want PCM mono {RATE} Hz 8-bit, got {fmt}")
