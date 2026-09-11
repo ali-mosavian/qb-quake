@@ -54,6 +54,10 @@
  */
 #define GAME_VIS_OFFSET 4988
 
+/* e1m6 has 107 submodels; a map with more drawn than this asks at every
+   node, as the walk always did. On the stack: DGROUP is string space. */
+#define ENT_NODES_MAX 128
+
 /* ign here is BASIC's own "ign as integer" -- no byval in the original
    declare, so it is BYREF: r_emit_entities sets it true, walks the
    entity's own submodel tree, then sets it back false before returning
@@ -159,6 +163,10 @@ typedef struct {
     BASARRAY      *pvsb_dsc;
     BASARRAY      *pflag_dsc;
     BASARRAY      *ord_dsc;
+    /* the nodes drawn brush models sit at, ascending; -1 when there are
+       more models than room, and every node asks */
+    short         *ent_node;
+    short          ent_n;
 } WalkCtx;
 
 /* A leaf's faces marked and its entities emitted, in a frame of its own:
@@ -166,9 +174,28 @@ typedef struct {
    about 24 bytes a level, where the nine far pointers it used to copy
    made 70 -- and e1m3 is 85 deep, which ran BASIC's 8K stack out into
    DGROUP and came back as "runtime error 9" from a procedure entry. */
+/* r_emit_entities is BASIC and loops over every model, so it is asked
+   only at a node some drawn model sits at -- not, as it was, at every
+   node visited while any entity was unplaced, which on a map of doors
+   is every node. */
+static int near r_walk_has_ent( WalkCtx *ctx, int nodenr )
+{
+    int lo = 0, hi = ctx->ent_n - 1, mid;
+
+    if ( ctx->ent_n < 0 ) return 1;
+    while ( lo <= hi ) {
+        mid = ( lo + hi ) >> 1;
+        if ( ctx->ent_node[mid] == nodenr ) return 1;
+        if ( ctx->ent_node[mid] < nodenr ) lo = mid + 1; else hi = mid - 1;
+    }
+    return 0;
+}
+
 static void near r_walk_emit( WalkCtx *ctx, int nodenr )
 {
     short ign_tmp = ctx->ign;
+
+    if ( ctx->ign || !r_walk_has_ent( ctx, nodenr ) ) return;
 
     r_emit_entities( ctx->g, nodenr, ctx->model_count, &ctx->cpos,
                       &ign_tmp, ctx->models, ctx->brush,
@@ -247,6 +274,9 @@ void pascal far r_recursive_world_node(
 )
 {
     WalkCtx ctx;
+    short ent_node[ENT_NODES_MAX];
+    BrushModel far *bm = (BrushModel far *) brush->farptr;
+    short m, k, v;
 
     ctx.nds   = (Node      far *) nds_dsc->farptr;
     ctx.lef   = (Leaf      far *) lef_dsc->farptr;
@@ -270,6 +300,16 @@ void pascal far r_recursive_world_node(
     ctx.pvsb_dsc    = pvsb_dsc;
     ctx.pflag_dsc   = pflag_dsc;
     ctx.ord_dsc     = ord_dsc;
+
+    ctx.ent_node = ent_node;
+    ctx.ent_n    = 0;
+    for ( m = 1; m < (short) model_count && !ign; m++ ) {
+        if ( !bm[m].draw ) continue;
+        if ( ctx.ent_n == ENT_NODES_MAX ) { ctx.ent_n = -1; break; }
+        v = bm[m].node;
+        for ( k = ctx.ent_n++; k > 0 && ent_node[k - 1] > v; k-- ) ent_node[k] = ent_node[k - 1];
+        ent_node[k] = v;
+    }
 
     r_walk_rec( &ctx, nodenr, CLIP_ALL );
 }
