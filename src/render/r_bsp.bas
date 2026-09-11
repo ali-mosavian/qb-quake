@@ -193,6 +193,16 @@ dim shared dbg_pvscull as integer
 '' file needs declaring first. Module-local, so this does not belong in
 '' bspfile.bi with the cross-module declarations.
 ''
+declare function r_mdl_vis_c ( _
+    bb as Bounds, _
+    org as Vec3, _
+    byval zmid as single, _
+    nds() as Node, _
+    pln() as Plane, _
+    fru() as DiskPlane, _
+    pvs() as integer _
+) as integer
+
 declare sub r_recursive_world_node ( _
     g as Game, _
     byval nodenr as integer, _
@@ -628,29 +638,15 @@ function r_mdl_visible ( _
     frustum() as DiskPlane _
 ) as integer
     dim bb as Bounds
-    dim p as Vec3
-    dim i as integer, leaf as integer
 
-    r_mdl_visible = 0
     bb.min.x = cint( org.x - radius ) : bb.max.x = cint( org.x + radius )
     bb.min.y = cint( org.y - radius ) : bb.max.y = cint( org.y + radius )
     bb.min.z = cint( org.z + zlo )    : bb.max.z = cint( org.z + zhi )
-    if ( r_cull_box( bb, frustum() ) = 0 ) then exit function
-
-    for i = 0 to 8
-        if ( i = 8 ) then
-            p = org
-            p.z = org.z + (zlo + zhi) * 0.5
-        else
-            if ( i and 1 ) then p.x = bb.max.x else p.x = bb.min.x
-            if ( i and 2 ) then p.y = bb.max.y else p.y = bb.min.y
-            if ( i and 4 ) then p.z = bb.max.z else p.z = bb.min.z
-        end if
-        leaf = r_point_leaf( p, nodes(), planes() )
-        if ( leaf > 0 ) then
-            if ( pvs_now( leaf ) ) then r_mdl_visible = -1 : exit function
-        end if
-    next i
+    '' r_walk.c from here: the cull and nine descents of the tree, which
+    '' forty entities a frame make 360 of. CINT stays in BASIC -- it
+    '' rounds to even and a C cast truncates, and the box decides culling.
+    r_mdl_visible = r_mdl_vis_c( bb, org, (zlo + zhi) * 0.5, _
+                                 nodes(), planes(), frustum(), pvs_now() )
 end function
 
 

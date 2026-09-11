@@ -328,6 +328,64 @@ void pascal far r_pflag_clear( BASARRAY *pflag_dsc, short nwords )
     for ( i = 0; i < nwords; i++ ) p[i] = 0;
 }
 
+/* r_bsp.bas's r_mdl_visible, minus the CINT its caller still does: the
+   box against the frustum, then the eight corners and the centre against
+   the PVS, each a descent of the tree. Forty entities a frame is up to
+   360 descents, and in BASIC that was 2.6ms of the frame.
+
+   The near corner alone decides, as r_cull_box does -- no clip mask,
+   because there are no children to hand one to. */
+short pascal far r_mdl_vis_c(
+    Bounds   *bb,
+    Vec3     *org,
+    float     zmid,
+    BASARRAY *nds_dsc,
+    BASARRAY *pln_dsc,
+    BASARRAY *fru_dsc,
+    BASARRAY *pvs_dsc
+)
+{
+    Node      far *nds = (Node      far *) nds_dsc->farptr;
+    Plane     far *pln = (Plane     far *) pln_dsc->farptr;
+    DiskPlane far *fru = (DiskPlane far *) fru_dsc->farptr;
+    short     far *pvs = (short     far *) pvs_dsc->farptr;
+    float lo[3], hi[3], px, py, pz, dp;
+    short i, nodenr;
+
+    lo[0] = (float) bb->min.x; hi[0] = (float) bb->max.x;
+    lo[1] = (float) bb->min.y; hi[1] = (float) bb->max.y;
+    lo[2] = (float) bb->min.z; hi[2] = (float) bb->max.z;
+
+    /* the frustum is renderer space, y up: the box's z goes in y */
+    for ( i = 0; i < 6; i++ ) {
+        px = fru[i].norm.x > 0.0 ? lo[0] : hi[0];
+        py = fru[i].norm.y > 0.0 ? lo[2] : hi[2];
+        pz = fru[i].norm.z > 0.0 ? lo[1] : hi[1];
+        dp = fru[i].norm.x * px + fru[i].norm.y * py + fru[i].norm.z * pz;
+        if ( ( dp + fru[i].dist ) > 0 ) return 0;
+    }
+
+    for ( i = 0; i < 9; i++ ) {
+        if ( i == 8 ) {
+            px = org->x; py = org->y; pz = org->z + zmid;
+        } else {
+            px = ( i & 1 ) ? hi[0] : lo[0];
+            py = ( i & 2 ) ? hi[1] : lo[1];
+            pz = ( i & 4 ) ? hi[2] : lo[2];
+        }
+        /* r_point_leaf: the tree in BSP space, z up, no swap */
+        nodenr = 0;
+        while ( !( nodenr & 0x8000 ) ) {
+            Plane far *pl = &pln[ nds[nodenr].plane_id ];
+            dp = px * pl->norm.x + py * pl->norm.y + pz * pl->norm.z - pl->dist;
+            nodenr = dp >= 0.0 ? nds[nodenr].child0 : nds[nodenr].child1;
+        }
+        nodenr = ~nodenr;
+        if ( nodenr > 0 && pvs[nodenr] ) return -1;
+    }
+    return 0;
+}
+
 int pascal far r_walk_layout_ok( long off )
 {
     return ( off == GAME_VIS_OFFSET );
