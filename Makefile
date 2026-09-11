@@ -216,7 +216,7 @@ $(BUILD)/%.obj: %.bas $(HDRS) | $(BUILD)
 # qrender's own C ports (r_walk.c, sb_build.c, pl_trace.c, r_span.c),
 # NOT mgl's -- see tools/bcc-qr.sh's own note on why that is a separate
 # script from tools/bcc.sh rather than a shared one with more flags.
-$(BUILD)/%.obj: %.c $(C_HDRS) | $(BUILD)
+$(BUILD)/%.obj: %.c $(C_HDRS) $(BCC_QR) | $(BUILD)
 	$(BCC_QR) $< $@
 
 # On every .inc, for the same reason the BASIC rule takes every .bi:

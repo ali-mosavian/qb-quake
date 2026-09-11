@@ -17,6 +17,11 @@
 # the span renderer and none of the rest has inline asm today, but the
 # flag stays: it is harmless, and the next module to want __asm should
 # not have to rediscover this.
+#
+# -f287: the FPU's own instructions. Without it every float op is an
+# INT 34h-3Dh into the VBDOS runtime's emulator, and that is what it
+# costs: d_alias.c alone went 12.25 -> 10.04 ms a frame on e1m6's
+# monsters.
 set -euo pipefail
 
 SRC_REL="${1:?usage: bcc-qr.sh <src-c> <out-obj>}"
@@ -54,7 +59,7 @@ done
   echo "mount t $TOOLCHAINS/tasm50/TASM/BIN"
   echo "path b:\\bin;t:"
   echo "w:"
-  echo "b:\\bin\\bcc.exe -c -B -3 -mm -Ox$CC_DBG -IW:\\ -IB:\\INCLUDE $base.c > w:\\cc.txt"
+  echo "b:\\bin\\bcc.exe -c -B -3 -f287 -mm -Ox$CC_DBG -IW:\\ -IB:\\INCLUDE $base.c > w:\\cc.txt"
   echo "exit"
 } > "$W/build.conf"
 
