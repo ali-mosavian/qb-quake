@@ -344,6 +344,16 @@ PY
     else
         echo "FAIL  e1m1 armor: pl_armor ${na:-none}, the armor was not taken"; rc=1
     fi
+    # and weapon_supershotgun at (-360,2912,-80): standing on it puts the
+    # super shotgun in hand, with its five shells on the 25
+    run_frame "-lm -nostats -noai -at -360 2912 -80 -yaw 90 -bench 400 -ticks 30" "$VBD_OUT/e1m1-ssg.bmp" e1m1.bsp
+    nw=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_weapon"{print $2}')
+    nsh=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_shells"{print $2}')
+    if [[ "$nw" == 2 && "$nsh" == 30 ]]; then
+        echo "PASS  e1m1 ssg: pl_weapon 2 pl_shells 30, the super shotgun was taken"
+    else
+        echo "FAIL  e1m1 ssg: pl_weapon ${nw:-none} pl_shells ${nsh:-none}, the super shotgun was not taken"; rc=1
+    fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc
 fi

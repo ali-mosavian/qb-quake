@@ -82,6 +82,7 @@ const ENT_ITEM_HEALTH   = 0
 const ENT_ITEM_SHELLS   = 1
 const ENT_ITEM_ARMOR1   = 2      '' green, 100 at 0.3; amount is the value
 const ENT_ITEM_ARMOR2   = 3      '' yellow, 150 at 0.6
+const ENT_ITEM_SSG      = 4      '' weapon_supershotgun; amount is its shells
 const ENT_ITEM_HALF#    = 10.0   '' the box's half width
 const ENT_ITEM_TOP#     = 20.0   '' and its height
 const ENT_ITEM_REACH#   = 32.0   '' Quake's touch: item box against the player's

@@ -148,6 +148,7 @@ declare sub pl_fire ( _
     trig() as TrigEnt _
 )
 declare sub pl_items_touch ( g as Game, item() as ItemEnt )
+declare sub pl_select_weapon ( g as Game )
 declare sub pl_respawn ( g as Game )
 declare sub pl_game_reset ( _
     g as Game, _
@@ -352,6 +353,7 @@ sub host_tick ( _
     fire = ( g.env.mouse.left or g.env.keyboard.ctrl or g.env.hold_fire )
     select case g.fight.state
     case GS_PLAY%
+        pl_select_weapon g
         if ( fire ) then pl_fire g, mdl_ent(), models(), brush(), planes(), item(), door(), trig()
         pl_items_touch g, item()
         '' every soldier's own think -- Quake's 10 Hz, gated inside
@@ -654,10 +656,11 @@ sub host_render ( _
             end if
         end if
     next mdl_i
-    '' the view weapon: v_shot at the eye, turned with the view, last and
-    '' with depth off, as Quake draws it. The fire animation is shot2..6
-    '' at 10 Hz over the half second the shotgun takes to be ready again.
-    if ( g.vmdl.loaded and g.env.no_mdl = 0 and g.env.no_view = 0 ) then
+    '' the view weapon: v_shot, or v_shot2 with the super shotgun in hand,
+    '' at the eye, turned with the view, last and with depth off, as Quake
+    '' draws it. The fire animation is shot2.. at 10 Hz from the shot,
+    '' the model's last frame held until it is ready again.
+    if ( g.env.no_mdl = 0 and g.env.no_view = 0 ) then
         bob.x = g.pl.pos.x : bob.y = g.pl.pos.y : bob.z = g.pl.pos.z + PL_EYE#
         vdx = g.cam.look_at.x - g.cam.pos.x
         vdy = g.cam.look_at.y - g.cam.pos.y
@@ -666,16 +669,21 @@ sub host_render ( _
         if ( vlen < 0.001 ) then vlen = 0.001
         vframe = 0
         if ( g.rdr.anim_time < g.fight.next_fire ) then
-            vframe = 1 + int( ( g.rdr.anim_time - ( g.fight.next_fire - PL_FIRE_RATE# ) ) * 10.0 )
-            if ( vframe > 5 ) then vframe = 5
+            vframe = 1 + int( ( g.rdr.anim_time - g.fight.fire_at ) * 10.0 )
         end if
         '' look_at is the point one unit from cam.pos the eye looks at,
         '' renderer Y up: the yaw's cos and sin are the difference's x and z
         '' over their length, the pitch's are that length and -y, positive
         '' looking down
-        mdl_draw_view g, g.vmdl, vframe, bob, _
-                      vdx / vlen, vdz / vlen, vlen, -vdy, _
-                      mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
+        if ( g.fight.weapon = PL_IT_SSG% and g.smdl.loaded ) then
+            mdl_draw_view g, g.smdl, vframe, bob, _
+                          vdx / vlen, vdz / vlen, vlen, -vdy, _
+                          mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
+        elseif ( g.vmdl.loaded ) then
+            mdl_draw_view g, g.vmdl, vframe, bob, _
+                          vdx / vlen, vdz / vlen, vlen, -vdy, _
+                          mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
+        end if
     end if
     if ( g.ft.n > 0 ) then
         ptd = sys_now() - pt0

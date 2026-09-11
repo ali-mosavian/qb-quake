@@ -144,6 +144,9 @@ type PlayerCombat
     secrets     as integer     '' trigger_secrets found
     armor       as integer     '' armorvalue
     armor_type  as single      '' armortype: the share of a hit it takes, 0 none
+    items       as integer     '' the weapons owned, PL_IT_* bits
+    weapon      as integer     '' the one in hand, a PL_IT_* bit
+    fire_at     as single      '' anim_time of the last shot, the view weapon's frames run from it
 end type
 
 const PL_HEALTH%       = 100
@@ -151,6 +154,14 @@ const PL_ARMOR1_TYPE#  = 0.3    '' armor_touch: green, and yellow
 const PL_ARMOR2_TYPE#  = 0.6
 const PL_SHELLS%       = 25     '' Quake's starting shells
 const PL_FIRE_RATE#    = 0.5    '' the shotgun's attack_finished
+const PL_IT_SHOTGUN%   = 1
+const PL_IT_SSG%       = 2
+'' W_FireSuperShotgun: FireBullets (14, dir, '0.14 0.08 0'), two shells,
+'' 0.7 to be ready; with one shell left it fires as the shotgun
+const PL_SSG_RATE#     = 0.7
+const PL_SSG_PELLETS%  = 14
+const PL_SSG_SPREAD_X# = 0.14
+const PL_SSG_SPREAD_Y# = 0.08
 const PL_SHOT_RANGE#   = 2048.0
 '' W_FireShotgun: FireBullets (6, dir, '0.04 0.04 0'), TraceAttack (4, ...)
 const PL_PELLETS%      = 6

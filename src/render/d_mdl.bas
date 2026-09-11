@@ -116,7 +116,7 @@ declare function mdl_draw_tris ( _
 
 ''::::::::::::::
 '' name: mdl_load
-'' desc: reads <name>.geo (mkmdl.py's own output) and <name[:5]>skn.raw,
+'' desc: reads <name>.geo (mkmdl.py's own output), <name>.vtx and <name>.skn,
 ''       both loose files beside the exe -- mkmdl.py does not pack them
 ''       into base.dat/assets.zip, so this is a plain OPEN and a plain
 ''       qglFileRead, not the "archive::path" convention
@@ -140,8 +140,8 @@ sub mdl_load ( _
 
     m.loaded = 0
     geopath = mdlname + ".geo"
-    vtxpath = left$(mdlname, 5) + "vtx.bin"
-    skinpath = left$(mdlname, 5) + "skn.raw"
+    vtxpath = mdlname + ".vtx"
+    skinpath = mdlname + ".skn"
 
     fh = freefile
     open geopath for binary as #fh

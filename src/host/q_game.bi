@@ -31,6 +31,7 @@ type Game
     door_count  as integer
     trig_count  as integer
     vmdl        as MdlState       '' the view weapon, v_shot
+    smdl        as MdlState       '' and v_shot2, the super shotgun's
     kmdl        as MdlState       '' the knight
     dmdl        as MdlState       '' the dog
 

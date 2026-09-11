@@ -420,7 +420,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
     names: dict[str, int] = {}
     mons: list[tuple[int, tuple[float, float, float], float]] = []
     mon_kind = {'monster_army': 0, 'monster_knight': 1, 'monster_dog': 2}   # MDL_KIND_*; no model for the rest
-    item_kind = {'item_health': 0, 'item_shells': 1, 'item_armor1': 2, 'item_armor2': 3}
+    item_kind = {'item_health': 0, 'item_shells': 1, 'item_armor1': 2, 'item_armor2': 3,
+                 'weapon_supershotgun': 4}
 
     def vec(v: str) -> tuple[float, float, float]:
         x, y, z = (float(t) for t in v.split())
@@ -428,8 +429,10 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
 
     def item_amount(classname: str, flags: int) -> int:
         # items.qc: H_ROTTEN 15, H_MEGA 100, else 25; WEAPON_BIG2 40 shells,
-        # else 20; armor_touch's 100 green, 150 yellow
+        # else 20; armor_touch's 100 green, 150 yellow; weapon_touch's
+        # 5 shells with the super shotgun
         match classname, flags & 1, flags & 2:
+            case 'weapon_supershotgun', _, _: return 5
             case 'item_armor1', _, _: return 100
             case 'item_armor2', _, _: return 150
             case 'item_health', 1, _: return 15

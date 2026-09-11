@@ -89,7 +89,8 @@ declare function mdl_ray_box ( _
 ) as single
 declare sub pl_spread_dir ( _
     dir as Vec3, _
-    byval spread as single, _
+    byval sx as single, _
+    byval sy as single, _
     outdir as Vec3 _
 )
 declare sub pl_damage ( g as Game, byval dmg as integer )
@@ -1996,7 +1997,8 @@ end function
 ''::::::::::::::
 sub pl_spread_dir ( _
     dir as Vec3, _
-    byval spread as single, _
+    byval sx as single, _
+    byval sy as single, _
     outdir as Vec3 _
 )
     dim rx as single, ry as single, rl as single
@@ -2011,8 +2013,8 @@ sub pl_spread_dir ( _
     ux = ry * dir.z
     uy = -rx * dir.z
     uz = rx * dir.y - ry * dir.x
-    a = ( 2.0 * rnd - 1.0 ) * spread
-    b = ( 2.0 * rnd - 1.0 ) * spread
+    a = ( 2.0 * rnd - 1.0 ) * sx
+    b = ( 2.0 * rnd - 1.0 ) * sy
     outdir.x = dir.x + a * rx + b * ux
     outdir.y = dir.y + a * ry + b * uy
     outdir.z = dir.z + b * uz
@@ -2040,10 +2042,20 @@ sub pl_fire ( _
     dim i as integer, p as integer, best as integer
     dim t as single, bt as single
     dim hit( MDL_MAX_ENTS% - 1 ) as integer
+    dim npellet as integer, sx as single, sy as single, rate as single
 
     if ( g.rdr.anim_time < g.fight.next_fire ) then exit sub
     if ( g.fight.shells <= 0 ) then exit sub
-    g.fight.next_fire = g.rdr.anim_time + PL_FIRE_RATE#
+    npellet = PL_PELLETS% : sx = PL_SPREAD# : sy = PL_SPREAD# : rate = PL_FIRE_RATE#
+    if ( g.fight.weapon = PL_IT_SSG% ) then
+        rate = PL_SSG_RATE#
+        if ( g.fight.shells >= 2 ) then
+            npellet = PL_SSG_PELLETS% : sx = PL_SSG_SPREAD_X# : sy = PL_SSG_SPREAD_Y#
+            g.fight.shells = g.fight.shells - 1
+        end if
+    end if
+    g.fight.next_fire = g.rdr.anim_time + rate
+    g.fight.fire_at = g.rdr.anim_time
     g.fight.show_hostile = g.rdr.anim_time + 1.0
     g.fight.shells = g.fight.shells - 1
     g.fight.flash_until = g.rdr.anim_time + 0.1
@@ -2059,8 +2071,8 @@ sub pl_fire ( _
     for i = 0 to g.mdl_count - 1
         hit(i) = 0
     next i
-    for p = 1 to PL_PELLETS%
-        pl_spread_dir aim, PL_SPREAD#, dir
+    for p = 1 to npellet
+        pl_spread_dir aim, sx, sy, dir
         fin.x = org.x + dir.x * PL_SHOT_RANGE#
         fin.y = org.y + dir.y * PL_SHOT_RANGE#
         fin.z = org.z + dir.z * PL_SHOT_RANGE#
@@ -2162,7 +2174,7 @@ sub mdl_fire ( _
 
     dmg = 0
     for p = 1 to MDL_PELLETS%
-        pl_spread_dir aim, MDL_SPREAD#, dir
+        pl_spread_dir aim, MDL_SPREAD#, MDL_SPREAD#, dir
         fin.x = org.x + dir.x * PL_SHOT_RANGE#
         fin.y = org.y + dir.y * PL_SHOT_RANGE#
         fin.z = org.z + dir.z * PL_SHOT_RANGE#
@@ -2237,12 +2249,20 @@ sub pl_respawn ( g as Game )
     pl_reset_player g
 end sub
 
+'' W_ChangeWeapon: 1 the shotgun, 2 the super shotgun once it is owned
+sub pl_select_weapon ( g as Game )
+    if ( g.env.keyboard.one ) then g.fight.weapon = PL_IT_SHOTGUN%
+    if ( g.env.keyboard.two and ( g.fight.items and PL_IT_SSG% ) ) then g.fight.weapon = PL_IT_SSG%
+end sub
+
 sub pl_reset_player ( g as Game )
     g.fight.health = PL_HEALTH%
     g.fight.shells = PL_SHELLS%
     g.fight.armor = 0
     g.fight.armor_type = 0.0
     g.fight.secrets = 0
+    g.fight.items = PL_IT_SHOTGUN%
+    g.fight.weapon = PL_IT_SHOTGUN%
     g.fight.next_fire = 0.0
     g.fight.show_hostile = 0.0
     g.pl.pos.x = g.fight.spawn.x : g.pl.pos.y = g.fight.spawn.y : g.pl.pos.z = g.fight.spawn.z
@@ -2327,6 +2347,13 @@ sub pl_items_touch ( g as Game, item() as ItemEnt )
                         if ( g.fight.shells > PL_SHELLS_MAX% ) then g.fight.shells = PL_SHELLS_MAX%
                         item(i).gone = -1
                     end if
+                elseif ( item(i).kind = ENT_ITEM_SSG ) then
+                    '' weapon_touch: the weapon, its shells, and it is the one in hand
+                    g.fight.items = g.fight.items or PL_IT_SSG%
+                    g.fight.weapon = PL_IT_SSG%
+                    g.fight.shells = g.fight.shells + item(i).amount
+                    if ( g.fight.shells > PL_SHELLS_MAX% ) then g.fight.shells = PL_SHELLS_MAX%
+                    item(i).gone = -1
                 elseif ( item(i).kind = ENT_ITEM_ARMOR1 or item(i).kind = ENT_ITEM_ARMOR2 ) then
                     '' armor_touch: only what beats the armor worn, type * value
                     atype = PL_ARMOR1_TYPE#

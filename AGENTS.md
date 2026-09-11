@@ -2124,10 +2124,24 @@ through at all. Subtract `cam.pos` first. `MEM_MARKS` is 40 now and
 **The view weapon is v_shot from the PAK**, `mdl_draw_view`: the model
 at the eye, turned by the view's yaw and pitch -- `mdl_draw_tris` takes
 the pitch as a cos/sin pair, applied in model space before the yaw --
-and drawn last with depth off, as Quake does. `shot2..6` play over the
-half second the shotgun takes to reload. `-noview` leaves it out, which
-the model gate needs: its away tick asks that the soldiers add nothing.
-Both references carry the gun now.
+and drawn last with depth off, as Quake does. `shot2..` play at 10 Hz
+from the shot. `-noview` leaves it out, which the model gate needs:
+its away tick asks that the soldiers add nothing. Both references
+carry the gun now.
+
+**`weapon_supershotgun` is v_shot2 and W_FireSuperShotgun**: the
+pickup is an item kind that puts it in hand with five shells, `1` and
+`2` choose (W_ChangeWeapon, `pl_select_weapon`), and a shot is 14
+pellets at 0.14 by 0.08 for two shells, 0.7 to be ready -- or the
+shotgun's six with one shell left. `fight.items` holds the weapons
+owned as bits and `fight.weapon` the one in hand. mkmdl.py writes
+`<name>.vtx` and `<name>.skn` beside the `.geo` now: the old
+`<name[:5]>vtx.bin` cut v_shot and v_shot2 to the same v_sho. In hand
+it shows as a band four rows deep above the bar, 40 pixels: its top
+edge is 6 units under the eye 14 forward, and this view's centre is
+the frame's, where Quake's is the centre of the rows above the bar --
+8 rows higher on 100. Rendering above the bar instead of under it would
+move every reference; not done.
 
 **Pickups are the map's own `item_health`/`item_shells`**, shipped in
 `ents.bin` after the hides, dropped to the hull floor at load, and drawn
@@ -2232,8 +2246,9 @@ as `side >> 1` in `d_faces.c`, and `CacheSlot.cls` (11K), which only the
 selftest read and `sc_bord` already held per block. Then, for the dog:
 a model's triangles into page 1 of its EMS handle (20K, the four arrays
 and their plumbing gone), `Plane.ptype` (3.6K, never read), the campath
-arrays only under `-campath` (3K). 25.6K of far heap is free after the
-depth buffer, DOS's largest block 1K. Next on the list if it tightens:
+arrays only under `-campath` (3K). 15.5K of far heap is free after the
+depth buffer with `MDL_MAX_ENTS` at 48 and both view models loaded,
+DOS's largest block 704 bytes. Next on the list if it tightens:
 the node and leaf bounds at 6 bytes instead of 12 -- the C cull unpacks
 them for nothing, unlike the BASIC attempt this file records -- and
 `sc_slot` at 33K.

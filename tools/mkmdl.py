@@ -17,7 +17,8 @@ Emits (DOS 8.3 names, since the loader opens them by name):
                  as fixed-point Integers, then one vertex array per
                  animation frame as raw BYTES -- the same trivertx_t
                  compression the .mdl file itself already uses.
-    <name>skn.raw  the skin: sw*sh palette indices, top-down, no header
+    <name>.vtx   one vertex array per frame as raw BYTES, no header
+    <name>.skn   the skin: sw*sh palette indices, top-down, no header
 
 UVs are normalised 0..1 -- uGL's own convention, and the patched library
 scales by xRes rather than xRes-1 (see ugl-patch/README.md). The `onseam`
@@ -158,14 +159,14 @@ def main() -> int:
     for f in frames:
         q = np.clip(np.rint((f.verts - vmin) / vscale), 0, 255).astype(np.uint8)
         vtxbuf += q.tobytes()
-    vtxpath = os.path.join(outdir, f"{name[:5]}vtx.bin")
+    vtxpath = os.path.join(outdir, f"{name[:8]}.vtx")
     open(vtxpath, "wb").write(bytes(vtxbuf))
 
     # Raw palette indices, top-down, no header: the .geo already carries
     # sw and sh, and a second copy in a BMP header is a second place for
     # them to be wrong. qgl has no BMP reader and does not want one --
     # the world atlas ships as texr.raw/texs.raw for the same reason.
-    skn = os.path.join(outdir, f"{name[:5]}skn.raw")
+    skn = os.path.join(outdir, f"{name[:8]}.skn")
     open(skn, "wb").write(res.tobytes())
 
     print(f"{name}: {len(m.tris)} tris, {len(m.st)} verts, {len(frames)} frames")

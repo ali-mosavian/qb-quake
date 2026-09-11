@@ -331,6 +331,7 @@ declare sub ent_load_spawn ( _
 declare sub pl_init ( _
     g as Game _
 )
+declare sub pl_reset_player ( g as Game )
 declare function ent_load_monsters ( _
     g as Game, _
     mdl_ent() as MdlEnt, _
@@ -745,9 +746,8 @@ sub host_init ( _
     scr_begin_loading g
     ent_load_spawn g
     pl_init g
-    g.fight.health = PL_HEALTH%
-    g.fight.shells = PL_SHELLS%
     g.fight.spawn.x = g.pl.pos.x : g.fight.spawn.y = g.pl.pos.y : g.fight.spawn.z = g.pl.pos.z
+    pl_reset_player g
     '' a headless run has no one to press fire, and its frame is a reference
     g.fight.state = GS_TITLE%
     if ( g.env.bench_frames > 0 or g.env.bench_ticks > 0 or g.env.cam_path ) then g.fight.state = GS_PLAY%
@@ -802,6 +802,7 @@ sub host_init ( _
     '' to install here.
     mdl_load g, g.mdl, "soldier"
     mdl_load g, g.vmdl, "v_shot"
+    mdl_load g, g.smdl, "v_shot2"
     mdl_load g, g.kmdl, "knight"
     mdl_load g, g.dmdl, "dog"
     g.mdl_count = 0
