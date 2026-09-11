@@ -108,20 +108,32 @@ run_frame() {   # $1 = flags, $2 = where to keep BENCH.BMP, $3 = map (default dm
 # lands, and the frame comes out as slanted stripes of texture from
 # faces that were never in view. 87% of pixels differed before the fix,
 # ~2.5% after; the 5% allows the edges a working depth test really moves.
+#
+# The e1m6 arm is also what holds -noz to PAINTER'S order. The draw walk
+# runs front to back and depth-tests when there is a buffer; with none,
+# that same walk paints far faces over near ones and the world comes out
+# inside out. Measured, forcing the front-to-back walk on regardless:
+# 3,740 of 16,000 pixels, 23.4% -- far outside the 5% a working depth
+# test may move.
 if [[ "${1:-}" == "--depth" ]]; then
     build_exe
-    BENCH="-lm -nostats -yaw 182 -bench 40 -ticks 60"
-    run_frame "$BENCH"      "$VBD_OUT/depth-z.bmp"
-    run_frame "$BENCH -noz" "$VBD_OUT/depth-noz.bmp"
-    out=$(python3 "$ROOT/tools/imgdiff.py" "$VBD_OUT/depth-z.bmp" "$VBD_OUT/depth-noz.bmp" | tail -1)
-    pct=$(sed -n 's/.*(\([0-9.]*\)%).*/\1/p' <<< "$out")
-    echo "  $out"
-    if [[ "$out" == IDENTICAL* ]] || awk -v p="$pct" 'BEGIN{exit !(p+0 <= 5.0)}'; then
-        echo "PASS  depth changes only what depth may change"
-        exit 0
-    fi
-    echo "FAIL  the depth buffer changed the picture, not the ordering"
-    exit 1
+    rc=0
+    for m in dm3ish e1m6; do
+        [[ "$m" == dm3ish ]] && BENCH="-lm -nostats -yaw 182 -bench 40 -ticks 60" \
+                             || BENCH="-lm -nostats -walk -bench 400 -ticks 600"
+        run_frame "$BENCH"      "$VBD_OUT/depth-z.bmp"   "$m.bsp"
+        run_frame "$BENCH -noz" "$VBD_OUT/depth-noz.bmp" "$m.bsp"
+        out=$(python3 "$ROOT/tools/imgdiff.py" "$VBD_OUT/depth-z.bmp" "$VBD_OUT/depth-noz.bmp" | tail -1)
+        pct=$(sed -n 's/.*(\([0-9.]*\)%).*/\1/p' <<< "$out")
+        echo "  $m $out"
+        if [[ "$out" == IDENTICAL* ]] || awk -v p="$pct" 'BEGIN{exit !(p+0 <= 5.0)}'; then
+            echo "PASS  $m: depth changes only what depth may change"
+        else
+            echo "FAIL  $m: the depth buffer changed the picture, not the ordering"
+            rc=1
+        fi
+    done
+    exit $rc
 fi
 
 # --model is the streak test. mdl_draw projected every vertex and then

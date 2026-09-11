@@ -247,6 +247,21 @@ qgl$fdzdx       real4   0.0                     ;; only qgl$drawP reads them
 
 
 
+;; THE COVERAGE, one interval a row: what the polygons drawn so far
+;; already cover. It is never allowed to claim more than it has --
+;; forgetting coverage costs pixels, claiming it would cost the picture
+;; -- so two intervals that do not touch keep the wider and drop the
+;; other. lo >= hi is a row nothing has covered.
+;;
+;; A row past the table simply claims nothing -- the scan bounds-checks
+;; and skips, so a destination taller than this loses the skip and keeps
+;; the picture. 256 is every mode qgl has a filler for.
+QGL_COV_ROWS    equ     256
+
+qgl_cov_on      dw      0
+qgl_cov_lo      dw      QGL_COV_ROWS dup (0)
+qgl_cov_hi      dw      QGL_COV_ROWS dup (0)
+
 ;; qglRsPoly's phases in RDTSC cycles, and its calls: settex, gradients,
 ;; clip, fixup-to-scan, scan, count; then scanlines and pixels filled,
 ;; affine then perspective. qglPrfTake reads one and zeroes it.
@@ -1037,6 +1052,41 @@ qglRsPoly     proc    public uses bx cx dx si di ds es,\
 qglRsPoly     endp
 
 ;; qglPrfTake ( k ) -> dx:ax = qgl_cy[k], which is then zeroed
+;;::::::::::::::
+;; qglRsCoverClear -- forget every row, and switch the skip on. Once at
+;; the top of a front-to-back pass.
+;;
+;; qglRsCover ( on ) -- whether the polygons that follow take part.
+;; SEPARATE from the clear on purpose: a pass turns it off for the
+;; polygons it cannot vouch for -- a brush entity, whose place in the
+;; order is an approximation and not the tree's own answer -- and back on
+;; afterwards, and neither may lose what the world has already claimed.
+;;
+;; Only the perspective scan reads it, which is the world: a model is
+;; drawn after the world and IN FRONT of parts of it, and coverage
+;; cannot tell those apart -- depth can, and does.
+;;::::::::::::::
+qglRsCoverClear proc    public uses ax cx di es
+                push    ds
+                pop     es
+                cld
+                xor     ax, ax
+                mov     di, O qgl_cov_lo        ;; two clears, not one over
+                mov     cx, QGL_COV_ROWS        ;; both: nothing declares
+                rep     stosw                   ;; them adjacent
+                mov     di, O qgl_cov_hi
+                mov     cx, QGL_COV_ROWS
+                rep     stosw
+                mov     qgl_cov_on, 1
+                ret
+qglRsCoverClear endp
+
+qglRsCover    proc    public uses ax, on:word
+                mov     ax, on
+                mov     qgl_cov_on, ax
+                ret
+qglRsCover    endp
+
 qglPrfTake    proc    public uses bx, k:word
                 mov     bx, k
                 shl     bx, 2
@@ -1392,6 +1442,7 @@ qgl$drawP       proc    near private,\
                 local   lf_v:real4, lf_dvdy:real4
                 local   rg_x:dword, rg_dxdy:dword
                 local   lf_z:real4, lf_dzdy:real4
+                local   cov_x0:word, cov_x1:word
 
                 mov     lines, 0
                 mov     si, O qgl$fx
@@ -1643,6 +1694,97 @@ qgl$drawP       proc    near private,\
                 FXFLOOR esi
                 sub     si, ax
                 jle     @@advance               ;; the edges have crossed
+
+                ;;
+                ;; WHAT THIS ROW ALREADY COVERS comes off the front of the
+                ;; span, or off its back. A covered MIDDLE is left alone:
+                ;; splitting the span would need a list per row, and depth
+                ;; is what keeps that case right anyway.
+                ;;
+                ;; TRIMMING THE FRONT MOVES A FEW PIXELS BY A TEXEL, and
+                ;; that is this trim's whole cost, measured: the filler
+                ;; re-divides every QGL_SUBDIVP pixels, so a span that
+                ;; starts k pixels later restarts that phase elsewhere and
+                ;; interpolates between different divides. e1m6 unlit, 600
+                ;; ticks: back trim alone is BYTE-IDENTICAL to no coverage
+                ;; at all, which is what says the bookkeeping below is
+                ;; right; both trims move 6 pixels of 16,000 and save a
+                ;; further 1.7ms of 44.6.
+                ;;
+                cmp     qgl_cov_on, 0
+                je      @@cov_none
+                mov     bx, yy
+                add     bx, bx
+                cmp     bx, QGL_COV_ROWS * 2
+                jae     @@cov_none              ;; past the table: no claim
+                mov     cx, qgl_cov_lo[bx]
+                mov     dx, qgl_cov_hi[bx]
+                mov     di, ax
+                add     di, si                  ;; di= x1
+                mov     cov_x0, ax
+                mov     cov_x1, di
+                cmp     cx, dx
+                jge     @@cov_take              ;; nothing covered here yet
+
+                cmp     ax, cx                  ;; x0 inside [lo,hi)?
+                jl      @@cov_r
+                cmp     ax, dx
+                jge     @@cov_r
+                mov     ax, dx
+@@cov_r:        cmp     di, dx                  ;; x1 inside?
+                jg      @@cov_u
+                cmp     di, cx
+                jle     @@cov_u
+                mov     di, cx
+
+                ;; the union where the two touch; where they do not, the
+                ;; wider of them and the other forgotten
+@@cov_u:        mov     si, cov_x1
+                cmp     si, cx
+                jl      @@cov_apart
+                mov     si, cov_x0
+                cmp     si, dx
+                jg      @@cov_apart
+                cmp     si, cx
+                jge     @F
+                mov     qgl_cov_lo[bx], si
+@@:             mov     si, cov_x1
+                cmp     si, dx
+                jle     @F
+                mov     qgl_cov_hi[bx], si
+@@:             jmp     short @@cov_trim
+
+@@cov_apart:    mov     si, cov_x1
+                sub     si, cov_x0
+                push    ax
+                mov     ax, dx
+                sub     ax, cx
+                cmp     si, ax
+                pop     ax
+                jle     @@cov_trim              ;; the old one is wider
+
+@@cov_take:     mov     si, cov_x0
+                mov     qgl_cov_lo[bx], si
+                mov     si, cov_x1
+                mov     qgl_cov_hi[bx], si
+
+@@cov_trim:     mov     si, di
+                sub     si, ax
+                jle     @@advance               ;; the row had all of it
+                mov     di, ax
+                sub     di, cov_x0              ;; di= pixels cut off the front
+                jz      @@cov_none
+                push    ax
+                movzx   eax, di                 ;; the sub-pixel offset the
+                shl     eax, 16                 ;; setup below carries takes
+                add     pfrac, eax              ;; whole pixels too
+                cmp     qgl$zmode, QGL_Z_OFF
+                je      @F
+                movzx   eax, di
+                imul    eax, qgl$zdzdx
+                add     qgl$zacc, eax
+@@:             pop     ax
+@@cov_none:
 
                 ;; u/z, v/z and 1/z at the first pixel centre, in the order
                 ;; the filler reads them: st(0) u', st(1) v', st(2) z'.

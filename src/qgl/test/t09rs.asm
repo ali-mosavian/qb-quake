@@ -32,6 +32,8 @@ qglSfZNew     proto   far :dword, :word
 qglSfZClear   proto   far :dword, :word
 qglSfZFree    proto   far :dword
 qglZScale     proto   far :dword
+qglRsCover    proto   far :word
+qglRsCoverClear proto far
 
 SFW              equ     64
 SFH              equ     64
@@ -54,6 +56,18 @@ n_straddle      db      'straddling ems refused $'
 ;; the three below name what went wrong, not what is checked: each was a
 ;; real defect against mgl and each drew a wrong frame for months.
 n_pbox          db      'ptex adds no half pixel$'
+;; Coverage may under-report and lose a skip; it may never over-report,
+;; which loses a PIXEL. Each case below names the side it pins.
+n_covfull       db      'covered span draws none$'
+n_covleft       db      'front trim keeps 40..55$'
+n_covlx         db      'and starts at 40       $'
+n_covright      db      'back trim keeps 0..7   $'
+n_covrx         db      'and ends at 7          $'
+n_covoff        db      'coverage off draws all $'
+n_covkeep       db      'off then on forgets not$'
+n_covwide       db      'apart and wider replaces$'
+n_covnarrow     db      'apart and narrower kept$'
+n_covmid        db      'a covered middle draws $'
 n_ccw           db      'ccw winding still draws$'
 n_coll          db      'collinear 0,1,2 draws  $'
 n_dzdy          db      'z steps by fx height   $'
@@ -163,6 +177,41 @@ sqh             QVert   <8.5,  8.5,  1.0, 0.0, 0.0>
                 QVert   <40.5, 40.5, 1.0, 1.0, 1.0>
                 QVert   <8.5,  40.5, 1.0, 0.0, 1.0>
 sqhp            dd      0
+
+;; two more squares for the coverage cases, on the same half-pixel
+;; convention as sqh: 24..55 overlaps the first square's right half, and
+;; 0..23 overlaps its left.
+sqcr            QVert   <24.5, 8.5,  1.0, 0.0, 0.0>
+                QVert   <56.5, 8.5,  1.0, 1.0, 0.0>
+                QVert   <56.5, 40.5, 1.0, 1.0, 1.0>
+                QVert   <24.5, 40.5, 1.0, 0.0, 1.0>
+sqcrp           dd      0
+
+sqcl            QVert   <0.5,  8.5,  1.0, 0.0, 0.0>
+                QVert   <24.5, 8.5,  1.0, 1.0, 0.0>
+                QVert   <24.5, 40.5, 1.0, 1.0, 1.0>
+                QVert   <0.5,  40.5, 1.0, 0.0, 1.0>
+sqclp           dd      0
+
+;; three more for the intervals that do not overlap, and the one that
+;; swallows the claim whole.
+sqcn            QVert   <8.5,  8.5,  1.0, 0.0, 0.0>   ;; 8..15, narrow
+                QVert   <16.5, 8.5,  1.0, 1.0, 0.0>
+                QVert   <16.5, 40.5, 1.0, 1.0, 1.0>
+                QVert   <8.5,  40.5, 1.0, 0.0, 1.0>
+sqcnp           dd      0
+
+sqcm            QVert   <24.5, 8.5,  1.0, 0.0, 0.0>   ;; 24..39, the middle
+                QVert   <40.5, 8.5,  1.0, 1.0, 0.0>
+                QVert   <40.5, 40.5, 1.0, 1.0, 1.0>
+                QVert   <24.5, 40.5, 1.0, 0.0, 1.0>
+sqcmp           dd      0
+
+sqcw            QVert   <8.5,  8.5,  1.0, 0.0, 0.0>   ;; 8..55, over it
+                QVert   <56.5, 8.5,  1.0, 1.0, 0.0>
+                QVert   <56.5, 40.5, 1.0, 1.0, 1.0>
+                QVert   <8.5,  40.5, 1.0, 0.0, 1.0>
+sqcwp           dd      0
 
 ;; the same square, wound the other way. mgl reads the winding off the
 ;; denominator's sign and walks the ring backwards for a CCW one
@@ -629,6 +678,112 @@ tmain           proc    far public uses bx cx dx si di es
                 invoke  qglRsPoly, dst, pconstp, 4, QGL_M_PTEX, tcol
                 invoke  scan, 10
                 CHK     n_pconst, ax, 60*32
+
+                ;;
+                ;; 15. the coverage, which is qgl$drawP's alone. Depth is
+                ;;     off here on purpose: coverage has to hold the span
+                ;;     back BY ITSELF, and with depth on a wrong trim
+                ;;     hides behind the compare that would have rejected
+                ;;     the same pixels anyway.
+                ;;
+                mov     word ptr sqcrp, offset sqcr
+                mov     word ptr sqcrp+2, ds
+                mov     word ptr sqclp, offset sqcl
+                mov     word ptr sqclp+2, ds
+
+                mov     word ptr sqcnp, offset sqcn
+                mov     word ptr sqcnp+2, ds
+                mov     word ptr sqcmp, offset sqcm
+                mov     word ptr sqcmp+2, ds
+                mov     word ptr sqcwp, offset sqcw
+                mov     word ptr sqcwp+2, ds
+
+                invoke  qglSfZMode, dst, QGL_Z_OFF
+                invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
+                invoke  qglRsCoverClear
+
+                invoke  qglDrFill, tx, 0, 0, 7, 7, 99
+                invoke  qglRsPoly, dst, sqhp, 4, QGL_M_PTEX, tx
+
+                ;; the same square again, in another colour: every pixel
+                ;; of it is claimed, so none of it may reach the filler
+                invoke  qglDrFill, tx, 0, 0, 7, 7, 77
+                invoke  qglRsPoly, dst, sqhp, 4, QGL_M_PTEX, tx
+                invoke  scan, 77
+                CHK     n_covfull, ax, 0
+
+                ;; overlapping on the LEFT: 24..39 is claimed, 40..55 is
+                ;; not, so the span comes off its front
+                invoke  qglRsPoly, dst, sqcrp, 4, QGL_M_PTEX, tx
+                invoke  scan, 77
+                CHK     n_covleft, ax, 16*32
+                mov     ax, xmin
+                CHK     n_covlx, ax, 40
+
+                ;; and on the RIGHT: 8..23 is claimed, 0..7 is not
+                invoke  qglDrFill, tx, 0, 0, 7, 7, 55
+                invoke  qglRsPoly, dst, sqclp, 4, QGL_M_PTEX, tx
+                invoke  scan, 55
+                CHK     n_covright, ax, 8*32
+                mov     ax, xmax
+                CHK     n_covrx, ax, 7
+
+                ;; and off is off
+                invoke  qglRsCover, 0
+                invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
+                invoke  qglRsPoly, dst, sqhp, 4, QGL_M_PTEX, tx
+                invoke  scan, 55
+                CHK     n_covoff, ax, 32*32
+
+                ;; back ON must not forget: a pass switches it off for
+                ;; the polygons it cannot vouch for and on again after,
+                ;; and the world's claims have to survive that
+                invoke  qglRsCover, 1
+                invoke  qglDrFill, tx, 0, 0, 7, 7, 44
+                invoke  qglRsPoly, dst, sqhp, 4, QGL_M_PTEX, tx
+                invoke  scan, 44
+                CHK     n_covkeep, ax, 0
+
+                ;;
+                ;; 16. two intervals that do not touch: one row holds one,
+                ;;     so the wider is kept and the other FORGOTTEN. Being
+                ;;     forgotten costs a skip, which is allowed; being
+                ;;     remembered wrongly would cost a pixel.
+                ;;
+                invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
+                invoke  qglRsCoverClear
+
+                invoke  qglDrFill, tx, 0, 0, 7, 7, 99
+                invoke  qglRsPoly, dst, sqcnp, 4, QGL_M_PTEX, tx  ;; 8..15
+                invoke  qglDrFill, tx, 0, 0, 7, 7, 77
+                invoke  qglRsPoly, dst, sqcrp, 4, QGL_M_PTEX, tx  ;; 24..55
+
+                ;; 24..55 is 32 wide against 8..15's 8, so it replaced it
+                invoke  qglDrFill, tx, 0, 0, 7, 7, 55
+                invoke  qglRsPoly, dst, sqcnp, 4, QGL_M_PTEX, tx
+                invoke  scan, 55
+                CHK     n_covwide, ax, 8*32
+
+                ;; and the narrow one it just drew did not displace it
+                invoke  qglDrFill, tx, 0, 0, 7, 7, 33
+                invoke  qglRsPoly, dst, sqcrp, 4, QGL_M_PTEX, tx
+                invoke  scan, 33
+                CHK     n_covnarrow, ax, 0
+
+                ;;
+                ;; 17. a claim wholly INSIDE the span. Splitting would
+                ;;     need a list a row, so the middle is drawn again
+                ;;     and the row ends up claiming all of it.
+                ;;
+                invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
+                invoke  qglRsCoverClear
+                invoke  qglDrFill, tx, 0, 0, 7, 7, 99
+                invoke  qglRsPoly, dst, sqcmp, 4, QGL_M_PTEX, tx  ;; 24..39
+                invoke  qglDrFill, tx, 0, 0, 7, 7, 22
+                invoke  qglRsPoly, dst, sqcwp, 4, QGL_M_PTEX, tx  ;; 8..55
+                invoke  scan, 22
+                CHK     n_covmid, ax, 48*32
+                invoke  qglRsCover, 0
 
                 ret
 tmain           endp

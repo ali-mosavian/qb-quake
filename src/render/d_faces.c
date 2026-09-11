@@ -105,6 +105,13 @@ extern short pascal far qglRsPoly    ( long dst, void far *v, short cnt,
    leaves the surface with depth OFF -- when the surface has no depth
    buffer, which is what -noz produces, so this may be called blind. */
 extern short pascal far qglSfZMode   ( long surf, short mode );
+/* The perspective scan skips what the rows already cover. Clear once at
+   the top of a front-to-back pass; qglRsCover says whether the polygons
+   that follow take part, and never forgets what is already claimed.
+   Coverage never decides what is visible, only what is worth iterating
+   -- depth decides, which is why neither may run without it. */
+extern void  pascal far qglRsCoverClear ( void );
+extern void  pascal far qglRsCover   ( short on );
 extern void  pascal far qglDrLine    ( long d, short x0, short y0,
                                        short x1, short y1, short col );
 
@@ -328,6 +335,7 @@ void pascal far d_draw_faces(
     long       far *tex_ofs = (long       far *)dp->tex_ofs_ptr;
 
     short mi, m_node, ti, i, j, v0, gn, vcnt, cnt;
+    short z_have, ord_lo, ord_hi, ord_st, cov_now, is_ent;
     short tex, tex_id, draw_mip, mip_level, liquid;
     short z_mode, lm_use, lm_on;
     long  q_dst;                /* the destination Surface */
@@ -380,7 +388,25 @@ void pascal far d_draw_faces(
         q_ok = 1;
     }
 
-    for ( mi = 0; mi < dp->ord_count; mi++ ) {
+    /*
+     * FRONT TO BACK, which is the order list read backwards: depth
+     * rejects the hidden pixels and coverage stops their spans reaching
+     * the filler at all, where painter's order drew every one of them
+     * and let the next face paint over it.
+     *
+     * BOTH OF THOSE ARE DEPTH. Without a buffer -- -noz -- reversing the
+     * walk is not an optimisation but the picture inside out, far faces
+     * painted over near ones, so the walk goes back to front and the
+     * modes go back to what they were. Asked once, here: the answer
+     * cannot change inside a frame.
+     */
+    z_have = q_ok ? qglSfZMode( q_dst, QGL_Z_TEST ) : 0;
+    if ( z_have ) { ord_lo = dp->ord_count - 1; ord_hi = -1;            ord_st = -1; }
+    else          { ord_lo = 0;                 ord_hi = dp->ord_count; ord_st =  1; }
+    cov_now = z_have;
+    if ( z_have ) qglRsCoverClear();
+
+    for ( mi = ord_lo; mi != ord_hi; mi += ord_st ) {
         D_ARRAYS_REFRESH();
         m_node    = order[mi];
         leaf_indx = nodes[m_node].lface_id;
@@ -483,12 +509,13 @@ void pascal far d_draw_faces(
             if ( vcnt < 0 ) vcnt = 0;
 
             /*
-             * Depth mode follows what the face belongs to. The world only
-             * writes -- it arrives front to back, so a test could never
-             * reject what the order already settled, and rejecting costs
-             * a compare per pixel for nothing. Brush entities test,
+             * Depth mode follows what the face belongs to, and what the
+             * walk above decided. Back to front -- which is what -noz
+             * leaves -- the world only WRITES, since a test could never
+             * reject what the order already settled and rejecting costs
+             * a compare per pixel for nothing, while brush entities test
              * because a door swinging through a doorway has no such
-             * guarantee.
+             * guarantee. Front to back everything tests.
              *
              * Set per face rather than switched on change. There was a
              * cache here once; it took qglZMode's return, which answered
@@ -502,7 +529,24 @@ void pascal far d_draw_faces(
              * qglSfZMode refuses and leaves the surface OFF, which is
              * exactly what -noz should draw.
              */
-            z_mode = ( tri[i].side >> 1 ) ? QGL_Z_TEST : QGL_Z_SET;
+            /*
+             * TEST for a world face too, once the walk is front to back:
+             * the near one is already down and the far one must be
+             * asked. Back to front -- -noz -- it is the rule above.
+             *
+             * AND A BRUSH ENTITY TAKES NO PART IN COVERAGE. Its place in
+             * the order is ent_find_node's approximation, not the tree's
+             * own answer, so it can be drawn before a world face that is
+             * actually in front of it. Depth still settles that; a claim
+             * would not, and would take the world face's span away
+             * before depth ever saw it.
+             */
+            is_ent = ( tri[i].side >> 1 ) != 0;
+            z_mode = z_have ? QGL_Z_TEST : ( is_ent ? QGL_Z_TEST : QGL_Z_SET );
+            if ( z_have && cov_now == is_ent ) {
+                cov_now = !is_ent;
+                qglRsCover( cov_now );
+            }
 
             tw = mipinf[tex_id].wdth;
             th = mipinf[tex_id].hght;
@@ -864,11 +908,18 @@ void pascal far d_draw_faces(
             }
             qglSfZMode( q_dst, z_mode );
             qglRsPoly( q_dst, (void far *)qvtx, cnt, QGL_M_FLAT, 200L );
+            /* The outline goes on with depth OFF. It sits exactly on the
+               fill it just laid down, so a test rejects it on the tie
+               and wireframe loses every edge -- which is what happened
+               the moment world faces stopped writing with SET. */
+            qglSfZMode( q_dst, QGL_Z_OFF );
             qglRsPoly( q_dst, (void far *)qvtx, cnt, QGL_M_WIRE, 0L );
             dp->tris += cnt - 2;
 
         }
     }
+
+    qglRsCover( 0 );
 
     /* Why nothing went through qgl, when the setup itself stood up.
        -5: no face reached the one-call-per-polygon gate at all.
