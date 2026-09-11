@@ -155,6 +155,8 @@ declare sub qglDrFill ( byval d as long, _
 '' silently convert instead of reinterpreting.
 declare function qglZScale ( byval f as single ) as long
 
+declare sub sys_fp_native ()
+declare function sys_fp_sites () as long
 declare sub host_init ( _
     g as Game, _
     tri_buffer() as Face, _
@@ -687,6 +689,10 @@ sub host_init ( _
     dim t_start as single, t_sub as single, t_map as single
     dim t_lump as single, t_tex as single, t_vid as single
     dim pf as integer
+
+    '' Before anything computes: every float below is an emulator
+    '' interrupt until its site has run once. fp87.asm.
+    sys_fp_native
 
     ''
     '' r_walk.c hardcodes vis's byte offset within Game (measured once,

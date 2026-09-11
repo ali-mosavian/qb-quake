@@ -91,6 +91,12 @@ run_frame() {   # $1 = flags, $2 = where to keep BENCH.BMP, $3 = map (default dm
     local bad
     bad=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1 ~ /^pt_/ && ($3 < $2 - 0.001 || $3 > $4 + 0.001) {print $1, $2, $3, $4}')
     [[ -z "$bad" ]] || { echo "FAIL  timer mean outside min..max: $bad"; exit 1; }
+    # fp87.asm rewrites each emulator interrupt into the 8087 instruction
+    # it stands for. Zero sites means every float in the run went back to
+    # costing an interrupt -- silently, and for 13ms of an e1m6 frame.
+    local fp
+    fp=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1 == "fp_sites" {print $2}')
+    [[ -n "$fp" && "$fp" -gt 0 ]] || { echo "FAIL  fp_sites ${fp:-absent}: emulator interrupts unpatched"; exit 1; }
     echo "  $(tr -d '\r' < "$VBD_OUT/bench.txt" |
         awk '/^(frames|ticks|polys|sc_evict) /{printf "%s=%s ",$1,$2}')"
 }

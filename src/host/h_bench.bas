@@ -64,6 +64,7 @@ declare function sys_tick_hz ( ) as single
 '' qgl/mem.asm -- DOS's own numbers, not BASIC's. See the use site.
 declare function qglMemAvail ( byval what as integer ) as long
 declare function mod_cm_bytes ( g as Game ) as long
+declare function sys_fp_sites () as long
 declare function mod_geom_rows ( g as Game ) as integer
 declare function mod_lm_bytes ( g as Game ) as long
 declare function mod_lm_got ( g as Game ) as long
@@ -223,6 +224,7 @@ sub host_bench_report ( _
     host_kv benchf, "lm_size", str$( mod_lm_bytes( g ) )
     host_kv benchf, "lm_read", str$( mod_lm_got( g ) )
     host_kv benchf, "geom_rows", str$( mod_geom_rows( g ) )
+    host_kv benchf, "fp_sites", str$( sys_fp_sites() )
     host_kv benchf, "cm_size", str$( mod_cm_bytes( g ) )
         sc_stats scs
     host_kv benchf, "sc_made", str$( scs.made )
