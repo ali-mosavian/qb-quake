@@ -1677,8 +1677,6 @@ sub scr_draw_hud ( _
     dim dxv as single, dyv as single, ayv as single, yawd as single
     dim pstr as string, fstr as string, msg as string, secs as long
 
-    fstr = "KILLS " + ltrim$(str$( g.fight.kills )) + "  DEATHS " + ltrim$(str$( g.fight.deaths ))
-
     '' Quake's own bar first; the stats overlay may cover its edge
     scr_sbar_draw g, h_dst_dc, w, h
 
@@ -1846,9 +1844,13 @@ sub scr_draw_hud ( _
     qglSfPset h_dst_dc, w \ 2, h \ 2 + 2, hc_slabhi
 
     ''
-    '' Where the camera is, always -- with or without the stats panel,
-    '' drawn last so the panel cannot cover it, and printed as the flags
-    '' themselves so a sighting can be replayed headlessly.
+    '' Where the camera is, printed as the flags themselves so a sighting
+    '' can be replayed headlessly, and drawn last so the panel cannot cover
+    '' it. With the stats (F12) only: its string builds and BASIC glyph
+    '' loop cost every frame of play.
+    ''
+    if ( g.scr.stats = 0 ) then exit sub
+
     ''
     '' pl.pos, not cam.pos: -at takes the hull origin, and the eye is
     '' PL_EYE# above it. The yaw is mirrored the way -yaw wants -- the
@@ -1857,6 +1859,8 @@ sub scr_draw_hud ( _
     '' a negative angle is a negative screen x. Printing atan2's own
     '' -180..180 makes half the viewpoints unreplayable.
     ''
+    fstr = "KILLS " + ltrim$(str$( g.fight.kills )) + "  DEATHS " + ltrim$(str$( g.fight.deaths ))
+
     dxv = g.cam.look_at.x - g.cam.pos.x
     dyv = g.cam.look_at.z - g.cam.pos.z
     ayv = -dyv
@@ -1886,9 +1890,7 @@ sub scr_draw_hud ( _
     if ( wide ) then draw_string_r h_dst_dc, w - 40, 1, fstr
     '' Stats hidden or not: the number a player watches. Not under
     '' -nostats, whose frame is a byte-for-byte reference.
-    if ( g.env.no_stats = 0 ) then
-        draw_string_r h_dst_dc, w-4, 1, ltrim$(str$( g.scr.fps )) + " fps"
-    end if
+    draw_string_r h_dst_dc, w-4, 1, ltrim$(str$( g.scr.fps )) + " fps"
 end sub
 
 

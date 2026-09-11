@@ -285,6 +285,16 @@ declare function sys_now ( ) as single
 declare function sys_rdtsc ( ) as long
 declare function host_lap ( t0 as long ) as single
 declare sub host_tt_add ( tt as TickTimer, byval v as single )
+declare function host_mdl_vis ( _
+    acc as single, _
+    org as Vec3, _
+    byval radius as single, _
+    byval zlo as single, _
+    byval zhi as single, _
+    nodes() as Node, _
+    planes() as Plane, _
+    frustum() as DiskPlane _
+) as integer
 declare function sys_rdtsc_hz ( ) as single
 declare sub host_tk ( _
     byval timing as integer, _
@@ -580,6 +590,24 @@ sub host_tt_add ( tt as TickTimer, byval v as single )
     if ( v > tt.hi ) then tt.hi = v
 end sub
 
+'' r_mdl_visible, its microseconds added to acc.
+function host_mdl_vis ( _
+    acc as single, _
+    org as Vec3, _
+    byval radius as single, _
+    byval zlo as single, _
+    byval zhi as single, _
+    nodes() as Node, _
+    planes() as Plane, _
+    frustum() as DiskPlane _
+) as integer
+    dim t as long, d as single
+    t = sys_rdtsc()
+    host_mdl_vis = r_mdl_visible( org, radius, zlo, zhi, nodes(), planes(), frustum() )
+    d = host_lap( t )
+    if ( d > 0.0 ) then acc = acc + d
+end function
+
 
 
 
@@ -613,6 +641,7 @@ sub host_render ( _
     mon() as MdlState _
 )
     dim t0 as long
+    dim vis_us as single
     dim cpu as single
     dim mtx_mdl as Mat4
     dim bob as Vec3
@@ -774,7 +803,7 @@ sub host_render ( _
             if ( mon( k ).loaded = 0 ) then
             elseif ( mdl_ent( mdl_i ).state = MDL_ST_DEAD% and mon( k ).ndeath = 0 ) then
                 '' gibbed: a zombie has no death frames to lie in
-            elseif ( r_mdl_visible( mdl_ent( mdl_i ).pos, mon( k ).radius, mon( k ).zlo, mon( k ).zhi, _
+            elseif ( host_mdl_vis( vis_us, mdl_ent( mdl_i ).pos, mon( k ).radius, mon( k ).zlo, mon( k ).zhi, _
                                     nds_buffer(), pln_buffer(), frustum() ) ) then
                     mdl_draw g, mon( k ), mdl_ent( mdl_i ), _
                              mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
@@ -797,7 +826,7 @@ sub host_render ( _
     '' as the liquids, flat colours the world's palette already has
     for mdl_i = 0 to g.item_count - 1
         if ( item( mdl_i ).gone = 0 ) then
-            if ( r_mdl_visible( item( mdl_i ).pos, ENT_BOX_HALF# * 1.5, 0.0, ENT_BOX_TOP# + 8.0, _
+            if ( host_mdl_vis( vis_us, item( mdl_i ).pos, ENT_BOX_HALF# * 1.5, 0.0, ENT_BOX_TOP# + 8.0, _
                                 nds_buffer(), pln_buffer(), frustum() ) ) then
                 bob = item( mdl_i ).pos
                 bob.z = bob.z + 4.0 + 4.0 * sin( g.rdr.anim_time * 3.0 )
@@ -921,6 +950,7 @@ sub host_render ( _
         end if
     end if
     host_tk g.ft.n > 0, t0, g.pt.md_view
+    if ( g.ft.n > 0 ) then host_tt_add g.pt.md_vis, vis_us
     if ( g.ft.n > 0 ) then
         ptd = sys_now() - pt0
         g.pt.mdl_sum = g.pt.mdl_sum + ptd

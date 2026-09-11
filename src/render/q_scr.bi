@@ -199,6 +199,7 @@ type PhaseTimes
     md_item  as TickTimer
     md_nail  as TickTimer
     md_view  as TickTimer
+    md_vis   as TickTimer     '' r_mdl_visible, inside md_mon and md_item
     '' pt_draw's parts, microseconds a frame: d_faces.c's DrawParams.cy_*
     d_geom    as TickTimer
     d_xf      as TickTimer
