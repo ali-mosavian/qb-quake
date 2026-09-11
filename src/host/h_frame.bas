@@ -387,6 +387,25 @@ sub host_next_level ( g as Game )
 end sub
 
 ''::::::::::
+'' the view model of the weapon in hand, loaded the first time it is
+'' held -- a pickup, a key, the carry -- and never before: each costs
+'' the far heap 600 bytes, and e1m4 ran out of string space at the
+'' bench write with all six loaded at host_init
+sub host_view_load ( g as Game )
+    select case g.fight.weapon
+    case PL_IT_SSG%
+        if ( g.smdl.loaded = 0 ) then mdl_load g, g.smdl, "v_shot2"
+    case PL_IT_NAILGUN%
+        if ( g.nmdl.loaded = 0 ) then mdl_load g, g.nmdl, "v_nail"
+    case PL_IT_GL%
+        if ( g.gmdl.loaded = 0 ) then mdl_load g, g.gmdl, "v_rock"
+    case PL_IT_SNG%
+        if ( g.n2mdl.loaded = 0 ) then mdl_load g, g.n2mdl, "v_nail2"
+    case PL_IT_RL%
+        if ( g.rmdl.loaded = 0 ) then mdl_load g, g.rmdl, "v_rock2"
+    end select
+end sub
+
 sub host_tick ( _
     g as Game, _
     byval dt as single, _
@@ -424,6 +443,7 @@ sub host_tick ( _
         if ( fire ) then pl_fire g, mdl_ent(), models(), brush(), planes(), item(), door(), trig(), nail(), plat()
         pl_nails_tick g, dt, nail(), mdl_ent(), models(), brush(), planes(), nodes(), item(), door(), trig(), plat()
         pl_items_touch g, item(), door(), trig(), plat()
+        host_view_load g
         pl_env_damage g
         '' every soldier's own think -- Quake's 10 Hz, gated inside
         '' mdl_think against g.rdr.anim_time

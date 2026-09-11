@@ -75,7 +75,8 @@ run_frame() {   # $1 = flags, $2 = where to keep BENCH.BMP, $3 = map (default dm
     for try in 1 2 3; do
         rm -f "$VBD_OUT/BENCH.BMP" "$VBD_OUT/bench.txt" "$VBD_OUT/ERROR.LOG"
         QFLAGS="$1" TIMEOUT=900 "$ROOT/tools/dosbox.sh" run ${3:-} > /dev/null 2>&1
-        [[ -f "$VBD_OUT/BENCH.BMP" ]] && break
+        # a run that dies writing the frame leaves a 54-byte header: not a run
+        [[ -f "$VBD_OUT/BENCH.BMP" && $(stat -f%z "$VBD_OUT/BENCH.BMP") -gt 1000 ]] && break
         [[ -f "$VBD_OUT/ERROR.LOG" ]] && { echo "RUN FAILED: $(cat "$VBD_OUT/ERROR.LOG")"; exit 1; }
         echo "  attempt $try produced nothing; retrying"
     done

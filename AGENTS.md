@@ -2258,6 +2258,12 @@ dropped from higher stopped 24 above the floor and floated. It
 traces from `PL_FEET` above the origin now, SV_ClipMoveToEntity's
 offset of the hull's clip_mins against the item's mins, and lands
 the origin on the floor.
+The view models load lazily: v_shot at host_init and the rest the
+first time their weapon is in hand (`host_view_load`, from the tick).
+Each costs the far heap 600 bytes, and with all six loaded at init
+e1m4 read 3,984 after the depth buffer and died in error 14 at the
+bench write -- which `run_frame` took as a run, since a 54-byte
+header-only BENCH.BMP existed; it wants 1,000 bytes now.
 
 **The shambler is kind 7**, `stand:1,run,death,pain,magic` on its
 page (144 vertices, 36 of the 37 frames that fit), health 600. It

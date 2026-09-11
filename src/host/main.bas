@@ -76,6 +76,7 @@ declare sub host_bench_report ( _
     byval host_ticks as long, _
     mon() as MdlState _
 )
+declare sub host_view_load ( g as Game )
 declare sub host_render ( _
     g as Game, _
     byval h_dst_dc as long, _
@@ -832,11 +833,7 @@ sub host_init ( _
     redim mon( MDL_KINDS% - 1 ) as MdlState
     if ( mon_kinds and 1 ) then mdl_load g, mon( MDL_KIND_ARMY% ), "soldier"
     mdl_load g, g.vmdl, "v_shot"
-    mdl_load g, g.smdl, "v_shot2"
-    mdl_load g, g.nmdl, "v_nail"
-    mdl_load g, g.gmdl, "v_rock"
-    mdl_load g, g.n2mdl, "v_nail2"
-    mdl_load g, g.rmdl, "v_rock2"
+    host_view_load g
     if ( mon_kinds and 2 ) then mdl_load g, mon( MDL_KIND_KNIGHT% ), "knight"
     if ( mon_kinds and 4 ) then mdl_load g, mon( MDL_KIND_DOG% ), "dog"
     if ( mon_kinds and 8 ) then mdl_load g, mon( MDL_KIND_OGRE% ), "ogre"
