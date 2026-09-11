@@ -199,10 +199,14 @@ fi
 # damage flash's palette copy was a module-level dynamic array screen.bas
 # never allocated -- the trap this repo already documents -- and every
 # other gate stands where no monster ever lands a hit. Spawn is
-# randomize 1, so the knight at (464,-40) is always there.
+# randomize 1, so the knight at (464,-48) is always there. The player
+# stands 100 units from it, inside RANGE_MELEE, where FindTarget needs
+# no infront: at 150 the knight has to happen to face them while it
+# wanders, and once it did not -- it walked to x 620 and health stayed
+# 100 for the whole 600 ticks.
 if [[ "${1:-}" == "--fight" ]]; then
     build_exe
-    run_frame "-lm -nostats -at 314 -40 48 -yaw 0 -bench 400 -ticks 600" "$VBD_OUT/fight.bmp"
+    run_frame "-lm -nostats -at 364 -48 48 -yaw 0 -bench 400 -ticks 600" "$VBD_OUT/fight.bmp"
     hp=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_health"{print $2}')
     deaths=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_deaths"{print $2}')
     if [[ -f "$VBD_OUT/ERROR.LOG" ]]; then echo "FAIL  fight: $(cat "$VBD_OUT/ERROR.LOG")"; exit 1; fi
