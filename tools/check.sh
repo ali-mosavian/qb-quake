@@ -674,6 +674,13 @@ if [[ "${1:-}" == "--e1m6" || "${1:-}" == "--e1m7" || "${1:-}" == "--e1m8" || "$
             echo "FAIL  e1m8 pent: pl_pent_left ${np:-none}, the pentagram was not taken"; rc=1
         fi
     fi
+    if [[ "$m" == start ]]; then
+        # in *8, the episode 2 hall's trigger_onlyregistered: the shareware's
+        # "For registered users only!" is in the frame, its door t2 shut
+        run_frame "-lm -nostats -noai -at -160 2368 128 -yaw 270 -bench 40 -ticks 60" "$VBD_OUT/start-reg.bmp" start.bsp
+        out=$(python3 "$ROOT/tools/imgdiff.py" "$ROOT/tools/ref/start-reg.bmp" "$VBD_OUT/start-reg.bmp" | tail -1)
+        if [[ "$out" == IDENTICAL* ]]; then echo "PASS  start registered: $out"; else echo "FAIL  start registered: $out"; rc=1; fi
+    fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc
 fi

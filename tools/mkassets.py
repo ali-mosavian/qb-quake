@@ -624,7 +624,9 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
         return names.setdefault(s, len(names) + 1) if s else 0
 
     def msg_of(kv: dict[str, str]) -> bytes:
-        return kv.get('message', '')[:40].encode('latin1').ljust(40)
+        # the first line: a map's newline is a literal backslash-n, and the
+        # overlay draws one line of 40; only start's registered notice has more
+        return kv.get('message', '').split('\\n')[0][:40].encode('latin1').ljust(40)
 
     def movedir(angle: float) -> tuple[float, float, float]:
         # SetMovedir: angle -1 up, -2 down, anything else a heading
@@ -756,6 +758,12 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
                 next_map = kv.get('map', '')
             case 'func_button' if model(kv.get('model', '')):
                 uses.append(button_record(model(kv['model']), kv, boxes[model(kv['model'])]))
+            case 'trigger_onlyregistered' if model(kv.get('model', '')) and kv.get('message'):
+                # OnlyRegisteredTouch on the shareware: the message and misc/talk
+                # every two seconds, its target never fired -- a multiple with no target
+                hides.append(model(kv['model']))
+                uses.append(trig_record(model(kv['model']), {
+                    'classname': 'trigger_multiple', 'message': kv['message'], 'wait': '2'}))
             case str(c) if c.startswith('trigger_') and model(kv.get('model', '')):
                 # any trigger's brush is a volume: e1m1 drew its changelevel
                 # as a column of the "trigger" texture

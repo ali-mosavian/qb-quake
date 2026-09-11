@@ -2303,11 +2303,14 @@ targeted door and no easy-skill monster can reach it, so no arm;
 Its four `func_episodegate` ship hidden -- draw off, solid off, as a
 trigger's brush -- since misc.qc spawns one only for its rune held,
 and no rune is ever taken here; the `func_bossgate` is the reverse,
-removed only with all four, so it stays a solid brush model. Its
-`trigger_setskill` and `trigger_onlyregistered` volumes are hidden
-by the generic trigger case; the skill is the assets', not the
-map's, and every changelevel it holds names a map the shareware PAK
-has only for e1m1.
+removed only with all four, so it stays a solid brush model.
+`trigger_onlyregistered` is OnlyRegisteredTouch's shareware branch:
+a multiple with its message and no target, so the episode 2 to 4
+doors it would open stay shut and "For registered users only!" is
+said every two seconds -- the gate's second frame stands in the
+episode 2 hall's. `trigger_setskill` hides by the generic trigger
+case, the skill being the assets'; every changelevel here names a
+map the shareware PAK has only for e1m1.
 
 **The powerups are thirty-second clocks on `fight`**: the quad
 (`quad_until`) makes every pellet and nail four times (T_Damage's
