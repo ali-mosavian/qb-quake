@@ -830,10 +830,21 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
         assert len(bolt_doors) == 2, bolt_doors
         uses = [(*u[:8], (float(bolt_doors[0]), float(bolt_doors[1]), 0.0), *u[9:]) if u[1] == TRIG_BOLT else u
                 for u in uses]
-    buf = bytearray(struct.pack('<4f3fff13hf8s', *spawn, angle, *inter[0], inter[1], inter[2], nmodels,
+    # messages are ids into one table after the crates, 0 none: 40 bytes a
+    # record was 3K on e1m4, whose 78 doors and triggers say two things
+    msgs: dict[bytes, int] = {}
+
+    def msg_id(b: bytes) -> int:
+        return msgs.setdefault(b, len(msgs) + 1) if b.strip() else 0
+
+    for d in doors:
+        msg_id(d[-1])
+    for u in uses:
+        msg_id(u[10])
+    buf = bytearray(struct.pack('<4f3fff13hf8sh', *spawn, angle, *inter[0], inter[1], inter[2], nmodels,
                                 len(teles), len(plats), len(hides), len(items), len(doors), len(uses), len(mons),
                                 len(ambs), len(trains), len(corners), worldtype, len(crates.used), gravity,
-                                next_map[:8].encode('latin1').ljust(8)))
+                                next_map[:8].encode('latin1').ljust(8), len(msgs)))
     for kind, org, yaw, target in mons:
         buf += struct.pack('<h3ffh', kind, *org, yaw, corner_at.get(target, -1))   # its patrol's first corner
     for m, org, yaw in teles:
@@ -845,13 +856,13 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
     for kind, amount, target, crate, org in items:
         buf += struct.pack('<hhhh3f', kind, amount, target, crate, *org)
     for m, travel, mid, speed, hold, start_open, nolink, targeted, secret, shoot, snd, key, msg in doors:
-        buf += struct.pack('<h3f3fffhhhhhhh40s', m, *travel, *mid, speed, hold, start_open, nolink, targeted,
-                           secret, shoot, snd, key, msg)
+        buf += struct.pack('<h3f3fffhhhhhhhh', m, *travel, *mid, speed, hold, start_open, nolink, targeted,
+                           secret, shoot, snd, key, msg_id(msg))
     for m, kind, target, name, kill, count, wait, speed, travel, snd, msg, *rest in uses:
         org = rest[0] if rest else (0.0, 0.0, 0.0)   # a shooter's
         delay = rest[1] if len(rest) > 1 else 0.0
-        buf += struct.pack('<6hff3f3fh40sf', m, kind, target, name, kill, count, wait, speed, *travel, *org, snd,
-                           msg, delay)
+        buf += struct.pack('<6hff3f3fhhf', m, kind, target, name, kill, count, wait, speed, *travel, *org, snd,
+                           msg_id(msg), delay)
     for snd, vol, org in ambs:
         buf += struct.pack('<hh3f', snd, vol, *org)
     for m, speed, targeted, first in trains:
@@ -866,6 +877,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
         for tn, corners4 in src.faces:
             tex, frames = crates.tex_id(name, tn)
             buf += struct.pack('<hh12b', tex, frames, *(v for corner in corners4 for v in corner))
+    for b in msgs:
+        buf += b
     return bytes(buf)
 
 

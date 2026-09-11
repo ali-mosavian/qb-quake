@@ -61,6 +61,7 @@ type EntsHead
     ncrate      as integer      '' the pickups' b_*.bsp boxes, after the corners
     gravity     as single       '' world.qc's sv_gravity: 100 on e1m8, 800 elsewhere
     next_map    as string * 8   '' trigger_changelevel's map, space padded; blank for none
+    nmsg        as integer      '' the message table, 40 bytes each, last in the file
 end type
 
 '' A func_train, after the ambients: it rides the plat array. first is
@@ -189,7 +190,7 @@ type EntsDoor
     shoot       as integer      '' a pellet opens it
     snd         as integer      '' "sounds": doors.qc's set, 0 none
     key         as integer      '' 1 silver, 2 gold: opens by touch with the key, once
-    msg         as string * 40  '' centerprint on touch, space padded
+    msg         as integer      '' centerprint on touch: ent_msg's id, 0 none
 end type
 
 const ENT_PLAT_DOWN = 0
@@ -256,7 +257,7 @@ type DoorEnt
     say_at      as single       '' door_touch's attack_finished: the refusal two seconds apart
     mins        as Vec3         '' the touch field
     maxs        as Vec3
-    msg         as string * 40
+    msg         as integer      '' ent_msg's id
 end type
 
 const ENT_TRIG_ONCE    = 0
@@ -286,7 +287,7 @@ type EntsTrig
     travel      as Vec3         '' a button's; a shooter's movedir
     org         as Vec3         '' a shooter's origin
     snd         as integer      '' "sounds": a trigger's 1 secret, 2 talk; a button's set
-    msg         as string * 40
+    msg         as integer      '' ent_msg's id, 0 none
     delay       as single       '' SUB_UseTargets' delay: seconds before the target fires
 end type
 
@@ -321,7 +322,7 @@ type TrigEnt
     snd         as integer
     mins        as Vec3         '' the volume, or the button's brush
     maxs        as Vec3
-    msg         as string * 40
+    msg         as integer
     delay       as single
     delay_left  as single       '' above zero: fired, its target due when this runs out
 end type

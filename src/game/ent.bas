@@ -27,6 +27,7 @@ declare sub qglMousePos ( byval x as integer, byval y as integer )
 dim shared ent_corner() as PathCorner
 '' the pickups' b_*.bsp boxes, copied out by ent_crate
 dim shared crate_tab() as CrateModel
+dim shared ent_msg() as string * 40     '' the maps' messages; 0 is blank
 
 ''
 '' This module's own procedures.
@@ -438,6 +439,8 @@ sub ent_load_teleports ( _
     redim plat( h.nplat + h.ntrain ) as PlatEnt
     redim ent_corner( h.ncorner ) as PathCorner
     redim crate_tab( h.ncrate ) as CrateModel
+    redim ent_msg( h.nmsg ) as string * 40
+    ent_msg( 0 ) = ""
     redim door( h.ndoor ) as DoorEnt
     redim trig( h.ntrig ) as TrigEnt
     '' room after the map's items for one backpack a monster, the crowd's
@@ -580,6 +583,9 @@ sub ent_load_teleports ( _
     next i
     for  i = 0 to h.ncrate - 1
         ent_get u, clng( varseg( crate_tab(i) ) ) * 65536& + (clng( varptr( crate_tab(i) ) ) and 65535&), len( crate_tab(i) )
+    next i
+    for  i = 1 to h.nmsg
+        ent_get u, clng( varseg( ent_msg(i) ) ) * 65536& + (clng( varptr( ent_msg(i) ) ) and 65535&), 40
     next i
     for  i = 0 to g.plat_count - 1
         if ( plat(i).kind = ENT_PLAT_KIND_TRAIN ) then ent_train_init plat(i), brush()
@@ -793,7 +799,7 @@ sub ent_door_key ( _
     if ( ( g.fight.items and bit ) = 0 ) then
         if ( g.rdr.anim_time < door(k).say_at ) then exit sub
         door(k).say_at = g.rdr.anim_time + 2.0
-        ent_say g, door(k).msg
+        ent_say g, ent_msg( door(k).msg )
         snd_play g, SND_KEYTRY% + wt * 2, g.pl.pos
         exit sub
     end if
@@ -817,7 +823,7 @@ sub ent_move_doors ( _
             elseif ( door(k).targeted = 0 and door(k).secret = 0 ) then
                 ent_door_fire g, door(k).link, door()
             else
-                ent_talk g, door(k).msg
+                ent_talk g, ent_msg( door(k).msg )
             end if
         end if
     next k
@@ -1151,10 +1157,10 @@ sub ent_trig_fire ( _
 )
     if ( trig(k).kind = ENT_TRIG_SECRET ) then g.fight.secrets = g.fight.secrets + 1
     if ( trig(k).snd = 1 ) then
-        ent_say g, trig(k).msg
+        ent_say g, ent_msg( trig(k).msg )
         snd_play g, SND_SECRET%, g.pl.pos
     else
-        ent_talk g, trig(k).msg
+        ent_talk g, ent_msg( trig(k).msg )
     end if
     if ( trig(k).kind = ENT_TRIG_COUNTER or trig(k).wait < 0.0 ) then
         trig(k).state = ENT_TRIG_DONE
@@ -1245,7 +1251,7 @@ sub ent_move_trigs ( _
                         if ( ent_door_step( brush(m).ofs, trig(k).ofs_out, trig(k).speed * dt ) ) then
                             trig(k).state = ENT_TRIG_HELD
                             trig(k).wait_left = trig(k).wait
-                            ent_talk g, trig(k).msg
+                            ent_talk g, ent_msg( trig(k).msg )
                             ent_use_targets g, trig(k).target, door(), trig(), plat()
                         end if
                     case ENT_TRIG_HELD
@@ -1265,7 +1271,7 @@ sub ent_move_trigs ( _
                 if ( trig(k).state = ENT_TRIG_READY ) then
                     if ( ent_box_touched( g, trig(k).mins, trig(k).maxs, 0.0 ) ) then
                         '' the intermission: the map's title stays up
-                        ent_say g, trig(k).msg
+                        ent_say g, ent_msg( trig(k).msg )
                         g.fight.msg_until = g.rdr.anim_time + 3600.0
                         g.fight.state = GS_EXIT%
                         g.fight.exit_time = g.rdr.anim_time
