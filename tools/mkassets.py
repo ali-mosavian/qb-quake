@@ -430,6 +430,7 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
     title = ''
     angle = 0.0
     inter: tuple[tuple[float, float, float], float, float] | None = None   # origin, pitch, yaw
+    next_map = ''
     dests: dict[str, tuple[tuple[float, float, float], float]] = {}
     trigs: list[tuple[str, int]] = []
     hides: list[int] = []
@@ -590,6 +591,7 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
                 hides.append(model(kv['model']))
                 uses.append((model(kv['model']), TRIG_EXIT, 0, 0, 0, 0, -1.0, 0.0, (0.0, 0.0, 0.0), 0,
                              title[:40].encode('latin1').ljust(40)))
+                next_map = kv.get('map', '')
             case 'func_button' if model(kv.get('model', '')):
                 uses.append(button_record(model(kv['model']), kv, boxes[model(kv['model'])]))
             case str(c) if c.startswith('trigger_') and model(kv.get('model', '')):
@@ -618,9 +620,9 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
 
     if inter is None:
         inter = (spawn, 0.0, angle)   # no info_intermission: the start, as Quake does
-    buf = bytearray(struct.pack('<4f3fff9h', *spawn, angle, *inter[0], inter[1], inter[2], nmodels,
+    buf = bytearray(struct.pack('<4f3fff9h8s', *spawn, angle, *inter[0], inter[1], inter[2], nmodels,
                                 len(teles), len(plats), len(hides), len(items), len(doors), len(uses), len(mons),
-                                len(ambs)))
+                                len(ambs), next_map[:8].encode('latin1').ljust(8)))
     for kind, org, yaw in mons:
         buf += struct.pack('<h3ff', kind, *org, yaw)
     for m, org, yaw in teles:

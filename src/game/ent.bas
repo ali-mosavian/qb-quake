@@ -269,6 +269,7 @@ sub ent_load_spawn ( _
     g.fight.inter = h.inter
     g.fight.inter_pitch = h.inter_pitch
     g.fight.inter_yaw = h.inter_yaw
+    g.fight.next_map = h.next_map
 
     '' BSP is Z-up and the camera is Y-up, so y and z swap here
     g.cam.pos.x = h.spawn.x

@@ -133,6 +133,8 @@ declare sub pl_item_add ( _
 )
 declare sub pl_respawn ( g as Game )
 declare sub pl_reset_player ( g as Game )
+declare sub pl_carry_save ( g as Game )
+declare sub pl_carry_load ( g as Game )
 declare sub pl_game_reset ( _
     g as Game, _
     mdl_ent() as MdlEnt, _
@@ -2507,6 +2509,46 @@ sub pl_reset_player ( g as Game )
     g.fight.show_hostile = 0.0
     g.pl.pos.x = g.fight.spawn.x : g.pl.pos.y = g.fight.spawn.y : g.pl.pos.z = g.fight.spawn.z
     g.pl.vel.x = 0.0 : g.pl.vel.y = 0.0 : g.pl.vel.z = 0.0
+end sub
+
+'' SetChangeParms: the kit the next level starts with, to CARRY.BIN
+sub pl_carry_save ( g as Game )
+    dim f as integer
+    dim c as PlayerCarry
+
+    c.items = g.fight.items
+    c.health = g.fight.health
+    if ( c.health > PL_HEALTH% ) then c.health = PL_HEALTH%
+    if ( c.health < PL_CARRY_MIN% ) then c.health = PL_CARRY_MIN%
+    c.armor = g.fight.armor
+    c.armor_type = g.fight.armor_type
+    c.shells = g.fight.shells
+    if ( c.shells < PL_SHELLS% ) then c.shells = PL_SHELLS%
+    c.nails = g.fight.nails
+    c.weapon = g.fight.weapon
+    f = freefile
+    open "CARRY.BIN" for binary as #f
+    put #f, , c
+    close #f
+end sub
+
+'' DecodeLevelParms: -carry reads it back over pl_reset_player's kit
+sub pl_carry_load ( g as Game )
+    dim f as integer
+    dim c as PlayerCarry
+
+    f = freefile
+    open "CARRY.BIN" for binary as #f
+    if ( lof( f ) < len( c ) ) then close #f : exit sub
+    get #f, , c
+    close #f
+    g.fight.items = c.items
+    g.fight.health = c.health
+    g.fight.armor = c.armor
+    g.fight.armor_type = c.armor_type
+    g.fight.shells = c.shells
+    g.fight.nails = c.nails
+    g.fight.weapon = c.weapon
 end sub
 
 ''::::::::::::::

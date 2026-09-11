@@ -165,6 +165,8 @@ declare sub pl_items_touch ( g as Game, item() as ItemEnt )
 declare sub pl_env_damage ( g as Game )
 declare sub pl_select_weapon ( g as Game )
 declare sub pl_respawn ( g as Game )
+declare sub pl_carry_save ( g as Game )
+declare sub host_next_level ( g as Game )
 declare sub pl_game_reset ( _
     g as Game, _
     mdl_ent() as MdlEnt, _
@@ -337,6 +339,34 @@ end sub
 ''       far the world moves, and a caller can pass a different one -- a
 ''       fixed step, a halved step for a sub-tick -- without the routine
 ''       knowing or caring.
+'' changelevel: the kit to CARRY.BIN, the next map's run to NEXT.BAT --
+'' GOMAP.BAT stages its files, then qrender with -carry and the flags
+'' that describe the run rather than where it started -- and the host
+'' loop ends. dosbox.sh's run.bat runs NEXT.BAT while one is written.
+sub host_next_level ( g as Game )
+    dim f as integer
+    dim cmd as string
+
+    pl_carry_save g
+    cmd = "qrender.exe " + rtrim$( g.fight.next_map ) + ".bsp -carry"
+    if ( g.env.use_lm ) then cmd = cmd + " -lm"
+    if ( g.snd.off ) then cmd = cmd + " -nosound"
+    if ( g.env.no_stats ) then cmd = cmd + " -nostats"
+    if ( g.env.no_ai ) then cmd = cmd + " -noai"
+    if ( g.env.no_mdl ) then cmd = cmd + " -nomdl"
+    if ( g.env.no_view ) then cmd = cmd + " -noview"
+    if ( g.env.comp ) then cmd = cmd + " -comp"
+    if ( g.env.hold_fire ) then cmd = cmd + " -fire"
+    if ( g.env.bench_frames > 0 ) then cmd = cmd + " -bench " + ltrim$( str$( g.env.bench_frames ) )
+    if ( g.env.bench_ticks > 0 ) then cmd = cmd + " -ticks " + ltrim$( str$( g.env.bench_ticks ) )
+    f = freefile
+    open "NEXT.BAT" for output as #f
+    print #f, "call GOMAP.BAT " + rtrim$( g.fight.next_map )
+    print #f, cmd + " >> run.out"
+    close #f
+    g.fight.state = GS_NEXT%
+end sub
+
 ''::::::::::
 sub host_tick ( _
     g as Game, _
@@ -402,9 +432,21 @@ sub host_tick ( _
             pl_respawn g
             g.fight.state = GS_PLAY%
         end if
+    case GS_EXIT%
+        '' IntermissionThink: a button held past exittime goes on to the
+        '' next map; with none, the level again
+        if ( fire and g.rdr.anim_time >= g.fight.exit_time + PL_INTER_HOLD# ) then
+            if ( len( rtrim$( g.fight.next_map ) ) > 0 ) then
+                host_next_level g
+            else
+                pl_game_reset g, mdl_ent(), item(), models(), brush(), planes()
+                ent_reset g, brush(), door(), trig()
+                g.fight.state = GS_PLAY%
+            end if
+        end if
     case else
         if ( fire and g.fight.fire_prev = 0 ) then
-            if ( g.fight.state = GS_WON% or g.fight.state = GS_EXIT% ) then
+            if ( g.fight.state = GS_WON% ) then
                 pl_game_reset g, mdl_ent(), item(), models(), brush(), planes()
                 ent_reset g, brush(), door(), trig()
             end if

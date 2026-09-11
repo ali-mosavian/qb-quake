@@ -111,13 +111,28 @@ GFX_ASSETS := $(if $(wildcard $(PAK)),data/assets/sbar.raw data/assets/snd.raw)
 # identical standing frames and called that a pass.
 CAM_ASSETS := data/assets/campath.bin
 ASSET_FILES := $(wildcard data/assets/*)
+# The maps a run can chain through: each gets its bsp and its own four
+# asset files under data/maps/<map>/, staged to $(BUILD)/MAPS/<map>/.
+# trigger_changelevel writes NEXT.BAT, GOMAP.BAT copies the next map's
+# files over the ones beside the exe and dosbox.sh's run.bat loops.
+MAPS       ?= e1m1 e1m2
+MAP_ASSETS := $(if $(wildcard $(PAK)),$(foreach m,$(MAPS),data/maps/$(m)/assets.zip))
 EXE  := $(BUILD)/qrender.exe
 
 .PHONY: all build run viz qb45 pds evidence assets test clean help
 
 all: build                      ## build the renderer (default)
 build: $(EXE)
-assets: $(ASSETS) $(MDL_ASSETS) $(GFX_ASSETS) $(CAM_ASSETS)   ## regenerate the preprocessed textures
+assets: $(ASSETS) $(MDL_ASSETS) $(GFX_ASSETS) $(CAM_ASSETS) $(MAP_ASSETS)   ## regenerate the preprocessed textures
+maps: $(MAP_ASSETS)             ## the chainable maps' assets
+
+$(foreach m,$(MAPS),data/$(m).bsp): data/%.bsp: $(PAK) tools/pakget.py
+	@python3 tools/pakget.py $(PAK) maps/$*.bsp $@
+
+data/maps/%/assets.zip: data/%.bsp data/base.dat tools/mkassets.py tools/mkportals.py
+	@mkdir -p data/maps/$*
+	@python3 tools/mkassets.py data/$*.bsp data/base.dat data/maps/$* $(SKILL)
+	@cp data/$*.bsp data/maps/$*/
 
 $(ASSETS): data/$(MAP) data/base.dat tools/mkassets.py tools/mkportals.py
 	@python3 tools/mkassets.py data/$(MAP) data/base.dat data/assets $(SKILL)
@@ -205,7 +220,14 @@ $(BUILD)/.assets-stamp: $(ASSET_FILES) | $(BUILD)
 
 $(BUILD)/.assets-stamp: $(MDL_ASSETS) $(CAM_ASSETS)
 
-$(EXE): $(BAS_OBJS) $(C_OBJS) $(ASM_OBJS) $(BUILD)/stuff.ini $(BUILD)/base.dat $(BUILD)/FONT.FNT $(BUILD)/.assets-stamp
+$(BUILD)/.maps-stamp: $(MAP_ASSETS) | $(BUILD)
+	$(if $(MAP_ASSETS),mkdir -p $(BUILD)/MAPS && cp -R $(foreach m,$(MAPS),data/maps/$(m)) $(BUILD)/MAPS/,)
+	touch $@
+
+$(BUILD)/GOMAP.BAT: data/gomap.bat | $(BUILD)
+	cp $< $@
+
+$(EXE): $(BAS_OBJS) $(C_OBJS) $(ASM_OBJS) $(BUILD)/stuff.ini $(BUILD)/base.dat $(BUILD)/FONT.FNT $(BUILD)/.assets-stamp $(BUILD)/.maps-stamp $(BUILD)/GOMAP.BAT
 	@python3 tools/qblint.py
 	$(LINKQR) $(BUILD) "$(BAS_MODS)" "$(C_MODS) $(ASM_MODS)"
 

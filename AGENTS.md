@@ -2471,6 +2471,24 @@ spawn's way, and `ent_reset` every door shut and every trigger and
 button as it loaded. A map with no info_intermission looks from its
 start, as Quake does. The slipgate arm wants the exit at (-112,704).
 
+**The next map is a new process.** Fire held two seconds into the
+intermission (IntermissionThink) runs `host_next_level`: the kit to
+`CARRY.BIN` by SetChangeParms' rules -- keys and powerups dropped,
+health 50..100, 25 shells at least -- and `NEXT.BAT`, `call GOMAP.BAT
+e1m2` then `qrender.exe e1m2.bsp -carry` with the run's own flags (-lm,
+-nosound, -bench, -ticks, the -no* set, -fire; never -at or -yaw), and
+the host loop ends on `GS_NEXT`. GOMAP.BAT copies `MAPS\<map>\*.*` --
+the bsp and its four asset files, `make maps` builds `data/maps/<map>/`
+for every map in `MAPS` and the build stages them -- over the ones
+beside the exe; dosbox.sh's run.bat copies NEXT.BAT to RUN1.BAT,
+deletes it and calls it while one is written, since a batch deleted
+while it runs is "Batch file missing". `-carry` reads CARRY.BIN over
+`pl_reset_player`. The map's `map` key rides in ents.bin's header, and
+bench.txt says `map`. The e1m1 gate's last arm walks into the slipgate
+with fire held and the soldier awake and wants e1m2's bench with the
+damage carried: e1m1's shells 25 and fire's 14 shots read `pl_shells
+11` there.
+
 `tools/check.sh --e1m1`'s fourth frame walks into the first button:
 the plunger floor (`*3`, a door targeted by `*4`) must go down with the
 player on it, pz below -100 by tick 240. The sixth walks and jumps

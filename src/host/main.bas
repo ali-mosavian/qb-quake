@@ -337,6 +337,7 @@ declare sub pl_init ( _
     g as Game _
 )
 declare sub pl_reset_player ( g as Game )
+declare sub pl_carry_load ( g as Game )
 declare function ent_load_monsters ( _
     g as Game, _
     mdl_ent() as MdlEnt, _
@@ -755,6 +756,7 @@ sub host_init ( _
     pl_init g
     g.fight.spawn.x = g.pl.pos.x : g.fight.spawn.y = g.pl.pos.y : g.fight.spawn.z = g.pl.pos.z
     pl_reset_player g
+    if ( g.fight.carry ) then pl_carry_load g
     '' a headless run has no one to press fire, and its frame is a reference
     g.fight.state = GS_TITLE%
     if ( g.env.bench_frames > 0 or g.env.bench_ticks > 0 or g.env.cam_path ) then g.fight.state = GS_PLAY%
@@ -1192,7 +1194,7 @@ sub host_main ( _
             exit do
         end if
 
-    loop while ( g.env.keyboard.esc = FALSE )
+    loop while ( g.env.keyboard.esc = FALSE and g.fight.state <> GS_NEXT% )
     
     if ( g.cam.script_file <> 0 ) then close #g.cam.script_file
 

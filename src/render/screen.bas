@@ -1819,7 +1819,7 @@ sub scr_draw_hud ( _
     case GS_TITLE% : msg = "FIRE TO START"
     case GS_DEAD%  : msg = "YOU DIED"
     case GS_WON%   : msg = "AREA CLEARED - FIRE TO GO AGAIN"
-    case GS_EXIT%  : msg = "LEVEL COMPLETE - FIRE TO GO AGAIN"
+    case GS_EXIT%  : msg = "LEVEL COMPLETE - HOLD FIRE TO GO ON"
     case else      : msg = ""
     end select
     '' the centerprint takes the state line when it is free, else the

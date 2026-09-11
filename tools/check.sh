@@ -418,6 +418,18 @@ PY
     else
         echo "FAIL  e1m1 boxwall: px ${bx:-none}, the walk went through the box"; rc=1
     fi
+    # and the level after it. LAST: it leaves e1m2's assets staged. The
+    # slipgate walk with fire held and the soldier behind the exit awake:
+    # two seconds into the intermission the run writes NEXT.BAT, run.bat
+    # chains, and the bench is e1m2's with the soldier's damage carried
+    run_frame "-lm -nostats -at 1312 660 -200 -yaw 90 -walk -jump -fire -bench 400 -ticks 420" "$VBD_OUT/e1m1-chain.bmp" e1m1.bsp
+    cm=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="map"{print $2}')
+    hp=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_health"{print $2}')
+    if [[ "$cm" == e1m2.bsp && "${hp:-100}" -lt 100 && "${hp:-0}" -gt 0 ]]; then
+        echo "PASS  e1m1 chain: the bench is $cm's, health $hp carried over"
+    else
+        echo "FAIL  e1m1 chain: map ${cm:-none}, health ${hp:-none}; want e1m2.bsp under 100"; rc=1
+    fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc
 fi

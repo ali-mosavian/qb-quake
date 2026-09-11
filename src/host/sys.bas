@@ -203,6 +203,9 @@ sub sys_parse_args ( _
         if ( lcase$(argv(i)) = "-fire" ) then
             g.env.hold_fire = true
         end if
+        if ( lcase$(argv(i)) = "-carry" ) then
+            g.fight.carry = true
+        end if
         if ( lcase$(argv(i)) = "-nostats" ) then
             g.env.no_stats = true
         end if

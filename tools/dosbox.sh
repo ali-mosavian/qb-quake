@@ -63,12 +63,23 @@ run)
     rm -f "$out"/scrn*.bmp "$out"/SCRN*.BMP "$out"/bench.bmp "$out"/BENCH.BMP \
           "$out"/ran.txt "$out"/RAN.TXT "$out"/bench.txt "$out"/BENCH.TXT \
           "$out"/errmem.txt "$out"/ERRMEM.TXT "$out"/error.log "$out"/ERROR.LOG \
-          "$out"/run.out "$out"/RUN.OUT
+          "$out"/run.out "$out"/RUN.OUT "$out"/next.bat "$out"/NEXT.BAT
 
+    ## A level's end writes NEXT.BAT -- GOMAP.BAT for the next map's
+    ## files, then qrender again with -carry -- and the loop runs it
+    ## until a run writes none. Copied first: a batch deleted while it
+    ## runs is "Batch file missing".
     printf '%s\r\n' \
       '@echo off' \
       'if exist ran.txt del ran.txt' \
       "qrender.exe $map $QFLAGS > run.out" \
+      ':loop' \
+      'if not exist NEXT.BAT goto done' \
+      'copy NEXT.BAT RUN1.BAT > nul' \
+      'del NEXT.BAT' \
+      'call RUN1.BAT' \
+      'goto loop' \
+      ':done' \
       'echo DONE > ran.txt' > "$out/run.bat"
 
     conf="$out/dosbox-run.conf"

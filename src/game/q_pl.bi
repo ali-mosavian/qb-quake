@@ -168,12 +168,28 @@ type PlayerCombat
     secret_total as integer    '' trigger_secrets the map has
     level_start as single      '' anim_time the level began, for the intermission's clock
     exit_time   as single
+    next_map    as string * 8  '' where the exit leads, from ents.bin; blank for nowhere
+    carry       as integer     '' -carry: CARRY.BIN holds the last level's kit
+end type
+
+'' What a level hands the next through CARRY.BIN: SetChangeParms' parms,
+'' keys and powerups left behind, health 50..100, at least 25 shells
+type PlayerCarry
+    items       as integer
+    health      as integer
+    armor       as integer
+    armor_type  as single
+    shells      as integer
+    nails       as integer
+    weapon      as integer
 end type
 
 const PL_HEALTH%       = 100
 const PL_ARMOR1_TYPE#  = 0.3    '' armor_touch: green, and yellow
 const PL_ARMOR2_TYPE#  = 0.6
 const PL_SHELLS%       = 25     '' Quake's starting shells
+const PL_CARRY_MIN%    = 50     '' SetChangeParms: health goes on at 50 at least
+const PL_INTER_HOLD#   = 2.0    '' intermission_exittime: the tally stays this long at least
 const PL_FIRE_RATE#    = 0.5    '' the shotgun's attack_finished
 const PL_IT_SHOTGUN%   = 1
 const PL_IT_SSG%       = 2
@@ -258,7 +274,8 @@ const GS_TITLE% = 0             '' fire starts the fight
 const GS_PLAY%  = 1
 const GS_DEAD%  = 2             '' the pause, then pl_respawn
 const GS_WON%   = 3             '' every soldier down; fire resets them all
-const GS_EXIT%  = 4             '' the slipgate: LEVEL COMPLETE, fire resets
+const GS_EXIT%  = 4             '' the slipgate: LEVEL COMPLETE, fire held two seconds on goes on
+const GS_NEXT%  = 5             '' leaving for the next map: the host loop ends
 
 
 ''

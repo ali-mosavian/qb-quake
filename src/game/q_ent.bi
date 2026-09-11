@@ -55,6 +55,7 @@ type EntsHead
     ntrig       as integer
     nmon        as integer
     namb        as integer
+    next_map    as string * 8   '' trigger_changelevel's map, space padded; blank for none
 end type
 
 '' A monster where the map put it, first in the file so host_init can

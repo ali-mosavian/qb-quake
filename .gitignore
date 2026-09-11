@@ -14,3 +14,8 @@ data/assets/
 __pycache__/
 dosbox-crash.log
 *.o
+
+# id's maps out of the PAK, and the per-map assets built from them
+data/e1m*.bsp
+data/start.bsp
+data/maps/
