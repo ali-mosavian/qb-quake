@@ -155,6 +155,10 @@ sub host_bench_report ( _
         host_pt_put benchf, "pt_tk_traps", g.pt.tk_traps.lo, g.pt.tk_traps.sum, g.pt.tk_traps.hi, g.pt.tk_traps.n, 0.001
         host_pt_put benchf, "pt_tk_place", g.pt.tk_place.lo, g.pt.tk_place.sum, g.pt.tk_place.hi, g.pt.tk_place.n, 0.001
         host_pt_put benchf, "pt_tk_ls", g.pt.tk_ls.lo, g.pt.tk_ls.sum, g.pt.tk_ls.hi, g.pt.tk_ls.n, 0.001
+        host_pt_put benchf, "pt_md_mon", g.pt.md_mon.lo, g.pt.md_mon.sum, g.pt.md_mon.hi, g.pt.md_mon.n, 0.001
+        host_pt_put benchf, "pt_md_item", g.pt.md_item.lo, g.pt.md_item.sum, g.pt.md_item.hi, g.pt.md_item.n, 0.001
+        host_pt_put benchf, "pt_md_nail", g.pt.md_nail.lo, g.pt.md_nail.sum, g.pt.md_nail.hi, g.pt.md_nail.n, 0.001
+        host_pt_put benchf, "pt_md_view", g.pt.md_view.lo, g.pt.md_view.sum, g.pt.md_view.hi, g.pt.md_view.n, 0.001
     end if
     g.pt.place_stale = ent_place_stale( g.wld.count.models, models(), nodes(), planes(), brush() )
     host_kv benchf, "place_stale", str$( g.pt.place_stale )
@@ -297,6 +301,10 @@ sub host_pt_init ( g as Game )
     g.pt.tk_traps.lo = 1E+09
     g.pt.tk_place.lo = 1E+09
     g.pt.tk_ls.lo = 1E+09
+    g.pt.md_mon.lo = 1E+09
+    g.pt.md_item.lo = 1E+09
+    g.pt.md_nail.lo = 1E+09
+    g.pt.md_view.lo = 1E+09
 end sub
 
 '' One 'name value' line. The caller's str$ keeps each type's own format.

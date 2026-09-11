@@ -607,6 +607,7 @@ sub host_render ( _
     nail() as Spike, _
     mon() as MdlState _
 )
+    dim t0 as long
     dim mtx_mdl as Mat4
     dim bob as Vec3
     dim nbox as integer
@@ -749,6 +750,7 @@ sub host_render ( _
     '' drawing reads them, same split host_tick/host_render already keep
     '' for the player.
     pt0 = sys_now()
+    t0 = sys_rdtsc()
     g.mdl_drawn = 0
     if ( g.env.no_mdl = 0 ) then
         for mdl_i = 0 to g.mdl_count - 1
@@ -774,6 +776,7 @@ sub host_render ( _
             end if
         next mdl_i
     end if
+    host_tk g.ft.n > 0, t0, g.pt.md_mon
     '' the pickups: a box each, spinning and bobbing on the same clock
     '' as the liquids, flat colours the world's palette already has
     for mdl_i = 0 to g.item_count - 1
@@ -832,6 +835,7 @@ sub host_render ( _
             end if
         end if
     next mdl_i
+    host_tk g.ft.n > 0, t0, g.pt.md_item
     '' the nails in flight, a sliver each, dark with a bright end; a
     '' grenade a box
     for mdl_i = 0 to ubound( nail )
@@ -850,6 +854,7 @@ sub host_render ( _
             end if
         end if
     next mdl_i
+    host_tk g.ft.n > 0, t0, g.pt.md_nail
     '' the view weapon: v_shot, v_shot2, v_nail, v_rock, v_nail2 or v_rock2 by the weapon in hand,
     '' at the eye, turned with the view, last and with depth off, as Quake
     '' draws it. The fire animation is shot2.. at 10 Hz from the shot,
@@ -899,6 +904,7 @@ sub host_render ( _
                           mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
         end if
     end if
+    host_tk g.ft.n > 0, t0, g.pt.md_view
     if ( g.ft.n > 0 ) then
         ptd = sys_now() - pt0
         g.pt.mdl_sum = g.pt.mdl_sum + ptd

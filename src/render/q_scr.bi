@@ -195,6 +195,11 @@ type PhaseTimes
     tk_traps   as TickTimer
     tk_place   as TickTimer
     tk_ls      as TickTimer
+    '' pt_mdl's parts, microseconds a frame
+    md_mon   as TickTimer
+    md_item  as TickTimer
+    md_nail  as TickTimer
+    md_view  as TickTimer
     present_sum as single     '' vid_update: blit to the screen
     present_max as single
     present_n   as long       '' the last frame exits before present and loop

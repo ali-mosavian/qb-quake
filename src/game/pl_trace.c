@@ -188,6 +188,24 @@ static void near pl_box_sweep( Vec3 *s, Vec3 *f, SolidBox *b, TraceResult *tr )
     else tr->norm.z = (float) hs;
 }
 
+/* A submodel's hull-1 solid lies inside its bounds grown by the player's
+   box, as pl_box_sweep grows a box. A sweep whose own box misses that is
+   empty the whole way and cannot change tr, so the hull walk is skipped:
+   on e1m6 that was every door, lift and button on every trace. The pad
+   covers qbsp rounding the bounds. */
+#define PL_CULL_PAD 8.0f
+
+static short near pl_sweep_misses( Vec3 *s, Vec3 *f, Submodel far *m )
+{
+    if ( ( s->x < f->x ? s->x : f->x ) > m->maxs.x + 16.0f + PL_CULL_PAD ) return 1;
+    if ( ( s->x > f->x ? s->x : f->x ) < m->mins.x - 16.0f - PL_CULL_PAD ) return 1;
+    if ( ( s->y < f->y ? s->y : f->y ) > m->maxs.y + 16.0f + PL_CULL_PAD ) return 1;
+    if ( ( s->y > f->y ? s->y : f->y ) < m->mins.y - 16.0f - PL_CULL_PAD ) return 1;
+    if ( ( s->z < f->z ? s->z : f->z ) > m->maxs.z + 24.0f + PL_CULL_PAD ) return 1;
+    if ( ( s->z > f->z ? s->z : f->z ) < m->mins.z - 32.0f - PL_CULL_PAD ) return 1;
+    return 0;
+}
+
 /* The only external entry point -- pl_slide_move, pl_step_move (x2) and
    pl_gravity all call this unchanged. */
 void pascal far pl_trace(
@@ -226,6 +244,7 @@ void pascal far pl_trace(
             f2 = *fin;
             s2.x -= brush[i].ofs.x; s2.y -= brush[i].ofs.y; s2.z -= brush[i].ofs.z;
             f2.x -= brush[i].ofs.x; f2.y -= brush[i].ofs.y; f2.z -= brush[i].ofs.z;
+            if ( pl_sweep_misses( &s2, &f2, &models[i] ) ) continue;
 
             tr->all_solid = 1;
             dummy = pl_hull_check_c( (short) models[i].head_node1, (float) 0.0, (float) 1.0, &s2, &f2, tr, clip, planes );
