@@ -142,6 +142,11 @@ declare sub ent_use_targets ( _
     door() as DoorEnt, _
     trig() as TrigEnt _
 )
+declare sub ent_kill_targets ( _
+    g as Game, _
+    byval id as integer, _
+    trig() as TrigEnt _
+)
 declare sub ent_trig_fire ( _
     g as Game, _
     byval k as integer, _
@@ -711,6 +716,7 @@ sub ent_trig_init ( _
     t.kind      = xr.kind
     t.target    = xr.target
     t.name      = xr.name
+    t.kill      = xr.kill
     t.state     = ENT_TRIG_READY
     t.left      = xr.count
     t.count     = xr.count
@@ -808,7 +814,27 @@ sub ent_trig_fire ( _
         trig(k).state = ENT_TRIG_HELD
         trig(k).wait_left = trig(k).wait
     end if
+    ent_kill_targets g, trig(k).kill, trig()
     ent_use_targets g, trig(k).target, door(), trig()
+end sub
+
+''::::::::::
+'' name: ent_kill_targets
+'' desc: SUB_UseTargets' remove(): every trigger named id is gone until
+''       the level restarts. A door or a monster by that name stays --
+''       e1m1 kills only its two hint triggers.
+''::::::::::
+sub ent_kill_targets ( _
+    g as Game, _
+    byval id as integer, _
+    trig() as TrigEnt _
+)
+    dim k as integer
+
+    if ( id = 0 ) then exit sub
+    for  k = 0 to g.trig_count-1
+        if ( trig(k).name = id ) then trig(k).state = ENT_TRIG_DONE
+    next k
 end sub
 
 

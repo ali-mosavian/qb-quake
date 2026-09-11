@@ -309,6 +309,15 @@ PY
     else
         echo "FAIL  e1m1 secret: door 43 at x ${sx:-none}, the secret door stayed"; rc=1
     fi
+    # and killtarget: standing in trigger_once *54 removes the hint *51,
+    # "You can jump up here...", for good -- its state reads DONE, 4
+    run_frame "-lm -nostats -noai -at 688 192 60 -yaw 90 -bench 400 -ticks 30" "$VBD_OUT/e1m1-kill.bmp" e1m1.bsp
+    ks=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1 ~ /^trig_/ && $2==51 {print $4}')
+    if [[ "$ks" == 4 ]]; then
+        echo "PASS  e1m1 kill: trigger 51 state 4, the hint was removed"
+    else
+        echo "FAIL  e1m1 kill: trigger 51 state ${ks:-none}, the hint survived"; rc=1
+    fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc
 fi

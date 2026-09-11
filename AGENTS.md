@@ -2343,6 +2343,13 @@ units where a touch door's is grown 60. `tools/ref/e1m1-exit.bmp`
 carries "Walk into the slipgate to exit." because its camera stands in
 that trigger; the reference is what proves the text draws.
 
+`killtarget` removes: a trigger's use puts every trigger named by it in
+DONE before its target fires, which is SUB_UseTargets' order. e1m1 uses
+it twice, each a trigger_once that removes the hint trigger it also
+names, so the hint is never said again once the player has passed. A
+door or a monster named by a killtarget stays; `delay` is not ported.
+The ninth e1m1 arm stands in `*54` and wants `*51` DONE.
+
 `trigger_changelevel` is the level's end: touching it is `GS_EXIT`,
 LEVEL COMPLETE with the worldspawn's message -- the map's title --
 above it, and fire starts the map over: `pl_game_reset` puts the

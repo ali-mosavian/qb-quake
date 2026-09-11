@@ -492,8 +492,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
             case _: kind, wait, count = TRIG_COUNTER, -1.0, int(kv.get('count', '0')) or 2
         if int(kv.get('health', '0')) > 0:
             kind = TRIG_SHOOT   # multi_killed: shot, not touched; wait as above
-        return (m, kind, name_id(kv.get('target', '')), name_id(kv.get('targetname', '')), count,
-                wait, 0.0, (0.0, 0.0, 0.0), msg_of(kv))
+        return (m, kind, name_id(kv.get('target', '')), name_id(kv.get('targetname', '')),
+                name_id(kv.get('killtarget', '')), count, wait, 0.0, (0.0, 0.0, 0.0), msg_of(kv))
 
     def button_record(m: int, kv: dict[str, str], box: tuple[float, ...]) -> tuple:
         # func_button: speed 40, wait 1, lip 4; wait -1 stays pressed
@@ -501,8 +501,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
         wait = float(kv.get('wait', '0')) or 1.0
         lip = float(kv.get('lip', '0')) or 4.0
         travel = travel_of(float(kv.get('angle', '0')), box, lip)
-        return (m, TRIG_BUTTON, name_id(kv.get('target', '')), name_id(kv.get('targetname', '')), 0,
-                wait, speed, travel, msg_of(kv))
+        return (m, TRIG_BUTTON, name_id(kv.get('target', '')), name_id(kv.get('targetname', '')),
+                name_id(kv.get('killtarget', '')), 0, wait, speed, travel, msg_of(kv))
 
     def model(v: str) -> int:
         m = int(v[1:]) if v.startswith('*') and v[1:].isdigit() else 0
@@ -532,7 +532,7 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
             case 'trigger_changelevel' if model(kv.get('model', '')):
                 # the level ends here; its message is the map's title
                 hides.append(model(kv['model']))
-                uses.append((model(kv['model']), TRIG_EXIT, 0, 0, 0, -1.0, 0.0, (0.0, 0.0, 0.0),
+                uses.append((model(kv['model']), TRIG_EXIT, 0, 0, 0, 0, -1.0, 0.0, (0.0, 0.0, 0.0),
                              title[:40].encode('latin1').ljust(40)))
             case 'func_button' if model(kv.get('model', '')):
                 uses.append(button_record(model(kv['model']), kv, boxes[model(kv['model'])]))
@@ -573,8 +573,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]]) -> b
     for m, travel, mid, speed, hold, start_open, nolink, targeted, secret, shoot, msg in doors:
         buf += struct.pack('<h3f3fffhhhhh40s', m, *travel, *mid, speed, hold, start_open, nolink, targeted,
                            secret, shoot, msg)
-    for m, kind, target, name, count, wait, speed, travel, msg in uses:
-        buf += struct.pack('<5hff3f40s', m, kind, target, name, count, wait, speed, *travel, msg)
+    for m, kind, target, name, kill, count, wait, speed, travel, msg in uses:
+        buf += struct.pack('<6hff3f40s', m, kind, target, name, kill, count, wait, speed, *travel, msg)
     return bytes(buf)
 
 

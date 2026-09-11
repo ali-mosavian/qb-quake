@@ -188,6 +188,7 @@ type EntsTrig
     kind        as integer      '' ENT_TRIG_*
     target      as integer      '' what it fires, 0 none
     name        as integer      '' what fires it, 0 none
+    kill        as integer      '' killtarget: the triggers it removes first, 0 none
     count       as integer      '' a counter's count
     wait        as single       '' re-arm delay; below zero fires once, or stays pressed
     speed       as single       '' a button's
@@ -214,6 +215,7 @@ type TrigEnt
     kind        as integer
     target      as integer
     name        as integer
+    kill        as integer
     state       as integer      '' ENT_TRIG_READY..DONE
     left        as integer      '' a counter's uses to go
     count       as integer      '' what left resets to
