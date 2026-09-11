@@ -57,7 +57,9 @@ LDBG=""
 
 # /STACK:8192: BC links 4K, and r_walk_rec recursing 62 deep on e1m1 ran
 # through it into the string space above -- "String space corrupt" on the
-# first frame. dm3ish is 42 deep and never showed it.
+# first frame. dm3ish is 42 deep and never showed it. e1m3 is 85 deep and
+# ran 8K out too, until the recursion's frame shrank to a node pointer and
+# a side (r_walk.c); a bigger stack comes straight out of the far heap.
 {
   printf '%s\r\n' \
     "/NOE /MAP$LDBG /SEG:800 /STACK:8192 $OBJS" \

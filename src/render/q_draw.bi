@@ -51,7 +51,6 @@ type DrawParams
     dl_z        as single
     dl_radius   as single
     build_us    as long      '' out: microseconds spent in sb_build
-    frame_stamp as integer
     ord_count   as integer
     use_lm      as integer
     lightmap    as integer

@@ -357,7 +357,7 @@ void pascal far d_draw_faces(
             i = ti;
             D_ARRAYS_REFRESH();
 
-            if ( pflag[i] != dp->frame_stamp ) continue;
+            if ( ( pflag[i >> 4] & ( 1 << ( i & 15 ) ) ) == 0 ) continue;
 
             /*
              * Backface cull. Signed distance to the face's plane with

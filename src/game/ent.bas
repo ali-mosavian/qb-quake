@@ -314,6 +314,27 @@ end sub
 
 
 
+'' the MDL_KIND_* bits of the map's monsters and how many there are:
+'' host_init loads the kinds the map uses and sizes mdl_ent() to it
+function ent_monster_kinds ( _
+    g as Game, _
+    count as integer _
+) as integer
+    dim u as integer, i as integer, mask as integer
+    dim h as EntsHead
+    dim mr as EntsMon
+
+    ent_open_bin g, u, h
+    mask = 0
+    for  i = 1 to h.nmon
+        ent_get u, clng( varseg( mr ) ) * 65536& + (clng( varptr( mr ) ) and 65535&), len( mr )
+        if ( mr.kind >= 0 and mr.kind < MDL_KINDS% ) then mask = mask or cint( 2 ^ mr.kind )
+    next i
+    qglFileClose u
+    count = h.nmon
+    ent_monster_kinds = mask
+end function
+
 ''::::::::::
 '' name: ent_load_monsters
 '' desc: Spawns the map's monsters where it put them, facing its angle;
@@ -337,10 +358,10 @@ function ent_load_monsters ( _
     n = 0
     for  i = 1 to h.nmon
         ent_get u, clng( varseg( mr ) ) * 65536& + (clng( varptr( mr ) ) and 65535&), len( mr )
-        if ( n < MDL_MAX_ENTS% ) then
+        '' a kind with no model loaded is left out, not stood in for
+        if ( mr.kind < 0 or mr.kind >= MDL_KINDS% ) then
+        elseif ( mon( mr.kind ).loaded and n <= ubound( mdl_ent ) ) then
             mdl_ent( n ).kind = mr.kind
-            if ( mr.kind >= MDL_KINDS% ) then mdl_ent( n ).kind = MDL_KIND_ARMY%
-            if ( mon( mdl_ent( n ).kind ).loaded = 0 ) then mdl_ent( n ).kind = MDL_KIND_ARMY%
             mdl_ent( n ).patrol = mr.first
             mdl_spawn g, mdl_ent( n ), mr.org, models(), brush(), planes()
             mdl_ent( n ).yaw = mr.angle

@@ -212,6 +212,10 @@ declare sub r_recursive_world_node ( _
 '' sys.bas. Only caller in this module is r_draw_world, timing its own
 '' two sub-phases -- narrowest place that can see it.
 declare function sys_now ( ) as single
+declare sub r_pflag_clear ( _
+    pflag() as integer, _
+    byval nwords as integer _
+)
 
 
 
@@ -367,23 +371,9 @@ sub r_draw_world ( _
     g.vis.cul_leafs = 0
     g.vis.drw_leafs = 0
 
-    ''
-    '' Advance the frame stamp instead of clearing every face flag.
-    ''
-    '' The clear walked all triCount faces every frame -- 1,600 on e1m7,
-    '' 5,500 on the episode maps -- to reset flags that only the few hundred
-    '' faces of the visible leaves ever set. Comparing against the stamp is
-    '' the same test where it is used, and the pass runs once per 32,767
-    '' frames instead. The wrap is checked BEFORE the increment because
-    '' QuickBASIC traps integer overflow at run time rather than wrapping.
-    ''
-    if ( g.vis.frame_stamp = 32767 ) then
-        for  i = 0 to g.wld.count.faces-1
-            pflag(i) = 0
-        next i
-        g.vis.frame_stamp = 0
-    end if
-    g.vis.frame_stamp = g.vis.frame_stamp + 1
+    '' the face bits off: a bit a face where a frame stamp was two bytes,
+    '' cleared in C at a word a face-sixteen
+    r_pflag_clear pflag(), ubound( pflag ) + 1
 
     ''
     '' Extract pvs

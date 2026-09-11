@@ -199,73 +199,68 @@ typedef struct {
     BASARRAY      *ord_dsc;
 } WalkCtx;
 
+/* A leaf's faces marked and its entities emitted, in a frame of its own:
+   the recursion below carries no locals but the node array and the side,
+   about 24 bytes a level, where the nine far pointers it used to copy
+   made 70 -- and e1m3 is 85 deep, which ran BASIC's 8K stack out into
+   DGROUP and came back as "runtime error 9" from a procedure entry. */
+static void near r_walk_emit( WalkCtx *ctx, int nodenr )
+{
+    short ign_tmp = ctx->ign;
+
+    r_emit_entities( ctx->g, nodenr, ctx->model_count, &ctx->cpos,
+                      &ign_tmp, ctx->models, ctx->brush,
+                      ctx->nodes_dsc, ctx->planes_dsc,
+                      ctx->pvsb_dsc, ctx->pflag_dsc, ctx->ord_dsc,
+                      ctx->fru_dsc );
+}
+
+static void near r_walk_leaf( WalkCtx *ctx, int nodenr )
+{
+    Leaf      far *lef   = ctx->lef;
+    short     far *lfc   = ctx->lfc;
+    short     far *pflag = ctx->pflag;
+    int i, frst, last, leafnr;
+
+    leafnr = ~nodenr;
+    if ( (ctx->ign || ctx->pvsb[leafnr]) &&
+         r_cull_box_c( &lef[leafnr].bound, ctx->fru ) ) {
+        frst = lef[leafnr].lface_id;
+        last = frst + lef[leafnr].lface_num;
+        for ( i = frst; i < last; i++ )
+            pflag[ lfc[i] >> 4 ] |= (short) ( 1 << ( lfc[i] & 15 ) );
+
+        if ( ctx->vis->ent_left ) r_walk_emit( ctx, nodenr );
+
+        ctx->vis->drw_leafs++;
+    } else {
+        ctx->vis->cul_leafs++;
+    }
+}
+
 static void near r_walk_rec( WalkCtx *ctx, int nodenr )
 {
-    Node      far *nds  = ctx->nds;
-    Leaf      far *lef  = ctx->lef;
-    Plane     far *pln  = ctx->pln;
-    DiskPlane far *fru  = ctx->fru;
-    short     far *lfc  = ctx->lfc;
-    short     far *pvsb = ctx->pvsb;
-    short     far *pflag = ctx->pflag;
-    short     far *ord  = ctx->ord;
-    VisState  far *vis  = ctx->vis;
-    short ign_tmp;
-
-    int side, i, frst, last, leafnr;
+    Node far *nds = ctx->nds;
+    int side;
 
     if ( nodenr & 0x8000 ) {
-        leafnr = ~nodenr;
-        if ( (ctx->ign || pvsb[leafnr]) &&
-             r_cull_box_c( &lef[leafnr].bound, fru ) ) {
-            frst = lef[leafnr].lface_id;
-            last = frst + lef[leafnr].lface_num;
-            for ( i = frst; i < last; i++ )
-                pflag[ lfc[i] ] = vis->frame_stamp;
-
-            if ( vis->ent_left ) {
-                ign_tmp = ctx->ign;
-                r_emit_entities( ctx->g, nodenr, ctx->model_count, &ctx->cpos,
-                                  &ign_tmp, ctx->models, ctx->brush,
-                                  ctx->nodes_dsc, ctx->planes_dsc,
-                                  ctx->pvsb_dsc, ctx->pflag_dsc, ctx->ord_dsc,
-                                  ctx->fru_dsc );
-            }
-
-            vis->drw_leafs++;
-        } else {
-            vis->cul_leafs++;
-        }
+        r_walk_leaf( ctx, nodenr );
         return;
     }
 
-    if ( !r_cull_box_c( &nds[nodenr].bound, fru ) ) return;
+    if ( !r_cull_box_c( &nds[nodenr].bound, ctx->fru ) ) return;
 
-    side = ( r_cam_plane_dist_c( &ctx->cpos, &pln[ nds[nodenr].plane_id ] ) >= 0.0 );
+    side = ( r_cam_plane_dist_c( &ctx->cpos, &ctx->pln[ nds[nodenr].plane_id ] ) >= 0.0 );
 
     if ( side ) {
         r_walk_rec( ctx, nds[nodenr].child1 );
-        if ( vis->ent_left ) {
-            ign_tmp = ctx->ign;
-            r_emit_entities( ctx->g, nodenr, ctx->model_count, &ctx->cpos,
-                              &ign_tmp, ctx->models, ctx->brush,
-                              ctx->nodes_dsc, ctx->planes_dsc,
-                              ctx->pvsb_dsc, ctx->pflag_dsc, ctx->ord_dsc,
-                              ctx->fru_dsc );
-        }
-        ord[ vis->ord_count++ ] = nodenr;
+        if ( ctx->vis->ent_left ) r_walk_emit( ctx, nodenr );
+        ctx->ord[ ctx->vis->ord_count++ ] = nodenr;
         r_walk_rec( ctx, nds[nodenr].child0 );
     } else {
         r_walk_rec( ctx, nds[nodenr].child0 );
-        if ( vis->ent_left ) {
-            ign_tmp = ctx->ign;
-            r_emit_entities( ctx->g, nodenr, ctx->model_count, &ctx->cpos,
-                              &ign_tmp, ctx->models, ctx->brush,
-                              ctx->nodes_dsc, ctx->planes_dsc,
-                              ctx->pvsb_dsc, ctx->pflag_dsc, ctx->ord_dsc,
-                              ctx->fru_dsc );
-        }
-        ord[ vis->ord_count++ ] = nodenr;
+        if ( ctx->vis->ent_left ) r_walk_emit( ctx, nodenr );
+        ctx->ord[ ctx->vis->ord_count++ ] = nodenr;
         r_walk_rec( ctx, nds[nodenr].child1 );
     }
 }
@@ -319,6 +314,17 @@ void pascal far r_recursive_world_node(
 /* Called once at startup (see main.bas) with off = varptr(g.vis)-varptr(g):
    fails loud if a field ever gets added ahead of vis in Game, instead of
    silently corrupting whichever VisState field the wrong offset lands on. */
+/* every face bit off, at the top of the frame: 16 a word, so the
+   episode maps cost 350 words here and 700 bytes of far heap, where the
+   frame stamp this replaced cost two bytes a face for the whole map */
+void pascal far r_pflag_clear( BASARRAY *pflag_dsc, short nwords )
+{
+    short far *p = (short far *) pflag_dsc->farptr;
+    short i;
+
+    for ( i = 0; i < nwords; i++ ) p[i] = 0;
+}
+
 int pascal far r_walk_layout_ok( long off )
 {
     return ( off == GAME_VIS_OFFSET );

@@ -627,7 +627,6 @@ sub host_render ( _
     dparm.dl_y        = g.rdr.dlight.pos.y
     dparm.dl_z        = g.rdr.dlight.pos.z
     dparm.dl_radius   = g.rdr.dlight.radius
-    dparm.frame_stamp = g.vis.frame_stamp
     dparm.ord_count   = g.vis.ord_count
     dparm.use_lm      = g.env.use_lm
     dparm.lightmap    = g.rdr.lightmap

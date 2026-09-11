@@ -27,6 +27,7 @@
 #   tools/check.sh --e1m1       id's e1m1, from the shareware PAK: it must
 #                               load and draw polygons at the spawn
 #   tools/check.sh --e1m2       e1m2's own entities, from the build's MAPS\
+#   tools/check.sh --e1m3       e1m3, the first map with no soldier: its spawn frame
 #
 # -nostats is not optional. The overlay prints live fps and frame time, so
 # two runs of the SAME build differ by ~28 pixels in the digits, and a
@@ -507,6 +508,23 @@ if [[ "${1:-}" == "--e1m2" ]]; then
         echo "FAIL  e1m2 ogre: health ${hp:-none}, deaths ${deaths:-none}, ${og:-0} ogres hunting; want a bite and one"; rc=1
         tr -d '\r' < "$VBD_OUT/bench.txt" | grep '^ent[0-9]'
     fi
+    for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
+    exit $rc
+fi
+
+# e1m3: no soldier among its monsters (ogres, a demon, and kinds not yet
+# ported), so the map is the one where a load gated on the soldier's
+# model skips something -- mdl_ent() and nail() were sized inside that
+# gate, and the first frame died in ubound( nail ), error 9 at line 0.
+# The spawn frame against tools/ref/e1m3-spawn.bmp is the test.
+if [[ "${1:-}" == "--e1m3" ]]; then
+    build_exe
+    [[ -f "$VBD_OUT/MAPS/e1m3/assets.zip" ]] || { echo "SKIP  e1m3: no MAPS/e1m3 in the build (needs the PAK)"; exit 0; }
+    for f in assets.zip texr.raw texs.raw pal.raw e1m3.bsp; do cp "$VBD_OUT/MAPS/e1m3/$f" "$VBD_OUT/$f"; done
+    rc=0
+    run_frame "-lm -nostats -noai -bench 40 -ticks 60" "$VBD_OUT/e1m3-spawn.bmp" e1m3.bsp
+    out=$(python3 "$ROOT/tools/imgdiff.py" "$ROOT/tools/ref/e1m3-spawn.bmp" "$VBD_OUT/e1m3-spawn.bmp" | tail -1)
+    if [[ "$out" == IDENTICAL* ]]; then echo "PASS  e1m3 spawn: $out"; else echo "FAIL  e1m3 spawn: $out"; rc=1; fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc
 fi

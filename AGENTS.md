@@ -2313,7 +2313,12 @@ that routine, so any past oddity involving one is suspect.
 it** into the string space above: `String space corrupt`, raised from
 `B$CompactSB` under `d_draw_faces` -- lazily, at the next compaction,
 nowhere near the write. `tools/link-qr.sh` passes `/STACK:8192`. dm3ish
-is 42 deep and never came close.
+is 42 deep and never came close. e1m3 is 85 deep and ran 8K out too,
+and a bigger stack comes straight out of the far heap (16K was `Out
+of memory` at load), so `r_walk_rec`'s frame shrank instead: the
+context it needs lives in one struct reached through a pointer and
+the leaf and emit halves are their own routines, so the recursion
+holds a node pointer and a side.
 
 **A map whose portal table does not load must still walk its PVS.**
 `pt_ref` is 6,624 x 7 x 2 bytes on e1m1, past a BASIC array's 64K, so
@@ -2366,9 +2371,35 @@ code. `sc_slot` is one integer a face now -- the block's generation tag
 and style epoch sit on the block, `sc_btag`/`sc_bstag`, since they
 describe its content and a face keeps only its block -- 22K back on
 e1m2's 5,516 faces less 4K on the blocks. e1m2 plays: far heap after
-the depth buffer 23,024 with eight models and the sound layer. Next
-if it tightens: per-map model loading (a kind the map lacks costs
-600 to 1,000 bytes), `mdl_ent()` sized to the map's count.
+the depth buffer 23,024 with eight models and the sound layer.
+
+e1m3 (5,274 faces, 2,942 nodes 85 deep, 1,689 leaves) loaded with 1K
+and died in its first frame with 7K, and three cuts got it to 5.8K
+after the depth buffer: the per-face frame stamp is a bit
+(`pflag()` is faces/16 integers, `r_pflag_clear` zeroes it a frame,
+the walk sets and `d_faces.c` tests a bit -- 10K), the monster kinds
+loaded are the ones the map's ents.bin names (`ent_monster_kinds`,
+soldier and knight on a map with none) and `mdl_ent()` is the map's
+count (6K), and the surface cache's drawing views are one a HEIGHT
+re-shaped to the class at every use (`qglSfViewShape`, five views)
+where they were one a class, 22 of them made at the first face of
+each class -- past the load trace, which is why the first frame died
+with 7K to spare and nothing in the trace said so (6K). A lazily
+made thing is invisible to a trace taken at load; count what the
+first frame makes too.
+
+**`ubound()` of an array never made is error 9, and per-map loading
+found one.** `mdl_ent()` and `nail()` were sized inside `if ( mon(
+MDL_KIND_ARMY% ).loaded )`, which every map had satisfied until e1m3
+-- ogres and a demon, no soldier -- and the first frame's `for mdl_i
+= 0 to ubound( nail )` was `runtime error 9 at line 0`. Both are
+sized before the gate now. What found it, after the debugger's stack
+read as garbage: a `tk_mark` writing a tag to a file, open/append/
+close, before each stage of the tick and the render -- three builds,
+the last one marking each item -- and the run stopped between the
+items and the nails. `tools/check.sh --e1m3` is the gate, the spawn
+frame against `tools/ref/e1m3-spawn.bmp`; the run died on it before
+the fix.
 
 **A black lit world with every counter normal is a missing allocation.**
 The surface builder's 16K conventional scratch was taken at the first

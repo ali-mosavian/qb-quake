@@ -115,7 +115,7 @@ ASSET_FILES := $(wildcard data/assets/*)
 # asset files under data/maps/<map>/, staged to $(BUILD)/MAPS/<map>/.
 # trigger_changelevel writes NEXT.BAT, GOMAP.BAT copies the next map's
 # files over the ones beside the exe and dosbox.sh's run.bat loops.
-MAPS       ?= e1m1 e1m2
+MAPS       ?= e1m1 e1m2 e1m3
 MAP_ASSETS := $(if $(wildcard $(PAK)),$(foreach m,$(MAPS),data/maps/$(m)/assets.zip))
 EXE  := $(BUILD)/qrender.exe
 

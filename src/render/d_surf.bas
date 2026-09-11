@@ -27,6 +27,11 @@ declare sub qglSfFree ( byval s as long )
 declare function qglSfViewNew ( byval parent as long, byval wid as integer, _
                                   byval hgt as integer, byval bps as integer ) as long
 declare function qglSfViewAim ( byval v as long, byval ofs as long ) as integer
+declare function qglSfViewShape ( _
+    byval v as long, _
+    byval wid as integer, _
+    byval ofs as long _
+) as integer
 declare function qglSfPget ( byval s as long, byval x as integer, _
                                byval y as integer ) as integer
 declare function qglSfWrRow ( byval s as long, byval y as integer ) as long
@@ -184,6 +189,7 @@ const SC_MAXSH  = 8             '' 256 on one axis, if the other stays small
 const SC_MAXSUM = 14            '' 2^a * 2^b <= 16384: one EMS page, which is
                                 '' all a single rdAccess brings in
 const SC_NCLS   = 25            '' (SC_MAXSH-SC_MINSH+1) squared
+const SC_NHGT   = 5             '' the heights, one drawing view each
 ''
 '' How many bytes of surfaces to keep. This is EMS, and EMS is the one
 '' thing here there is plenty of -- what used to bound the cache was the
@@ -320,9 +326,13 @@ dim shared sc_bprev() as integer        '' the class's LRU chain
 dim shared sc_bnext() as integer
 dim shared sc_bcnt as integer           '' blocks made so far
 '$dynamic
-'' one drawing DC per size class. '$DYNAMIC, so the array lands in the far
-'' heap rather than DGROUP -- DGROUP is shared with BASIC's stack and string
-'' space here and has no room to spare.
+'' one drawing view per HEIGHT, shaped to the width at every use: its
+'' address table is the height's, so 5 views of 60 + 4 * rows bytes
+'' stand where one a class was 22 and 8.7K, made at the first face of
+'' each class -- past the load trace, which is how e1m3 came to die in
+'' its first frame with 7K to spare. '$DYNAMIC, so the array lands in
+'' the far heap rather than DGROUP -- DGROUP is shared with BASIC's
+'' stack and string space here and has no room to spare.
 dim shared sc_desc() as long
 
 ''
@@ -867,7 +877,7 @@ sub sc_init ( _
     sc_dlit = 0
 
     redim sc_slot(g.wld.count.faces-1) as integer
-    redim sc_desc(SC_NCLS-1) as long
+    redim sc_desc(SC_NHGT-1) as long
 
     redim sc_lhead(SC_NORD-1) as integer
     redim sc_ltail(SC_NORD-1) as integer
@@ -881,7 +891,7 @@ sub sc_init ( _
     redim sc_bnext(SC_NBLK-1) as integer
     sc_bcnt = 0
 
-    for i = 0 to SC_NCLS-1
+    for i = 0 to SC_NHGT-1
         sc_desc(i) = 0
     next i
     for i = 0 to SC_NORD-1
@@ -1018,7 +1028,7 @@ function sc_find ( _
     byval stag as integer _
 ) as long
     dim dc as long
-    dim a as integer, b as integer, vcls as integer, blk as integer
+    dim a as integer, b as integer, blk as integer
 
     if ( sc_ok = 0 ) then
         sc_find = 0
@@ -1052,11 +1062,10 @@ function sc_find ( _
         sc_find = 0
         exit function
     end if
-    vcls = (a - SC_MINSH) * 5 + (b - SC_MINSH)
-    dc = sc_desc( vcls )
+    dc = sc_desc( b - SC_MINSH )
     if ( dc <> 0 ) then
         sc_aim_ofs = clng( sc_bgrn( blk ) ) * SC_GRAN
-        if ( qglSfViewAim%( dc, sc_aim_ofs ) = 0 ) then dc = 0
+        if ( qglSfViewShape%( dc, 2 ^ a, sc_aim_ofs ) = 0 ) then dc = 0
     end if
     if ( dc <> 0 ) then
         sc_hits = sc_hits + 1
@@ -1080,7 +1089,7 @@ function sc_alloc ( _
     byval fh as integer, _
     byval stag as integer _
 ) as long
-    dim a as integer, b as integer, cidx as integer, bord as integer
+    dim a as integer, b as integer, bord as integer
     dim dc as long
     dim vic as integer, blk as integer, j as integer, b2 as integer
 
@@ -1105,23 +1114,21 @@ function sc_alloc ( _
         sc_alloc = 0
         exit function
     end if
-    cidx = (a - SC_MINSH) * 5 + (b - SC_MINSH)
-
     ''
-    '' One view per class, made once and aimed somewhere new every time.
-    '' These are every DC the cache ever makes -- 25 at the very most,
-    '' against one per cached surface before.
+    '' One view per height, made once and shaped and aimed somewhere
+    '' new every time. These are every DC the cache ever makes -- five
+    '' at the very most, against one per cached surface before.
     ''
-    if ( sc_desc(cidx) = 0 ) then
+    if ( sc_desc( b - SC_MINSH ) = 0 ) then
         dc = qglSfViewNew&( sc_hnd, 2 ^ a, 2 ^ b, 2 ^ a )
         if ( dc = 0 ) then
             sc_alloc = 0
             exit function
         end if
-        sc_desc(cidx) = dc
+        sc_desc( b - SC_MINSH ) = dc
         sc_made = sc_made + 1
     end if
-    dc = sc_desc(cidx)
+    dc = sc_desc( b - SC_MINSH )
 
     ''
     '' The block is sized at the mip being drawn NOW, and grows only if a
@@ -1237,9 +1244,10 @@ function sc_alloc ( _
     sc_bstag(blk) = stag
     sc_lru_touch blk
 
-    '' aim it at the bytes just claimed, ready for the builder to write
+    '' shape it to the class and aim it at the bytes just claimed, ready
+    '' for the builder to write
     sc_aim_ofs = ofs
-    if ( qglSfViewAim%( dc, ofs ) = 0 ) then
+    if ( qglSfViewShape%( dc, 2 ^ a, ofs ) = 0 ) then
         sc_alloc = 0
         exit function
     end if
@@ -1283,7 +1291,7 @@ sub sc_shutdown
     '' headers just leak, once, at process exit. sc_desc(i) is still
     '' cleared so nothing downstream mistakes a stale pointer for a live
     '' view after shutdown.
-    for i = 0 to SC_NCLS-1
+    for i = 0 to SC_NHGT-1
         sc_desc(i) = 0
     next i
     if ( sc_hnd <> 0 ) then qglSfFree sc_hnd

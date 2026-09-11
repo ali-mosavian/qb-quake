@@ -179,7 +179,6 @@ typedef struct {
     float dl_x, dl_y, dl_z, dl_radius;
     /* out */
     long  build_us;
-    short frame_stamp;
     short ord_count;
     short use_lm;
     short lightmap;
@@ -231,12 +230,11 @@ typedef struct {
 /* q_draw.bi's DynLight -- BSP space, Z-up, hence Vec3 not Vec3f. */
 typedef struct { Vec3 pos; float radius; } DynLight;
 
-/* q_vis.bi's VisState -- frame_stamp(int) ord_count(long) drw_leafs(int)
+/* q_vis.bi's VisState -- ord_count(long) drw_leafs(int)
    cul_leafs(int) ent_left(int) pt_culled(int) no_ents(int) bad_order(int),
    all scalars, no padding: a direct transcription of the declared field
    order, and a field added on one side only shifts every field after it. */
 typedef struct {
-    short frame_stamp;
     long  ord_count;
     short drw_leafs;
     short cul_leafs;

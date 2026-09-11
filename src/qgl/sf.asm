@@ -664,6 +664,42 @@ qglSfViewAim  proc    public,\
                 ret
 qglSfViewAim  endp
 
+;;::::::::::::::
+;; qglSfViewShape ( v:far ptr, wid:word, ofs:dword ) -> ax nonzero
+;;
+;; Re-aims a view AND gives it a new width: xRes, the clip's xMax and
+;; the stride, a cached surface being a flat run wid bytes a row. The
+;; address table is the height's whatever the width, so one view a
+;; HEIGHT serves every class of that height -- five for the cache
+;; where a view a class was twenty-two, made at the first face of each
+;; class where the load trace could not see them.
+;;::::::::::::::
+qglSfViewShape proc   public uses bx dx es,\
+                        v:dword, wid:word, ofs:dword
+
+                les     bx, v
+                mov     ax, es
+                or      ax, bx
+                jz      @@fail
+                mov     ax, wid
+                mov     es:[bx].Surface.xRes, ax
+                mov     es:[bx].Surface.bps, ax
+                dec     ax
+                mov     es:[bx].Surface.xMax, ax
+                mov     ax, wid
+                mul     es:[bx].Surface.yRes
+                mov     W es:[bx].Surface._size+0, ax
+                mov     W es:[bx].Surface._size+2, dx
+                invoke  qglSetView, v, ofs
+                neg     ax
+                sbb     ax, ax
+                neg     ax
+                ret
+
+@@fail:         xor     ax, ax
+                ret
+qglSfViewShape endp
+
 
 ;;::::::::::::::
 ;; qglSfPget ( s:far ptr, x:word, y:word ) -> al

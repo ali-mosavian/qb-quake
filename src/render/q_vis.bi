@@ -10,7 +10,6 @@
 ''
 
 type VisState
-    frame_stamp as integer      '' stamped into poly_flag for visible faces
     ord_count   as long         '' entries written to order_list
     drw_leafs   as integer      '' leaves the walk kept this frame, and
     cul_leafs   as integer      '' threw away; both shown on the stats panel

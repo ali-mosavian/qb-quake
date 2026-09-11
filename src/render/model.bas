@@ -303,11 +303,10 @@ sub mod_alloc ( _
     r_alloc_pvs g.wld.count.leaves
     r_load_portals g.wld.count.leaves
 
-    '' Sized to the map, not a fixed 4096: poly_flag is indexed by face
-    '' 0..wld.count.faces-1, and e3m6 has 6,985 faces -- a fixed 4096 was too
-    '' SMALL there, an out-of-bounds write waiting to happen, not just
-    '' wasted space on the smaller maps.
-    redim pflag( g.wld.count.faces-1 ) as integer
+    '' Sized to the map, a bit a face: e3m6 has 6,985 faces, a fixed 4096
+    '' was too SMALL there once, and two bytes a face was 11K of far heap
+    '' e1m3 did not have
+    redim pflag( ( g.wld.count.faces - 1 ) \ 16 ) as integer
     redim texinf(g.wld.count.tex_infos-1) as TexInfo
 
 end sub

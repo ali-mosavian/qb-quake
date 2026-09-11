@@ -343,6 +343,10 @@ declare sub pl_init ( _
 )
 declare sub pl_reset_player ( g as Game )
 declare sub pl_carry_load ( g as Game )
+declare function ent_monster_kinds ( _
+    g as Game, _
+    count as integer _
+) as integer
 declare function ent_load_monsters ( _
     g as Game, _
     mdl_ent() as MdlEnt, _
@@ -453,7 +457,7 @@ dim gv_buf() as integer
 
 '' One spawned instance per element -- the asset (mdltri_buffer, above,
 '' and mon()) is shared; only per-monster position/state lives here.
-'' Sized in host_init, once, to MDL_MAX_ENTS%.
+'' Sized in host_init to the map's monster count, MDL_CROWD% at least.
 dim mdl_ent() as MdlEnt
 '' the asset a kind's spawns share, indexed MDL_KIND_*
 dim mon() as MdlState
@@ -818,32 +822,39 @@ sub host_init ( _
     '' vid_init, above) already applies -- the skin's indices come from
     '' the same Quake palette mkmdl.py baked them from, so nothing extra
     '' to install here.
+    '' Only the kinds this map's monsters are -- a kind loaded costs
+    '' about a K of far heap -- or the crowd's soldiers and knights on
+    '' a map with none
+    dim mon_kinds as integer, mon_count as integer
+    mon_kinds = ent_monster_kinds( g, mon_count )
+    if ( mon_kinds = 0 ) then mon_kinds = 3
+    if ( mon_count < MDL_CROWD% ) then mon_count = MDL_CROWD%
     redim mon( MDL_KINDS% - 1 ) as MdlState
-    mdl_load g, mon( MDL_KIND_ARMY% ), "soldier"
+    if ( mon_kinds and 1 ) then mdl_load g, mon( MDL_KIND_ARMY% ), "soldier"
     mdl_load g, g.vmdl, "v_shot"
     mdl_load g, g.smdl, "v_shot2"
     mdl_load g, g.nmdl, "v_nail"
-    mdl_load g, mon( MDL_KIND_KNIGHT% ), "knight"
-    mdl_load g, mon( MDL_KIND_DOG% ), "dog"
-    mdl_load g, mon( MDL_KIND_OGRE% ), "ogre"
-    mdl_load g, mon( MDL_KIND_DEMON% ), "demon"
+    if ( mon_kinds and 2 ) then mdl_load g, mon( MDL_KIND_KNIGHT% ), "knight"
+    if ( mon_kinds and 4 ) then mdl_load g, mon( MDL_KIND_DOG% ), "dog"
+    if ( mon_kinds and 8 ) then mdl_load g, mon( MDL_KIND_OGRE% ), "ogre"
+    if ( mon_kinds and 16 ) then mdl_load g, mon( MDL_KIND_DEMON% ), "demon"
     snd_init g
-    g.mdl_count = 0
-    if ( mon( MDL_KIND_ARMY% ).loaded ) then
-        '' mdl_pick_section places every model from rnd, so a clock
-        '' seed leaves the saved frame unrepeatable. Bench only.
-        if ( g.env.bench_frames > 0 or g.env.bench_ticks > 0 ) then
-            randomize 1
-        else
-            randomize timer
-        end if
-        dim mdl_i as integer
-        dim mdl_spawn_rad as single, mdl_spawn_fallback as Vec3, mdl_spawn_org as Vec3
-        redim mdl_ent( MDL_MAX_ENTS% - 1 ) as MdlEnt
-        redim nail( PL_NAILS_MAX% - 1 ) as Spike
-        '' the map's own, where it put them; a deathmatch map has none
-        g.mdl_count = ent_load_monsters( g, mdl_ent(), mdl_buffer(), brush(), pln_buffer(), mon() )
-        if ( g.mdl_count = 0 ) then
+    '' mdl_pick_section places every model from rnd, so a clock
+    '' seed leaves the saved frame unrepeatable. Bench only.
+    if ( g.env.bench_frames > 0 or g.env.bench_ticks > 0 ) then
+        randomize 1
+    else
+        randomize timer
+    end if
+    dim mdl_i as integer
+    dim mdl_spawn_rad as single, mdl_spawn_fallback as Vec3, mdl_spawn_org as Vec3
+    '' sized whatever the map has: a map with no soldier still has the
+    '' nails, and ubound of an array never made is error 9 (e1m3)
+    redim mdl_ent( mon_count - 1 ) as MdlEnt
+    redim nail( PL_NAILS_MAX% - 1 ) as Spike
+    '' the map's own, where it put them; a deathmatch map has none
+    g.mdl_count = ent_load_monsters( g, mdl_ent(), mdl_buffer(), brush(), pln_buffer(), mon() )
+    if ( g.mdl_count = 0 and mon( MDL_KIND_ARMY% ).loaded ) then
         for mdl_i = 0 to MDL_CROWD% - 1
             '' the old ring around the player, kept as mdl_pick_section's
             '' own fallback when the map doesn't offer enough separated
@@ -864,17 +875,16 @@ sub host_init ( _
             mdl_spawn g, mdl_ent( mdl_i ), mdl_spawn_org, mdl_buffer(), brush(), pln_buffer()
         next mdl_i
         g.mdl_count = MDL_CROWD%
-        end if
-        '' where they stood: a bench run is aimed at one with -at
-        if ( g.env.bench_frames > 0 or g.env.bench_ticks > 0 ) then
-            dim mdl_sf as integer
-            mdl_sf = freefile
-            open "spawn.txt" for output as #mdl_sf
-            for mdl_i = 0 to g.mdl_count - 1
-                print #mdl_sf, mdl_ent( mdl_i ).kind; mdl_ent( mdl_i ).pos.x; mdl_ent( mdl_i ).pos.y; mdl_ent( mdl_i ).pos.z
-            next mdl_i
-            close #mdl_sf
-        end if
+    end if
+    '' where they stood: a bench run is aimed at one with -at
+    if ( g.env.bench_frames > 0 or g.env.bench_ticks > 0 ) then
+        dim mdl_sf as integer
+        mdl_sf = freefile
+        open "spawn.txt" for output as #mdl_sf
+        for mdl_i = 0 to g.mdl_count - 1
+            print #mdl_sf, mdl_ent( mdl_i ).kind; mdl_ent( mdl_i ).pos.x; mdl_ent( mdl_i ).pos.y; mdl_ent( mdl_i ).pos.z
+        next mdl_i
+        close #mdl_sf
     end if
 
     t_vid = timer
