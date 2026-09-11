@@ -421,6 +421,7 @@ ENT_PAIR = re.compile(r'"([^"]*)"\s*"([^"]*)"')
 TRIG_ONCE, TRIG_MULTI, TRIG_COUNTER, TRIG_BUTTON, TRIG_EXIT, TRIG_SHOOT, TRIG_SECRET = 0, 1, 2, 3, 4, 5, 6   # ENT_TRIG_*
 TRIG_SHOOTER = 7
 TRIG_RELAY, TRIG_BOSS, TRIG_BOLT = 8, 9, 10   # a use passed on; Chthon, unseen; event_lightning
+TRIG_FIREBALL = 11   # misc_fireball: a lava ball up from its origin every 3 to 8 seconds
 KEY_NAMES = ('key', 'runekey', 'keycard')   # items.qc's netname by worldtype
 
 
@@ -762,6 +763,11 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
                 next_map = kv.get('map', '')
             case 'func_button' if model(kv.get('model', '')):
                 uses.append(button_record(model(kv['model']), kv, boxes[model(kv['model'])]))
+            case 'misc_fireball':
+                # speed as the map gives it: id's default is `self.speed == 1000`,
+                # a compare, so an unset one leaves 0 and the ball rises 0..200
+                uses.append((0, TRIG_FIREBALL, 0, 0, 0, 0, 0.0, float(kv.get('speed', '0')),
+                             (0.0, 0.0, 0.0), 0, b''.ljust(40), vec(kv.get('origin', '0 0 0'))))
             case 'trigger_relay':
                 # SUB_UseTargets passed on, at once: delay is not ported
                 uses.append((0, TRIG_RELAY, name_id(kv.get('target', '')), name_id(kv.get('targetname', '')),

@@ -807,7 +807,10 @@ sub host_render ( _
         if ( nail( mdl_i ).alive ) then
             bob = nail( mdl_i ).pos
             bob.z = bob.z - 1.0
-            if ( nail( mdl_i ).grenade ) then
+            if ( nail( mdl_i ).toss ) then
+                nbox = mdl_draw_box( bob, 4.0, 8.0, 1.0, 0.0, mtx_fin, xresh, yresh, g.env.z_near, _
+                                     h_dst_dc, ENT_COL_RED%, ENT_COL_YELLOW% )
+            elseif ( nail( mdl_i ).grenade ) then
                 nbox = mdl_draw_box( bob, 2.0, 4.0, 1.0, 0.0, mtx_fin, xresh, yresh, g.env.z_near, _
                                      h_dst_dc, ENT_COL_BROWN%, ENT_COL_BROWN% )
             else

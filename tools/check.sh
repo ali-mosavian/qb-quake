@@ -699,6 +699,15 @@ if [[ "${1:-}" == "--e1m6" || "${1:-}" == "--e1m7" || "${1:-}" == "--e1m8" || "$
         if [[ "$out" == IDENTICAL* ]]; then echo "PASS  start registered: $out"; else echo "FAIL  start registered: $out"; rc=1; fi
     fi
     if [[ "$m" == e1m6 ]]; then
+        # misc_fireball: fifteen emitters, a ball each in 0..5 s and every 3..8
+        # after, counted in the emitter's left: ten seconds must send some
+        run_frame "-lm -nostats -noai -bench 2000 -ticks 600" "$VBD_OUT/e1m6-fire.bmp" e1m6.bsp
+        nf=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1 ~ /^trig_[0-9]+$/ && $3==11 {s += $5} END {print s+0}')
+        if [[ "${nf:-0}" -ge 15 ]]; then
+            echo "PASS  e1m6 fireballs: $nf sent in ten seconds"
+        else
+            echo "FAIL  e1m6 fireballs: ${nf:-none} sent in ten seconds, want 15 or more"; rc=1
+        fi
         # in *10, a once with delay 3 for the nine t5 stair doors: at a second
         # the trigger is spent and door *8 still shut; fired at once it would be opening
         run_frame "-lm -nostats -noai -at -256 1280 -100 -bench 40 -ticks 60" "$VBD_OUT/e1m6-delay.bmp" e1m6.bsp

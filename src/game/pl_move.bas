@@ -3051,7 +3051,7 @@ function pl_nail_free ( nail() as Spike ) as integer
     pl_nail_free = -1
     for n = 0 to ubound( nail )
         if ( nail(n).alive = 0 ) then
-            nail(n).hostile = 0 : nail(n).grenade = 0 : nail(n).gib = 0 : nail(n).rocket = 0
+            nail(n).hostile = 0 : nail(n).grenade = 0 : nail(n).gib = 0 : nail(n).rocket = 0 : nail(n).toss = 0
             pl_nail_free = n
             exit function
         end if
@@ -3081,6 +3081,24 @@ sub pl_traps_tick ( _
                 nail(n).dmg = trig(k).count
                 nail(n).alive = -1
                 snd_play g, SND_SPIKE2%, trig(k).mins
+            end if
+        end if
+        if ( trig(k).kind = ENT_TRIG_FIREBALL and trig(k).state = ENT_TRIG_ARMED ) then
+            '' fire_fly: up at speed plus up to 200, 50 either way across,
+            '' five seconds; fire_touch bites 20 and is gone
+            trig(k).state = ENT_TRIG_READY
+            n = pl_nail_free( nail() )
+            if ( n >= 0 ) then
+                nail(n).pos = trig(k).mins
+                nail(n).vel.x = rnd * 100.0 - 50.0
+                nail(n).vel.y = rnd * 100.0 - 50.0
+                nail(n).vel.z = trig(k).speed + rnd * 200.0
+                nail(n).die_at = g.rdr.anim_time + 5.0
+                nail(n).hostile = -1
+                nail(n).toss = -1
+                nail(n).dmg = PL_FIREBALL_DMG%
+                nail(n).alive = -1
+                trig(k).left = trig(k).left + 1
             end if
         end if
     next k
@@ -3218,6 +3236,7 @@ sub pl_nails_tick ( _
                     pmins.y = g.pl.pos.y - PL_HALF# : pmaxs.y = g.pl.pos.y + PL_HALF#
                     pmins.z = g.pl.pos.z - PL_FEET# : pmaxs.z = g.pl.pos.z + PL_ZHI#
                     t = pl_ray_box( pmins, pmaxs, nail(n).pos, dir, reach )
+                    if ( nail(n).toss ) then nail(n).vel.z = nail(n).vel.z - g.fight.gravity * dt
                     if ( pl_point_contents( fin, nodes(), planes() ) = CONTENTS_SOLID ) then
                         '' A trap's spike leaves from a point 8 units off
                         '' its wall, inside hull 1's grown solid, so it is

@@ -912,7 +912,8 @@ sub ent_trig_init ( _
     t.delay_left = 0.0
     t.mins      = models(m).mins
     t.maxs      = models(m).maxs
-    if ( xr.kind = ENT_TRIG_SHOOTER ) then t.mins = xr.org : t.maxs = xr.org
+    if ( xr.kind = ENT_TRIG_SHOOTER or xr.kind = ENT_TRIG_FIREBALL ) then t.mins = xr.org : t.maxs = xr.org
+    if ( xr.kind = ENT_TRIG_FIREBALL ) then t.wait_left = rnd * 5.0
     t.msg       = xr.msg
     trig( g.trig_count ) = t
     g.trig_count = g.trig_count + 1
@@ -1267,6 +1268,13 @@ sub ent_move_trigs ( _
                             end if
                         end if
                 end select
+            case ENT_TRIG_FIREBALL
+                '' fire_fly: the next in 3 to 8 seconds; pl_traps_tick sends it
+                trig(k).wait_left = trig(k).wait_left - dt
+                if ( trig(k).wait_left <= 0.0 ) then
+                    trig(k).wait_left = rnd * 5.0 + 3.0
+                    trig(k).state = ENT_TRIG_ARMED
+                end if
             case ENT_TRIG_EXIT
                 if ( trig(k).state = ENT_TRIG_READY ) then
                     if ( ent_box_touched( g, trig(k).mins, trig(k).maxs, 0.0 ) ) then

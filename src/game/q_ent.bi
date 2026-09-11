@@ -271,6 +271,7 @@ const ENT_TRIG_SHOOTER = 7      '' trap_spikeshooter: used, it fires a spike; mi
 const ENT_TRIG_RELAY   = 8      '' trigger_relay: used, it fires its target
 const ENT_TRIG_BOSS    = 9      '' Chthon, unseen: the rune wakes him, left is his health, dead his target fires
 const ENT_TRIG_BOLT    = 10     '' event_lightning: both electrode doors up, a point off Chthon; ofs_out.x/.y are the doors
+const ENT_TRIG_FIREBALL = 11    '' misc_fireball: mins is its origin, wait_left the next ball, left the balls sent
 
 '' Anything that fires a target, resolved offline: a trigger's volume, a
 '' button's travel. Names are ids -- a door's targeted, a trigger's name

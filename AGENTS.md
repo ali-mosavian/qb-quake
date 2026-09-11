@@ -2308,6 +2308,17 @@ electrode doors up -- the doors whose target is `lightning`, their
 indices in the bolt's `ofs_out` -- taking a point, and at none his
 target fires: the relay that opens e1m7's exit. `trigger_relay` is
 `ENT_TRIG_RELAY`, a use passed on at once.
+
+**`misc_fireball` is a trigger kind too**, `ENT_TRIG_FIREBALL`: its
+origin in `mins`, the next ball in 0..5 s and then every 3..8
+(fire_fly), `pl_traps_tick` sending it. The lava ball is a hostile
+`Spike` with `toss` set: walked as a point through hull 0 as a trap's
+spike is, since it leaves from inside the lava, under the map's
+gravity, gone on a wall or at five seconds, 20 to the player's box
+(fire_touch); monsters are not bitten. id's default speed is
+`self.speed == 1000`, a compare, so an unset one is 0; every map sets
+it. Drawn as an 8-unit red and yellow box. e1m6's gate counts the
+balls sent in ten seconds, in the emitters' `left`.
 e1m7's gate stands on the rune and wants Chthon ARMED; the bolt is
 read, not run -- its buttons cannot be pressed headlessly. The chain
 closes: e1m7 exits to start, e1m8 to e1m5.

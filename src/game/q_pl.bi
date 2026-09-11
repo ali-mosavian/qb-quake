@@ -132,6 +132,7 @@ type Spike
     grenade     as integer     '' an ogre's or the player's: gravity, a bounce, a fuse and a blast
     gib         as integer     '' a zombie's: bites what it lands on, stops on a wall, no blast
     rocket      as integer     '' the player's rocket: straight, the blast where it stops
+    toss        as integer     '' a hostile one under gravity: misc_fireball's lava ball
 end type
 
 type PlayerCombat
@@ -222,6 +223,7 @@ const PL_NG_UP#        = 16.0
 const PL_NG_LIFE#      = 6.0
 const PL_NAILS_CAP%    = 200
 const PL_NAILS_MAX%    = 24    '' in flight at once
+const PL_FIREBALL_DMG% = 20    '' fire_touch
 const PL_QUAD_MUL%     = 4
 '' W_FireGrenade: 600 along the aim and 200 up, a 2.5 s fuse, 120 less
 '' half the distance to everything round it (GrenadeExplode)
