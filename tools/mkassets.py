@@ -760,6 +760,10 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
                 # any trigger's brush is a volume: e1m1 drew its changelevel
                 # as a column of the "trigger" texture
                 hides.append(model(kv['model']))
+            case 'func_episodegate' if model(kv.get('model', '')):
+                # misc.qc spawns it only for a rune held, and none ever is here;
+                # func_bossgate is the reverse, gone with all four, so it stays
+                hides.append(model(kv['model']))
             case 'func_door' if model(kv.get('model', '')):
                 doors.append(door_record(model(kv['model']), kv, boxes[model(kv['model'])]))
             case 'func_door_secret' if model(kv.get('model', '')):

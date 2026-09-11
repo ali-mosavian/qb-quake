@@ -2299,6 +2299,16 @@ without it), `trigger_monsterjump` -- e1m6's one sits at the foot of a
 targeted door and no easy-skill monster can reach it, so no arm;
 `func_wall` draws as any solid brush model.
 
+**start, the hub, is in `MAPS`** with its spawn frame as the gate.
+Its four `func_episodegate` ship hidden -- draw off, solid off, as a
+trigger's brush -- since misc.qc spawns one only for its rune held,
+and no rune is ever taken here; the `func_bossgate` is the reverse,
+removed only with all four, so it stays a solid brush model. Its
+`trigger_setskill` and `trigger_onlyregistered` volumes are hidden
+by the generic trigger case; the skill is the assets', not the
+map's, and every changelevel it holds names a map the shareware PAK
+has only for e1m1.
+
 **The powerups are thirty-second clocks on `fight`**: the quad
 (`quad_until`) makes every pellet and nail four times (T_Damage's
 super_damage_finished), the envirosuit (`suit_until`) turns the slime
@@ -2533,7 +2543,12 @@ leaf face list is a `qglArLoadBas` MEM store now, as the leaves are:
 `qglMemAlloc` takes the UMB pool before it shrinks BASIC's heap, and
 the faces store leaves 26K of it, so the list's 13K (16K on e1m4)
 costs the far heap 16 bytes -- the walk reads it through the bound
-descriptor as before. `MapStore.lfaces` holds the handle, which moved
+descriptor as before. That pool is spent now: faces 56K and the
+lists 16K, so a MEM store for the submodel table cost e1m4 700
+bytes MORE than the array (measured after depth, reverted), and
+`QGL_AR_MAX`'s eight stores are all taken -- a ninth fails as
+`0x0015 colormap would not load`. `SC_NBLK` 512 to 384 is the
+cheap cut left. `MapStore.lfaces` holds the handle, which moved
 `GAME_VIS_OFFSET` and `GAME_DLIGHT_OFFSET` by four. And the disk
 texture headers, 40 bytes a texture, are erased once the anim chains
 are linked. e1m3 reads 30.4K after the depth buffer with both, e1m4

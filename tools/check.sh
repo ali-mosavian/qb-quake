@@ -30,7 +30,7 @@
 #   tools/check.sh --e1m3       e1m3, the first map with no soldier: its spawn frame
 #   tools/check.sh --e1m4       e1m4's spawn frame, the super nailgun
 #   tools/check.sh --e1m5       e1m5's spawn frame, the shambler, the rocket launcher
-#   tools/check.sh --e1m6       e1m6's spawn frame; --e1m7 and --e1m8 likewise,
+#   tools/check.sh --e1m6       e1m6's spawn frame; --e1m7, --e1m8 and --start likewise,
 #                               and e1m8's jump under its sv_gravity of 100, its pentagram
 #
 # -nostats is not optional. The overlay prints live fps and frame time, so
@@ -644,8 +644,10 @@ fi
 # 100: the spawn hangs 630 over its floor, -jump lands at -736 and goes
 # 364 up by v^2/2g against 48 under 800, so at tick 400 the body is still
 # 300 up. peak_z is the spawn, -104: it read 0 on any map under z 0
-# before pl_init set it, and a jump there was unmeasurable
-if [[ "${1:-}" == "--e1m6" || "${1:-}" == "--e1m7" || "${1:-}" == "--e1m8" ]]; then
+# before pl_init set it, and a jump there was unmeasurable.
+# start is the hub: its episode gates ship hidden, as a runeless
+# Quake never spawns them; the boss gate stays, gone only with all four
+if [[ "${1:-}" == "--e1m6" || "${1:-}" == "--e1m7" || "${1:-}" == "--e1m8" || "${1:-}" == "--start" ]]; then
     m="${1#--}"
     build_exe
     [[ -f "$VBD_OUT/MAPS/$m/assets.zip" ]] || { echo "SKIP  $m: no MAPS/$m in the build (needs the PAK)"; exit 0; }
