@@ -270,7 +270,8 @@ dim shared ls_scratch as string * 1024
 '' are the only writers, and the two readers want a picture of the cache,
 '' not nine separate variables. sc_stats gives them one.
 ''
-dim shared sc_slot() as CacheSlot
+dim shared sc_slot() as integer         '' a face's block, -1 for none: the tag and
+                                        '' style epoch its content holds sit on the block
 dim shared sc_gen as integer
 '' Where sc_find/sc_alloc last aimed the class view. One view serves
 '' every surface of a size class, so the handle alone does not say which
@@ -313,6 +314,8 @@ dim shared sc_rfree as integer          '' recycled block records, via sc_bnext
 dim shared sc_bgrn() as integer         '' block offset / SC_GRAN
 dim shared sc_bord() as integer         '' size order: 2^(o+SC_MINORD) bytes
 dim shared sc_bown() as integer         '' owning face, -1 if none
+dim shared sc_btag() as integer         '' generation * 4 + mip the content holds
+dim shared sc_bstag() as integer        '' and the owner's light style epoch (ls_epoch)
 dim shared sc_bprev() as integer        '' the class's LRU chain
 dim shared sc_bnext() as integer
 dim shared sc_bcnt as integer           '' blocks made so far
@@ -863,7 +866,7 @@ sub sc_init ( _
     sc_tbuilds = 0
     sc_dlit = 0
 
-    redim sc_slot(g.wld.count.faces-1) as CacheSlot
+    redim sc_slot(g.wld.count.faces-1) as integer
     redim sc_desc(SC_NCLS-1) as long
 
     redim sc_lhead(SC_NORD-1) as integer
@@ -872,6 +875,8 @@ sub sc_init ( _
     redim sc_bgrn(SC_NBLK-1) as integer
     redim sc_bord(SC_NBLK-1) as integer
     redim sc_bown(SC_NBLK-1) as integer
+    redim sc_btag(SC_NBLK-1) as integer
+    redim sc_bstag(SC_NBLK-1) as integer
     redim sc_bprev(SC_NBLK-1) as integer
     redim sc_bnext(SC_NBLK-1) as integer
     sc_bcnt = 0
@@ -891,7 +896,7 @@ sub sc_init ( _
     '' surface in the store.
     ''
     for i = 0 to g.wld.count.faces-1
-        sc_slot(i).blk = -1
+        sc_slot(i) = -1
     next i
 
     sc_hnd  = 0
@@ -995,7 +1000,7 @@ sub sc_flush ( _
     next i
     sc_rfree = -1
     for i = 0 to g.wld.count.faces-1
-        sc_slot(i).blk = -1
+        sc_slot(i) = -1
     next i
     sc_bcnt = 0
 end sub
@@ -1013,24 +1018,25 @@ function sc_find ( _
     byval stag as integer _
 ) as long
     dim dc as long
-    dim a as integer, b as integer, vcls as integer
+    dim a as integer, b as integer, vcls as integer, blk as integer
 
     if ( sc_ok = 0 ) then
         sc_find = 0
         exit function
     end if
-    if ( sc_slot(face).blk < 0 ) then
+    blk = sc_slot(face)
+    if ( blk < 0 ) then
         sc_find = 0
         exit function
     end if
-    if ( sc_slot(face).tag <> sc_gen * 4 + mip ) then
+    if ( sc_btag(blk) <> sc_gen * 4 + mip ) then
         sc_find = 0
         exit function
     end if
     '' A tag match says the mip and generation are right; stag is the
     '' SEPARATE axis -- the face's light style may have moved on since
     '' this block was built, and that has nothing to do with mip or gen.
-    if ( sc_slot(face).stag <> stag ) then
+    if ( sc_bstag(blk) <> stag ) then
         sc_find = 0
         exit function
     end if
@@ -1049,12 +1055,12 @@ function sc_find ( _
     vcls = (a - SC_MINSH) * 5 + (b - SC_MINSH)
     dc = sc_desc( vcls )
     if ( dc <> 0 ) then
-        sc_aim_ofs = clng( sc_bgrn( sc_slot(face).blk ) ) * SC_GRAN
+        sc_aim_ofs = clng( sc_bgrn( blk ) ) * SC_GRAN
         if ( qglSfViewAim%( dc, sc_aim_ofs ) = 0 ) then dc = 0
     end if
     if ( dc <> 0 ) then
         sc_hits = sc_hits + 1
-        sc_lru_touch sc_slot(face).blk  '' a hit is a use -- the whole point
+        sc_lru_touch blk  '' a hit is a use -- the whole point
     end if
     sc_find = dc
 end function
@@ -1135,7 +1141,7 @@ function sc_alloc ( _
     '' used surface of the SAME class -- exactly this size and already
     '' aligned to it, so evicting one always suffices and never fragments.
     ''
-    blk = sc_slot(face).blk
+    blk = sc_slot(face)
     if ( blk >= 0 and sc_bord(blk) >= bord ) then
         '' what it already owns is big enough -- a coarser mip just uses
         '' less of it, and not shrinking avoids churn on every mip step
@@ -1146,7 +1152,7 @@ function sc_alloc ( _
             '' which is the leak the bump allocator never plugged
             sc_lru_unlink blk
             sc_bfree blk
-            sc_slot(face).blk = -1
+            sc_slot(face) = -1
             sc_live = sc_live - 1
         end if
 
@@ -1181,8 +1187,7 @@ function sc_alloc ( _
             if ( blk >= 0 ) then
                 vic = sc_bown(blk)
                 if ( vic >= 0 ) then
-                    sc_slot(vic).tag = 0
-                    sc_slot(vic).blk = -1
+                    sc_slot(vic) = -1
                     sc_live  = sc_live - 1
                     sc_evict = sc_evict + 1
                 end if
@@ -1201,8 +1206,7 @@ function sc_alloc ( _
                 if ( vic >= 0 ) then
                     b2 = sc_bown(vic)
                     if ( b2 >= 0 ) then
-                        sc_slot(b2).tag = 0
-                        sc_slot(b2).blk = -1
+                        sc_slot(b2) = -1
                         sc_live  = sc_live - 1
                         sc_evict = sc_evict + 1
                     end if
@@ -1223,14 +1227,14 @@ function sc_alloc ( _
         sc_bown(blk) = face
         sc_bprev(blk) = -1
         sc_bnext(blk) = -1
-        sc_slot(face).blk = blk
+        sc_slot(face) = blk
         sc_live = sc_live + 1
     end if
     ofs = clng( sc_bgrn(blk) ) * SC_GRAN
     if ( sc_next > sc_peak ) then sc_peak = sc_next
 
-    sc_slot(face).tag = sc_gen * 4 + mip
-    sc_slot(face).stag = stag
+    sc_btag(blk) = sc_gen * 4 + mip
+    sc_bstag(blk) = stag
     sc_lru_touch blk
 
     '' aim it at the bytes just claimed, ready for the builder to write
@@ -1254,8 +1258,7 @@ sub sc_reset ( _
     dim i as integer
 
     for i = 0 to g.wld.count.faces-1
-        sc_slot(i).tag = 0
-        sc_slot(i).blk = -1
+        sc_slot(i) = -1
     next i
     for i = 0 to SC_NORD-1
         sc_lhead(i) = -1
@@ -1328,7 +1331,7 @@ function sc_selftest ( _
     '' both round to 128x128, so they share a view and differ only in where
     '' it points -- the whole point of the store
     if ( d0 <> d1 ) then sc_selftest = -18 : exit function
-    if ( sc_slot(0).blk = sc_slot(1).blk ) then sc_selftest = -21 : exit function
+    if ( sc_slot(0) = sc_slot(1) ) then sc_selftest = -21 : exit function
     if ( sc_hnd = 0 ) then sc_selftest = -22 : exit function
 
     '' and the floor it implies: 224 needs mip 1, 112 does not
@@ -1371,8 +1374,8 @@ function sc_selftest ( _
     d2 = sc_alloc ( g, 5, 0, 112, 112, 112, 112, 0 )
     if ( d2 <> d0 ) then sc_selftest = -15 : exit function
     if ( sc_made <> made0 ) then sc_selftest = -16 : exit function
-    if ( sc_slot(5).blk < 0 ) then sc_selftest = -23 : exit function
-    if ( sc_bgrn( sc_slot(5).blk ) <> 0 ) then sc_selftest = -33 : exit function
+    if ( sc_slot(5) < 0 ) then sc_selftest = -23 : exit function
+    if ( sc_bgrn( sc_slot(5) ) <> 0 ) then sc_selftest = -33 : exit function
 
     ''
     '' ---- the LRU itself ---------------------------------------------
@@ -1392,23 +1395,23 @@ function sc_selftest ( _
     '' PROBE: three allocations should be three new blocks. Separate codes --
     '' a single packed number turned out to have two valid decodes.
     if ( sc_bcnt <> 3 ) then sc_selftest = -(2000 + sc_bcnt) : exit function
-    if ( sc_slot(0).blk < 0 ) then sc_selftest = -2999 : exit function
-    if ( sc_slot(0).blk = sc_slot(1).blk ) then sc_selftest = -25 : exit function
-    if ( sc_slot(1).blk = sc_slot(2).blk ) then sc_selftest = -26 : exit function
+    if ( sc_slot(0) < 0 ) then sc_selftest = -2999 : exit function
+    if ( sc_slot(0) = sc_slot(1) ) then sc_selftest = -25 : exit function
+    if ( sc_slot(1) = sc_slot(2) ) then sc_selftest = -26 : exit function
 
     '' face 0 is the oldest, so touching it must make face 1 the victim
     if ( sc_find( 0, 0, 112, 112, 0 ) = 0 ) then sc_selftest = -27 : exit function
-    if ( sc_lhead( sc_bord( sc_slot(0).blk ) ) < 0 ) then sc_selftest = -28 : exit function
-    if ( sc_bown( sc_lhead( sc_bord( sc_slot(0).blk ) ) ) <> 1 ) then _
-        sc_selftest = -(4000 + sc_bown( sc_lhead( sc_bord( sc_slot(0).blk ) ) )) : exit function
+    if ( sc_lhead( sc_bord( sc_slot(0) ) ) < 0 ) then sc_selftest = -28 : exit function
+    if ( sc_bown( sc_lhead( sc_bord( sc_slot(0) ) ) ) <> 1 ) then _
+        sc_selftest = -(4000 + sc_bown( sc_lhead( sc_bord( sc_slot(0) ) ) )) : exit function
 
     '' rebuilding the SAME face at a new mip must reuse its own block, not
     '' take a second one -- this is the leak the old allocator had
-    ofs0 = clng( sc_slot(0).blk )
+    ofs0 = clng( sc_slot(0) )
     live0 = sc_live
     flush0 = sc_flushes
     if ( sc_alloc( g, 0, 1, 56, 56, 112, 112, 0 ) = 0 ) then sc_selftest = -29 : exit function
-    if ( clng( sc_slot(0).blk ) <> ofs0 ) then sc_selftest = -30 : exit function
+    if ( clng( sc_slot(0) ) <> ofs0 ) then sc_selftest = -30 : exit function
     if ( sc_live <> live0 ) then sc_selftest = -31 : exit function
 
     '' and a mip change must not have cost a flush
@@ -1763,9 +1766,9 @@ end function
 function sc_held ( byval face as integer ) as integer
     sc_held = -1
     if ( sc_ok = 0 ) then exit function
-    if ( sc_slot(face).blk < 0 ) then exit function
-    if ( (sc_slot(face).tag \ 4) <> sc_gen ) then exit function
-    sc_held = sc_slot(face).tag and 3
+    if ( sc_slot(face) < 0 ) then exit function
+    if ( (sc_btag( sc_slot(face) ) \ 4) <> sc_gen ) then exit function
+    sc_held = sc_btag( sc_slot(face) ) and 3
 end function
 
 
