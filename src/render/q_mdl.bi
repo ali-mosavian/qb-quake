@@ -32,7 +32,9 @@ const MDL_KIND_KNIGHT% = 1
 const MDL_KIND_DOG%    = 2
 const MDL_KIND_OGRE%   = 3
 const MDL_KIND_DEMON%  = 4
-const MDL_KINDS%       = 5       '' mon() in main.bas: one MdlState a kind
+const MDL_KIND_ZOMBIE% = 5
+const MDL_KIND_WIZARD% = 6
+const MDL_KINDS%       = 7       '' mon() in main.bas: one MdlState a kind
 const MDL_HEALTH%       = 30  '' monster_army's health
 '' army_fire: FireBullets (4, dir, '0.1 0.1 0'), 4 damage a pellet, aimed
 '' 0.2 s behind the player's velocity
@@ -109,6 +111,45 @@ const DEMON_LEAP_MIN#    = 100.0
 const DEMON_LEAP_MAX#    = 200.0
 const DEMON_LEAP_TOUCH#  = 400.0 '' Demon_JumpTouch bites past this speed
 const DEMON_LEAP_DMG#    = 40.0  '' 40 + 10 * random
+
+'' zombie.qc: 60 health, put back on every hit -- one hit of 60 gibs it,
+'' nothing else kills; a hit under 9 is ignored, one of 25 or more drops
+'' it (paine: three seconds down on its last pain frame, no paine frames
+'' on the page); the gib leaves atta13 at 600 with 200 up and bites 10
+'' where it lands (ZombieGrenadeTouch), CheckAttack's chances with no
+'' th_melee
+const ZOMBIE_HEALTH%     = 60
+const ZOMBIE_PAIN_MIN%   = 9
+const ZOMBIE_FALL_DMG%   = 25
+const ZOMBIE_FALL_TIME#  = 3.0
+const ZOMBIE_FLINCH#     = 1.0
+const ZOMBIE_GIB_FRAME%  = 12    '' atta13, 0-based
+const ZOMBIE_GIB_SPEED#  = 600.0
+const ZOMBIE_GIB_UP#     = 200.0
+const ZOMBIE_GIB_LIFE#   = 2.5
+const ZOMBIE_GIB_DMG%    = 10
+const ZOMBIE_GIB_Z#      = 6.0   '' '-10 -22 30' less the 24 to the origin
+const ZOMBIE_ATK_NEAR#   = 0.4
+const ZOMBIE_ATK_MID#    = 0.1
+
+'' wizard.qc: 80 health; FL_FLY's step is a straight trace, held 30 to
+'' 40 above the player by 8 a step; wiz_fast fires Wiz_FastFire twice,
+'' 0.3 and 0.8 s in, spikes at 600 that bite 9, WizardCheckAttack's
+'' 0.9 / 0.6 / 0.2 by range and two seconds to be ready
+const WIZARD_HEALTH%      = 80
+const WIZARD_FLY_LO#      = 30.0
+const WIZARD_FLY_HI#      = 40.0
+const WIZARD_FLY_STEP#    = 8.0
+const WIZARD_FLY_DIST#    = 16.0  '' wiz_run's ai_run(16)
+const WIZARD_FIRE_A%      = 2     '' the attack frames the spikes leave, 0-based
+const WIZARD_FIRE_B%      = 7
+const WIZARD_SPIKE_SPEED# = 600.0
+const WIZARD_SPIKE_DMG%   = 9
+const WIZARD_SPIKE_Z#     = 30.0
+const WIZARD_ATK_MELEE#   = 0.9
+const WIZARD_ATK_NEAR#    = 0.6
+const WIZARD_ATK_MID#     = 0.2
+const WIZARD_ATK_WAIT#    = 2.0
 
 '' NOT in stock Quake: a walkmonster with no path_corner target just
 '' stands forever (see the note above) -- there is no explore state to

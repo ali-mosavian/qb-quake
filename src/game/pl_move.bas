@@ -149,6 +149,31 @@ declare sub ent_use_targets ( _
 declare sub pl_fire_nail ( g as Game, nail() as Spike )
 declare sub pl_fire_grenade ( g as Game, nail() as Spike )
 declare function pl_nail_free ( nail() as Spike ) as integer
+declare sub mdl_say ( _
+    g as Game, _
+    ent as MdlEnt, _
+    byval which as integer _
+)
+declare sub mdl_gib ( _
+    g as Game, _
+    ent as MdlEnt, _
+    nail() as Spike _
+)
+declare sub mdl_spike ( _
+    g as Game, _
+    ent as MdlEnt, _
+    nail() as Spike _
+)
+declare function mdl_flystep ( _
+    g as Game, _
+    ent as MdlEnt, _
+    byval dx as single, _
+    byval dy as single, _
+    byval model_count as integer, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+) as integer
 declare sub pl_box_hit ( _
     g as Game, _
     item() as ItemEnt, _
@@ -446,6 +471,7 @@ dim shared knight_atk_dist() as integer  '' knight_atk1..10's ai_charge
 dim shared ogre_run_dist() as integer    '' ogre_run1..8's ai_run
 dim shared demon_run_dist() as integer   '' demon1_run1..6's ai_run
 dim shared demon_atk_dist() as integer   '' demon1_atta1..15's ai_charge
+dim shared zombie_run_dist() as integer  '' zombie_run1..8's ai_run
 
 '' sv_move.c's own STEPSIZE -- see mdl_movestep.
 const MDL_STEPSIZE# = 18.0
@@ -1308,6 +1334,8 @@ sub mdl_spawn ( _
     case MDL_KIND_DOG%    : ent.health = DOG_HEALTH%
     case MDL_KIND_OGRE%   : ent.health = OGRE_HEALTH%
     case MDL_KIND_DEMON%  : ent.health = DEMON_HEALTH%
+    case MDL_KIND_ZOMBIE% : ent.health = ZOMBIE_HEALTH%
+    case MDL_KIND_WIZARD% : ent.health = WIZARD_HEALTH%
     case else             : ent.health = MDL_HEALTH%
     end select
     ent.hunting = 0
@@ -1329,7 +1357,8 @@ sub mdl_spawn ( _
     fin.y = ent.pos.y
     fin.z = ent.pos.z - 256.0
     pl_trace ent.pos, fin, tr, g.wld.count.models, models(), brush(), clp_buffer(), planes()
-    if ( tr.frac < 1.0 and tr.all_solid = 0 ) then
+    '' flymonster_start_go: a flyer stays where the map put it
+    if ( ent.kind <> MDL_KIND_WIZARD% and tr.frac < 1.0 and tr.all_solid = 0 ) then
         ent.pos.x = tr.end_pos.x
         ent.pos.y = tr.end_pos.y
         ent.pos.z = tr.end_pos.z
@@ -1361,7 +1390,116 @@ sub mdl_spawn ( _
     demon_atk_dist(4)  = 2 : demon_atk_dist(5)  = 1 : demon_atk_dist(6)  = 6 : demon_atk_dist(7)  = 8
     demon_atk_dist(8)  = 4 : demon_atk_dist(9)  = 2 : demon_atk_dist(10) = 0 : demon_atk_dist(11) = 5
     demon_atk_dist(12) = 8 : demon_atk_dist(13) = 4 : demon_atk_dist(14) = 4
+    redim zombie_run_dist( 7 ) as integer
+    zombie_run_dist(0) = 1 : zombie_run_dist(1) = 1 : zombie_run_dist(2) = 0 : zombie_run_dist(3) = 1
+    zombie_run_dist(4) = 2 : zombie_run_dist(5) = 3 : zombie_run_dist(6) = 4 : zombie_run_dist(7) = 4
 end sub
+
+'' a kind's sight (0), attack, pain or death (3): the first five kinds'
+'' four sit at SND_MON, the rest at SND_MON2. A sub, not a function: BC
+'' reads a user function inside a CALL-less sub's argument list as an
+'' array and reports Argument-count mismatch
+sub mdl_say ( _
+    g as Game, _
+    ent as MdlEnt, _
+    byval which as integer _
+)
+    if ( ent.kind < MDL_KIND_ZOMBIE% ) then
+        snd_play g, SND_MON% + ent.kind * 4 + which, ent.pos
+    else
+        snd_play g, SND_MON2% + ( ent.kind - MDL_KIND_ZOMBIE% ) * 4 + which, ent.pos
+    end if
+end sub
+
+'' ZombieFireGrenade: the gib from atta13, at 600 toward the player with
+'' 200 up, a Spike that bites 10 where it lands
+sub mdl_gib ( _
+    g as Game, _
+    ent as MdlEnt, _
+    nail() as Spike _
+)
+    dim n as integer, l as single
+    dim d as Vec3
+
+    n = pl_nail_free( nail() )
+    if ( n < 0 ) then exit sub
+    nail(n).pos = ent.pos
+    nail(n).pos.z = ent.pos.z + ZOMBIE_GIB_Z#
+    d.x = g.pl.pos.x - nail(n).pos.x : d.y = g.pl.pos.y - nail(n).pos.y : d.z = g.pl.pos.z - nail(n).pos.z
+    l = sqr( d.x*d.x + d.y*d.y + d.z*d.z )
+    if ( l < 1.0 ) then exit sub
+    nail(n).vel.x = d.x / l * ZOMBIE_GIB_SPEED#
+    nail(n).vel.y = d.y / l * ZOMBIE_GIB_SPEED#
+    nail(n).vel.z = ZOMBIE_GIB_UP#
+    nail(n).die_at = g.rdr.anim_time + ZOMBIE_GIB_LIFE#
+    nail(n).hostile = -1
+    nail(n).grenade = -1
+    nail(n).gib = -1
+    nail(n).dmg = ZOMBIE_GIB_DMG%
+    nail(n).alive = -1
+    mdl_say g, ent, 1
+end sub
+
+'' Wiz_FastFire: a spike from 30 up at 600 toward the player, biting 9
+sub mdl_spike ( _
+    g as Game, _
+    ent as MdlEnt, _
+    nail() as Spike _
+)
+    dim n as integer, l as single
+    dim d as Vec3
+
+    n = pl_nail_free( nail() )
+    if ( n < 0 ) then exit sub
+    nail(n).pos = ent.pos
+    nail(n).pos.z = ent.pos.z + WIZARD_SPIKE_Z#
+    d.x = g.pl.pos.x - nail(n).pos.x : d.y = g.pl.pos.y - nail(n).pos.y : d.z = g.pl.pos.z - nail(n).pos.z
+    l = sqr( d.x*d.x + d.y*d.y + d.z*d.z )
+    if ( l < 1.0 ) then exit sub
+    nail(n).vel.x = d.x / l * WIZARD_SPIKE_SPEED#
+    nail(n).vel.y = d.y / l * WIZARD_SPIKE_SPEED#
+    nail(n).vel.z = d.z / l * WIZARD_SPIKE_SPEED#
+    nail(n).die_at = g.rdr.anim_time + PL_NG_LIFE#
+    nail(n).hostile = -1
+    nail(n).grenade = 0
+    nail(n).gib = 0
+    nail(n).dmg = WIZARD_SPIKE_DMG%
+    nail(n).alive = -1
+    mdl_say g, ent, 1
+end sub
+
+'' SV_movestep for FL_FLY: a straight trace to the step, 8 up or down
+'' toward 30..40 above the player while hunting, and once more level
+'' when that is blocked
+function mdl_flystep ( _
+    g as Game, _
+    ent as MdlEnt, _
+    byval dx as single, _
+    byval dy as single, _
+    byval model_count as integer, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    planes() as Plane _
+) as integer
+    dim fin as Vec3, tr as TraceResult
+    dim dz as single, try as integer
+
+    mdl_flystep = 0
+    for try = 0 to 1
+        fin.x = ent.pos.x + dx : fin.y = ent.pos.y + dy : fin.z = ent.pos.z
+        if ( try = 0 and ent.hunting ) then
+            dz = ent.pos.z - g.pl.pos.z
+            if ( dz > WIZARD_FLY_HI# ) then fin.z = fin.z - WIZARD_FLY_STEP#
+            if ( dz < WIZARD_FLY_LO# ) then fin.z = fin.z + WIZARD_FLY_STEP#
+        end if
+        pl_trace ent.pos, fin, tr, model_count, models(), brush(), clp_buffer(), planes()
+        if ( tr.frac >= 1.0 and tr.start_solid = 0 and tr.all_solid = 0 ) then
+            ent.pos = tr.end_pos
+            mdl_flystep = -1
+            exit function
+        end if
+    next try
+end function
 
 ''::::::::::::::
 '' name: mdl_anglemod
@@ -1493,6 +1631,10 @@ function mdl_movestep ( _
     dim start as Vec3, fin as Vec3
     dim tr as TraceResult
 
+    if ( ent.kind = MDL_KIND_WIZARD% ) then
+        mdl_movestep = mdl_flystep( g, ent, dx, dy, model_count, models(), brush(), planes() )
+        exit function
+    end if
     start.x = ent.pos.x + dx
     start.y = ent.pos.y + dy
     start.z = ent.pos.z + MDL_STEPSIZE#
@@ -1841,12 +1983,15 @@ sub mdl_think ( _
     dim fin as Vec3, tr as TraceResult, dz as single
     dim corner as PathCorner
     dim ogre as integer, demon as integer, thr as single
+    dim zombie as integer, wizard as integer
 
     if ( m.loaded = 0 ) then exit sub
     knight = ( ent.kind = MDL_KIND_KNIGHT% )
     dog = ( ent.kind = MDL_KIND_DOG% )
     ogre = ( ent.kind = MDL_KIND_OGRE% )
     demon = ( ent.kind = MDL_KIND_DEMON% )
+    zombie = ( ent.kind = MDL_KIND_ZOMBIE% )
+    wizard = ( ent.kind = MDL_KIND_WIZARD% )
     if ( g.rdr.anim_time < ent.next_think ) then exit sub
     ent.next_think = g.rdr.anim_time + 0.1
 
@@ -1858,6 +2003,8 @@ sub mdl_think ( _
 
     '' Hit: the flinch, standing, then the hunt.
     if ( ent.state = MDL_ST_PAIN% ) then
+        '' a dropped zombie lies on its last pain frame until it may rise
+        if ( zombie and ent.anim_frame >= m.npain - 1 and g.rdr.anim_time < ent.pain_finished ) then exit sub
         ent.anim_frame = ent.anim_frame + 1
         if ( ent.anim_frame >= m.npain ) then
             ent.state = MDL_ST_RUN%
@@ -1884,6 +2031,8 @@ sub mdl_think ( _
         if ( knight and ent.anim_frame >= KNIGHT_ATK_FIRST% and ent.anim_frame <= KNIGHT_ATK_LAST% ) then mdl_melee g, ent
         if ( demon and ( ent.anim_frame = DEMON_CLAW_A% or ent.anim_frame = DEMON_CLAW_B% ) ) then mdl_claw g, ent
         if ( ogre and ent.anim_frame = OGRE_GREN_FRAME% ) then mdl_grenade g, ent, nail()
+        if ( zombie and ent.anim_frame = ZOMBIE_GIB_FRAME% ) then mdl_gib g, ent, nail()
+        if ( wizard and ( ent.anim_frame = WIZARD_FIRE_A% or ent.anim_frame = WIZARD_FIRE_B% ) ) then mdl_spike g, ent, nail()
         ent.anim_frame = ent.anim_frame + 1
         '' knight_atk10 is the last frame id uses; attackb11 is in the file
         if ( ent.anim_frame >= m.natk or ( knight and ent.anim_frame > ubound( knight_atk_dist ) ) ) then
@@ -1934,7 +2083,7 @@ sub mdl_think ( _
     if ( ent.state = MDL_ST_STAND% ) then
         if ( can_chase and mdl_find_target( g, ent, models(), brush(), planes() ) ) then
             ent.hunting = -1
-            snd_play g, SND_MON% + ent.kind * 4, ent.pos
+            mdl_say g, ent, 0
             ent.state = MDL_ST_RUN%
             ent.anim_frame = 0
             ent.wander_ticks = 0
@@ -1959,6 +2108,8 @@ sub mdl_think ( _
     case MDL_KIND_DOG%    : dist = dog_run_dist( ent.anim_frame )
     case MDL_KIND_OGRE%   : dist = ogre_run_dist( ent.anim_frame )
     case MDL_KIND_DEMON%  : dist = demon_run_dist( ent.anim_frame )
+    case MDL_KIND_ZOMBIE% : dist = zombie_run_dist( ent.anim_frame )
+    case MDL_KIND_WIZARD% : dist = WIZARD_FLY_DIST#
     case else             : dist = mdl_run_dist( ent.anim_frame )
     end select
     if ( ent.hunting and knight ) then
@@ -1970,7 +2121,7 @@ sub mdl_think ( _
             if ( d2 < MDL_RANGE_MELEE# * MDL_RANGE_MELEE# ) then
                 ent.state = MDL_ST_ATTACK%
                 ent.anim_frame = 0
-                snd_play g, SND_MON% + ent.kind * 4 + 1, ent.pos
+                mdl_say g, ent, 1
                 exit sub
             end if
         end if
@@ -1985,7 +2136,7 @@ sub mdl_think ( _
                 d2 = dx*dx + dy*dy + dz * dz
                 if ( d2 < DOG_BITE_RANGE# * DOG_BITE_RANGE# ) then
                     ent.next_attack = g.rdr.anim_time + DOG_BITE_RATE#
-                    snd_play g, SND_MON% + ent.kind * 4 + 1, ent.pos
+                    mdl_say g, ent, 1
                     dmg = int( ( rnd + rnd + rnd ) * DOG_BITE_DMG# )
                     if ( dmg > 0 ) then pl_damage g, dmg
                 elseif ( dx*dx + dy*dy > DOG_LEAP_MIN# * DOG_LEAP_MIN# and dx*dx + dy*dy < DOG_LEAP_MAX# * DOG_LEAP_MAX# ) then
@@ -2012,7 +2163,7 @@ sub mdl_think ( _
             if ( d2 < MDL_RANGE_MELEE# * MDL_RANGE_MELEE# ) then
                 if ( g.rdr.anim_time >= ent.next_attack ) then
                     ent.next_attack = g.rdr.anim_time + OGRE_SWING#
-                    snd_play g, SND_MON% + ent.kind * 4 + 1, ent.pos
+                    mdl_say g, ent, 1
                 end if
                 if ( ( ent.anim_frame and 1 ) and mdl_in_reach( g, ent, OGRE_SAW_RANGE# ) ) then
                     dmg = int( ( rnd + rnd + rnd ) * OGRE_SAW_DMG# )
@@ -2055,6 +2206,36 @@ sub mdl_think ( _
             end if
         end if
         goal.x = g.pl.pos.x : goal.y = g.pl.pos.y : goal.z = g.pl.pos.z
+    elseif ( ent.hunting and ( zombie or wizard ) ) then
+        '' CheckAttack with a th_missile alone (the zombie), or
+        '' WizardCheckAttack: a clear line, ready, a chance by range, and
+        '' the attack set throws or fires from its frames
+        if ( g.rdr.anim_time >= ent.next_attack ) then
+            if ( mdl_find_target( g, ent, models(), brush(), planes() ) ) then
+                dx = g.pl.pos.x - ent.pos.x : dy = g.pl.pos.y - ent.pos.y
+                d2 = dx*dx + dy*dy + ( g.pl.pos.z - ent.pos.z ) * ( g.pl.pos.z - ent.pos.z )
+                if ( d2 < MDL_RANGE_MELEE# * MDL_RANGE_MELEE# ) then
+                    chance = MDL_ATK_MELEE#
+                elseif ( d2 < MDL_RANGE_NEAR# * MDL_RANGE_NEAR# ) then
+                    if ( wizard ) then chance = WIZARD_ATK_NEAR# else chance = ZOMBIE_ATK_NEAR#
+                elseif ( d2 < MDL_RANGE_MID# * MDL_RANGE_MID# ) then
+                    if ( wizard ) then chance = WIZARD_ATK_MID# else chance = ZOMBIE_ATK_MID#
+                else
+                    chance = 0.0
+                end if
+                if ( rnd < chance ) then
+                    if ( wizard ) then
+                        ent.next_attack = g.rdr.anim_time + WIZARD_ATK_WAIT#
+                    else
+                        ent.next_attack = g.rdr.anim_time + 2.0 * rnd
+                    end if
+                    ent.state = MDL_ST_ATTACK%
+                    ent.anim_frame = 0
+                    exit sub
+                end if
+            end if
+        end if
+        goal.x = g.pl.pos.x : goal.y = g.pl.pos.y : goal.z = g.pl.pos.z
     elseif ( ent.hunting ) then
         '' SoldierCheckAttack: a clear line, attack_finished passed, and a
         '' chance by range each think; then army_fire and 1 + random().
@@ -2074,7 +2255,7 @@ sub mdl_think ( _
                 if ( rnd < chance ) then
                     ent.next_attack = g.rdr.anim_time + 1.0 + rnd
                     ent.flash_until = g.rdr.anim_time + MDL_FLASH#
-                    snd_play g, SND_MON% + ent.kind * 4 + 1, ent.pos
+                    mdl_say g, ent, 1
                     mdl_fire g, ent, models(), brush(), planes()
                 end if
             end if
@@ -2085,7 +2266,7 @@ sub mdl_think ( _
         '' then starts the run cycle and the step is skipped
         if ( can_chase and mdl_find_target( g, ent, models(), brush(), planes() ) ) then
             ent.hunting = -1
-            snd_play g, SND_MON% + ent.kind * 4, ent.pos
+            mdl_say g, ent, 0
             ent.anim_frame = 0
             exit sub
         end if
@@ -2361,13 +2542,30 @@ sub mdl_damage ( _
     if ( ent.health <= 0 ) then
         ent.state = MDL_ST_DEAD%
         ent.anim_frame = 0
-        snd_play g, SND_MON% + ent.kind * 4 + 3, ent.pos
+        mdl_say g, ent, 3
         g.fight.kills = g.fight.kills + 1
         if ( ent.kind = MDL_KIND_ARMY% ) then pl_item_add g, item(), ENT_ITEM_SHELLS, ENT_BACKPACK%, ent.pos
         exit sub
     end if
     ent.hunting = -1
     ent.ideal_yaw = mdl_vectoyaw( g.pl.pos.x - ent.pos.x, g.pl.pos.y - ent.pos.y )
+    if ( ent.kind = MDL_KIND_ZOMBIE% ) then
+        '' zombie_pain: the health always back, a hit under 9 ignored, one
+        '' while down or flinching too; 25 or more drops it for three
+        '' seconds, less is paina
+        ent.health = ZOMBIE_HEALTH%
+        if ( dmg < ZOMBIE_PAIN_MIN% ) then exit sub
+        if ( g.rdr.anim_time < ent.pain_finished ) then exit sub
+        if ( dmg >= ZOMBIE_FALL_DMG% ) then
+            ent.pain_finished = g.rdr.anim_time + ZOMBIE_FALL_TIME#
+        else
+            ent.pain_finished = g.rdr.anim_time + ZOMBIE_FLINCH#
+        end if
+        mdl_say g, ent, 2
+        ent.state = MDL_ST_PAIN%
+        ent.anim_frame = 0
+        exit sub
+    end if
     if ( g.rdr.anim_time < ent.pain_finished ) then exit sub
     select case ent.kind
     case MDL_KIND_KNIGHT%, MDL_KIND_OGRE%, MDL_KIND_DEMON%
@@ -2379,7 +2577,7 @@ sub mdl_damage ( _
             ent.pain_finished = g.rdr.anim_time + MDL_PAIN_LONG#
         end if
     end select
-    snd_play g, SND_MON% + ent.kind * 4 + 2, ent.pos
+    mdl_say g, ent, 2
     '' demon1_pain: a hit under random() * 200 does not flinch
     if ( ent.kind = MDL_KIND_DEMON% ) then
         if ( rnd * 200.0 > dmg ) then exit sub
@@ -2487,7 +2685,7 @@ end function
 '' Demon_Melee: within 100, dhit2 and 10 + 5 * random
 sub mdl_claw ( g as Game, ent as MdlEnt )
     if ( mdl_in_reach( g, ent, DEMON_CLAW_RANGE# ) = 0 ) then exit sub
-    snd_play g, SND_MON% + ent.kind * 4 + 1, ent.pos
+    mdl_say g, ent, 1
     pl_damage g, DEMON_CLAW_BASE% + int( rnd * DEMON_CLAW_DMG# )
 end sub
 
@@ -2513,6 +2711,7 @@ sub mdl_grenade ( _
     nail(n).die_at = g.rdr.anim_time + OGRE_GREN_FUSE#
     nail(n).hostile = -1
     nail(n).grenade = -1
+    nail(n).gib = 0
     nail(n).dmg = OGRE_GREN_DMG#
     nail(n).alive = -1
     snd_play g, SND_GRENADE%, ent.pos
@@ -2700,6 +2899,7 @@ sub pl_fire_grenade ( g as Game, nail() as Spike )
     nail(i).die_at = g.rdr.anim_time + PL_GL_FUSE#
     nail(i).hostile = 0
     nail(i).grenade = -1
+    nail(i).gib = 0
     nail(i).dmg = PL_GL_DMG#
     if ( g.rdr.anim_time < g.fight.quad_until ) then nail(i).dmg = nail(i).dmg * PL_QUAD_MUL%
     nail(i).alive = -1
@@ -2795,6 +2995,7 @@ sub pl_grenade_tick ( _
         pmins.y = g.pl.pos.y - PL_HALF# : pmaxs.y = g.pl.pos.y + PL_HALF#
         pmins.z = g.pl.pos.z - PL_FEET# : pmaxs.z = g.pl.pos.z + PL_ZHI#
         t = pl_ray_box( pmins, pmaxs, s.pos, dir, reach )
+        if ( t >= 0.0 and s.gib ) then pl_damage g, s.dmg : s.alive = 0 : exit sub
         if ( t >= 0.0 ) then pl_grenade_explode g, s, mdl_ent(), item() : exit sub
     else
         for i = 0 to g.mdl_count - 1
@@ -2811,6 +3012,7 @@ sub pl_grenade_tick ( _
     pl_trace s.pos, fin, tr, g.wld.count.models, models(), brush(), clp_buffer(), planes()
     s.pos = tr.end_pos
     if ( tr.frac >= 1.0 ) then exit sub
+    if ( s.gib ) then s.vel.x = 0.0 : s.vel.y = 0.0 : s.vel.z = 0.0 : exit sub
     backoff = ( s.vel.x * tr.norm.x + s.vel.y * tr.norm.y + s.vel.z * tr.norm.z ) * PL_BOUNCE#
     s.vel.x = s.vel.x - tr.norm.x * backoff
     s.vel.y = s.vel.y - tr.norm.y * backoff
@@ -2848,7 +3050,7 @@ sub pl_nails_tick ( _
         if ( nail(n).alive ) then
             if ( g.rdr.anim_time >= nail(n).die_at ) then
                 nail(n).alive = 0
-                if ( nail(n).grenade ) then pl_grenade_explode g, nail(n), mdl_ent(), item()
+                if ( nail(n).grenade and nail(n).gib = 0 ) then pl_grenade_explode g, nail(n), mdl_ent(), item()
             else
                 fin.x = nail(n).pos.x + nail(n).vel.x * dt
                 fin.y = nail(n).pos.y + nail(n).vel.y * dt

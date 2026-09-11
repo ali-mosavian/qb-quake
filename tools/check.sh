@@ -536,6 +536,27 @@ if [[ "${1:-}" == "--e1m3" ]]; then
     else
         echo "FAIL  e1m3 gl: rockets ${rk:-none}, health ${hp:-none}, deaths ${deaths:-none}; want under 5 and a blast felt"; rc=1
     fi
+    # zombie: 92 units from the zombie at (800,-216), inside RANGE_MELEE so it looks
+    # round; six seconds of its gibs
+    run_frame "-lm -nostats -at 755 -296 -288 -yaw 299 -bench 400 -ticks 360" "$VBD_OUT/e1m3-zombie.bmp" e1m3.bsp
+    hp=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_health"{print $2}')
+    deaths=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_deaths"{print $2}')
+    hunt=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1 ~ /^ent[0-9]/ && $2 == 5 && $4 == -1' | wc -l | tr -d ' ')
+    if [[ ( "${hp:-100}" -lt 100 || "${deaths:-0}" -gt 0 ) && "${hunt:-0}" -ge 1 ]]; then
+        echo "PASS  e1m3 zombie: health $hp, deaths $deaths, $hunt hunting"
+    else
+        echo "FAIL  e1m3 zombie: health ${hp:-none}, deaths ${deaths:-none}, ${hunt:-0} hunting; want a hit and one"; rc=1
+    fi
+    # wizard: 88 from the wizard at (8,-472), which flies over and fires its spikes
+    run_frame "-lm -nostats -at 56 -400 -32 -yaw 124 -bench 400 -ticks 360" "$VBD_OUT/e1m3-wizard.bmp" e1m3.bsp
+    hp=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_health"{print $2}')
+    deaths=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pl_deaths"{print $2}')
+    hunt=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1 ~ /^ent[0-9]/ && $2 == 6 && $4 == -1' | wc -l | tr -d ' ')
+    if [[ ( "${hp:-100}" -lt 100 || "${deaths:-0}" -gt 0 ) && "${hunt:-0}" -ge 1 ]]; then
+        echo "PASS  e1m3 wizard: health $hp, deaths $deaths, $hunt hunting"
+    else
+        echo "FAIL  e1m3 wizard: health ${hp:-none}, deaths ${deaths:-none}, ${hunt:-0} hunting; want a hit and one"; rc=1
+    fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc
 fi

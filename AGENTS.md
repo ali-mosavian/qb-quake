@@ -2102,6 +2102,37 @@ before the ogre at (1790,-146) for six seconds and wants a bite with
 the ogre hunting -- health under 100 or a death, since it kills in
 that time and the respawn reads 100.
 
+**The zombie and the wizard are kinds 5 and 6**, their four sounds at
+`SND_MON2` since the table after the first five kinds' is taken;
+`mdl_say` picks. The zombie's page is `stand:1,run:8,death,paina:8,
+atta` (177 vertices, 30 frames): no death set, since zombie_die is a
+gib -- a dead one with `ndeath` 0 is not drawn -- and no paine, so a
+dropped one lies on paina's last frame. zombie_pain's rules are in
+`mdl_damage`: the health back to 60 after every hit, so only one hit of
+60 kills (the SSG's 56 does not, as in Quake); under 9 ignored; 25 or
+more, or any hit, sets `pain_finished` -- three seconds down, or one
+flinching -- and nothing flinches it again before. CheckAttack with a
+th_missile alone (0.9 / 0.4 / 0.1) starts `atta`, and frame 13 throws
+the gib: a `Spike` with `grenade` and `gib` set, ZombieFireGrenade's
+600 toward the player with 200 up, that bites 10 where it lands on
+the player's box, stops dead on a wall and goes out at 2.5 s with no
+blast. The wizard (80 vertices, all 54 frames) flies: `mdl_flystep` is
+SV_movestep's FL_FLY case -- a straight trace, 8 up or down toward 30
+to 40 above the player while hunting, once more level when blocked --
+and `mdl_spawn` does not drop it to the floor; WizardCheckAttack's 0.9
+/ 0.6 / 0.2 starts `magatt`, frames 3 and 8 fire Wiz_FastFire's spikes
+(hostile, 600, 9), two seconds to be ready. Its corpse stays in the
+air. `tools/check.sh --e1m3`'s third and fourth arms stand inside
+RANGE_MELEE of one of each -- outside it a wanderer must be facing the
+player, and the zombie at (800,-216) wanders off in the first second --
+and want health under 100 and the kind hunting.
+
+**BC reads a user FUNCTION inside a CALL-less SUB's argument list as an
+array.** `snd_play g, mdl_snd( ent.kind, 1 ), ent.pos` was `Argument-
+count mismatch` at every site, the DECLARE in place and the function
+compiling; `l = mdl_snd( ent.kind, 1 )` on the line before compiled.
+Assign to a local first, or make the helper a SUB, as `mdl_say` is.
+
 **A monster that only looks while standing never sees anyone.** The
 port called FindTarget from `ai_stand` alone; id's `ai_walk` calls it
 every frame too, and a player who fired within the second is noticed
@@ -2393,7 +2424,8 @@ describe its content and a face keeps only its block -- 22K back on
 e1m2's 5,516 faces less 4K on the blocks. e1m2 plays: far heap after
 the depth buffer 23,024 with eight models and the sound layer.
 
-e1m3 (5,274 faces, 2,942 nodes 85 deep, 1,689 leaves) loaded with 1K
+e1m3 (5,274 faces, 2,942 nodes 85 deep, 1,689 leaves; 7.3K after depth
+with the zombie and the wizard loaded) loaded with 1K
 and died in its first frame with 7K, and three cuts got it to 5.8K
 after the depth buffer: the per-face frame stamp is a bit
 (`pflag()` is faces/16 integers, `r_pflag_clear` zeroes it a frame,

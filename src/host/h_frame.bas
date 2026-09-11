@@ -685,8 +685,10 @@ sub host_render ( _
     if ( g.env.no_mdl = 0 ) then
         for mdl_i = 0 to g.mdl_count - 1
             k = mdl_ent( mdl_i ).kind
-            if ( mon( k ).loaded ) then
-                if ( r_mdl_visible( mdl_ent( mdl_i ).pos, mon( k ).radius, mon( k ).zlo, mon( k ).zhi, _
+            if ( mon( k ).loaded = 0 ) then
+            elseif ( mdl_ent( mdl_i ).state = MDL_ST_DEAD% and mon( k ).ndeath = 0 ) then
+                '' gibbed: a zombie has no death frames to lie in
+            elseif ( r_mdl_visible( mdl_ent( mdl_i ).pos, mon( k ).radius, mon( k ).zlo, mon( k ).zhi, _
                                     nds_buffer(), pln_buffer(), frustum() ) ) then
                     mdl_draw g, mon( k ), mdl_ent( mdl_i ), _
                              mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
@@ -701,7 +703,6 @@ sub host_render ( _
                         nbox = mdl_draw_box( bob, 3.0, 6.0, 1.0, 0.0, mtx_fin, xresh, yresh, g.env.z_near, _
                                              h_dst_dc, ENT_COL_YELLOW%, ENT_COL_WHITE% )
                     end if
-                end if
             end if
         next mdl_i
     end if

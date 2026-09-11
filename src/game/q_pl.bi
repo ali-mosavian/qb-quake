@@ -132,6 +132,7 @@ type Spike
     hostile     as integer     '' a trap's: it bites the player, not the monsters
     dmg         as integer     '' what a hostile one bites
     grenade     as integer     '' an ogre's or the player's: gravity, a bounce, a fuse and a blast
+    gib         as integer     '' a zombie's: bites what it lands on, stops on a wall, no blast
 end type
 
 type PlayerCombat
@@ -232,7 +233,7 @@ const PL_LAND_SOFT#    = -300.0 '' PlayerPreThink: land.wav below this fall spee
 const PL_LAND_HARD#    = -650.0 '' land2.wav and five points
 '' the sounds, in tools/mksnd.py's SOUNDS order; SND_MON + kind * 4 is
 '' a monster's sight, then attack, pain, death
-const SND_COUNT%       = 82
+const SND_COUNT%       = 90
 const SND_SHOTGUN%     = 0
 const SND_SSG%         = 1
 const SND_NAIL%        = 2
@@ -265,6 +266,7 @@ const SND_SPIKE2%      = 78    '' trap_spikeshooter
 const SND_DJUMP%       = 79    '' the demon's leap
 const SND_GRENADE%     = 80    '' the ogre's grenade thrown, and bounced
 const SND_BOUNCE%      = 81
+const SND_MON2%        = 82    '' the zombie's and the wizard's four, kinds 5 up
 '' 57, 58 are comp1 and drone6, the ambient_* points; mkassets writes
 '' their ids into ents.bin, so nothing here names them -- and a const
 '' SND_AMBIENT% is the sub snd_ambient to BC, sigil or not
