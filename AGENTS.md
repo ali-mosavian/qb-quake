@@ -2440,6 +2440,21 @@ with 7K to spare and nothing in the trace said so (6K). A lazily
 made thing is invisible to a trace taken at load; count what the
 first frame makes too.
 
+**e1m4 (6,120 faces, 3,193 nodes, 1,817 leaves, 6,948 clipnodes) is
+18K bigger than e1m3 in the far heap, and two cuts paid for it.** The
+leaf face list is a `qglArLoadBas` MEM store now, as the leaves are:
+`qglMemAlloc` takes the UMB pool before it shrinks BASIC's heap, and
+the faces store leaves 26K of it, so the list's 13K (16K on e1m4)
+costs the far heap 16 bytes -- the walk reads it through the bound
+descriptor as before. `MapStore.lfaces` holds the handle, which moved
+`GAME_VIS_OFFSET` and `GAME_DLIGHT_OFFSET` by four. And the disk
+texture headers, 40 bytes a texture, are erased once the anim chains
+are linked. e1m3 reads 30.4K after the depth buffer with both, e1m4
+8.7K. e1m4's rebuilt portals miss 152 of 1,230 PVS leaves, so mkassets
+ships it an index of zeros instead of failing -- `r_load_portals`
+leaves `pt_ok` 0 and the PVS alone draws, as it does on any map whose
+table passes 4,681 refs. `tools/check.sh --e1m4` is its spawn frame.
+
 **`ubound()` of an array never made is error 9, and per-map loading
 found one.** `mdl_ent()` and `nail()` were sized inside `if ( mon(
 MDL_KIND_ARMY% ).loaded )`, which every map had satisfied until e1m3

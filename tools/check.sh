@@ -28,6 +28,7 @@
 #                               load and draw polygons at the spawn
 #   tools/check.sh --e1m2       e1m2's own entities, from the build's MAPS\
 #   tools/check.sh --e1m3       e1m3, the first map with no soldier: its spawn frame
+#   tools/check.sh --e1m4       e1m4's spawn frame
 #
 # -nostats is not optional. The overlay prints live fps and frame time, so
 # two runs of the SAME build differ by ~28 pixels in the digits, and a
@@ -557,6 +558,21 @@ if [[ "${1:-}" == "--e1m3" ]]; then
     else
         echo "FAIL  e1m3 wizard: health ${hp:-none}, deaths ${deaths:-none}, ${hunt:-0} hunting; want a hit and one"; rc=1
     fi
+    for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
+    exit $rc
+fi
+
+# e1m4: knights, ogres and wizards, a train, 29 drips; the map that needed
+# the leaf-face list out of the far heap. The spawn frame against
+# tools/ref/e1m4-spawn.bmp.
+if [[ "${1:-}" == "--e1m4" ]]; then
+    build_exe
+    [[ -f "$VBD_OUT/MAPS/e1m4/assets.zip" ]] || { echo "SKIP  e1m4: no MAPS/e1m4 in the build (needs the PAK)"; exit 0; }
+    for f in assets.zip texr.raw texs.raw pal.raw e1m4.bsp; do cp "$VBD_OUT/MAPS/e1m4/$f" "$VBD_OUT/$f"; done
+    rc=0
+    run_frame "-lm -nostats -noai -bench 40 -ticks 60" "$VBD_OUT/e1m4-spawn.bmp" e1m4.bsp
+    out=$(python3 "$ROOT/tools/imgdiff.py" "$ROOT/tools/ref/e1m4-spawn.bmp" "$VBD_OUT/e1m4-spawn.bmp" | tail -1)
+    if [[ "$out" == IDENTICAL* ]]; then echo "PASS  e1m4 spawn: $out"; else echo "FAIL  e1m4 spawn: $out"; rc=1; fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc
 fi

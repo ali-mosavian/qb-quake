@@ -174,7 +174,10 @@ declare sub qglGemFree ( byval h as integer )
 ''
 declare sub r_alloc_pvs ( byval leaf_count as long )
 declare sub r_load_portals ( byval leaf_count as long )
-declare sub r_load_lfaces ( byval lump_bytes as long )
+declare sub r_load_lfaces ( _
+    g as Game, _
+    byval lump_bytes as long _
+)
 declare sub ent_load_teleports ( _
     g as Game, _
     models() as Submodel, _
@@ -533,7 +536,7 @@ sub mod_load_marksurfaces ( _
 )
     '' r_bsp owns the list -- it is the only reader. All it needs is how
     '' many bytes the lump holds.
-    r_load_lfaces g.wld.file.head.lface.size
+    r_load_lfaces g, g.wld.file.head.lface.size
 
     scr_load_step
 end sub

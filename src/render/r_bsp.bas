@@ -134,7 +134,10 @@ declare sub r_set_frustum ( _
     frustum() as DiskPlane, _
     mtx as Mat4 _
 )
-declare sub r_load_lfaces ( byval lump_bytes as long )
+declare sub r_load_lfaces ( _
+    g as Game, _
+    byval lump_bytes as long _
+)
 declare sub r_alloc_pvs ( byval leaf_count as long )
 declare sub r_load_leaves ( _
     g as Game _
@@ -772,15 +775,23 @@ end sub
 '' desc: Sizes and loads the marksurface list from its lump byte count.
 ''       The elements are plain integers, so the count is the lump over
 ''       len() of one -- taken here, where the array actually lives.
+''       A MEM store, as the leaves are: qglMemAlloc takes the UMB pool
+''       before BASIC's far heap, and 13K of far heap is what e1m4
+''       needed. The walk reads it through the bound descriptor as
+''       before.
 ''::::::::::
-sub r_load_lfaces ( byval lump_bytes as long )
-    dim n as long
+sub r_load_lfaces ( _
+    g as Game, _
+    byval lump_bytes as long _
+)
+    dim n as long, mapped as long
 
+    redim lfc_buffer(0) as integer
     n = lump_bytes \ len( lfc_buffer(0) )
-    redim lfc_buffer( n-1 ) as integer
-
-    mod_load_flat "assets.zip::lface.bld", _
-        clng( varseg( lfc_buffer(0) ) ) * 65536& + (clng( varptr( lfc_buffer(0) ) ) and 65535&)
+    g.wld.store.lfaces = qglArLoadBas&( "assets.zip::lface.bld", QGL_AR_MEM, len( lfc_buffer(0) ), n, 0 )
+    if ( g.wld.store.lfaces = 0 ) then sys_error "0x0037, lface.bld would not load"
+    erase lfc_buffer
+    mapped = qglArMap&( g.wld.store.lfaces, lfc_buffer(), 0 )
 end sub
 
 ''::::::::::

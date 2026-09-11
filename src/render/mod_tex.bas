@@ -314,6 +314,7 @@ sub mod_link_anims ( _
             end if
         end if
     next i
+    erase t_mip_inf     '' 40 bytes a texture, read by nothing from here on
 end sub
 
 '' 0 for +0..+9, 1 for +a..+j, -1 for anything else after the +

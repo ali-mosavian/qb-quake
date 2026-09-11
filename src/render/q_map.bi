@@ -48,6 +48,7 @@ type MapStore
     nodes       as long
     leaves      as long
     clips       as long
+    lfaces      as long         '' the leaf face lists (marksurfaces)
 end type
 
 type GeomStore
