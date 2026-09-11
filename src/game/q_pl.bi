@@ -30,9 +30,7 @@ const CONTENTS_SKY   = -6
 ''
 const PLAYER_HULL   = 1
 
-'' units per second squared. Quake's sv_gravity.
 const PL_BOUNCE#     = 1.5   '' MOVETYPE_BOUNCE's ClipVelocity overbounce
-const PL_FALLACC#    = 800.0
 '' a per-axis safety clamp, not a gameplay speed cap. Quake's sv_maxvelocity.
 const PL_MAXVEL#     = 2000.0
 const PL_STOP_EPS#   = 0.1
@@ -178,6 +176,7 @@ type PlayerCombat
     next_map    as string * 8  '' where the exit leads, from ents.bin; blank for nowhere
     carry       as integer     '' -carry: CARRY.BIN holds the last level's kit
     worldtype   as integer     '' worldspawn's: 0 medieval, 1 rune, 2 base -- the keys' names and sounds
+    gravity     as single      '' the map's sv_gravity, units per second squared; 100 on e1m8
 end type
 
 '' What a level hands the next through CARRY.BIN: SetChangeParms' parms,

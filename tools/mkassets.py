@@ -421,7 +421,7 @@ TRIG_SHOOTER = 7
 KEY_NAMES = ('key', 'runekey', 'keycard')   # items.qc's netname by worldtype
 
 
-def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skill: int) -> bytes:
+def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skill: int, gravity: float) -> bytes:
     # Resolved here, not on the target: BASIC strings cap at 32,767 bytes
     # and e1m3's entities lump is 45,762 -- mod_find_spawn died at error 5
     # before anything else could. The renderer wants four facts out of the
@@ -662,9 +662,9 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
     # corners by index, each pointing at the next; a train at one with no target stays
     corner_at = {name: i for i, (name, _, _, _) in reversed(list(enumerate(corners))) if name}
     trains = [(m, speed, targeted, corner_at[first]) for m, speed, targeted, first in trains if first in corner_at]
-    buf = bytearray(struct.pack('<4f3fff12h8s', *spawn, angle, *inter[0], inter[1], inter[2], nmodels,
+    buf = bytearray(struct.pack('<4f3fff12hf8s', *spawn, angle, *inter[0], inter[1], inter[2], nmodels,
                                 len(teles), len(plats), len(hides), len(items), len(doors), len(uses), len(mons),
-                                len(ambs), len(trains), len(corners), worldtype,
+                                len(ambs), len(trains), len(corners), worldtype, gravity,
                                 next_map[:8].encode('latin1').ljust(8)))
     for kind, org, yaw, target in mons:
         buf += struct.pack('<h3ffh', kind, *org, yaw, corner_at.get(target, -1))   # its patrol's first corner
@@ -691,7 +691,7 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
     return bytes(buf)
 
 
-def convert_lumps(d, lumps, outdir, skill):
+def convert_lumps(d, lumps, outdir, skill, gravity):
     """Convert each lump from its on-disk layout to the renderer's own.
 
     model.bas did this per element, in BASIC, copying field by field -- and
@@ -789,7 +789,7 @@ def convert_lumps(d, lumps, outdir, skill):
     ent_text = lump(0).split(b'\0')[0].decode('latin-1')
     nmodels = lumps[14][1] // 64
     boxes = [struct.unpack_from('<6f', lump(14), m * 64) for m in range(nmodels)]
-    out['ents.bin'] = parse_entities(ent_text, nmodels, boxes, skill)
+    out['ents.bin'] = parse_entities(ent_text, nmodels, boxes, skill, gravity)
 
     # marksurfaces, models: identical either side
     out['lface.bld'] = lump(11)
@@ -922,7 +922,9 @@ def main():
 
     lumps   = read_lumps(d)
     print("converting lumps ...", flush=True)
-    convert_lumps(d, lumps, outdir, skill)
+    # world.qc: sv_gravity 100 on e1m8, 800 everywhere else
+    gravity = 100.0 if os.path.basename(bsp).lower() == 'e1m8.bsp' else 800.0
+    convert_lumps(d, lumps, outdir, skill, gravity)
 
     toff, _ = lumps[2]
     ntex    = struct.unpack_from('<i', d, toff)[0]

@@ -30,6 +30,8 @@
 #   tools/check.sh --e1m3       e1m3, the first map with no soldier: its spawn frame
 #   tools/check.sh --e1m4       e1m4's spawn frame, the super nailgun
 #   tools/check.sh --e1m5       e1m5's spawn frame, the shambler, the rocket launcher
+#   tools/check.sh --e1m6       e1m6's spawn frame; --e1m7 and --e1m8 likewise,
+#                               and e1m8's jump under its sv_gravity of 100
 #
 # -nostats is not optional. The overlay prints live fps and frame time, so
 # two runs of the SAME build differ by ~28 pixels in the digits, and a
@@ -631,6 +633,36 @@ if [[ "${1:-}" == "--e1m5" ]]; then
         echo "PASS  e1m5 rl: weapon $wp, rockets $rk, health $hp"
     else
         echo "FAIL  e1m5 rl: weapon ${wp:-none}, rockets ${rk:-none}, health ${hp:-none}, deaths ${deaths:-none}; want 128, 4, a blast felt and no death"; rc=1
+    fi
+    for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
+    exit $rc
+fi
+
+# e1m6, e1m7 and e1m8: the shareware's last three, spawn frames against
+# tools/ref/<map>-spawn.bmp. e1m7's Chthon is not ported (no monster_boss
+# kind; mkassets ships the map without it). e1m8 is world.qc's sv_gravity
+# 100: the spawn hangs 630 over its floor, -jump lands at -736 and goes
+# 364 up by v^2/2g against 48 under 800, so at tick 400 the body is still
+# 300 up. peak_z is the spawn, -104: it read 0 on any map under z 0
+# before pl_init set it, and a jump there was unmeasurable
+if [[ "${1:-}" == "--e1m6" || "${1:-}" == "--e1m7" || "${1:-}" == "--e1m8" ]]; then
+    m="${1#--}"
+    build_exe
+    [[ -f "$VBD_OUT/MAPS/$m/assets.zip" ]] || { echo "SKIP  $m: no MAPS/$m in the build (needs the PAK)"; exit 0; }
+    for f in assets.zip texr.raw texs.raw pal.raw $m.bsp; do cp "$VBD_OUT/MAPS/$m/$f" "$VBD_OUT/$f"; done
+    rc=0
+    run_frame "-lm -nostats -noai -bench 40 -ticks 60" "$VBD_OUT/$m-spawn.bmp" $m.bsp
+    out=$(python3 "$ROOT/tools/imgdiff.py" "$ROOT/tools/ref/$m-spawn.bmp" "$VBD_OUT/$m-spawn.bmp" | tail -1)
+    if [[ "$out" == IDENTICAL* ]]; then echo "PASS  $m spawn: $out"; else echo "FAIL  $m spawn: $out"; rc=1; fi
+    if [[ "$m" == e1m8 ]]; then
+        run_frame "-lm -nostats -noai -jump -bench 400 -ticks 400" "$VBD_OUT/e1m8-jump.bmp" e1m8.bsp
+        pk=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="peak_z"{print int($2)}')
+        pz=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1=="pz"{print int($2)}')
+        if [[ "${pz:-0}" -gt -600 && "${pk:-0}" -eq -104 ]]; then
+            echo "PASS  e1m8 jump: pz $pz over the -736 floor, peak_z $pk the spawn"
+        else
+            echo "FAIL  e1m8 jump: pz ${pz:-none} peak_z ${pk:-none}; want pz over -600 (a jump under sv_gravity 100) and peak_z -104"; rc=1
+        fi
     fi
     for f in assets.zip texr.raw texs.raw pal.raw; do cp "$ROOT/data/assets/$f" "$VBD_OUT/$f"; done   # the other gates' map back
     exit $rc

@@ -854,7 +854,7 @@ sub pl_gravity ( _
         if ( g.pl.vel.z < 0.0 ) then g.pl.vel.z = 0.0
     else
         g.pl.on_ground = false
-        if ( g.pl.water_level = 0 ) then g.pl.vel.z = g.pl.vel.z - PL_FALLACC#*dt
+        if ( g.pl.water_level = 0 ) then g.pl.vel.z = g.pl.vel.z - g.fight.gravity*dt
     end if
 
 end sub
@@ -1112,6 +1112,8 @@ sub pl_init ( _
     g.pl.vel.z = 0.0
 
     g.pl.on_ground = false
+    '' the spawn, not 0: a map below z 0 read peak_z 0 whatever -jump did
+    g.pl.peak_z = g.pl.pos.z
 
 end sub
 
@@ -2064,7 +2066,7 @@ sub mdl_think ( _
     '' bitten once. A stop while falling is the ground and the run again;
     '' one while rising is a wall, and the dog drops down it.
     if ( ent.state = MDL_ST_LEAP% ) then
-        ent.vel.z = ent.vel.z - PL_FALLACC# * 0.1
+        ent.vel.z = ent.vel.z - g.fight.gravity * 0.1
         fin.x = ent.pos.x + ent.vel.x * 0.1
         fin.y = ent.pos.y + ent.vel.y * 0.1
         fin.z = ent.pos.z + ent.vel.z * 0.1
@@ -3129,7 +3131,7 @@ sub pl_grenade_tick ( _
             end if
         next i
     end if
-    s.vel.z = s.vel.z - PL_FALLACC# * dt
+    s.vel.z = s.vel.z - g.fight.gravity * dt
     fin.x = s.pos.x + s.vel.x * dt
     fin.y = s.pos.y + s.vel.y * dt
     fin.z = s.pos.z + s.vel.z * dt

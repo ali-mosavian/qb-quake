@@ -2286,6 +2286,18 @@ so it leaves from the origin -- and its blast is T_RadiusDamage's,
 halved for its owner (`head == attacker`): 59 at the feet, health 41,
 as the gate reads. The rule reaches the grenade launcher too.
 
+**e1m6, e1m7 and e1m8 are in `MAPS`**, each smaller than e1m4 in every
+lump, with spawn-frame gates. `sv_gravity` is the map's now:
+`fight.gravity`, from the ents header, which mkassets sets to 100 for
+e1m8 as world.qc does and 800 otherwise; the player's fall, a leap
+and a grenade all read it. The e1m8 gate holds jump from the spawn,
+which hangs 630 over its floor, and at tick 400 wants the body over
+-600: the jump goes 364 up by v^2/2g against 48 under 800. `peak_z`
+read 0 on any map under z 0 -- nothing set it -- so `pl_init` starts
+it at the spawn, and the gate wants e1m8's -104. Not ported: Chthon (`monster_boss`, no kind; e1m7 ships
+without it), `trigger_monsterjump`, `item_artifact_invulnerability`;
+`func_wall` draws as any solid brush model.
+
 **The powerups are thirty-second clocks on `fight`**: the quad
 (`quad_until`) makes every pellet and nail four times (T_Damage's
 super_damage_finished), the envirosuit (`suit_until`) turns the slime

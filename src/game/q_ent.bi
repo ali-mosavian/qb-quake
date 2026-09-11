@@ -58,6 +58,7 @@ type EntsHead
     ntrain      as integer
     ncorner     as integer
     worldtype   as integer      '' worldspawn's: the keys' names and sounds
+    gravity     as single       '' world.qc's sv_gravity: 100 on e1m8, 800 elsewhere
     next_map    as string * 8   '' trigger_changelevel's map, space padded; blank for none
 end type
 
