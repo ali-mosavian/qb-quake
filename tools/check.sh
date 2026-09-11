@@ -681,6 +681,18 @@ if [[ "${1:-}" == "--e1m6" || "${1:-}" == "--e1m7" || "${1:-}" == "--e1m8" || "$
         out=$(python3 "$ROOT/tools/imgdiff.py" "$ROOT/tools/ref/start-reg.bmp" "$VBD_OUT/start-reg.bmp" | tail -1)
         if [[ "$out" == IDENTICAL* ]]; then echo "PASS  start registered: $out"; else echo "FAIL  start registered: $out"; rc=1; fi
     fi
+    if [[ "$m" == e1m6 ]]; then
+        # in *10, a once with delay 3 for the nine t5 stair doors: at a second
+        # the trigger is spent and door *8 still shut; fired at once it would be opening
+        run_frame "-lm -nostats -noai -at -256 1280 -100 -bench 40 -ticks 60" "$VBD_OUT/e1m6-delay.bmp" e1m6.bsp
+        ts=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1 ~ /^trig_[0-9]+$/ && $2==10 {print $4}')
+        ds=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1 ~ /^door_[0-9]+$/ && $2==8 {print $3}')
+        if [[ "${ts:-0}" -eq 4 && "${ds:-1}" -eq 0 ]]; then
+            echo "PASS  e1m6 delay: trigger *10 spent, door *8 still shut a second on"
+        else
+            echo "FAIL  e1m6 delay: trigger *10 state ${ts:-none} (want 4 DONE), door *8 state ${ds:-none} (want 0 SHUT)"; rc=1
+        fi
+    fi
     if [[ "$m" == e1m7 ]]; then
         # on the rune at (8,64,24): sigil_touch fires t4 and Chthon (kind 9) wakes to ARMED, 5
         run_frame "-lm -nostats -noai -at 8 64 24 -bench 40 -ticks 30" "$VBD_OUT/e1m7-rune.bmp" e1m7.bsp

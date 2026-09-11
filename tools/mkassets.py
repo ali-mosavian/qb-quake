@@ -696,8 +696,10 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
             snd = snd or 1
             if not kv.get('message'):
                 msg = b'You found a secret area!'.ljust(40)
+        # delay: SUB_UseTargets' DelayThink, seconds before the target fires
         return (m, kind, name_id(kv.get('target', '')), name_id(kv.get('targetname', '')),
-                name_id(kv.get('killtarget', '')), count, wait, 0.0, (0.0, 0.0, 0.0), snd, msg)
+                name_id(kv.get('killtarget', '')), count, wait, 0.0, (0.0, 0.0, 0.0), snd, msg,
+                (0.0, 0.0, 0.0), float(kv.get('delay', '0')))
 
     def button_record(m: int, kv: dict[str, str], box: tuple[float, ...]) -> tuple:
         # func_button: speed 40, wait 1, lip 4; wait -1 stays pressed
@@ -847,7 +849,9 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
                            secret, shoot, snd, key, msg)
     for m, kind, target, name, kill, count, wait, speed, travel, snd, msg, *rest in uses:
         org = rest[0] if rest else (0.0, 0.0, 0.0)   # a shooter's
-        buf += struct.pack('<6hff3f3fh40s', m, kind, target, name, kill, count, wait, speed, *travel, *org, snd, msg)
+        delay = rest[1] if len(rest) > 1 else 0.0
+        buf += struct.pack('<6hff3f3fh40sf', m, kind, target, name, kill, count, wait, speed, *travel, *org, snd,
+                           msg, delay)
     for snd, vol, org in ambs:
         buf += struct.pack('<hh3f', snd, vol, *org)
     for m, speed, targeted, first in trains:

@@ -287,6 +287,7 @@ type EntsTrig
     org         as Vec3         '' a shooter's origin
     snd         as integer      '' "sounds": a trigger's 1 secret, 2 talk; a button's set
     msg         as string * 40
+    delay       as single       '' SUB_UseTargets' delay: seconds before the target fires
 end type
 
 const ENT_TRIG_READY = 0
@@ -321,6 +322,8 @@ type TrigEnt
     mins        as Vec3         '' the volume, or the button's brush
     maxs        as Vec3
     msg         as string * 40
+    delay       as single
+    delay_left  as single       '' above zero: fired, its target due when this runs out
 end type
 
 ''

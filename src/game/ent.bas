@@ -902,6 +902,8 @@ sub ent_trig_init ( _
     t.speed     = xr.speed
     t.snd       = xr.snd
     t.ofs_out   = xr.travel
+    t.delay     = xr.delay
+    t.delay_left = 0.0
     t.mins      = models(m).mins
     t.maxs      = models(m).maxs
     if ( xr.kind = ENT_TRIG_SHOOTER ) then t.mins = xr.org : t.maxs = xr.org
@@ -933,6 +935,7 @@ sub ent_reset ( _
         trig(k).state = ENT_TRIG_READY
         trig(k).left = trig(k).count
         trig(k).wait_left = 0.0
+        trig(k).delay_left = 0.0
         if ( trig(k).kind = ENT_TRIG_BUTTON ) then brush( trig(k).model ).ofs = home
     next k
     for  k = 0 to g.plat_count-1
@@ -1159,6 +1162,11 @@ sub ent_trig_fire ( _
         trig(k).state = ENT_TRIG_HELD
         trig(k).wait_left = trig(k).wait
     end if
+    '' SUB_UseTargets' delay: the kill and the fire wait in ent_move_trigs
+    if ( trig(k).delay > 0.0 ) then
+        trig(k).delay_left = trig(k).delay
+        exit sub
+    end if
     ent_kill_targets g, trig(k).kill, trig()
     ent_use_targets g, trig(k).target, door(), trig(), plat()
 end sub
@@ -1218,6 +1226,13 @@ sub ent_move_trigs ( _
 
     for  k = 0 to g.trig_count-1
         m = trig(k).model
+        if ( trig(k).delay_left > 0.0 ) then
+            trig(k).delay_left = trig(k).delay_left - dt
+            if ( trig(k).delay_left <= 0.0 ) then
+                ent_kill_targets g, trig(k).kill, trig()
+                ent_use_targets g, trig(k).target, door(), trig(), plat()
+            end if
+        end if
         select case trig(k).kind
             case ENT_TRIG_BUTTON
                 select case trig(k).state

@@ -2307,7 +2307,7 @@ above; `event_lightning` is `ENT_TRIG_BOLT`, lightning_use with both
 electrode doors up -- the doors whose target is `lightning`, their
 indices in the bolt's `ofs_out` -- taking a point, and at none his
 target fires: the relay that opens e1m7's exit. `trigger_relay` is
-`ENT_TRIG_RELAY`, a use passed on at once; `delay` is not ported.
+`ENT_TRIG_RELAY`, a use passed on at once.
 e1m7's gate stands on the rune and wants Chthon ARMED; the bolt is
 read, not run -- its buttons cannot be pressed headlessly. The chain
 closes: e1m7 exits to start, e1m8 to e1m5.
@@ -2751,7 +2751,7 @@ The margin is there because `pl_trace` walks hull 1, the player's, so
 a wall stops a pellet 16 units early, and e1m1's switch volume stands
 8 units off its wall: without it four shots at the switch fired
 nothing. A point trace through hull 0 is the real fix. Nothing in
-`delay`, `killtarget` or sounds. `-fire` holds the trigger for a
+sounds. `-fire` holds the trigger for a
 headless shot and `-pitch D` aims it up or down, as `-yaw` aims it
 round: the default view looks 11 degrees down, mouse y 110 of 200.
 
@@ -2767,7 +2767,13 @@ that trigger; the reference is what proves the text draws.
 DONE before its target fires, which is SUB_UseTargets' order. e1m1 uses
 it twice, each a trigger_once that removes the hint trigger it also
 names, so the hint is never said again once the player has passed. A
-door or a monster named by a killtarget stays; `delay` is not ported.
+door or a monster named by a killtarget stays. `delay` is
+SUB_UseTargets' DelayThink: a fired trigger with one holds its kill
+and its fire in `delay_left`, run down by `ent_move_trigs`; a fire
+inside the delay restarts it where id's spawns a second thinker.
+e1m6's nine-door stair opens three seconds after its trigger, and the
+e1m6 gate stands in it a second: the trigger spent, the first door
+still shut.
 The ninth e1m1 arm stands in `*54` and wants `*51` DONE.
 
 `trigger_changelevel` is the level's end: touching it is `GS_EXIT`,
