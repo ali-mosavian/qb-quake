@@ -13,6 +13,7 @@
 #include "d_alias.h"
 #include "mdl.h"
 #include "mdl_ai.h"
+#include "weapons.h"
 #include "item.h"
 #include "qgl.h"
 #include "mod_tex.h"
@@ -535,6 +536,37 @@ short d_draw_models( World *world, Renderer *rdr, DiskPlane far *frustum,
             (float) cos( a ), (float) sin( a ), 1.0f, 0.0f,
             &ms->scale, &ms->origin, ms->vtx_hnd, ms->skin,
             m, xresh, yresh, z_near, dst, QGL_Z_TEST ) );
+    }
+    return drawn;
+}
+
+/*
+ * The projectiles in flight, a box each: a lava ball red and yellow and
+ * twice the size, a grenade brown, a nail dark with a bright end. No
+ * spike.mdl -- the vertex pages are spoken for.
+ */
+short d_draw_spikes( Fight *fight, Mat4 *mtx_fin, float xresh, float yresh,
+                      float z_near, QSurf dst )
+{
+    float *m = (float *) mtx_fin;
+    short i, drawn = 0;
+
+    for ( i = 0; i < PL_NAILS_MAX; i++ ) {
+        Spike *s = &fight->nail[i];
+        BspVec3 at;
+
+        if ( !s->alive ) continue;
+        at = s->pos;
+        at.z -= 1.0f;
+        if ( s->toss )
+            drawn = (short) ( drawn + mdl_draw_box( &at, 4.0f, 8.0f, 1.0f, 0.0f, m,
+                        xresh, yresh, z_near, dst, ENT_COL_RED, ENT_COL_YELLOW ) );
+        else if ( s->grenade )
+            drawn = (short) ( drawn + mdl_draw_box( &at, 2.0f, 4.0f, 1.0f, 0.0f, m,
+                        xresh, yresh, z_near, dst, ENT_COL_BROWN, ENT_COL_BROWN ) );
+        else
+            drawn = (short) ( drawn + mdl_draw_box( &at, 1.0f, 2.0f, 1.0f, 0.0f, m,
+                        xresh, yresh, z_near, dst, ENT_COL_BROWN, ENT_COL_WHITE ) );
     }
     return drawn;
 }

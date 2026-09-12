@@ -57,5 +57,28 @@ if [[ "$(fld booms "$k")" -lt 1 || "$(fld health "$k")" -ge 100 ]]; then
     fail=1
 fi
 
-[[ $fail -eq 0 ]] && echo "ok: shotgun kills, the nailgun empties, the barrel goes off"
+# And a nail in the air is drawn. -nomdl and -noai leave the world the
+# only other thing on screen, and it is identical in both arms, so every
+# differing pixel is the nail. 14 ticks, because a nail at 1000 u/s is
+# out of the room in a fraction of a second: by 20 it has hit the wall
+# and there is nothing left to see.
+NB="-noai -nomdl -at 112 2352 16 -yaw 270 -ticks 14"
+run "e1m1.qmp -nostats $NB -fire"
+cp "$OUT/BENCH.BMP" "$OUT/nail-on.bmp" 2>/dev/null || { echo "FAIL: no frame written" >&2; exit 1; }
+run "e1m1.qmp -nostats $NB"
+px=$(python3 - "$OUT/nail-on.bmp" "$OUT/BENCH.BMP" <<'PYEOF'
+import sys
+def px(p):
+    d = open(p, "rb").read()
+    return d[int.from_bytes(d[10:14], "little"):]
+a, b = px(sys.argv[1]), px(sys.argv[2])
+print(sum(1 for x, y in zip(a, b) if x != y))
+PYEOF
+)
+if [[ ${px:-0} -lt 20 ]]; then
+    echo "FAIL: a nail in flight put $px pixels on screen, wanted at least 20" >&2
+    fail=1
+fi
+
+[[ $fail -eq 0 ]] && echo "ok: shotgun kills, the nailgun empties, the barrel goes off, the nail draws ($px px)"
 exit $fail

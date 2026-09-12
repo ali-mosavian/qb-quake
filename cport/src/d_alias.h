@@ -2,6 +2,7 @@
 #define __D_ALIAS_H__
 
 #include "world.h"
+#include "fight.h"
 #include "renderer.h"
 #include "qgltypes.h"
 #include "pl_move.h"   /* Player */
@@ -32,5 +33,13 @@ short d_draw_items( World *world, Renderer *rdr, Player *player,
 short d_draw_models( World *world, Renderer *rdr, DiskPlane far *frustum,
                       Mat4 *mtx_fin, float xresh, float yresh, float z_near,
                       QSurf dst );
+
+/*
+ * name: d_draw_spikes
+ * desc: Everything in flight, a box each. Depth tested like the rest,
+ *       and NOT gated by -nomdl: a nail is not a model.
+ */
+short d_draw_spikes( Fight *fight, Mat4 *mtx_fin, float xresh, float yresh,
+                      float z_near, QSurf dst );
 
 #endif
