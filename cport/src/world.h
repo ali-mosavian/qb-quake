@@ -2,6 +2,7 @@
 #define __WORLD_H__
 
 #include "bsptypes.h"
+#include "mdltypes.h"
 
 /*
  * World -- the loaded map. Grows a field at a time as the module that
@@ -90,6 +91,10 @@ typedef struct {
 
     short       crate_count;
     CrateModel  far *crate;
+
+    short       mon_count;
+    MdlEnt      far *mon;
+    MdlState    mdl[MDL_KINDS];   /* one per kind, only the map's own loaded */
 
     /* The message table, last in ents.bin: ENT_MSG_LEN bytes each, not
        NUL-terminated. A door's or a trigger's msg is a 1-based id into

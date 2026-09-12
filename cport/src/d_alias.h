@@ -23,4 +23,14 @@ short d_draw_items( World *world, Renderer *rdr, Player *player,
                      DiskPlane far *frustum, Mat4 *mtx_fin,
                      float xresh, float yresh, float z_near, QSurf dst );
 
+/*
+ * name: d_draw_models
+ * desc: Every monster the map spawned, on the frame it is holding.
+ *       Depth tested, like the pickups. Returns the triangles handed
+ *       to the rasteriser.
+ */
+short d_draw_models( World *world, Renderer *rdr, DiskPlane far *frustum,
+                      Mat4 *mtx_fin, float xresh, float yresh, float z_near,
+                      QSurf dst );
+
 #endif

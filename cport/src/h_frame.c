@@ -273,6 +273,8 @@ void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
        there. Before the outlines, which are the same depth state. */
     d_draw_items( world, rdr, player, frustum, &mtx_fin,
                    xresh, yresh, z_near, h_dst_dc );
+    rdr->mdl_drawn = d_draw_models( world, rdr, frustum, &mtx_fin,
+                                     xresh, yresh, z_near, h_dst_dc );
 
     /* Portal outlines, while the depth test is still on, so a portal
        behind a wall is hidden by it. Drawn after depth goes off they

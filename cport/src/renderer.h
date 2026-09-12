@@ -67,6 +67,8 @@ typedef struct {
                               PVS this frame, or -1 when it gave up */
     short no_ents;        /* -noents */
     short no_items;       /* -noitems */
+    short no_mdl;         /* -nomdl */
+    short mdl_drawn;      /* monster triangles submitted this frame */
     short bad_order;      /* -badorder */
 
     /* r_mark_leaves's own memory, not reset by r_draw_world: the

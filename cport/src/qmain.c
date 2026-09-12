@@ -29,6 +29,7 @@
 #include "input.h"
 #include "fight.h"
 #include "assets.h"
+#include "mdl.h"
 #include "item.h"
 #include "h_frame.h"
 #include "screen.h"
@@ -272,10 +273,25 @@ int main( void )
         mod_load_world( &world, &rdr, &cam, &fight, args.map_name, &counts );
         ld_step( &ldr, v.h_video_dc, hud );
 
-        sprintf( buf, "mod_load_world ok faces=%d leaves=%d models=%d tele=%d plat=%d item=%d",
+        sprintf( buf, "mod_load_world ok faces=%d leaves=%d models=%d tele=%d plat=%d item=%d mon=%d",
                  world.face_count, world.leaf_count, world.model_count,
-                 world.tele_count, world.plat_count, world.item_count );
+                 world.tele_count, world.plat_count, world.item_count, world.mon_count );
         mark( buf );
+        {   /* which models actually arrived: a monster record loads
+               whatever the map says, and the model behind it is a
+               separate file that may not have. */
+            short k; char *p = buf;
+            strcpy( buf, "models" );
+            p = buf + 6;
+            for ( k = 0; k < MDL_KINDS; k++ )
+                if ( world.mdl[k].loaded ) {
+                    sprintf( p, " %d:%dv/%dt/%df", (int) k, world.mdl[k].nvert,
+                             world.mdl[k].ntri, world.mdl[k].nframe );
+                    p += strlen( p );
+                }
+            mark( buf );
+        }
+
         sprintf( buf, "spawn=%ld,%ld,%ld angle=%ld",
                  (long) cam.pos.x, (long) cam.pos.y, (long) cam.pos.z,
                  (long) cam.start_angle );
@@ -392,6 +408,7 @@ int main( void )
         rdr.portal   = (short) ( args.no_portal ? 0 : -1 );
         rdr.no_ents   = args.no_ents;
         rdr.no_items  = args.no_items;
+        rdr.no_mdl    = args.no_mdl;
         rdr.bad_order = args.bad_order;
         hud->portal_wire = args.ptwire;
         /* Off unless asked for. F12 still toggles it; -nostats stays
@@ -440,7 +457,7 @@ int main( void )
         {
             float ft_min = 0.0f, ft_max = 0.0f, ft_sum = 0.0f;
             long  ft_n = 0;
-            long  poly_sum = 0, tri_sum = 0;
+            long  poly_sum = 0, tri_sum = 0, mdl_sum = 0;
             float raw_dt, frame_dt;
             FILE *bf;
 
@@ -642,6 +659,7 @@ int main( void )
                    in these longs here. */
                 poly_sum += rdr.polys;
                 tri_sum  += rdr.tris;
+                mdl_sum  += rdr.mdl_drawn;
                 scr_count_frame( hud, &rdr, sc, frame_dt );
                 frame++;
             }
@@ -652,8 +670,8 @@ int main( void )
                 if ( wf ) { fwrite( rec_buf->e, sizeof(RecEntry), rec_buf->count, wf ); fclose( wf ); }
             }
 
-            sprintf( buf, "frames=%d polys=%ld tris=%ld pos=%ld,%ld,%ld",
-                     frame, poly_sum, tri_sum,
+            sprintf( buf, "frames=%d polys=%ld tris=%ld mdl=%ld pos=%ld,%ld,%ld",
+                     frame, poly_sum, tri_sum, mdl_sum,
                      (long) cam.pos.x, (long) cam.pos.y, (long) cam.pos.z );
             mark( buf );
 

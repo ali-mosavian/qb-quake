@@ -80,6 +80,49 @@ def write_zip(path: str) -> None:
 #    34   pad to QMAP_HEAD
 #    64   directory: ndir x { char name[16]; long ofs; long size; }
 #   ...   member data, each aligned to 16
+# The monster models a map needs, by MDL_KIND_*: the .mdl to cut and
+# the frame sets to keep, which IS the frame layout -- d_mdl.bas and
+# cport's mdl.c index the sets by position, so the order here is the
+# order they read. Vertex counts decide what fits one EMS page, which
+# is why the dog keeps one stand frame and the zombie eight of its run.
+# The Makefile has the same list as fourteen rules, for the BASIC build
+# that still stages these loose; this is the one a container uses.
+MDL_SETS = {
+    0: ('soldier',  'stand,run,death,pain'),
+    1: ('knight',   'stand,runb,death,pain,attackb'),
+    2: ('dog',      'stand:1,run,death,pain:1'),
+    3: ('ogre',     'stand:1,run,death,pain:3,shoot'),
+    4: ('demon',    'stand:1,run,death,pain:3,attacka'),
+    5: ('zombie',   'stand:1,run:8,death,paina:8,atta'),
+    6: ('wizard',   'hover,fly,death,pain,magatt'),
+    7: ('shambler', 'stand:1,run,death,pain,magic'),
+}
+
+
+def build_models(pak: str, kinds: set[int], tmp: str) -> dict[str, bytes]:
+    """<name>.geo/.vtx/.skn for each kind, as container members."""
+    import subprocess
+
+    out: dict[str, bytes] = {}
+    if not pak or not os.path.exists(pak):
+        return out
+    os.makedirs(tmp, exist_ok=True)
+    for k in sorted(kinds):
+        if k not in MDL_SETS:
+            continue
+        name, sets = MDL_SETS[k]
+        r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), 'mkmdl.py'),
+                            pak, name, tmp, sets], capture_output=True, text=True)
+        if r.returncode != 0:
+            raise SystemExit(f"mkmdl {name}: {r.stderr.strip() or r.stdout.strip()}")
+        # mkmdl truncates the .geo's name to 8 characters and not the
+        # other two; the member keeps the model's own name either way.
+        for ext, stem in (('geo', name[:8]), ('vtx', name), ('skn', name)):
+            out[f'{name}.{ext}'] = open(os.path.join(tmp, f'{stem}.{ext}'), 'rb').read()
+    print(f"  models: {len(out) // 3} of the map's own monster kinds")
+    return out
+
+
 QMAP_VER   = 1
 QMAP_HEAD  = 64
 QMAP_NAME  = 16
@@ -1384,8 +1427,15 @@ def main():
     # stay for the BASIC build, which still stages five things; cport
     # reads this and nothing else.
     stem = os.path.splitext(os.path.basename(bsp))[0]
+    # Only the kinds the map actually spawns, read back out of the
+    # ents.bin just written rather than kept on the side: the file is
+    # what the runtime loads, so it is what decides which models ship.
+    head = struct.calcsize('<3ff3fff')
+    nmon = struct.unpack_from('<13h', OUT['ents.bin'], head)[7]
+    kinds = {struct.unpack_from('<h', OUT['ents.bin'], 76 + i * 20)[0] for i in range(nmon)}
+    models = build_models(pak, kinds, os.path.join(outdir, '.mdl'))
     write_qmap(os.path.join(outdir, stem + '.qmp'), stem, d,
-               dict(OUT, **{'texr.raw': qmap_texr, 'texs.raw': qmap_texs,
-                            'pal.raw': qmap_pal}))
+               dict(OUT, **models, **{'texr.raw': qmap_texr, 'texs.raw': qmap_texs,
+                                      'pal.raw': qmap_pal}))
 
 main()

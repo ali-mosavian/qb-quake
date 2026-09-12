@@ -21,7 +21,8 @@
 #include "pl_move.h"    /* PL_FEET/PL_TELE_LIFT -- shared with pl_move.c, one fact one place */
 #include "r_bsp.h"      /* r_point_leaf -- r_bsp.bas, not yet ported */
 #include "assets.h"
-#include "item.h"   /* ent_load_items -- the records sit between the hides and the doors */
+#include "item.h"
+#include "mdl.h"   /* ent_load_items -- the records sit between the hides and the doors */
 
 /* Neither toolchain here defines F_FTOL@, the runtime helper bcc emits
    for a float/double-to-integer cast (checked bcpp31's and tc201's
@@ -483,9 +484,7 @@ void ent_load_teleports( World *world )
     short i, j, k, mdlnum;
 
     _fmemcpy( &h, buf, sizeof(EntsHead) );
-    /* The monsters come first in the file and nothing here draws or
-       simulates one, so they are skipped by size rather than read. */
-    ofs = sizeof(EntsHead) + (long) h.nmon * sizeof(EntsMon);
+    ofs = sizeof(EntsHead);
 
     if ( h.nmodels != world->model_count ) {
         fprintf( stderr, "ents.bin is from another map\n" );
@@ -507,6 +506,10 @@ void ent_load_teleports( World *world )
 
     world->tele_count = 0;
     world->plat_count = 0;
+
+    /* The monsters come first in the file, and the models the kinds
+       among them need come with them. */
+    mdl_load_monsters( world, buf, &ofs, h.nmon );
 
     /* every submodel draws and blocks unless something claims it as a trigger */
     for ( i = 0; i < world->model_count; i++ ) {
