@@ -66,6 +66,15 @@ short asset_seek( char *member, long *out_bytes )
     return 0;
 }
 
+short asset_has( char *member )
+{
+    short i;
+
+    for ( i = 0; i < asset_n; i++ )
+        if ( strncmp( asset_dir[i].name, member, QMAP_NAME ) == 0 ) return -1;
+    return 0;
+}
+
 unsigned char far *asset_load( char *member, long bytes )
 {
     unsigned char far *p;

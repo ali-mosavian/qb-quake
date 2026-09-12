@@ -541,6 +541,57 @@ short d_draw_models( World *world, Renderer *rdr, DiskPlane far *frustum,
 }
 
 /*
+ * The view weapon: the model in hand at the eye, turned by the view's
+ * own yaw and pitch and drawn last with depth OFF, which is what Quake
+ * does -- it is not in the world and must not be hidden by it.
+ *
+ * cam->look_at is a POINT by the time this runs (v_update_camera makes
+ * it one on the way out), so the direction is the difference: the
+ * yaw's cos and sin are its x and z over their length, the pitch's are
+ * that length and -y, positive looking down.
+ */
+short d_draw_view( World *world, Renderer *rdr, Camera *cam, Player *player,
+                    Fight *fight, Mat4 *mtx_fin, float xresh, float yresh,
+                    float z_near, QSurf dst )
+{
+    MdlState *ms;
+    BspVec3 eye;
+    float dx, dy, dz, len;
+    short frame;
+
+    if ( rdr->no_mdl || rdr->no_view ) return 0;
+    if ( fight->state == GS_EXIT ) return 0;     /* no gun in the intermission's view */
+    ms = &world->vmdl[ pl_view_of( fight->weapon ) ];
+    if ( !ms->loaded ) return 0;
+
+    eye = player->pos;
+    eye.z += PL_EYE;
+
+    dx = cam->look_at.x - cam->pos.x;
+    dy = cam->look_at.y - cam->pos.y;
+    dz = cam->look_at.z - cam->pos.z;
+    len = (float) sqrt( dx * dx + dz * dz );
+    if ( len < 0.001f ) len = 0.001f;
+
+    /* frame 0 is the gun held; the fire set runs at 10 Hz from the
+       shot and holds its last frame until the weapon is ready again.
+       The nailgun cycles its eight while fire is held, as
+       player_nail1/2 do. */
+    frame = 0;
+    if ( rdr->anim_time < fight->next_fire ) {
+        frame = (short) ( 1 + (short) ( ( rdr->anim_time - fight->fire_at ) * 10.0f ) );
+        if ( fight->weapon == PL_IT_NAILGUN || fight->weapon == PL_IT_SNG )
+            frame = (short) ( 1 + ( (long) ( rdr->anim_time * 10.0f ) % 8 ) );
+    }
+    if ( frame >= ms->nframe ) frame = (short) ( ms->nframe - 1 );
+
+    return mdl_draw_tris( ms->ntri, ms->nvert, frame, &eye,
+                          dx / len, dz / len, len, -dy,
+                          &ms->scale, &ms->origin, ms->vtx_hnd, ms->skin,
+                          (float *) mtx_fin, xresh, yresh, z_near, dst, QGL_Z_OFF );
+}
+
+/*
  * The projectiles in flight, a box each: a lava ball red and yellow and
  * twice the size, a grenade brown, a nail dark with a bright end. No
  * spike.mdl -- the vertex pages are spoken for.

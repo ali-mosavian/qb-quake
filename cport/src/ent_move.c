@@ -16,6 +16,7 @@
 
 #include "ent_move.h"
 #include "gstate.h"
+#include "snd.h"
 #include "ent.h"
 #include "qgl.h"
 
@@ -123,9 +124,29 @@ void ent_link_doors( World *world )
     }
 }
 
+/* leg 0: the stop (a secret door's noise3), 1: a move (noise2), 2: a
+   secret door leaving home (noise1). snd 0 is a silent door. */
+static void ent_door_sound( Player *player, DoorEnt far *d, short leg )
+{
+    short id;
+
+    if ( d->snd <= 0 ) return;
+    id = d->secret ? (short) ( SND_SECRET1 + ( d->snd - 1 ) * 3 + ( 2 - leg ) )
+                   : (short) ( SND_DOOR + ( d->snd - 1 ) * 2 + leg );
+    snd_play( player, id, &d->mins );
+}
+
+/* SUB_UseTargets and door_touch: the message, and misc/talk with it */
+static void ent_talk( Player *player, Fight *fight, Renderer *rdr, char far *msg )
+{
+    if ( !msg || !msg[0] ) return;
+    ent_say( fight, rdr, msg );
+    snd_play( player, SND_TALK, &player->pos );
+}
+
 /* door_go_up for a whole linked group: a shut or closing door sets out,
    an open one restarts its hold. */
-void ent_door_fire( World *world, short grp )
+void ent_door_fire( World *world, Player *player, short grp )
 {
     short k;
     DoorEnt far *d = world->door;
@@ -135,13 +156,17 @@ void ent_door_fire( World *world, short grp )
 
         if ( d[k].secret ) {
             /* fd_secret_use: nothing while it is anywhere but home */
-            if ( d[k].state == ENT_DOOR_SHUT ) d[k].state = ENT_DOOR_OUT1;
+            if ( d[k].state == ENT_DOOR_SHUT ) {
+                d[k].state = ENT_DOOR_OUT1;
+                ent_door_sound( player, &d[k], 2 );
+            }
             continue;
         }
         switch ( d[k].state ) {
         case ENT_DOOR_SHUT:
         case ENT_DOOR_CLOSING:
             d[k].state = ENT_DOOR_OPENING;
+            ent_door_sound( player, &d[k], 1 );
             break;
         case ENT_DOOR_OPEN:
             d[k].hold_left = d[k].hold;
@@ -172,7 +197,7 @@ void ent_use_targets( World *world, Player *player, Fight *fight,
     if ( !id ) return;
 
     for ( k = 0; k < world->door_count; k++ )
-        if ( world->door[k].targeted == id ) ent_door_fire( world, world->door[k].link );
+        if ( world->door[k].targeted == id ) ent_door_fire( world, player, world->door[k].link );
 
     /* train_use: once */
     for ( k = 0; k < world->plat_count; k++ )
@@ -217,7 +242,12 @@ void ent_trig_fire( World *world, Player *player, Fight *fight,
     TrigEnt far *t = &world->trig[k];
 
     if ( t->kind == ENT_TRIG_SECRET ) fight->secrets++;
-    ent_say( fight, rdr, ent_msg( world, t->msg ) );
+    if ( t->snd == 1 ) {
+        ent_say( fight, rdr, ent_msg( world, t->msg ) );
+        snd_play( player, SND_SECRET, &player->pos );
+    } else {
+        ent_talk( player, fight, rdr, ent_msg( world, t->msg ) );
+    }
 
     if ( t->kind == ENT_TRIG_COUNTER || t->wait < 0.0f ) {
         t->state = ENT_TRIG_DONE;
@@ -242,18 +272,24 @@ static void ent_door_key( World *world, Player *player, Fight *fight,
 {
     DoorEnt far *d = &world->door[k];
     long bit;
+    short wt;
 
     if ( d->state != ENT_DOOR_SHUT ) return;
     bit = ( d->key == 2 ) ? PL_IT_KEY2 : PL_IT_KEY1;
+
+    /* the worldtype's key sounds: medieval's two, then the rune pair */
+    wt = (short) ( fight->worldtype > 1 ? 1 : fight->worldtype );
 
     if ( ( fight->items & bit ) == 0 ) {
         if ( rdr->anim_time < d->say_at ) return;
         d->say_at = rdr->anim_time + 2.0f;
         ent_say( fight, rdr, ent_msg( world, d->msg ) );
+        snd_play( player, (short) ( SND_KEYTRY + wt * 2 ), &player->pos );
         return;
     }
     fight->items &= ~bit;
-    ent_door_fire( world, d->link );
+    snd_play( player, (short) ( SND_KEYTRY + 1 + wt * 2 ), &player->pos );
+    ent_door_fire( world, player, d->link );
 }
 
 void ent_move_doors( World *world, Player *player, Fight *fight,
@@ -273,9 +309,9 @@ void ent_move_doors( World *world, Player *player, Fight *fight,
         if ( d->key )
             ent_door_key( world, player, fight, rdr, k );
         else if ( !d->targeted && !d->secret )
-            ent_door_fire( world, d->link );
+            ent_door_fire( world, player, d->link );
         else
-            ent_say( fight, rdr, ent_msg( world, d->msg ) );
+            ent_talk( player, fight, rdr, ent_msg( world, d->msg ) );
     }
 
     for ( k = 0; k < world->door_count; k++ ) {
@@ -288,13 +324,17 @@ void ent_move_doors( World *world, Player *player, Fight *fight,
             if ( ent_step_to( &b->ofs, &d->ofs_open, d->speed * dt ) ) {
                 d->state = ENT_DOOR_OPEN;
                 d->hold_left = d->hold;
+                ent_door_sound( player, d, 0 );
             }
             break;
 
         case ENT_DOOR_OPEN:
             if ( d->hold >= 0.0f ) {
                 d->hold_left -= dt;
-                if ( d->hold_left <= 0.0f ) d->state = ENT_DOOR_CLOSING;
+                if ( d->hold_left <= 0.0f ) {
+                    d->state = ENT_DOOR_CLOSING;
+                    ent_door_sound( player, d, 1 );
+                }
             }
             break;
 
@@ -306,6 +346,7 @@ void ent_move_doors( World *world, Player *player, Fight *fight,
                 }
             } else if ( ent_step_to( &b->ofs, &d->ofs_shut, d->speed * dt ) ) {
                 d->state = ENT_DOOR_SHUT;
+                ent_door_sound( player, d, 0 );
             }
             break;
 
@@ -318,16 +359,25 @@ void ent_move_doors( World *world, Player *player, Fight *fight,
 
         case ENT_DOOR_PAUSE_OUT:
             d->pause_left -= dt;
-            if ( d->pause_left <= 0.0f ) d->state = ENT_DOOR_OPENING;
+            if ( d->pause_left <= 0.0f ) {
+                d->state = ENT_DOOR_OPENING;
+                ent_door_sound( player, d, 1 );
+            }
             break;
 
         case ENT_DOOR_PAUSE_BACK:
             d->pause_left -= dt;
-            if ( d->pause_left <= 0.0f ) d->state = ENT_DOOR_BACK2;
+            if ( d->pause_left <= 0.0f ) {
+                d->state = ENT_DOOR_BACK2;
+                ent_door_sound( player, d, 1 );
+            }
             break;
 
         case ENT_DOOR_BACK2:
-            if ( ent_step_to( &b->ofs, &d->ofs_shut, d->speed * dt ) ) d->state = ENT_DOOR_SHUT;
+            if ( ent_step_to( &b->ofs, &d->ofs_shut, d->speed * dt ) ) {
+                d->state = ENT_DOOR_SHUT;
+                ent_door_sound( player, d, 0 );
+            }
             break;
         }
 
@@ -370,6 +420,7 @@ void ent_move_trigs( World *world, Player *player, Camera *cam, Fight *fight,
                 if ( ent_step_to( &b->ofs, &t->ofs_out, t->speed * dt ) ) {
                     t->state = ENT_TRIG_HELD;
                     t->wait_left = t->wait;
+                    snd_play( player, (short) ( SND_BUTTON + t->snd ), &t->mins );
                     ent_say( fight, rdr, ent_msg( world, t->msg ) );
                     ent_use_targets( world, player, fight, rdr, t->target );
                 }

@@ -48,7 +48,7 @@ void pl_spikes_tick( World *world, Player *player, Fight *fight,
  * desc: The spike shooters and fireball emitters a trigger armed this
  *       tick, each sending one hostile Spike.
  */
-void pl_traps_tick( World *world, Fight *fight, Renderer *rdr );
+void pl_traps_tick( World *world, Player *player, Fight *fight, Renderer *rdr );
 
 /*
  * name: mdl_damage

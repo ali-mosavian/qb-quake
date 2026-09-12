@@ -12,6 +12,7 @@
 #include <stdlib.h>
 
 #include "mdl_ai.h"
+#include "snd.h"
 #include "mdl.h"
 #include "pl_trace.h"
 #include "ent.h"
@@ -73,12 +74,32 @@ static void mdl_change_yaw( MdlEnt far *ent )
     ent->yaw = mdl_anglemod( cur + mv );
 }
 
-void pl_damage( Fight *fight, Renderer *rdr, short dmg )
+/* A monster's own four, by kind: sight, attack, pain, death. The first
+   five kinds' sit at SND_MON, the rest at SND_MON2 -- the table after
+   the first five was already taken. */
+void mdl_say( Player *player, MdlEnt far *ent, short which )
+{
+    BspVec3 org = ent->pos;
+
+    if ( ent->kind < MDL_KIND_ZOMBIE )
+        snd_play( player, (short) ( SND_MON + ent->kind * 4 + which ), &org );
+    else
+        snd_play( player, (short) ( SND_MON2 + ( ent->kind - MDL_KIND_ZOMBIE ) * 4 + which ), &org );
+}
+
+void pl_damage( Player *player, Fight *fight, Renderer *rdr, short dmg )
 {
     short save;
 
-    /* T_Damage: nothing gets through the pentagram */
-    if ( rdr->anim_time < fight->pent_until ) return;
+    /* T_Damage: nothing gets through the pentagram, and protect3 says
+       so no more than two seconds apart */
+    if ( rdr->anim_time < fight->pent_until ) {
+        if ( rdr->anim_time >= fight->pent_at ) {
+            fight->pent_at = rdr->anim_time + 2.0f;
+            snd_play( player, SND_PENT_HIT, &player->pos );
+        }
+        return;
+    }
 
     /* the armor takes ceil(type * damage), and its last point takes the
        type with it */
@@ -86,6 +107,16 @@ void pl_damage( Fight *fight, Renderer *rdr, short dmg )
     if ( save >= fight->armor ) { save = fight->armor; fight->armor_type = 0.0f; }
     fight->armor  = (short) ( fight->armor - save );
     fight->health = (short) ( fight->health - ( dmg - save ) );
+
+    /* PainSound: a burn while standing in something that is not water,
+       else a grunt, a half second apart at most */
+    if ( fight->health > 0 && rdr->anim_time >= fight->pain_at ) {
+        fight->pain_at = rdr->anim_time + PL_PAIN_GAP;
+        if ( player->water_level > 0 && player->water_type != CONTENTS_WATER )
+            snd_play( player, (short) ( SND_BURN1 + ( rand() % 2 ) ), &player->pos );
+        else
+            snd_play( player, (short) ( SND_PAIN1 + ( rand() % 3 ) ), &player->pos );
+    }
 }
 
 /* SV_movestep's FL_FLY case: a straight trace, held 30..40 above the
@@ -347,7 +378,7 @@ static void mdl_fire( World *world, Player *player, Fight *fight,
         if ( mdl_ray_player( &player->pos, &org, &dir, PL_SHOT_RANGE * tr.frac ) >= 0.0f )
             dmg = (short) ( dmg + MDL_PELLET_DMG );
     }
-    if ( dmg > 0 ) pl_damage( fight, rdr, dmg );
+    if ( dmg > 0 ) pl_damage( player, fight, rdr, dmg );
 }
 
 /* CastLightning: a line from 40 up toward 16 above the player's origin,
@@ -360,6 +391,7 @@ static void mdl_bolt( World *world, Player *player, Fight *fight,
     TraceResult tr;
     float l;
 
+    if ( ent->anim_frame == SHAMBLER_BOLT_A ) snd_play( player, SND_SHAM_BOOM, &ent->pos );
     org = ent->pos;
     org.z += SHAMBLER_BOLT_UP;
     d.x = player->pos.x - org.x;
@@ -374,7 +406,7 @@ static void mdl_bolt( World *world, Player *player, Fight *fight,
     pl_trace( world, &org, &fin, &tr );
     if ( mdl_ray_player( &player->pos, &org, &d,
                           SHAMBLER_BOLT_RANGE * tr.frac ) >= 0.0f )
-        pl_damage( fight, rdr, SHAMBLER_BOLT_DMG );
+        pl_damage( player, fight, rdr, SHAMBLER_BOLT_DMG );
 }
 
 /* dog_leap2 and demon1_jump4: ai_face, a unit up, and the velocity */
@@ -512,11 +544,11 @@ void mdl_think( World *world, Player *player, Fight *fight, Renderer *rdr,
                         ent->anim_frame <= KNIGHT_ATK_LAST &&
              mdl_in_reach( player, ent, KNIGHT_MELEE_RANGE ) ) {
             dmg = (short) ( ( mdl_rnd() + mdl_rnd() + mdl_rnd() ) * KNIGHT_MELEE_DMG );
-            if ( dmg > 0 ) pl_damage( fight, rdr, dmg );
+            if ( dmg > 0 ) pl_damage( player, fight, rdr, dmg );
         }
         if ( demon && ( ent->anim_frame == DEMON_CLAW_A || ent->anim_frame == DEMON_CLAW_B ) &&
              mdl_in_reach( player, ent, DEMON_CLAW_RANGE ) )
-            pl_damage( fight, rdr,
+            pl_damage( player, fight, rdr,
                         (short) ( DEMON_CLAW_BASE + (short) ( mdl_rnd() * DEMON_CLAW_DMG ) ) );
         if ( ogre && ent->anim_frame == OGRE_GREN_FRAME )
             mdl_grenade( player, fight, rdr, ent );
@@ -558,7 +590,7 @@ void mdl_think( World *world, Player *player, Fight *fight, Renderer *rdr,
                 thr = demon ? DEMON_LEAP_TOUCH : DOG_LEAP_SPEED;
                 if ( ent->vel.x * ent->vel.x + ent->vel.y * ent->vel.y +
                      ent->vel.z * ent->vel.z > thr * thr ) {
-                    pl_damage( fight, rdr, demon
+                    pl_damage( player, fight, rdr, demon
                         ? (short) ( DEMON_LEAP_DMG + mdl_rnd() * 10.0f )
                         : (short) ( DOG_LEAP_DMG + mdl_rnd() * DOG_LEAP_DMG ) );
                     ent->leapt = -1;
@@ -580,6 +612,7 @@ void mdl_think( World *world, Player *player, Fight *fight, Renderer *rdr,
     if ( ent->state == MDL_ST_STAND ) {
         if ( can_chase && mdl_find_target( world, player, fight, rdr, ent ) ) {
             ent->hunting = -1;
+            mdl_say( player, ent, 0 );
             ent->state = MDL_ST_RUN;
             ent->anim_frame = 0;
             ent->wander_ticks = 0;
@@ -622,6 +655,7 @@ void mdl_think( World *world, Player *player, Fight *fight, Renderer *rdr,
             if ( dx*dx + dy*dy + dz*dz < MDL_RANGE_MELEE * MDL_RANGE_MELEE ) {
                 ent->state = MDL_ST_ATTACK;
                 ent->anim_frame = 0;
+                mdl_say( player, ent, 1 );
                 return;
             }
         }
@@ -636,13 +670,15 @@ void mdl_think( World *world, Player *player, Fight *fight, Renderer *rdr,
             dz = player->pos.z - ent->pos.z;
             if ( dx*dx + dy*dy + dz*dz < DOG_BITE_RANGE * DOG_BITE_RANGE ) {
                 ent->next_attack = rdr->anim_time + DOG_BITE_RATE;
+                mdl_say( player, ent, 1 );
                 dmg = (short) ( ( mdl_rnd() + mdl_rnd() + mdl_rnd() ) * DOG_BITE_DMG );
-                if ( dmg > 0 ) pl_damage( fight, rdr, dmg );
+                if ( dmg > 0 ) pl_damage( player, fight, rdr, dmg );
             } else if ( dx*dx + dy*dy > DOG_LEAP_MIN * DOG_LEAP_MIN &&
                         dx*dx + dy*dy < DOG_LEAP_MAX * DOG_LEAP_MAX &&
                         mdl_leap_height( dz ) ) {
                 mdl_leap( fight, ent, dx, dy, DOG_LEAP_SPEED, DOG_LEAP_UP );
                 ent->next_attack = rdr->anim_time + DOG_BITE_RATE;
+                mdl_say( player, ent, 1 );
                 return;
             }
         }
@@ -656,11 +692,13 @@ void mdl_think( World *world, Player *player, Fight *fight, Renderer *rdr,
             dz = player->pos.z - ent->pos.z;
             d2 = dx*dx + dy*dy + dz*dz;
             if ( d2 < MDL_RANGE_MELEE * MDL_RANGE_MELEE ) {
-                if ( rdr->anim_time >= ent->next_attack )
+                if ( rdr->anim_time >= ent->next_attack ) {
                     ent->next_attack = rdr->anim_time + OGRE_SWING;
+                    mdl_say( player, ent, 1 );
+                }
                 if ( ( ent->anim_frame & 1 ) && mdl_in_reach( player, ent, OGRE_SAW_RANGE ) ) {
                     dmg = (short) ( ( mdl_rnd() + mdl_rnd() + mdl_rnd() ) * OGRE_SAW_DMG );
-                    if ( dmg > 0 ) pl_damage( fight, rdr, dmg );
+                    if ( dmg > 0 ) pl_damage( player, fight, rdr, dmg );
                 }
             } else if ( rdr->anim_time >= ent->next_attack ) {
                 chance = MDL_ATK_MID;
@@ -670,6 +708,7 @@ void mdl_think( World *world, Player *player, Fight *fight, Renderer *rdr,
                     ent->next_attack = rdr->anim_time + 2.0f * mdl_rnd();
                     ent->state = MDL_ST_ATTACK;
                     ent->anim_frame = 0;
+                    mdl_say( player, ent, 1 );
                     return;
                 }
             }
@@ -683,6 +722,7 @@ void mdl_think( World *world, Player *player, Fight *fight, Renderer *rdr,
             if ( dx*dx + dy*dy + dz*dz < MDL_RANGE_MELEE * MDL_RANGE_MELEE ) {
                 ent->state = MDL_ST_ATTACK;
                 ent->anim_frame = 0;
+                mdl_say( player, ent, 1 );
                 return;
             } else if ( rdr->anim_time >= ent->next_attack ) {
                 d2 = dx*dx + dy*dy;
@@ -691,6 +731,7 @@ void mdl_think( World *world, Player *player, Fight *fight, Renderer *rdr,
                      mdl_leap_height( dz ) ) {
                     mdl_leap( fight, ent, dx, dy, DEMON_LEAP_SPEED, DEMON_LEAP_UP );
                     ent->next_attack = rdr->anim_time + 2.0f * mdl_rnd();
+                    snd_play( player, SND_DJUMP, &ent->pos );
                     return;
                 }
             }
@@ -705,14 +746,19 @@ void mdl_think( World *world, Player *player, Fight *fight, Renderer *rdr,
             if ( d2 < MDL_RANGE_MELEE * MDL_RANGE_MELEE ) {
                 if ( rdr->anim_time >= ent->next_attack ) {
                     ent->next_attack = rdr->anim_time + SHAMBLER_SMASH;
+                    snd_play( player, SND_SHAM_MELEE, &ent->pos );
                     dmg = (short) ( ( mdl_rnd() + mdl_rnd() + mdl_rnd() ) * SHAMBLER_SMASH_DMG );
-                    if ( dmg > 0 ) pl_damage( fight, rdr, dmg );
+                    if ( dmg > 0 ) {
+                        pl_damage( player, fight, rdr, dmg );
+                        snd_play( player, SND_SHAM_SMACK, &ent->pos );
+                    }
                 }
             } else if ( rdr->anim_time >= ent->next_attack &&
                         d2 < SHAMBLER_BOLT_RANGE * SHAMBLER_BOLT_RANGE ) {
                 ent->next_attack = rdr->anim_time + SHAMBLER_ATK_WAIT + 2.0f * mdl_rnd();
                 ent->state = MDL_ST_ATTACK;
                 ent->anim_frame = 0;
+                mdl_say( player, ent, 1 );
                 return;
             }
         }
@@ -738,6 +784,7 @@ void mdl_think( World *world, Player *player, Fight *fight, Renderer *rdr,
                     ( wizard ? WIZARD_ATK_WAIT : 2.0f * mdl_rnd() );
                 ent->state = MDL_ST_ATTACK;
                 ent->anim_frame = 0;
+                mdl_say( player, ent, 1 );
                 return;
             }
         }
@@ -757,6 +804,7 @@ void mdl_think( World *world, Player *player, Fight *fight, Renderer *rdr,
             if ( mdl_rnd() < chance ) {
                 ent->next_attack = rdr->anim_time + 1.0f + mdl_rnd();
                 ent->flash_until = rdr->anim_time + MDL_FLASH;
+                mdl_say( player, ent, 1 );
                 mdl_fire( world, player, fight, rdr, ent );
             }
         }
@@ -765,6 +813,7 @@ void mdl_think( World *world, Player *player, Fight *fight, Renderer *rdr,
            then starts the run cycle and the step is skipped */
         if ( can_chase && mdl_find_target( world, player, fight, rdr, ent ) ) {
             ent->hunting = -1;
+            mdl_say( player, ent, 0 );
             ent->anim_frame = 0;
             return;
         }

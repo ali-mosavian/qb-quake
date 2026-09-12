@@ -15,7 +15,10 @@ OUT="$(cd "$OUT" && pwd)"
 
 { printf '[sdl]\nautolock=true\noutput=opengl\npriority=higher,normal\n'
   printf '[dosbox]\nmemsize=32\nstartbanner=false\nquit warning=false\n'
-  printf '[cpu]\ncore=dynamic\ncycles=%s\n[dos]\nxms=true\nems=true\n[autoexec]\n' "${CYCLES:-75000}"
+  printf '[cpu]\ncore=dynamic\ncycles=%s\n[dos]\nxms=true\nems=true\n' "${CYCLES:-75000}"
+  # the card, audible here -- this is the window a person sits at
+  printf '[sblaster]\nsbtype=sb16\nsbbase=220\nirq=7\ndma=1\nhdma=5\n'
+  printf '[autoexec]\n'
   echo "@echo off"
   echo "mount w $OUT"
   echo "w:"

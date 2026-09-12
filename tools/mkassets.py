@@ -99,6 +99,12 @@ MDL_SETS = {
 }
 
 
+# q_pl.bi's PL_IT_* order for the weapons that have one: shotgun,
+# super shotgun, nailgun, grenade launcher, super nailgun, rocket
+# launcher.
+VIEW_MDLS = ('v_shot', 'v_shot2', 'v_nail', 'v_rock', 'v_nail2', 'v_rock2')
+
+
 def build_sbar(pak: str, tmp: str) -> dict[str, bytes]:
     """sbar.raw and sbnum.raw out of gfx.wad, as container members."""
     import subprocess
@@ -114,6 +120,21 @@ def build_sbar(pak: str, tmp: str) -> dict[str, bytes]:
     if r.returncode != 0:
         raise SystemExit(f"mkgfx: {r.stderr.strip() or r.stdout.strip()}")
     return {n: open(os.path.join(tmp, n), "rb").read() for n in ("sbar.raw", "sbnum.raw")}
+
+
+def build_sounds(pak: str, tmp: str) -> dict[str, bytes]:
+    """snd.raw and sndtab.raw out of the PAK's wavs, as container members."""
+    import subprocess
+
+    if not pak or not os.path.exists(pak):
+        print("  sound: no PAK, so no sounds in the container")
+        return {}
+    os.makedirs(tmp, exist_ok=True)
+    r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "mksnd.py"), pak, tmp],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        raise SystemExit(f"mksnd: {r.stderr.strip() or r.stdout.strip()}")
+    return {n: open(os.path.join(tmp, n), "rb").read() for n in ("snd.raw", "sndtab.raw")}
 
 
 def build_models(pak: str, kinds: set[int], tmp: str) -> dict[str, bytes]:
@@ -137,6 +158,18 @@ def build_models(pak: str, kinds: set[int], tmp: str) -> dict[str, bytes]:
         for ext, stem in (('geo', name[:8]), ('vtx', name), ('skn', name)):
             out[f'{name}.{ext}'] = open(os.path.join(tmp, f'{stem}.{ext}'), 'rb').read()
     print(f"  models: {len(out) // 3} of the map's own monster kinds")
+
+    # The view weapons. Not the map's -- a weapon can be picked up on
+    # any of them -- so all six ship and the runtime loads the one in
+    # hand. mkmdl's 'shot' set is v_*.mdl's whole frame list.
+    for name in VIEW_MDLS:
+        r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), 'mkmdl.py'),
+                            pak, name, tmp, 'shot'], capture_output=True, text=True)
+        if r.returncode != 0:
+            raise SystemExit(f"mkmdl {name}: {r.stderr.strip() or r.stdout.strip()}")
+        for ext, stem in (('geo', name[:8]), ('vtx', name), ('skn', name)):
+            out[f'{name}.{ext}'] = open(os.path.join(tmp, f'{stem}.{ext}'), 'rb').read()
+    print(f"  view models: {len(VIEW_MDLS)}")
     return out
 
 
@@ -148,8 +181,11 @@ QMAP_ALIGN = 16
 
 
 def write_qmap(path: str, name: str, bsp: bytes, members: dict[str, bytes]) -> None:
-    if len(members) > 255:
-        raise SystemExit(f"{len(members)} members: the directory is a short count")
+    # cport/src/assets.h's QMAP_MAX: the runtime reads the directory into
+    # a fixed array and is fatal past it, which is a dead run rather
+    # than a bad build unless this says so here.
+    if len(members) > 80:
+        raise SystemExit(f"{len(members)} members: cport's QMAP_MAX is 80")
     for m in members:
         if len(m.encode()) >= QMAP_NAME:
             raise SystemExit(f"member name {m!r} does not fit {QMAP_NAME - 1} characters")
@@ -1452,8 +1488,9 @@ def main():
     kinds = {struct.unpack_from('<h', OUT['ents.bin'], 76 + i * 20)[0] for i in range(nmon)}
     models = build_models(pak, kinds, os.path.join(outdir, '.mdl'))
     sbar = build_sbar(pak, os.path.join(outdir, '.gfx'))
+    sounds = build_sounds(pak, os.path.join(outdir, '.snd'))
     write_qmap(os.path.join(outdir, stem + '.qmp'), stem, d,
-               dict(OUT, **models, **sbar, **{'texr.raw': qmap_texr, 'texs.raw': qmap_texs,
-                                              'pal.raw': qmap_pal}))
+               dict(OUT, **models, **sbar, **sounds,
+                    **{'texr.raw': qmap_texr, 'texs.raw': qmap_texs, 'pal.raw': qmap_pal}))
 
 main()

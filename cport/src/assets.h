@@ -33,7 +33,12 @@
 #define QMAP_VER   1L
 #define QMAP_NAME  16
 #define QMAP_ENT   24
-#define QMAP_MAX   48               /* members a map may carry */
+/* Members a map may carry. 19 lumps, three atlases and the palette,
+   the two bar pieces, the two sound files, three files per monster
+   kind the map spawns and three per view weapon -- e1m1 is 50 and a
+   map with every kind would be 68. tools/mkassets.py refuses to write
+   more than this. */
+#define QMAP_MAX   80
 
 typedef struct {
     char name[QMAP_NAME];
@@ -59,6 +64,11 @@ void asset_map( char *qmp );
  *       with an allocation and a read on top.
  */
 short asset_seek( char *member, long *out_bytes );
+
+/* Is member in the directory? The only non-fatal question this layer
+   answers: a container built without the PAK has no sounds, and that
+   is a quiet run rather than a dead one. */
+short asset_has( char *member );
 
 /*
  * name: asset_load

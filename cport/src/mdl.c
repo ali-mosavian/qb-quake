@@ -19,6 +19,7 @@
 #include <stdlib.h>
 
 #include "mdl.h"
+#include "fight.h"
 #include "ent.h"
 #include "assets.h"
 #include "qgl.h"
@@ -109,6 +110,33 @@ void mdl_load( MdlState *m, char *name )
     }
 
     m->loaded = 1;
+}
+
+/* q_pl.bi's weapon bits to this project's own view-model order. */
+short pl_view_of( short weapon )
+{
+    switch ( weapon ) {
+    case PL_IT_SSG:     return PL_VIEW_SSG;
+    case PL_IT_NAILGUN: return PL_VIEW_NAIL;
+    case PL_IT_GL:      return PL_VIEW_GL;
+    case PL_IT_SNG:     return PL_VIEW_SNG;
+    case PL_IT_RL:      return PL_VIEW_RL;
+    }
+    return PL_VIEW_SHOT;
+}
+
+void host_view_load( World *world, short weapon )
+{
+    static char *name[PL_VIEW_N] = {
+        "v_shot", "v_shot2", "v_nail", "v_rock", "v_nail2", "v_rock2" };
+    short i = pl_view_of( weapon );
+
+    /* loaded stays 0 when the model is not in the container, and
+       mdl_load says so once; asking again every frame would say it
+       every frame, so a failed load is remembered as a try. */
+    if ( world->vmdl[i].loaded || world->vmdl[i].ntri ) return;
+    mdl_load( &world->vmdl[i], name[i] );
+    if ( !world->vmdl[i].loaded ) world->vmdl[i].ntri = -1;
 }
 
 MdlState *mdl_of( World *world, short kind )

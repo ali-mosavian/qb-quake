@@ -20,6 +20,7 @@
 #include <string.h>
 
 #include "item.h"
+#include "snd.h"
 #include "ent.h"
 #include "ent_move.h"
 #include "pl_trace.h"
@@ -100,6 +101,35 @@ static void pl_key_name( char *out, short wt, short kind )
     strcpy( out, "You got the " );
     strcat( out, kind == ENT_ITEM_KEY2 ? "gold " : "silver " );
     strcat( out, wt == 1 ? "runekey" : ( wt == 2 ? "keycard" : "key" ) );
+}
+
+/* which sound a pickup makes: the ammo's, the weapon's, the armor's,
+   the powerup's, or one of health's three by how much it heals. A key's
+   is the worldtype's, as its name is. */
+static short pl_item_sound( Fight *fight, ItemEnt far *it )
+{
+    short wt = (short) ( fight->worldtype > 1 ? 1 : fight->worldtype );
+
+    switch ( it->kind ) {
+    case ENT_ITEM_KEY1:
+    case ENT_ITEM_KEY2:    return (short) ( SND_KEY + wt );
+    case ENT_ITEM_SHELLS:
+    case ENT_ITEM_NAILS:
+    case ENT_ITEM_ROCKETS: return SND_AMMO;
+    case ENT_ITEM_SSG:
+    case ENT_ITEM_NAILGUN:
+    case ENT_ITEM_GL:
+    case ENT_ITEM_SNG:
+    case ENT_ITEM_RL:      return SND_WEAPON;
+    case ENT_ITEM_ARMOR1:
+    case ENT_ITEM_ARMOR2:  return SND_ARMOR;
+    case ENT_ITEM_QUAD:    return SND_QUAD;
+    case ENT_ITEM_SUIT:    return SND_SUIT;
+    case ENT_ITEM_PENT:    return SND_PENT;
+    case ENT_ITEM_SIGIL:   return SND_KEY + 1;    /* misc/runekey */
+    }
+    if ( it->amount == ENT_ITEM_MEGA ) return SND_HEALTH_MEGA;
+    return (short) ( it->amount < 15 ? SND_HEALTH_ROT : SND_HEALTH );
 }
 
 void pl_items_touch( World *world, Player *player, Fight *fight, Renderer *rdr )
@@ -239,6 +269,7 @@ void pl_items_touch( World *world, Player *player, Fight *fight, Renderer *rdr )
 
         if ( it->gone ) {
             fight->bonus_pct = PL_BONUS_SHIFT;
+            snd_play( player, pl_item_sound( fight, it ), &player->pos );
             /* SUB_UseTargets: every touch fires the item's target */
             ent_use_targets( world, player, fight, rdr, it->target );
         }

@@ -17,6 +17,7 @@
 #include <stdlib.h>
 
 #include "ent.h"
+#include "snd.h"
 #include "ent_move.h"
 #include "pl_move.h"    /* PL_FEET/PL_TELE_LIFT -- shared with pl_move.c, one fact one place */
 #include "r_bsp.h"      /* r_point_leaf -- r_bsp.bas, not yet ported */
@@ -617,8 +618,14 @@ void ent_load_teleports( World *world )
     ent_load_doors( world, buf, &ofs, h.ndoor );
     ent_load_trigs( world, buf, &ofs, h.ntrig );
 
-    /* ambients: snd_mix is not ported */
-    ofs += (long) h.namb * sizeof(EntsAmb);
+    /* the map's ambient_* points, recorded now and started by
+       snd_init with the card: their volume is the map's, their place
+       the mixer's to re-derive every frame. */
+    for ( i = 0; i < h.namb; i++ ) {
+        EntsAmb ar;
+        _fmemcpy( &ar, buf + ofs, sizeof(EntsAmb) ); ofs += sizeof(EntsAmb);
+        snd_ambient( ar.snd, ar.vol, &ar.org );
+    }
 
     ent_load_trains( world, buf, &ofs, h.ntrain );
     ent_load_corners( world, buf, &ofs, h.ncorner );

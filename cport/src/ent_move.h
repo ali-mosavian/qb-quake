@@ -68,7 +68,7 @@ void ent_link_doors( World *world );
  *       Public because a pellet or a nail fires a shootable trigger and
  *       a secret door, which is fight.c's business, not a touch.
  */
-void ent_door_fire( World *world, short grp );
+void ent_door_fire( World *world, Player *player, short grp );
 void ent_trig_fire( World *world, Player *player, Fight *fight,
                      Renderer *rdr, short k );
 

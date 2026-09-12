@@ -27,7 +27,7 @@
  *       player and camera position.
  */
 void v_update_camera( Camera *cam, Player *player, World *world, Input *input,
-                       Fight *fight,
+                       Fight *fight, Renderer *rdr,
                        float dt, short x_res, short y_res );
 
 #endif

@@ -35,6 +35,16 @@ short d_draw_models( World *world, Renderer *rdr, DiskPlane far *frustum,
                       QSurf dst );
 
 /*
+ * name: d_draw_view
+ * desc: The weapon in hand, at the eye, turned with the view and drawn
+ *       last with depth off -- Quake's own order for it. Nothing in
+ *       the intermission. Returns the triangles drawn.
+ */
+short d_draw_view( World *world, Renderer *rdr, Camera *cam, Player *player,
+                    Fight *fight, Mat4 *mtx_fin, float xresh, float yresh,
+                    float z_near, QSurf dst );
+
+/*
  * name: d_draw_spikes
  * desc: Everything in flight, a box each. Depth tested like the rest,
  *       and NOT gated by -nomdl: a nail is not a model.

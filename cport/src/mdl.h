@@ -32,4 +32,16 @@ void mdl_load_monsters( World *world, unsigned char far *buf, long *ofs, short c
 /* The model for a kind, or NULL when the map spawns none of it. */
 MdlState *mdl_of( World *world, short kind );
 
+/* Which view model a PL_IT_* weapon holds: the shotgun's when the bit
+   is one no gun has a model for. */
+short pl_view_of( short weapon );
+
+/*
+ * name: host_view_load
+ * desc: The view weapon in hand, loaded the first time it is held and
+ *       never before -- a pickup, a key, the carry. Six at init is six
+ *       EMS handles and six skins for the one that draws.
+ */
+void host_view_load( World *world, short weapon );
+
 #endif

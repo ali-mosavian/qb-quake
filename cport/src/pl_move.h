@@ -3,6 +3,7 @@
 
 #include "renderer.h"
 #include "world.h"
+#include "fight.h"
 
 /*
  * q_pl.bi's constants. Player-physics-specific (contrast bsptypes.h's
@@ -32,6 +33,8 @@
 #define PL_JUMP        270.0f
 #define PL_NOCLIP      200.0f    /* noclip fly speed, units/s */
 #define PL_WATERSINK   60.0f     /* downward drift in water with no input */
+#define PL_LAND_SOFT   (-300.0f) /* PlayerPreThink: land.wav below this fall speed */
+#define PL_LAND_HARD   (-650.0f) /* land2.wav, and five points */
 #define PL_SWIM_WATER  100.0f    /* JumpButton's velocity.z by liquid */
 #define PL_SWIM_SLIME  80.0f
 #define PL_SWIM_LAVA   50.0f
@@ -78,8 +81,8 @@ void pl_init( Player *player, Camera *cam, BspVec3 *start_override );
  *       then put the eye where the camera can use it. fwd/strafe are
  *       -1, 0 or 1.
  */
-void pl_move( World *world, Player *player, Camera *cam,
-              float fwd, float strafe, float dir_x, float dir_y,
+void pl_move( World *world, Player *player, Camera *cam, Fight *fight,
+              Renderer *rdr, float fwd, float strafe, float dir_x, float dir_y,
               short jump, float dt );
 
 /* Builds world->clip: clip_count entries from assets.zip's own

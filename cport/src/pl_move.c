@@ -12,6 +12,8 @@
 #include <math.h>
 
 #include "pl_move.h"
+#include "snd.h"
+#include "mdl_ai.h"   /* pl_damage -- the landing costs five */
 #include "pl_trace.h"
 #include "r_bsp.h"
 #include "assets.h"
@@ -231,7 +233,18 @@ static void pl_step_move( World *world, Player *player, BspVec3 *org, BspVec3 *v
  *       rather than a separate force; at water_level=1 (feet only)
  *       there is neither fall nor sink.
  */
-static void pl_gravity( World *world, Player *player, float dt, TraceResult *tr )
+/* PlayerPreThink's landing: a thud past 300 down, a grunt and five
+   points past 650. */
+static void pl_land( Player *player, Fight *fight, Renderer *rdr )
+{
+    if ( player->vel.z > PL_LAND_SOFT ) return;
+    if ( player->vel.z > PL_LAND_HARD ) { snd_play( player, SND_LAND, &player->pos ); return; }
+    snd_play( player, SND_LAND2, &player->pos );
+    pl_damage( player, fight, rdr, 5 );
+}
+
+static void pl_gravity( World *world, Player *player, Fight *fight,
+                         Renderer *rdr, float dt, TraceResult *tr )
 {
     BspVec3 below = player->pos;
     below.z -= 1.0f;
@@ -239,6 +252,8 @@ static void pl_gravity( World *world, Player *player, float dt, TraceResult *tr 
     pl_trace( world, &player->pos, &below, tr );
 
     if ( tr->frac < 1.0f && tr->norm.z > PL_GROUND_NRM ) {
+        if ( !player->on_ground && player->water_level == 0 )
+            pl_land( player, fight, rdr );
         player->on_ground = 1;
         if ( player->vel.z < 0.0f ) player->vel.z = 0.0f;
     } else {
@@ -460,11 +475,12 @@ void pl_init( Player *player, Camera *cam, BspVec3 *start_override )
  *       direction, apply friction and gravity, move with collision,
  *       then put the eye where the camera can use it.
  */
-void pl_move( World *world, Player *player, Camera *cam,
-              float fwd, float strafe, float dir_x, float dir_y,
+void pl_move( World *world, Player *player, Camera *cam, Fight *fight,
+              Renderer *rdr, float fwd, float strafe, float dir_x, float dir_y,
               short jump, float dt )
 {
     TraceResult tr;
+    short wl_before = player->water_level;
     BspVec3 wishvel, wishdir;
     float wishspeed;
 
@@ -506,8 +522,13 @@ void pl_move( World *world, Player *player, Camera *cam,
     }
 
     pl_water_level( player, world );
+    /* slimbrn2 on the way in, once: the burn itself is pl_env_damage's,
+       which is not ported */
+    if ( wl_before == 0 && player->water_level > 0 &&
+         player->water_type == CONTENTS_SLIME )
+        snd_play( player, SND_SLIME, &player->pos );
 
-    pl_gravity( world, player, dt, &tr );
+    pl_gravity( world, player, fight, rdr, dt, &tr );
 
     /*
      * Jump. After pl_gravity, which is what decides whether there is
@@ -532,6 +553,7 @@ void pl_move( World *world, Player *player, Camera *cam,
     } else if ( jump && player->on_ground ) {
         player->vel.z     = PL_JUMP;
         player->on_ground = 0;
+        snd_play( player, SND_JUMP, &player->pos );
     }
 
     /*

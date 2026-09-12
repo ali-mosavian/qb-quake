@@ -66,9 +66,15 @@ if [[ ${n:-0} -lt 20 ]]; then
     fail=1
 fi
 
-# Thirty seconds in the open on e1m1 kills the player, and the respawn
+# Fifteen seconds in the open on e1m1 kills the player, and the respawn
 # has to put them back on their feet rather than leave them at zero.
-run "e1m1.qmp -nostats -at 88 1420 -190 -yaw 270 -ticks 600"
+#
+# 900 ticks, not the 600 this arm was written with: the pain sound
+# draws rand() on every hit (id's own PainSound does too) and the AI
+# rolls from the same generator, so the whole fight moved when the
+# sound layer landed. Same end state -- one death, 84 health -- a
+# third of a minute later.
+run "e1m1.qmp -nostats -at 88 1420 -190 -yaw 270 -ticks 900"
 k=$(tr -d '\r' < "$OUT/cstep.txt" 2>/dev/null | grep -m1 '^fight=')
 d=$(sed -n 's/.* deaths \([0-9-]*\).*/\1/p' <<< "$k")
 hp=$(sed -n 's/^fight=health \([0-9-]*\).*/\1/p' <<< "$k")

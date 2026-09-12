@@ -35,7 +35,12 @@ rm -f "$OUT/cport.txt" "$OUT/cstep.txt" "$OUT/error.log" \
       "$OUT/NEXT.BAT" "$OUT/RUN1.BAT" "$OUT/CARRY.BIN" "$OUT/run.out"
 
 { printf '[sdl]\nautolock=false\n[dosbox]\nmemsize=32\nstartbanner=false\nquit warning=false\n'
-  printf '[cpu]\ncore=dynamic\ncycles=%s\n[dos]\nxms=true\nems=true\n[autoexec]\n' "$CYCLES"
+  printf '[cpu]\ncore=dynamic\ncycles=%s\n[dos]\nxms=true\nems=true\n' "$CYCLES"
+  # The card dsp.asm programs, pinned: the emulator's own defaults, but
+  # a run is only comparable if both sides had the same machine.
+  # nosound=true still advances the DMA, so the mixer is exercised.
+  printf '[mixer]\nnosound=true\n[sblaster]\nsbtype=sb16\nsbbase=220\nirq=7\ndma=1\nhdma=5\n'
+  printf '[autoexec]\n'
   echo "@echo off"
   echo "mount w $OUT"
   echo "w:"

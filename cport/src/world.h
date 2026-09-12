@@ -97,6 +97,12 @@ typedef struct {
     MdlEnt      far *mon;
     MdlState    mdl[MDL_KINDS];   /* one per kind, only the map's own loaded */
 
+    /* The view weapons -- the player's, not the map's, and here only
+       because everything that draws already reaches World. Indexed by
+       PL_VIEW_*, loaded the first time the weapon is in hand: six at
+       once is six EMS handles and six skins for one that is drawn. */
+    MdlState    vmdl[PL_VIEW_N];
+
     /* The message table, last in ents.bin: ENT_MSG_LEN bytes each, not
        NUL-terminated. A door's or a trigger's msg is a 1-based id into
        this, 0 for none. */

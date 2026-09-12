@@ -11,7 +11,7 @@
 #define PI 3.14159f
 
 void v_update_camera( Camera *cam, Player *player, World *world, Input *input,
-                       Fight *fight,
+                       Fight *fight, Renderer *rdr,
                        float dt, short x_res, short y_res )
 {
     int   tmx, tmy;
@@ -91,7 +91,7 @@ void v_update_camera( Camera *cam, Player *player, World *world, Input *input,
         jump = 0;
         if ( input->keyboard.k[KEY_SPCBAR] ) jump = -1;
 
-        pl_move( world, player, cam, fwd, strafe, dir_x, dir_y, jump, dt );
+        pl_move( world, player, cam, fight, rdr, fwd, strafe, dir_x, dir_y, jump, dt );
     }
 
     cam->look_at.x += cam->pos.x;

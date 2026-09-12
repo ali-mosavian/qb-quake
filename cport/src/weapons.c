@@ -16,6 +16,7 @@
 #include <stdlib.h>
 
 #include "weapons.h"
+#include "snd.h"
 #include "mdl_ai.h"
 #include "pl_trace.h"
 #include "item.h"
@@ -131,6 +132,7 @@ void mdl_damage( World *world, Player *player, Fight *fight, Renderer *rdr,
     if ( ent->health <= 0 ) {
         ent->state = MDL_ST_DEAD;
         ent->anim_frame = 0;
+        mdl_say( player, ent, 3 );
         fight->kills++;
         if ( ent->kind == MDL_KIND_ARMY )
             pl_item_add( world, ENT_ITEM_SHELLS, ENT_BACKPACK, &ent->pos );
@@ -148,6 +150,7 @@ void mdl_damage( World *world, Player *player, Fight *fight, Renderer *rdr,
         if ( rdr->anim_time < ent->pain_finished ) return;
         ent->pain_finished = rdr->anim_time +
             ( dmg >= ZOMBIE_FALL_DMG ? ZOMBIE_FALL_TIME : ZOMBIE_FLINCH );
+        mdl_say( player, ent, 2 );
         ent->state = MDL_ST_PAIN;
         ent->anim_frame = 0;
         return;
@@ -168,6 +171,7 @@ void mdl_damage( World *world, Player *player, Fight *fight, Renderer *rdr,
             ( fg_rnd() < MDL_PAIN_SHORT_P ? MDL_PAIN_SHORT : MDL_PAIN_LONG );
         break;
     }
+    mdl_say( player, ent, 2 );
     /* demon1_pain and sham_pain: a hit under the roll does not flinch */
     if ( ent->kind == MDL_KIND_DEMON   && fg_rnd() * 200.0f > dmg ) return;
     if ( ent->kind == MDL_KIND_SHAMBLER && fg_rnd() * SHAMBLER_PAIN_ROLL > dmg ) return;
@@ -194,11 +198,12 @@ static void pl_box_hit( World *world, Player *player, Fight *fight,
 
     c = it->pos;
     c.z += ENT_BOX_TOP * 0.5f;
+    snd_play( player, SND_BOOM, &c );
     dx = player->pos.x - c.x;
     dy = player->pos.y - c.y;
     dz = player->pos.z + ( PL_ZLO + PL_ZHI ) * 0.5f - c.z;
     pts = ENT_BOX_DMG - 0.5f * (float) sqrt( dx*dx + dy*dy + dz*dz );
-    if ( pts > 0.0f ) pl_damage( fight, rdr, (short) pts );
+    if ( pts > 0.0f ) pl_damage( player, fight, rdr, (short) pts );
 
     for ( m = 0; m < world->mon_count; m++ ) {
         MdlEnt far *e = &world->mon[m];
@@ -222,12 +227,13 @@ static void pl_grenade_explode( World *world, Player *player, Fight *fight,
     short m;
 
     s->alive = 0;
+    snd_play( player, SND_BOOM, &s->pos );
     dx = player->pos.x - s->pos.x;
     dy = player->pos.y - s->pos.y;
     dz = player->pos.z + ( PL_ZLO + PL_ZHI ) * 0.5f - s->pos.z;
     pts = s->dmg - 0.5f * (float) sqrt( dx*dx + dy*dy + dz*dz );
     if ( !s->hostile ) pts *= 0.5f;
-    if ( pts > 0.0f ) pl_damage( fight, rdr, (short) pts );
+    if ( pts > 0.0f ) pl_damage( player, fight, rdr, (short) pts );
     if ( s->hostile ) return;
 
     for ( m = 0; m < world->mon_count; m++ ) {
@@ -272,7 +278,7 @@ static void pl_shot_touch( World *world, Player *player, Fight *fight,
              pl_ray_box( (BspVec3 *) &world->door[i].mins,
                           (BspVec3 *) &world->door[i].maxs, org, dir,
                           bt + PL_HALF ) >= 0.0f ) {
-            ent_door_fire( world, world->door[i].link );
+            ent_door_fire( world, player, world->door[i].link );
             if ( stopped ) *stopped = -1;
         }
 }
@@ -296,6 +302,7 @@ static void pl_fire_nail( Player *player, Camera *cam, Fight *fight, Renderer *r
     fight->flash_until = rdr->anim_time + 0.1f;
     fight->nails = (short) ( fight->nails - ( super ? 2 : 1 ) );
     fight->nail_side = (short) ( -fight->nail_side - 1 );
+    snd_play( player, (short) ( super ? SND_SPIKE2 : SND_NAIL ), &player->pos );
 
     aim.x = cam->look_at.x - cam->pos.x;
     aim.y = cam->look_at.z - cam->pos.z;   /* renderer z is bsp y */
@@ -332,6 +339,7 @@ static void pl_fire_grenade( Player *player, Camera *cam, Fight *fight, Renderer
     fight->fire_at = rdr->anim_time;
     fight->show_hostile = rdr->anim_time + 1.0f;
     fight->rockets--;
+    snd_play( player, SND_GRENADE, &player->pos );
 
     fight->nail[i].pos = player->pos;
     fight->nail[i].vel.x = ( cam->look_at.x - cam->pos.x ) * PL_GL_SPEED;
@@ -361,6 +369,7 @@ static void pl_fire_rocket( Player *player, Camera *cam, Fight *fight, Renderer 
     fight->show_hostile = rdr->anim_time + 1.0f;
     fight->flash_until = rdr->anim_time + 0.1f;
     fight->rockets--;
+    snd_play( player, SND_ROCKET, &player->pos );
 
     aim.x = cam->look_at.x - cam->pos.x;
     aim.y = cam->look_at.z - cam->pos.z;
@@ -409,6 +418,8 @@ void pl_fire( World *world, Player *player, Camera *cam, Fight *fight,
     fight->show_hostile = rdr->anim_time + 1.0f;
     fight->flash_until = rdr->anim_time + 0.1f;
     fight->shells--;
+    snd_play( player, (short) ( npellet == PL_SSG_PELLETS ? SND_SSG : SND_SHOTGUN ),
+              &player->pos );
 
     /* cam->look_at is the POINT the eye looks at by now -- a direction
        only inside v_update_camera -- one unit away in renderer space,
@@ -475,7 +486,7 @@ static void pl_grenade_tick( World *world, Player *player, Fight *fight,
     if ( s->hostile ) {
         t = mdl_ray_player( &player->pos, &s->pos, dir, reach );
         if ( t >= 0.0f && s->gib ) {
-            pl_damage( fight, rdr, s->dmg );
+            pl_damage( player, fight, rdr, s->dmg );
             s->alive = 0;
             return;
         }
@@ -499,6 +510,7 @@ static void pl_grenade_tick( World *world, Player *player, Fight *fight,
     if ( tr.frac >= 1.0f ) return;
     if ( s->gib ) { s->vel.x = s->vel.y = s->vel.z = 0.0f; return; }
 
+    snd_play( player, SND_BOUNCE, &s->pos );
     backoff = ( s->vel.x * tr.norm.x + s->vel.y * tr.norm.y +
                 s->vel.z * tr.norm.z ) * PL_BOUNCE;
     s->vel.x -= tr.norm.x * backoff;
@@ -552,7 +564,7 @@ void pl_spikes_tick( World *world, Player *player, Fight *fight,
             if ( pl_point_contents( &fin, world ) == CONTENTS_SOLID ) {
                 s->alive = 0;
             } else {
-                if ( t >= 0.0f ) { pl_damage( fight, rdr, s->dmg ); s->alive = 0; }
+                if ( t >= 0.0f ) { pl_damage( player, fight, rdr, s->dmg ); s->alive = 0; }
                 s->pos = fin;
             }
             continue;
@@ -594,7 +606,7 @@ void pl_spikes_tick( World *world, Player *player, Fight *fight,
     }
 }
 
-void pl_traps_tick( World *world, Fight *fight, Renderer *rdr )
+void pl_traps_tick( World *world, Player *player, Fight *fight, Renderer *rdr )
 {
     short k, n;
 
@@ -613,6 +625,7 @@ void pl_traps_tick( World *world, Fight *fight, Renderer *rdr )
             fight->nail[n].hostile = -1;
             fight->nail[n].dmg = t->count;
             fight->nail[n].alive = -1;
+            snd_play( player, SND_SPIKE2, &t->mins );
         }
         if ( t->kind == ENT_TRIG_FIREBALL && t->state == ENT_TRIG_ARMED ) {
             /* fire_fly: up at speed plus up to 200, 50 either way
@@ -660,6 +673,7 @@ void mdl_spike( World *world, Player *player, Fight *fight, Renderer *rdr,
     fight->nail[n].hostile = -1;
     fight->nail[n].dmg = WIZARD_SPIKE_DMG;
     fight->nail[n].alive = -1;
+    mdl_say( player, ent, 1 );
 }
 
 /* OgreFireGrenade: toward the player at 600 with 200 up. */
@@ -686,6 +700,7 @@ void mdl_grenade( Player *player, Fight *fight, Renderer *rdr, MdlEnt far *ent )
     fight->nail[n].grenade = -1;
     fight->nail[n].dmg = (short) OGRE_GREN_DMG;
     fight->nail[n].alive = -1;
+    snd_play( player, SND_GRENADE, &ent->pos );
 }
 
 /* ZombieFireGrenade: 600 toward the player with 200 up, biting 10 where
@@ -715,4 +730,5 @@ void mdl_gib( Player *player, Fight *fight, Renderer *rdr, MdlEnt far *ent )
     fight->nail[n].gib = -1;
     fight->nail[n].dmg = ZOMBIE_GIB_DMG;
     fight->nail[n].alive = -1;
+    mdl_say( player, ent, 1 );
 }

@@ -33,6 +33,8 @@
 #include "screen.h"
 #include "sbar.h"
 #include "gstate.h"
+#include "mdl.h"
+#include "snd.h"
 
 /* q_scr.bi's HOST_DT#/HOST_MAXSTEPS. */
 #define HOST_DT       0.0166666f
@@ -123,7 +125,7 @@ void host_tick( World *world, Player *player, Camera *cam, Renderer *rdr,
     in_handle_toggles( input, rdr, cam, player, hud );
 
     /* and what the world does about it: camera, and the physics under it */
-    v_update_camera( cam, player, world, input, fight, dt, scr_x_res, scr_y_res );
+    v_update_camera( cam, player, world, input, fight, rdr, dt, scr_x_res, scr_y_res );
 
     /* and anything the world does to the player as a result of moving */
     ent_check_teleport( player, world, scr_x_res );
@@ -153,7 +155,8 @@ void host_tick( World *world, Player *player, Camera *cam, Renderer *rdr,
         pl_select_weapon( input, fight );
         if ( fire ) pl_fire( world, player, cam, fight, rdr );
     }
-    pl_traps_tick( world, fight, rdr );
+    host_view_load( world, fight->weapon );
+    pl_traps_tick( world, player, fight, rdr );
     pl_spikes_tick( world, player, fight, rdr, dt );
 
     /* dying, coming back, and the level's end */
@@ -305,6 +308,11 @@ void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
     rdr->mdl_drawn = d_draw_models( world, rdr, frustum, &mtx_fin,
                                      xresh, yresh, z_near, h_dst_dc );
     d_draw_spikes( fight, &mtx_fin, xresh, yresh, z_near, h_dst_dc );
+    /* and the weapon in hand, LAST and with depth off inside
+       d_draw_view: it is not in the world and nothing may hide it */
+    rdr->mdl_drawn = (short) ( rdr->mdl_drawn +
+        d_draw_view( world, rdr, cam, player, fight, &mtx_fin,
+                      xresh, yresh, z_near, h_dst_dc ) );
 
     /* Portal outlines, while the depth test is still on, so a portal
        behind a wall is hidden by it. Drawn after depth goes off they

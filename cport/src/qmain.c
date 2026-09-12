@@ -34,6 +34,7 @@
 #include "sbar.h"
 #include "item.h"
 #include "gstate.h"
+#include "snd.h"
 #include "h_frame.h"
 #include "screen.h"
 #include "config.h"
@@ -264,7 +265,10 @@ int main( void )
         /* The container, before anything asks it for a member -- the
            font is the first, and it is not the map's. */
         asset_map( args.map_name );
-        mark( "asset_map ok" );
+        /* by name: a changelevel's second leg is a second run in the
+           same log, and which container it opened is the whole claim */
+        sprintf( buf, "asset_map ok %s", args.map_name );
+        mark( buf );
 
         font_load( &hud->font, "font.fnt" );
         mark( "font_load ok" );
@@ -327,6 +331,15 @@ int main( void )
         ld_stage( &ldr, v.h_video_dc, hud, "loading colormap" );
         mod_load_colormap( &world );
         mark( "mod_load_colormap ok" );
+
+        /* after the map: its ambient_* points were recorded by the ent
+           loader and this is what starts them */
+        snd_init( args.no_sound );
+        {   short st, lp, un;
+            snd_stats( &st, &lp, &un );
+            sprintf( buf, "snd loops=%d", (int) lp );
+            mark( buf );
+        }
         ld_step( &ldr, v.h_video_dc, hud );
 
         ld_stage( &ldr, v.h_video_dc, hud, "surface cache" );
@@ -394,6 +407,8 @@ int main( void )
             if ( args.no_ai )    strcat( nf, " -noai" );
             if ( args.no_mdl )   strcat( nf, " -nomdl" );
             if ( args.no_items ) strcat( nf, " -noitems" );
+            if ( args.no_view )  strcat( nf, " -noview" );
+            if ( args.no_sound ) strcat( nf, " -nosound" );
             if ( args.comp )     strcat( nf, " -comp" );
             if ( args.fire )     strcat( nf, " -fire" );
             if ( args.bench_ticks > 0 )
@@ -448,6 +463,7 @@ int main( void )
         rdr.no_ents   = args.no_ents;
         rdr.no_items  = args.no_items;
         rdr.no_mdl    = args.no_mdl;
+        rdr.no_view   = args.no_view;
         rdr.no_ai     = args.no_ai;
         rdr.bad_order = args.bad_order;
         hud->portal_wire = args.ptwire;
@@ -616,6 +632,12 @@ int main( void )
                 host_advance( &world, &player, &cam, &rdr, &input, hud, &ls, &fight,
                                &sysclk, &clock, &pt, frame_dt, v.scr_x_res, v.scr_y_res );
 
+                /* Between the tick and the render, where nothing else
+                   holds an EMS window -- the mixer takes PAGE_SLOT. It
+                   runs every frame whatever is playing: the DMA never
+                   stops, so what is not repainted is played again. */
+                snd_frame( &player, frame_dt );
+
                 if ( args.play_name[0] && rf && !play_drift ) {
                     /* The camera is NOT pinned: host_advance just
                        derived it from the queued input, and this only
@@ -725,6 +747,12 @@ int main( void )
                 mark( buf );
             }
 
+            {   short st, lp, un;
+                snd_stats( &st, &lp, &un );
+                sprintf( buf, "snd started=%d loops=%d under=%d", (int) st, (int) lp, (int) un );
+                mark( buf );
+            }
+
             sprintf( buf, "gs_state %d map %s next %s secrets %d/%d",
                      (int) fight.state, args.map_name, fight.next_map,
                      (int) fight.secrets, (int) fight.secret_total );
@@ -804,6 +832,7 @@ int main( void )
        advancing and sys_time_init spun in its tick-edge wait for ever,
        two marks into the load. It never showed while one run was the
        whole session. */
+    snd_shutdown();
     qglTmrShutdown();
     qglKbdShutdown();
     qglMouseShutdown();

@@ -6,6 +6,7 @@
 #include "mdl_ai.h"
 #include "item.h"
 #include "ent_move.h"
+#include "snd.h"
 #include "qgl.h"
 #include <stdio.h>
 
@@ -157,6 +158,7 @@ void host_state( World *world, Player *player, Camera *cam, Fight *fight,
     case GS_PLAY:
         if ( fight->health <= 0 ) {
             fight->state = GS_DEAD;
+            snd_play( player, SND_DEATH, &player->pos );
             fight->state_until = rdr->anim_time + PL_DEATH_PAUSE;
             break;
         }

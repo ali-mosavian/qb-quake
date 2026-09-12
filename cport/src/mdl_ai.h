@@ -184,6 +184,9 @@ void mdl_ai_stats( World *world, short *hunting, short *moved );
  * desc: T_Damage on the player: the pentagram, then the armor's share,
  *       then the health.
  */
-void pl_damage( Fight *fight, Renderer *rdr, short dmg );
+void pl_damage( Player *player, Fight *fight, Renderer *rdr, short dmg );
+
+/* A monster's own sound: 0 sight, 1 attack, 2 pain, 3 death. */
+void mdl_say( Player *player, MdlEnt far *ent, short which );
 
 #endif

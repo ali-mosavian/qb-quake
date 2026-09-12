@@ -72,8 +72,11 @@ if [[ "$legs" -lt 2 ]]; then
     echo "FAIL: the changelevel ran $legs map(s); NEXT.BAT should have started e1m2" >&2
     fail=1
 else
-    map2=$(tr -d '\r' < "$log" | grep '^gs_state ' | tail -1 | awk '{print $4}')
-    [[ "$map2" == "e1m2.qmp" ]] || { echo "FAIL: the second leg ran ${map2:-nothing}, not e1m2.qmp" >&2; fail=1; }
+    # the second leg's OWN load mark, not the last gs_state line: what
+    # is under test is the changelevel, and e1m2 running its carried
+    # -ticks to the end is a much longer run than that claim needs.
+    map2=$(tr -d '\r' < "$log" | grep '^asset_map ok ' | tail -1 | awk '{print $3}')
+    [[ "$map2" == "e1m2.qmp" ]] || { echo "FAIL: the second leg opened ${map2:-nothing}, not e1m2.qmp" >&2; fail=1; }
 
     carry=$(tr -d '\r' < "$log" | grep -m1 '^carry ')
     [[ -n "$carry" ]] || { echo "FAIL: e1m2 was started without -carry" >&2; fail=1; }

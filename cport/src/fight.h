@@ -31,6 +31,7 @@
 #define PL_ARMOR1_TYPE  0.3f  /* armor_touch: green, and yellow */
 #define PL_ARMOR2_TYPE  0.6f
 #define PL_BONUS_SHIFT  50.0f /* the pickup flash, fading 100/s */
+#define PL_PAIN_GAP     0.5f  /* PainSound's own spacing */
 
 /* The guns, q_pl.bi's own numbers: the shotgun's six pellets of four
    at 0.04, the super shotgun's fourteen at 0.14 by 0.08 for two
@@ -127,6 +128,8 @@ typedef struct {
     float suit_until;         /* radsuit_finished */
     float pent_until;         /* invincible_finished */
     float bonus_pct;          /* the pickup flash, 50, fading 100/s */
+    float pain_at;            /* PainSound: no new grunt before this */
+    float pent_at;            /* protect3, while the pentagram holds */
     float show_hostile;       /* W_Attack: time + 1, monsters notice a shot
                                  from behind until then -- nothing sets it
                                  until the player has a weapon */

@@ -56,6 +56,8 @@ typedef struct {
     short no_ents;            /* -noents */
     short no_items;           /* -noitems: the reference frame for the pickups */
     short no_mdl;             /* -nomdl: and for the monsters */
+    short no_view;            /* -noview: the view weapon left out */
+    short no_sound;           /* -nosound: the card left alone */
     short no_ai;              /* -noai: they stand still, so a frame repeats */
     short fire;               /* -fire: the trigger held, for a headless shot */
     short carry;              /* -carry: CARRY.BIN holds the last level's kit */
