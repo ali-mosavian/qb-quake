@@ -82,6 +82,7 @@ void sys_parse_args( RunArgs *args )
         else if ( stricmp( argv[i], "-comp" )    == 0 ) args->comp = -1;
         else if ( stricmp( argv[i], "-ptwire" )  == 0 ) args->ptwire = -1;
         else if ( stricmp( argv[i], "-nostats" ) == 0 ) args->no_stats = -1;
+        else if ( stricmp( argv[i], "-stats" )   == 0 ) args->stats = -1;
         else if ( stricmp( argv[i], "-nodraw" )  == 0 ) { args->no_draw = -1; args->no_stats = -1; }
         else if ( stricmp( argv[i], "-lm" )      == 0 ) args->use_lm = -1;
         else if ( stricmp( argv[i], "-at" ) == 0 && i + 3 < argc ) {
@@ -95,6 +96,13 @@ void sys_parse_args( RunArgs *args )
             args->yaw = (float) atof( argv[i+1] );
             while ( args->yaw < 0.0f ) args->yaw += 360.0f;
             args->yaw_set = -1;
+            i++;
+        }
+        else if ( stricmp( argv[i], "-pitch" ) == 0 && i + 1 < argc ) {
+            args->pitch = (float) atof( argv[i+1] );
+            if ( args->pitch < 0.0f )   args->pitch = 0.0f;
+            if ( args->pitch > 180.0f ) args->pitch = 180.0f;
+            args->pitch_set = -1;
             i++;
         }
         else if ( stricmp( argv[i], "-ticks" ) == 0 && i + 1 < argc ) {

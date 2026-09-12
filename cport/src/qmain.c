@@ -347,7 +347,18 @@ int main( void )
         /* Seeds the mouse position from the spawn yaw -- the camera
            reads its angle from the mouse, so the mouse is what has to
            move, the same trick a teleport uses (ent_check_teleport). */
-        qglMousePos( (short) ( (v.scr_x_res - 1) * cam.start_angle / 360.0f ), 110 );
+        {   /* v_update_camera reads phi as PI*(mouse.y+2)/y_res, so a
+               pitch in degrees is that inverted. 110 is the default and
+               is not the horizon -- it is 100.8 degrees, a little below
+               it, which is what every headless shot has always used. */
+            short my = 110;
+            if ( args.pitch_set ) {
+                my = (short) ( v.scr_y_res * args.pitch / 180.0f - 2.0f );
+                if ( my < 0 ) my = 0;
+                if ( my > v.scr_y_res - 1 ) my = (short) ( v.scr_y_res - 1 );
+            }
+            qglMousePos( (short) ( (v.scr_x_res - 1) * cam.start_angle / 360.0f ), my );
+        }
 
         /* -walk/-jump/-strafe hold an input the way a real keypress
            would -- there is no real keyboard under a headless run, so
@@ -374,7 +385,9 @@ int main( void )
         rdr.no_ents   = args.no_ents;
         rdr.bad_order = args.bad_order;
         hud->portal_wire = args.ptwire;
-        hud->stats       = (short) ( args.no_stats ? 0 : -1 );
+        /* Off unless asked for. F12 still toggles it; -nostats stays
+           accepted so every A/B recipe that passes it keeps working. */
+        hud->stats       = (short) ( args.stats && !args.no_stats ? -1 : 0 );
 
         /* bspfile.bi's DISPLAY_W/DISPLAY_H (4.0/3.0): VGA mode 13h's
            pixels are not square, so a square render target would

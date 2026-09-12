@@ -230,8 +230,13 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
                entity tests (nothing guarantees its own order). */
             if ( dp->z_avail ) {
                 z_want = ( facemdl[i] == 0 ) ? QGL_Z_SET : QGL_Z_TEST;
-                if ( z_want != z_have )
-                    z_have = qglSfZMode( dp->h_dst_dc, z_want );
+                if ( z_want != z_have ) {
+                    /* qglSfZMode returns the mode it REPLACED, so assigning
+                       its result left z_have one call behind and the next
+                       face of the same kind called again for nothing. */
+                    qglSfZMode( dp->h_dst_dc, z_want );
+                    z_have = z_want;
+                }
             }
 
             tw = mipinf[tex_id].wdth;

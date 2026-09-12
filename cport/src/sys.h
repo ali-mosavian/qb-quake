@@ -37,8 +37,17 @@ typedef struct {
     float at_x, at_y, at_z; /* -at X Y Z */
     short yaw_set;
     float yaw;               /* -yaw D, wrapped into [0,360) */
+    short pitch_set;
+    float pitch;             /* -pitch D: 0 straight up, 90 the horizon,
+                                180 straight down. The camera reads its
+                                angle off the mouse, so this is a mouse
+                                row -- and without it a headless run can
+                                only ever photograph one pitch, which is
+                                half of aiming a camera at a bug. */
     short walk, jump, strafe; /* -walk/-jump/-strafe: hold the input */
-    short no_stats;          /* -nostats */
+    short no_stats;
+    short stats;             /* -stats: the overlay is OFF by default now,
+                                so -nostats is accepted and redundant */          /* -nostats */
     short no_draw;           /* -nodraw (implies no_stats, the overlay
                                  rasterises too) */
     short no_cull;           /* -nocull */
