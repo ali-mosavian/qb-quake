@@ -97,6 +97,13 @@ run_frame() {   # $1 = flags, $2 = where to keep BENCH.BMP, $3 = map (default dm
     local fp
     fp=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1 == "fp_sites" {print $2}')
     [[ -n "$fp" && "$fp" -gt 0 ]] || { echo "FAIL  fp_sites ${fp:-absent}: emulator interrupts unpatched"; exit 1; }
+    # d_alias.c decides a model triangle's facing in clip space and skips
+    # the 115us clip when it faces away. The projected winding is the
+    # same answer, and every triangle that reaches both is checked
+    # against it: one disagreement means front faces are being discarded.
+    local bf
+    bf=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1 == "mdl_bf_bad" {print $2}')
+    [[ -n "$bf" && "$bf" -eq 0 ]] || { echo "FAIL  mdl_bf_bad ${bf:-absent}: clip-space facing disagrees with the projected one"; exit 1; }
     echo "  $(tr -d '\r' < "$VBD_OUT/bench.txt" |
         awk '/^(frames|ticks|polys|sc_evict) /{printf "%s=%s ",$1,$2}')"
 }

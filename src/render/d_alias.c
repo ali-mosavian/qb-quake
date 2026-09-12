@@ -50,11 +50,29 @@ static float near sx[MDL_MAXV + 1];
 static float near sy[MDL_MAXV + 1];
 static float near srw[MDL_MAXV + 1];
 
-/* The ping-pong clip rings and the projected polygon. */
-static float near cbx[2][MDL_CLIPV], cby[2][MDL_CLIPV], cbw[2][MDL_CLIPV];
-static float near cbu[2][MDL_CLIPV], cbv[2][MDL_CLIPV];
+/*
+ * The ping-pong clip rings and the projected polygon.
+ *
+ * ONE ARRAY OF A RECORD, and two pointers swapped -- not five arrays
+ * subscripted [ring][k]. A two-dimensional subscript costs bcc a
+ * multiply and an add at every one of the ~100 accesses a plane makes,
+ * which is what made a clip 115us against the 30-odd float operations
+ * it actually performs.
+ */
+typedef struct { float x, y, w, u, v; } ClipV;
+static ClipV near cba[MDL_CLIPV], cbb[MDL_CLIPV];
 static float near cd[MDL_CLIPV];
 static QglVtx near qv[MDL_CLIPV];
+
+/* Times the clip-space winding disagreed with the projected one on a
+   triangle that reached both. It is the identity the pre-clip backface
+   test rests on, checked on live data every frame for one compare, and
+   any number but zero says the test is throwing away front faces
+   somewhere it is not being watched. Read by -bench through
+   mdl_bf_bad(). */
+static long near bf_bad;
+
+long pascal far mdl_bf_bad ( void ) { return bf_bad; }
 
 short pascal far mdl_draw_tris(
     short     ntri,
@@ -79,9 +97,12 @@ short pascal far mdl_draw_tris(
     MdlTri far *tri;
     MdlTri far *t;
     unsigned char far *vb;
-    short v, j, k, k2, cp, nin, nout, sbuf, dbuf, drawn = 0;
-    short ia[3], cn[2];
+    short v, j, k, k2, cp, nin, nout, ns, nd, drawn = 0;
+    short bf_pre;
+    ClipV *cs, *cw, *ct;
+    short ia[3];
     float rx, ry, rz, wx, wy, wz, rw, f, area, px, pz;
+    float det;
 
     /* The frame's vertices: three bytes each, frames contiguous in the
        one EMS page. qglGemMap's own record makes this free when nobody
@@ -165,80 +186,93 @@ short pascal far mdl_draw_tris(
             continue;
         }
 
-        sbuf = 0;
-        cn[0] = 3;
-        for ( k = 0; k < 3; k++ ) {
-            cbx[0][k] = vx[ia[k]];
-            cby[0][k] = vy[ia[k]];
-            cbw[0][k] = vw[ia[k]];
+        /*
+         * BACKFACE BEFORE THE CLIP, not after. Clipping a triangle costs
+         * 115 us -- measured, 31.5 clipped triangles a frame on e1m6 for
+         * 3.64ms -- and half of any closed model's are facing away.
+         *
+         * The projected cross product is the 3x3 determinant of the clip
+         * -space corners over w0*w1*w2, and the screen y flip negates
+         * it, so with every w past the near plane sign(area) = -sign(det)
+         * and no divide is needed. A corner BEHIND the near plane has a
+         * w of the wrong sign and breaks that, so those go on to the
+         * clipper and are tested after it as they always were.
+         */
+        bf_pre = 0;
+        if ( okv[a] && okv[b] && okv[c] ) {
+            det = vx[a] * ( vy[b] * vw[c] - vy[c] * vw[b] )
+                - vy[a] * ( vx[b] * vw[c] - vx[c] * vw[b] )
+                + vw[a] * ( vx[b] * vy[c] - vx[c] * vy[b] );
+            if ( det <= 0.0f ) continue;
+            bf_pre = 1;
         }
-        cbu[0][0] = (float) t->u1 / MDL_UV_SCALE;
-        cbu[0][1] = (float) t->u2 / MDL_UV_SCALE;
-        cbu[0][2] = (float) t->u3 / MDL_UV_SCALE;
-        cbv[0][0] = (float) t->v1 / MDL_UV_SCALE;
-        cbv[0][1] = (float) t->v2 / MDL_UV_SCALE;
-        cbv[0][2] = (float) t->v3 / MDL_UV_SCALE;
 
-        /* Sutherland-Hodgman against the five clip-space planes. */
+        cs = cba; cw = cbb; ns = 3;
+        for ( k = 0; k < 3; k++ ) {
+            cs[k].x = vx[ia[k]];
+            cs[k].y = vy[ia[k]];
+            cs[k].w = vw[ia[k]];
+        }
+        cs[0].u = (float) t->u1 / MDL_UV_SCALE;
+        cs[1].u = (float) t->u2 / MDL_UV_SCALE;
+        cs[2].u = (float) t->u3 / MDL_UV_SCALE;
+        cs[0].v = (float) t->v1 / MDL_UV_SCALE;
+        cs[1].v = (float) t->v2 / MDL_UV_SCALE;
+        cs[2].v = (float) t->v3 / MDL_UV_SCALE;
+
+        /* Sutherland-Hodgman against the five clip-space planes. The
+           plane is chosen ONCE and then the whole ring measured, rather
+           than a five-way switch inside the vertex loop. */
         for ( cp = 0; cp < 5; cp++ ) {
-            nin = 0;
-            for ( k = 0; k < cn[sbuf]; k++ ) {
-                switch ( cp ) {
-                case 0:  cd[k] = cbw[sbuf][k] - z_near;      break;
-                case 1:  cd[k] = cbw[sbuf][k] - cbx[sbuf][k]; break;
-                case 2:  cd[k] = cbw[sbuf][k] + cbx[sbuf][k]; break;
-                case 3:  cd[k] = cbw[sbuf][k] - cby[sbuf][k]; break;
-                default: cd[k] = cbw[sbuf][k] + cby[sbuf][k]; break;
-                }
-                if ( cd[k] >= 0.0f ) nin++;
+            switch ( cp ) {
+            case 0:  for ( k = 0; k < ns; k++ ) cd[k] = cs[k].w - z_near;  break;
+            case 1:  for ( k = 0; k < ns; k++ ) cd[k] = cs[k].w - cs[k].x; break;
+            case 2:  for ( k = 0; k < ns; k++ ) cd[k] = cs[k].w + cs[k].x; break;
+            case 3:  for ( k = 0; k < ns; k++ ) cd[k] = cs[k].w - cs[k].y; break;
+            default: for ( k = 0; k < ns; k++ ) cd[k] = cs[k].w + cs[k].y; break;
             }
-            if ( nin == 0 ) { cn[sbuf] = 0; break; }
-            if ( nin == cn[sbuf] ) continue;      /* wholly inside */
+            nin = 0;
+            for ( k = 0; k < ns; k++ ) if ( cd[k] >= 0.0f ) nin++;
+            if ( nin == 0 ) { ns = 0; break; }
+            if ( nin == ns ) continue;            /* wholly inside */
 
-            dbuf = 1 - sbuf;
-            nout = 0;
-            for ( k = 0; k < cn[sbuf]; k++ ) {
-                k2 = k + 1; if ( k2 == cn[sbuf] ) k2 = 0;
-                if ( cd[k] >= 0.0f ) {
-                    cbx[dbuf][nout] = cbx[sbuf][k];
-                    cby[dbuf][nout] = cby[sbuf][k];
-                    cbw[dbuf][nout] = cbw[sbuf][k];
-                    cbu[dbuf][nout] = cbu[sbuf][k];
-                    cbv[dbuf][nout] = cbv[sbuf][k];
-                    nout++;
-                }
+            nd = 0;
+            for ( k = 0; k < ns; k++ ) {
+                k2 = k + 1; if ( k2 == ns ) k2 = 0;
+                if ( cd[k] >= 0.0f ) cw[nd++] = cs[k];
                 if ( (cd[k] >= 0.0f) != (cd[k2] >= 0.0f) ) {
                     f = cd[k] / ( cd[k] - cd[k2] );
-                    cbx[dbuf][nout] = cbx[sbuf][k] + f * ( cbx[sbuf][k2] - cbx[sbuf][k] );
-                    cby[dbuf][nout] = cby[sbuf][k] + f * ( cby[sbuf][k2] - cby[sbuf][k] );
-                    cbw[dbuf][nout] = cbw[sbuf][k] + f * ( cbw[sbuf][k2] - cbw[sbuf][k] );
-                    cbu[dbuf][nout] = cbu[sbuf][k] + f * ( cbu[sbuf][k2] - cbu[sbuf][k] );
-                    cbv[dbuf][nout] = cbv[sbuf][k] + f * ( cbv[sbuf][k2] - cbv[sbuf][k] );
-                    nout++;
+                    cw[nd].x = cs[k].x + f * ( cs[k2].x - cs[k].x );
+                    cw[nd].y = cs[k].y + f * ( cs[k2].y - cs[k].y );
+                    cw[nd].w = cs[k].w + f * ( cs[k2].w - cs[k].w );
+                    cw[nd].u = cs[k].u + f * ( cs[k2].u - cs[k].u );
+                    cw[nd].v = cs[k].v + f * ( cs[k2].v - cs[k].v );
+                    nd++;
                 }
             }
-            cn[dbuf] = nout;
-            sbuf = dbuf;
+            ct = cs; cs = cw; cw = ct;
+            ns = nd;
         }
-        nout = cn[sbuf];
+        nout = ns;
         if ( nout < 3 ) continue;
 
         /* The divide, on corners that are all inside the frustum. RAW u
            and v: the model is drawn affine, and that filler steps them
            linearly in screen space. */
         for ( k = 0; k < nout; k++ ) {
-            rw = 1.0f / cbw[sbuf][k];
-            qv[k].x = xresh + cbx[sbuf][k] * rw * xresh;
-            qv[k].y = yresh - cby[sbuf][k] * rw * yresh;
+            rw = 1.0f / cs[k].w;
+            qv[k].x = xresh + cs[k].x * rw * xresh;
+            qv[k].y = yresh - cs[k].y * rw * yresh;
             qv[k].z = rw;
-            qv[k].u = cbu[sbuf][k];
-            qv[k].v = cbv[sbuf][k];
+            qv[k].u = cs[k].u;
+            qv[k].v = cs[k].v;
         }
 
         /* Backface after the clip: clipping preserves winding, so the
            first three corners answer for all of them. */
         area = ( qv[1].x - qv[0].x ) * ( qv[2].y - qv[0].y )
              - ( qv[2].x - qv[0].x ) * ( qv[1].y - qv[0].y );
+        if ( bf_pre && area >= 0.0f ) bf_bad++;
         if ( area < 0.0f ) {
             qglRsPoly( dst, (void far *) qv, nout, QGL_M_TEX, skin );
             drawn++;

@@ -65,6 +65,7 @@ declare function sys_tick_hz ( ) as single
 declare function qglMemAvail ( byval what as integer ) as long
 declare function mod_cm_bytes ( g as Game ) as long
 declare function sys_fp_sites () as long
+declare function mdl_bf_bad () as long
 declare function mod_geom_rows ( g as Game ) as integer
 declare function mod_lm_bytes ( g as Game ) as long
 declare function mod_lm_got ( g as Game ) as long
@@ -225,6 +226,11 @@ sub host_bench_report ( _
     host_kv benchf, "lm_read", str$( mod_lm_got( g ) )
     host_kv benchf, "geom_rows", str$( mod_geom_rows( g ) )
     host_kv benchf, "fp_sites", str$( sys_fp_sites() )
+    '' d_alias.c culls a model triangle's backface in CLIP space, before
+    '' the clip, and checks that answer against the projected one on
+    '' every triangle that reaches both. Anything but zero says the two
+    '' disagree and front faces are being thrown away unwatched.
+    host_kv benchf, "mdl_bf_bad", str$( mdl_bf_bad() )
     host_kv benchf, "cm_size", str$( mod_cm_bytes( g ) )
         sc_stats scs
     host_kv benchf, "sc_made", str$( scs.made )
