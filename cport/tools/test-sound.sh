@@ -3,7 +3,7 @@
 #
 # The arms, and what each was written against:
 #
-#   1. snd_init has to reach the mixer: qglDspInit, snd.raw into EMS,
+#   1. snd_init has to reach the mixer: qglDspInit, snd.bsc into EMS,
 #      sndtab.raw's count agreeing with snd.h's SND_*. Only
 #      snd_mix_setup sets loops, so "loops=5" is the whole chain --
 #      e1m1's four comp_hum and its drone.

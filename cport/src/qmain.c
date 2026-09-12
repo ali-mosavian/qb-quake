@@ -340,6 +340,10 @@ int main( void )
             sprintf( buf, "snd loops=%d", (int) lp );
             mark( buf );
         }
+        if ( args.sndsum ) {
+            sprintf( buf, "snd_sum=%08lX", snd_sum() );
+            mark( buf );
+        }
         ld_step( &ldr, v.h_video_dc, hud );
 
         ld_stage( &ldr, v.h_video_dc, hud, "surface cache" );

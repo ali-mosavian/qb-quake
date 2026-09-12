@@ -2,7 +2,7 @@
  * snd_mix.c -- Quake's S_PaintChannels for one 8-bit mono ring.
  *
  * Eight channels, each a run of samples in the EMS handle mksnd.py's
- * snd.raw was loaded into, mixed into the DMA ring dsp.asm plays, from
+ * snd.bsc was loaded into, mixed into the DMA ring dsp.asm plays, from
  * where the mixer last stopped to a quarter second past where the DMA
  * is. Eight more are the map's ambients: S_StaticSound, looped from
  * sample 0 and re-spatialised from the player every frame. Every
@@ -15,6 +15,14 @@
  * held across nothing, the same way every other reader of that slot
  * behaves; the call sits between the tick and the render, where no one
  * has a window open.
+ *
+ * It is not a byte on the way in. mksnd.py ships bsc4/32n -- 32 samples
+ * a block, a scale byte and sixteen of 4-bit codes -- so snd_fetch
+ * decodes a run through mksnd's own 32 x 16 table and the paint reads
+ * that. 963 blocks fit a 16K page and none straddles one, so a block is
+ * still one window and a divide away. The table and the decoded run are
+ * two more buffers in dsp.asm's block for the reason above, which is
+ * what SND_CHUNK went to 256 to pay for.
  */
 extern short pascal far qglGemMap( short h, short pg, short slot );
 
@@ -23,17 +31,21 @@ extern short pascal far qglGemMap( short h, short pg, short slot );
 #define SND_CHANS   8               /* S_StartSound's */
 #define SND_STATICS 32              /* the ambients', looping; a silent one costs its pointer arithmetic */
 #define SND_ALL     (SND_CHANS + SND_STATICS)
-#define SND_CHUNK   512
+#define SND_CHUNK   256
+#define SND_BLK     32              /* samples a block, bsc4/32n */
+#define SND_BLK_B   17              /* its bytes: the scale, then sixteen of codes */
+#define SND_DTAB    512             /* 32 scales x 16 codes, mksnd.py's */
+#define SND_NSCALE  32              /* and the scale byte selects one, so it is masked */
 #define SND_TAB     1024            /* 128 (offset, length) records */
 #define SND_AHEAD   2756L           /* a quarter second at 11025 */
-#define EMS_PAGE    16384L
+#define EMS_PAGE    16384
+#define SND_BLK_PG  (EMS_PAGE / SND_BLK_B)  /* 963; the page's last 13 bytes are padding */
 #define SND_ATTN_STATIC 3L          /* ATTN_STATIC, per sound_nominal_clip_dist */
 #define SND_CLIP_DIST   1000L
 
 typedef struct { long pos, end, beg; short vol; } SndChan;  /* end 0: free; beg >= 0 loops */
 typedef struct { long ofs, len; } SndRec;
 typedef struct { short id, vol; float x, y, z; } SndAmb;
-typedef union { long l; struct { unsigned short lo, hi; } w; } Split;
 
 static short           near snd_hnd      = 0;
 static short           near snd_count    = 0;
@@ -47,6 +59,8 @@ static unsigned char far *snd_ring;
 static int           far *snd_paint;        /* SND_CHUNK ints */
 static SndRec        far *snd_tab;
 static SndChan       far *snd_chan;
+static signed char   far *snd_dtab;         /* scale row, then code */
+static signed char   far *snd_dbuf;         /* one run, decoded */
 static SndAmb        near snd_amb[SND_STATICS];
 
 /* An ambient_* point, recorded at map load, before the card is up:
@@ -76,13 +90,15 @@ short pascal far snd_mix_loops( void )
    came, and e1m2 hung in the heap compactor; tab: count records of
    (offset, length) to copy in. Starts every recorded ambient on its own
    static channel. */
-short pascal far snd_mix_setup( short hnd, long ring, long scratch, long tab, short count, short scratch_bytes )
+short pascal far snd_mix_setup( short hnd, long ring, long scratch, long tab, short count, short scratch_bytes, long dec )
 {
     SndRec far *src = (SndRec far *) tab;
+    signed char far *d = (signed char far *) dec;
     SndChan far *ch;
     short i;
 
-    if ( count * 8 > SND_TAB || SND_CHUNK * 2 + SND_TAB + SND_ALL * (short) sizeof(SndChan) > scratch_bytes )
+    if ( count * 8 > SND_TAB ||
+         SND_CHUNK * 2 + SND_TAB + SND_ALL * (short) sizeof(SndChan) + SND_DTAB + SND_CHUNK > scratch_bytes )
         return -1;
     snd_hnd     = hnd;
     snd_count   = count;
@@ -90,8 +106,12 @@ short pascal far snd_mix_setup( short hnd, long ring, long scratch, long tab, sh
     snd_paint   = (int far *) scratch;
     snd_tab     = (SndRec far *) ((char far *) scratch + SND_CHUNK * 2);
     snd_chan    = (SndChan far *) ((char far *) snd_tab + SND_TAB);
+    snd_dtab    = (signed char far *) ((char far *) snd_chan + SND_ALL * (short) sizeof(SndChan));
+    snd_dbuf    = snd_dtab + SND_DTAB;
     for ( i = 0; i < count; i++ )
         snd_tab[i] = src[i];
+    for ( i = 0; i < SND_DTAB; i++ )
+        snd_dtab[i] = d[i];
     for ( i = 0; i < SND_ALL; i++ )
         snd_chan[i].end = 0;
     snd_loops = 0;
@@ -130,12 +150,43 @@ short pascal far snd_mix_start( short id, short vol )
     return pick;
 }
 
+/* n samples from pos, decoded into out: the block's scale byte picks
+   one of 32 rows of mksnd.py's table and each 4-bit code indexes it.
+   Answers how many it did -- fewer than n at the end of a page, where
+   the caller comes back for the rest -- and 0 if the page would not
+   map. */
+static short near snd_fetch( long pos, short n, signed char far *out )
+{
+    long  blk = pos >> 5;                       /* SND_BLK */
+    short seg, k = 0, j, k0, run, nb;
+    unsigned char far *p;
+    signed char far *row;
+
+    seg = qglGemMap( snd_hnd, (short) ( blk / SND_BLK_PG ), PAGE_SLOT );
+    if ( seg == 0 ) return 0;
+    nb = (short) ( blk % SND_BLK_PG );
+    p  = (unsigned char far *) (((unsigned long) seg << 16) | (unsigned) ( nb * SND_BLK_B ));
+    k0 = (short) ( pos & (SND_BLK - 1) );
+    nb = SND_BLK_PG - nb;                       /* blocks this page has left */
+    if ( n > nb * SND_BLK - k0 ) n = nb * SND_BLK - k0;
+    while ( k < n ) {
+        row = snd_dtab + ( (short) ( p[0] & (SND_NSCALE - 1) ) << 4 );
+        run = SND_BLK - k0;
+        if ( run > n - k ) run = n - k;
+        for ( j = 0; j < run; j++, k0++ )
+            out[k + j] = row[ (k0 & 1) ? ( p[1 + (k0 >> 1)] >> 4 )
+                                       : ( p[1 + (k0 >> 1)] & 15 ) ];
+        k += run;
+        k0 = 0;
+        p += SND_BLK_B;
+    }
+    return n;
+}
+
 static void near snd_mix_chan( SndChan far *ch, short n )
 {
     long  left;
-    short i = 0, run, off, k, vol = ch->vol, seg;
-    unsigned char far *p;
-    Split at;
+    short i = 0, run, k, vol = ch->vol, got;
 
     while ( i < n ) {
         if ( ch->pos >= ch->end ) {
@@ -146,16 +197,12 @@ static void near snd_mix_chan( SndChan far *ch, short n )
         run = n - i;
         if ( run > left ) run = (short) left;
         if ( vol == 0 ) { ch->pos += run; i += run; continue; }   /* out of earshot: keep time */
-        at.l = ch->pos;             /* page and offset from the two words: no long divide */
-        seg = qglGemMap( snd_hnd, (short) ((at.w.hi << 2) | (at.w.lo >> 14)), PAGE_SLOT );
-        if ( seg == 0 ) { ch->end = 0; return; }
-        off = (short) (at.w.lo & (EMS_PAGE - 1));
-        if ( run > (short) (EMS_PAGE - off) ) run = (short) (EMS_PAGE - off);
-        p = (unsigned char far *) (((unsigned long) seg << 16) | (unsigned short) off);
-        for ( k = 0; k < run; k++ )
-            snd_paint[i + k] += ( ((int) p[k] - 128) * vol ) >> 3;
-        i += run;
-        ch->pos += run;
+        got = snd_fetch( ch->pos, run, snd_dbuf );
+        if ( got == 0 ) { ch->end = 0; return; }
+        for ( k = 0; k < got; k++ )
+            snd_paint[i + k] += ( snd_dbuf[k] * vol ) >> 3;
+        i += got;
+        ch->pos += got;
     }
     if ( ch->pos >= ch->end && ch->beg < 0 ) ch->end = 0;
 }

@@ -8,8 +8,9 @@
  * snd.h -- the sound layer: Quake's snd_dma.c without the stereo.
  *
  * qglDspInit starts a Sound Blaster playing a 4096-byte ring in
- * auto-init DMA; snd.raw, mksnd.py's concatenation of the game's wavs,
- * goes into one EMS handle a page at a time; snd_mix.c paints eight
+ * auto-init DMA; snd.bsc, mksnd.py's concatenation of the game's wavs
+ * as bsc4/32n, goes into one EMS handle a page at a time and
+ * snddec.raw is the table it is decoded through; snd_mix.c paints eight
  * channels plus the map's ambients into the ring ahead of where the
  * DMA is, once a frame. The card never stops: a frame with nothing
  * playing still paints, silence being 128 and not zero, because the
@@ -62,7 +63,7 @@
 
 /*
  * name: snd_init
- * desc: The card, snd.raw into EMS, and the mixer over dsp.asm's ring.
+ * desc: The card, snd.bsc into EMS, and the mixer over dsp.asm's ring.
  *       Quiet and harmless on a machine with no card, on -nosound, or
  *       with no sounds in the container: every call below then returns
  *       at once.
@@ -94,6 +95,10 @@ void snd_play( Player *player, short id, BspVec3 *org );
 void snd_frame( Player *player, float dt );
 
 void snd_shutdown( void );
+
+/* -sndsum's: every sound decoded through the mixer's own fetch and
+   summed. See snd_mix.h. */
+unsigned long snd_sum( void );
 
 /* for bench.txt: sounds started, ambients looping, and the frames that
    found the DMA past what had been painted */

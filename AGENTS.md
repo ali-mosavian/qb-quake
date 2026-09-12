@@ -2576,7 +2576,7 @@ count register (flip-flop cleared, interrupts off) and `snd_mix.c`
 paints a quarter second past it once a frame, between the tick and the
 render, where no one holds an EMS window; a stub on IRQ 7 acknowledges
 the block ends or the BIOS's iret leaves the PIC's in-service bit set.
-The samples are `tools/mksnd.py`'s `snd.raw`, every wav the ported
+The samples are `tools/mksnd.py`'s `snd.bsc`, every wav the ported
 QuakeC plays back to back at the DSP's own rate, in one EMS handle read
 through `PAGE_SLOT`; `sndtab.raw` is the (offset, length) table in the
 order of `q_pl.bi`'s `SND_*`, and `snd_init` refuses a count that
@@ -2589,9 +2589,47 @@ player every frame at ATTN_STATIC, three a thousand units; one out of
 earshot costs the mixer its pointer arithmetic and nothing else.
 `snd_loops` counts them. mksnd refuses a wav whose cue point is not
 0, since the mixer knows no other loop start.
+
+**The stream is bsc4/32n and the mixer decodes it by table lookup.**
+32 samples a block, one byte selecting the block's gain from a ladder
+of 32 and sixteen bytes of 4-bit codes: 17 bytes a block, 4.26 bits a
+sample, 698,022 bytes for the 1,311,418 the game plays -- 53% of raw,
+and 23.0 dB SNR over the whole set, which mksnd prints per wav. No
+predictor, so any block decodes on its own and the mixer still seeks
+anywhere; `snd_fetch` maps the page, reads the scale byte and indexes
+one of 32 rows of `snddec.raw` with each nibble. That table is SHIPPED,
+not recomputed -- a decoder building the ladder out of its own `exp()`
+agrees with the encoder to whatever its libm does, and nothing in a DOS
+box would say when it did not.
+963 blocks fit a 16K EMS page and the page's last 13 bytes are padding,
+so no block straddles a page and one window reaches any of them; a
+SOUND spans as many pages as it likes, `snd_fetch` returning short at
+each end. Every sound starts on a block, its length staying the wav's
+own, so the silence a block's tail is padded with never plays.
+The cost is a nibble and a lookup where a byte used to do, and the
+whole sound layer -- card, mix and decode -- is 1 frame of 127 over 400
+ticks on e1m1, measured against `-nosound` with the same binary.
+`cport/tools/test-sndcodec.sh` is the gate, and it is a checksum for a
+reason: a decode reading the high nibble for the low one, or dividing
+by the wrong blocks-per-page, still fills the ring on time and leaves
+`started`, `loops` and `under` all correct while the card plays noise.
+`-sndsum` walks every sound through the paint's own `snd_fetch` and
+prints the sum; the test asks mksnd.py what it should have been. Both
+halves were watched to fail: the nibbles swapped reads E9909737 for
+0C00A2D9, and the padding dropped from `pack_pages` is caught by name
+-- a code byte read as a scale.
 The ring and the mixer's scratch are one DOS block, not DGROUP -- that
 is BASIC's string space -- and with the code they cost the e1m1 far
-heap 16K. `-nosound` leaves the card alone; a machine without one fails
+heap 16K. The codec's table and its decoded run are two more buffers in
+that block: `SND_CHUNK` went from 512 to 256 to pay half of it and
+`DSP_SCRATCH` from 2608 to 2864, which the layout now fills exactly --
+512 of paint, 1024 of table, 560 of channels, 512 of codec table and
+256 of decoded run. Exactly is safe only because `snd_mix_setup` adds
+those five up against `qglDspScratchBytes()` and refuses (0x0053)
+rather than running off the end, which is what it did by 304 bytes
+once. cport keeps both buffers in DGROUP instead, having one to spare,
+and its `SND_CHUNK` stays 512; the two decoders are otherwise the same
+code, and only cport's is under a checksum. `-nosound` leaves the card alone; a machine without one fails
 the reset and plays nothing. Every conf pins `[sblaster]` to the
 emulator's own 220/IRQ 7/DMA 1, `[mixer] nosound=true` still advances
 the DMA, and `viz` turns the sound on. `snd_started` and `snd_under` are

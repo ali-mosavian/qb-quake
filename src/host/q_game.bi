@@ -10,7 +10,7 @@
 '' Nested rather than flat: g.pl.pos.z says which subsystem owns the field,
 '' and the groups already existed as their own types.
 ''
-'' snd.bas: the DSP is up and snd.raw is in the handle
+'' snd.bas: the DSP is up and snd.bsc is in the handle
 type SndState
     on          as integer
     off         as integer      '' -nosound

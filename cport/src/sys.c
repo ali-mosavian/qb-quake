@@ -82,6 +82,7 @@ void sys_parse_args( RunArgs *args )
         else if ( stricmp( argv[i], "-carry" )   == 0 ) args->carry = -1;
         else if ( stricmp( argv[i], "-noview" )  == 0 ) args->no_view = -1;
         else if ( stricmp( argv[i], "-nosound" ) == 0 ) args->no_sound = -1;
+        else if ( stricmp( argv[i], "-sndsum" )  == 0 ) args->sndsum = -1;
         else if ( stricmp( argv[i], "-badorder" )== 0 ) args->bad_order = -1;
         else if ( stricmp( argv[i], "-noz" )     == 0 ) args->no_z = -1;
         else if ( stricmp( argv[i], "-nocull" )  == 0 ) args->no_cull = -1;

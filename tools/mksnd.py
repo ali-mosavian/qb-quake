@@ -1,14 +1,26 @@
 #!/usr/bin/env python3
-"""mksnd.py -- the game's sound effects out of the PAK, as one raw stream.
+"""mksnd.py -- the game's sound effects out of the PAK, block-scale coded.
 
     tools/mksnd.py PAK0.PAK out/
 
-Emits, for snd.bas:
+Emits, for snd.c:
 
-    snd.raw     every wav's samples back to back, 8-bit unsigned mono at
-                11025 Hz -- the rate the DSP is run at, so nothing resamples
+    snd.bsc     every wav back to back as bsc4/32n -- 32 samples a block,
+                one scale byte and sixteen of packed 4-bit codes, so 17
+                bytes a block and 4.25 bits a sample. A block never
+                straddles a 16K EMS page: 963 fit and the page's last 13
+                bytes are padding, so the mixer reaches any block through
+                one window with a divide and no second slot.
+    snddec.raw  the 32 x 16 decode table, one signed byte an entry. The
+                codec's contract, shipped rather than recomputed: a
+                decoder building the ladder from its own exp() agrees
+                with this one to whatever its libm does, and nothing in
+                a DOS box would ever say that it does not.
     sndtab.raw  a count, then (offset, length) as two longs per sound, in
-                SOUNDS order, which is q_pl.bi's SND_* order
+                SOUNDS order, which is snd.h's SND_* order. The offset is
+                in SAMPLES and lands on a block; the length is the wav's
+                own, so the silence a block's tail is padded with is
+                never played.
 
 A wav named twice is stored once; the table just points at it again.
 """
@@ -18,6 +30,8 @@ from __future__ import annotations
 import os
 import struct
 import sys
+
+import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mdlview as mdl  # noqa: E402
@@ -66,6 +80,60 @@ SOUNDS = [
 ]
 
 
+# ---------------------------------------------------------------- bsc4/32n
+# Block scale: one gain for 32 samples, chosen from a ladder of 32 so no
+# block wastes up to 6 dB rounding its peak up to the next power of two.
+# Decode is a table lookup -- the scale byte picks one of 32 rows and the
+# 4-bit code indexes it -- which is the whole reason for the ladder being
+# a fixed 32 rather than a per-block byte of anything finer.
+BLK = 32
+BITS = 4
+NSCALE = 32
+BLK_BYTES = 1 + BLK * BITS // 8
+EMS_PAGE = 16384
+BLK_PER_PAGE = EMS_PAGE // BLK_BYTES
+CODE_HI = (1 << (BITS - 1)) - 1
+CODE_LO = -(1 << (BITS - 1))
+
+
+def scale_ladder() -> np.ndarray:
+    return np.exp(np.linspace(0.0, np.log(128.0 / (CODE_HI + 0.5)), NSCALE))
+
+
+def decode_table(g: np.ndarray) -> np.ndarray:
+    nib = np.arange(1 << BITS)
+    return np.clip(np.rint(np.outer(g, np.where(nib > CODE_HI, nib - (1 << BITS), nib))), -128, 127).astype(np.int8)
+
+
+def bsc_encode(x: np.ndarray, g: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    blk = x.astype(np.int32).reshape(-1, BLK)
+    peak = np.max(np.abs(blk), axis=1)
+    sel = np.clip(np.searchsorted(g * (CODE_HI + 0.5), np.maximum(peak, 1)), 0, NSCALE - 1)
+    q = np.clip(np.rint(blk / g[sel].reshape(-1, 1)), CODE_LO, CODE_HI).astype(np.int32)
+    nib = (q & ((1 << BITS) - 1)).astype(np.uint8)
+    return sel.astype(np.uint8), nib[:, 0::2] | (nib[:, 1::2] << 4)
+
+
+def bsc_decode(sel: np.ndarray, packed: np.ndarray, tab: np.ndarray) -> np.ndarray:
+    nib = np.empty((len(sel), BLK), np.uint8)
+    nib[:, 0::2] = packed & ((1 << BITS) - 1)
+    nib[:, 1::2] = packed >> BITS
+    return tab[sel[:, None], nib]
+
+
+def pack_pages(sel: np.ndarray, packed: np.ndarray) -> bytes:
+    rec = np.empty((len(sel), BLK_BYTES), np.uint8)
+    rec[:, 0] = sel
+    rec[:, 1:] = packed
+    npage = (len(sel) + BLK_PER_PAGE - 1) // BLK_PER_PAGE
+    out = np.zeros((npage, EMS_PAGE), np.uint8)
+    for p in range(npage):
+        take = rec[p * BLK_PER_PAGE : (p + 1) * BLK_PER_PAGE].reshape(-1)
+        out[p, : len(take)] = take
+    tail = len(sel) - (npage - 1) * BLK_PER_PAGE
+    return out.reshape(-1)[: (npage - 1) * EMS_PAGE + tail * BLK_BYTES].tobytes()
+
+
 def wav_samples(name: str, wav: bytes) -> bytes:
     if wav[:4] != b"RIFF" or wav[8:12] != b"WAVE":
         raise SystemExit(f"{name}: not a wav")
@@ -93,24 +161,51 @@ def wav_samples(name: str, wav: bytes) -> bytes:
     return data
 
 
+def report(name: str, x: np.ndarray, dec: np.ndarray, nbytes: int) -> tuple[float, float]:
+    e = (dec - x).astype(np.float64)
+    sig, err = float((x.astype(np.float64) ** 2).sum()), float((e ** 2).sum())
+    snr = 10.0 * np.log10(sig / err) if err > 0 and sig > 0 else float("inf")
+    print(f"  {name:<20} {len(x):>7,} smp {nbytes:>7,} B   rmse {np.sqrt(err / len(x)):5.2f}"
+          f"   peak {int(np.abs(e).max()):>3}   snr {snr:5.1f} dB")
+    return sig, err
+
+
 def main() -> int:
     if len(sys.argv) != 3:
         print(__doc__)
         return 1
     pak, outdir = sys.argv[1:3]
     blob, entries = mdl.read_pak(pak)
-    stream, placed = bytearray(), {}
+    g = scale_ladder()
+    tab = decode_table(g)
+
+    sels, codes, placed = [], [], {}
+    nblk, nsmp, sig, err = 0, 0, 0.0, 0.0
     for name in SOUNDS:
-        if name not in placed:
-            samples = wav_samples(name, mdl.pak_read(blob, entries, f"sound/{name}.wav"))
-            placed[name] = (len(stream), len(samples))
-            stream += samples
+        if name in placed:
+            continue
+        x = np.frombuffer(wav_samples(name, mdl.pak_read(blob, entries, f"sound/{name}.wav")),
+                          np.uint8).astype(np.int32) - 128
+        padded = np.concatenate([x, np.zeros(-len(x) % BLK, np.int32)])
+        sel, packed = bsc_encode(padded, g)
+        dec = bsc_decode(sel, packed, tab).reshape(-1)[: len(x)].astype(np.int32)
+        s, e = report(name, x, dec, len(sel) * BLK_BYTES)
+        sig, err, nsmp = sig + s, err + e, nsmp + len(x)
+        placed[name] = (nblk * BLK, len(x))
+        nblk += len(sel)
+        sels.append(sel)
+        codes.append(packed)
+
+    stream = pack_pages(np.concatenate(sels), np.concatenate(codes))
     table = [placed[name] for name in SOUNDS]
     os.makedirs(outdir, exist_ok=True)
-    open(os.path.join(outdir, "snd.raw"), "wb").write(bytes(stream))
-    tab = struct.pack("<h", len(table)) + b"".join(struct.pack("<ll", o, n) for o, n in table)
-    open(os.path.join(outdir, "sndtab.raw"), "wb").write(tab)
-    print(f"  snd.raw        {len(stream):,} B   sndtab.raw  {len(table)} sounds")
+    open(os.path.join(outdir, "snd.bsc"), "wb").write(stream)
+    open(os.path.join(outdir, "snddec.raw"), "wb").write(tab.tobytes())
+    open(os.path.join(outdir, "sndtab.raw"), "wb").write(
+        struct.pack("<h", len(table)) + b"".join(struct.pack("<ll", o, n) for o, n in table))
+    print(f"  snd.bsc {len(stream):,} B for {nsmp:,} samples ({8.0 * len(stream) / nsmp:.2f} bits each, "
+          f"{100.0 * len(stream) / nsmp:.0f}% of raw), snr {10.0 * np.log10(sig / err):.1f} dB, "
+          f"{len(table)} sounds")
     return 0
 
 

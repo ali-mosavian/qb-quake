@@ -123,7 +123,7 @@ def build_sbar(pak: str, tmp: str) -> dict[str, bytes]:
 
 
 def build_sounds(pak: str, tmp: str) -> dict[str, bytes]:
-    """snd.raw and sndtab.raw out of the PAK's wavs, as container members."""
+    """The bsc4/32n stream, its decode table and the id table, as container members."""
     import subprocess
 
     if not pak or not os.path.exists(pak):
@@ -134,7 +134,8 @@ def build_sounds(pak: str, tmp: str) -> dict[str, bytes]:
                        capture_output=True, text=True)
     if r.returncode != 0:
         raise SystemExit(f"mksnd: {r.stderr.strip() or r.stdout.strip()}")
-    return {n: open(os.path.join(tmp, n), "rb").read() for n in ("snd.raw", "sndtab.raw")}
+    print(r.stdout, end="")
+    return {n: open(os.path.join(tmp, n), "rb").read() for n in ("snd.bsc", "snddec.raw", "sndtab.raw")}
 
 
 def build_models(pak: str, kinds: set[int], tmp: str) -> dict[str, bytes]:

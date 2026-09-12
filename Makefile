@@ -103,7 +103,7 @@ ASSETS := data/assets/assets.zip
 # tree without it is not a build failure.
 MDL_ASSETS := $(if $(wildcard $(PAK)),data/assets/$(MDL).geo data/assets/knight.geo data/assets/dog.geo data/assets/ogre.geo data/assets/demon.geo data/assets/zombie.geo data/assets/wizard.geo data/assets/shambler.geo data/assets/v_shot.geo data/assets/v_shot2.geo data/assets/v_nail.geo data/assets/v_rock.geo data/assets/v_nail2.geo data/assets/v_rock2.geo)
 # The status bar's pictures, out of the PAK's gfx.wad.
-GFX_ASSETS := $(if $(wildcard $(PAK)),data/assets/sbar.raw data/assets/snd.raw)
+GFX_ASSETS := $(if $(wildcard $(PAK)),data/assets/sbar.raw data/assets/snd.bsc)
 # The A* flight path -bench -campath walks. Generated, untracked, and it
 # was a ZERO-BYTE file in every clean build: -campath then read nothing,
 # stood at the spawn for the whole run, and `check.sh --churn` -- whose
@@ -196,8 +196,8 @@ data/assets/v_rock2.geo: $(PAK) tools/mkmdl.py
 data/assets/sbar.raw: $(PAK) tools/mkgfx.py
 	@python3 tools/mkgfx.py $(PAK) data/assets
 
-# the sound effects: snd.raw stands in for sndtab.raw beside it
-data/assets/snd.raw: $(PAK) tools/mksnd.py
+# the sound effects: snd.bsc stands in for sndtab.raw and snddec.raw beside it
+data/assets/snd.bsc: $(PAK) tools/mksnd.py
 	@python3 tools/mksnd.py $(PAK) data/assets
 
 data/assets/campath.bin: data/$(MAP) tools/campath.py

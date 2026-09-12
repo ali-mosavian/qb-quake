@@ -15,6 +15,7 @@
 #define SND_CLIP_DIST  1000.0f   /* sound_nominal_clip_dist, ATTN_NORM */
 #define SND_PAGE       16384L
 #define PAGE_SLOT      2
+#define SND_DTAB       512L      /* snddec.raw: 32 scales x 16 codes */
 
 static short snd_on      = 0;
 static short snd_hnd     = 0;
@@ -25,12 +26,13 @@ void snd_init( short off )
 {
     SndRec far *tab;
     unsigned char far *raw;
+    unsigned char far *dec;
     long  remain, want, n;
     short fh, pg, pgseg, count;
 
     snd_on = 0;
     if ( off ) return;
-    if ( !asset_has( "snd.raw" ) || !asset_has( "sndtab.raw" ) ) {
+    if ( !asset_has( "snd.bsc" ) || !asset_has( "sndtab.raw" ) || !asset_has( "snddec.raw" ) ) {
         fprintf( stderr, "no sounds in the container -- rebuild its assets with the PAK\n" );
         return;
     }
@@ -48,38 +50,49 @@ void snd_init( short off )
         return;
     }
     tab = (SndRec far *) ( raw + 2 );
+    dec = asset_load( "snddec.raw", SND_DTAB );
 
-    /* and the samples, straight into EMS a page at a time: 1.3 MB of
-       them, which is why they are not in the far heap */
-    fh = asset_seek( "snd.raw", &remain );
+    /* and the samples, straight into EMS a page at a time: 683K of
+       bsc4/32n, which is why they are not in the far heap */
+    fh = asset_seek( "snd.bsc", &remain );
     snd_hnd = qglGemAlloc( remain );
     if ( !snd_hnd ) {
-        fprintf( stderr, "snd.raw: no EMS for %ld bytes\n", remain );
+        fprintf( stderr, "snd.bsc: no EMS for %ld bytes\n", remain );
+        qglMemFree( (long) dec );
         qglMemFree( (long) raw );
         qglDspShutdown();
         return;
     }
     for ( pg = 0; remain > 0; pg++ ) {
         pgseg = qglGemMap( snd_hnd, pg, PAGE_SLOT );
-        if ( !pgseg ) { fprintf( stderr, "snd.raw: page %d would not map\n", (int) pg ); exit( 1 ); }
+        if ( !pgseg ) { fprintf( stderr, "snd.bsc: page %d would not map\n", (int) pg ); exit( 1 ); }
         want = remain > SND_PAGE ? SND_PAGE : remain;
         if ( qglFileRead( fh, (long) pgseg << 16, want ) != want ) {
-            fprintf( stderr, "snd.raw: short read\n" ); exit( 1 );
+            fprintf( stderr, "snd.bsc: short read\n" ); exit( 1 );
         }
         remain -= want;
     }
 
     if ( snd_mix_setup( snd_hnd, (unsigned char far *) qglDspBuf(),
                         (void far *) qglDspScratch(), tab, count,
-                        qglDspScratchBytes() ) < 0 ) {
+                        qglDspScratchBytes(), (signed char far *) dec ) < 0 ) {
         fprintf( stderr, "dsp.asm's scratch is short of the mixer's table and channels\n" );
+        qglMemFree( (long) dec );
         qglMemFree( (long) raw );
         qglGemFree( snd_hnd );
         qglDspShutdown();
         return;
     }
+    qglMemFree( (long) dec );
     qglMemFree( (long) raw );
     snd_on = -1;
+}
+
+/* Every sound decoded and summed, the run's own answer to what mksnd.py
+   put in the container -- 0 with the card or the flag off. */
+unsigned long snd_sum( void )
+{
+    return snd_on ? snd_mix_sum() : 0L;
 }
 
 /* Recorded whatever the card does, and unguarded on purpose: this runs
