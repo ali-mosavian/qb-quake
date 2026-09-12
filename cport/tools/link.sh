@@ -1,79 +1,71 @@
 #!/bin/bash
 # Link the standalone-cport objects into QCPORT.EXE, medium model. The
 # graphics layer is qgl, assembled natively into the same object list --
-# there is no UGLV.LIB here and no BASIC runtime. One DOSBox session:
-# unlike compiling, linking needs every object at once.
+# there is no UGLV.LIB here and no BASIC runtime.
+#
+# jwlink, natively, not DOS LINK under DOSBox. Three reasons, in order
+# of how much they cost to learn:
+#
+# 1. DOS LINK takes its output paths from POSITIONAL fields of a
+#    response file, and CREATES the list file before it validates
+#    anything. One stray '+' at the end of the object list shifts every
+#    later field up by one, so the LIBRARY field lands in the list-file
+#    slot and LINK truncates a library to zero bytes on its way to
+#    reporting an unrelated error. That is not hypothetical: it
+#    destroyed tc201's MATHM.LIB here, and the next run's only symptom
+#    was "L1102: unexpected end-of-file" naming nothing.
+#    cport/tools/test-link-guard.sh is the regression test.
+# 2. TLINK 5.1 refuses jwasm's 32-bit OMF fixups (qgl addresses
+#    gs:[ebp*2+imm32] in the span fillers) and DOS LINK needs
+#    /NOE /MAP /SEG:800 plus four-objects-per-line CRLF response files
+#    to get as far as trying. jwlink reads all of it without ceremony.
+# 3. It is a native binary: no emulator boot per link.
+#
+# Every object name is single-quoted because wlink's directive parser
+# has keywords -- an unquoted `config.obj` is the `config` directive.
 #
 #   cport/tools/link.sh build/cport "qmain vid d_poly"
 set -euo pipefail
 
 OUT="${1:?usage: link.sh <build-dir> <obj-names>}"
 OBJS="${2:?usage: link.sh <build-dir> <obj-names>}"
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 TOOLCHAINS="${TOOLCHAINS:-$HOME/work/other/d32x/toolchains}"
+JWLINK="${JWLINK:-$TOOLCHAINS/native/bin/jwlink}"
 
-DOSBOX_BIN="${DOSBOX_BIN:-}"
-if [[ -z "$DOSBOX_BIN" ]]; then
-    for c in "$HOME/work/other/dosbox-x-debug/src/dosbox-x" "$(command -v dosbox-x || true)"; do
-        [[ -n "$c" && -x "$c" ]] && { DOSBOX_BIN="$c"; break; }
-    done
-fi
-[[ -n "$DOSBOX_BIN" ]] || { echo "no dosbox-x found; set DOSBOX_BIN" >&2; exit 1; }
-
-objlist=""
-for o in $OBJS; do
-    up=$(echo "$o" | tr 'a-z' 'A-Z')
-    objlist="$objlist+$up.OBJ"
+# One product, one memory model. bcc.sh compiles with bcpp31's own
+# bcc -mm, so the startup and runtime are bcpp31's own medium-model
+# pair; mixing in tc201's (which is what the DOS-LINK version did, for
+# want of a C0M/CM pair in this bcpp31 copy) pulls NEAR-code math
+# modules -- sqrt, sin, cos, atan2 -- into a FAR-code program, which
+# links clean and crashes on the first call.
+BCLIB="${BCLIB:-$TOOLCHAINS/bcpp31/LIB}"
+for f in C0M.OBJ CM.LIB MATHM.LIB FP87.LIB; do
+    [[ -s "$BCLIB/$f" ]] || { echo "link.sh: $BCLIB/$f missing or empty" >&2; exit 1; }
 done
-objlist="${objlist#+}"
 
-## DOS command lines cap at 127 chars -- TLINK's own line is well past
-## that once there's more than a couple of objects (measured: 165 chars
-## for 4). A response file sidesteps the limit entirely; TLINK reads
-## one field per line in the same order the command line would have
-## them (objs / exe,map / libs), '+' continuation works the same way.
 {
-  echo "T:\\LIB\\C0M.OBJ+$objlist"
-  echo "QCPORT.EXE"
-  echo "QCPORT.MAP"
-  # FP87.LIB: MATHM.LIB's own objects reference FIDRQQ/FIWRQQ/FIERQQ
-  # (the 8087 exception handlers) without defining them -- this project
-  # always assumes real FPU hardware (see r_ptproj.asm and friends), so
-  # FP87 not EMU.
-  # CC.LIB: bcc's own struct-assignment helper F_SCOPY@ (any `a = b;`
-  # where a/b are structs, e.g. Vec3) is model-independent compiler
-  # support, not part of tc201's medium-model runtime pair -- it lives
-  # in bcpp31's own CC.LIB, confirmed present by string search.
-  # MATHC.LIB: F_FTOL@ (the float/double-to-int cast helper, e.g.
-  # `(short) some_float_expr`) isn't in tc201's MATHM.LIB (which has
-  # only the differently-named FTOL@) -- it's in bcpp31's own MATHC.LIB.
-  # Listed after MATHM.LIB, so it only ever contributes the handful of
-  # modules MATHM.LIB doesn't already satisfy -- a library only pulls
-  # in an object for a symbol still unresolved when it's scanned, so
-  # this can't collide with anything MATHM.LIB already provided.
-  echo "T:\\LIB\\MATHM.LIB+T:\\LIB\\CM.LIB+T:\\LIB\\FP87.LIB+B:\\LIB\\CC.LIB+B:\\LIB\\MATHC.LIB"
-} > "$OUT/LINK.RSP"
+  echo "format dos"
+  echo "option quiet, map=$OUT/QCPORT.MAP"
+  echo "name $OUT/QCPORT.EXE"
+  echo "file '$BCLIB/C0M.OBJ'"
+  for o in $OBJS; do echo "file '$OUT/$o.obj'"; done
+  # FP87 not EMU: this project assumes real FPU hardware throughout
+  # (see r_ptproj.asm and friends).
+  echo "library '$BCLIB/CM.LIB'"
+  echo "library '$BCLIB/MATHM.LIB'"
+  echo "library '$BCLIB/FP87.LIB'"
+} > "$OUT/QCPORT.LNK"
 
-{ printf '[sdl]\nautolock=false\n[dosbox]\nmemsize=32\nstartbanner=false\nquit warning=false\n'
-  printf '[cpu]\ncore=dynamic\ncycles=max\n[dos]\nxms=true\nems=true\n[autoexec]\n'
-  echo "@echo off"
-  echo "mount w $OUT"
-  echo "mount b $TOOLCHAINS/bcpp31"
-  echo "mount t $TOOLCHAINS/tc201"
-  echo "path b:\\bin"
-  echo "w:"
-  echo "b:\\bin\\tlink.exe /c @LINK.RSP > w:\\lk.txt"
-  echo "exit"
-} > "$OUT/link.conf"
-
-SDL_VIDEODRIVER=dummy timeout "${TIMEOUT:-120}" "$DOSBOX_BIN" -nolog -conf "$OUT/link.conf" >/dev/null 2>&1 || true
+rm -f "$OUT/QCPORT.EXE"
+"$JWLINK" @"$OUT/QCPORT.LNK" > "$OUT/lk.txt" 2>&1 || true
 
 if [[ ! -f "$OUT/QCPORT.EXE" ]]; then
     echo "== link FAILED" >&2
-    [[ -f "$OUT/lk.txt" ]] && tr -d '\r' < "$OUT/lk.txt" | tail -30 >&2
+    tail -30 "$OUT/lk.txt" >&2
     exit 1
 fi
-if [[ -f "$OUT/lk.txt" ]] && tr -d '\r' < "$OUT/lk.txt" | grep -qiE "error|warning.*unresolved"; then
-    echo "== link warnings/errors:" >&2
-    tr -d '\r' < "$OUT/lk.txt" | grep -iE "error|unresolved" | head -20 >&2
+if grep -qiE 'undefined reference|Error!' "$OUT/lk.txt"; then
+    echo "== link errors:" >&2
+    grep -iE 'undefined reference|Error!' "$OUT/lk.txt" | head -20 >&2
+    exit 1
 fi
