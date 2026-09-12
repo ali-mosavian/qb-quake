@@ -62,6 +62,16 @@ void ent_link_doors( World *world );
  * desc: centerprint: msg is shown for ENT_MSG_TIME. An empty one is
  *       not a message and clears nothing.
  */
+/*
+ * name: ent_door_fire / ent_trig_fire
+ * desc: Send a door's linked group out, and fire a trigger's target.
+ *       Public because a pellet or a nail fires a shootable trigger and
+ *       a secret door, which is fight.c's business, not a touch.
+ */
+void ent_door_fire( World *world, short grp );
+void ent_trig_fire( World *world, Player *player, Fight *fight,
+                     Renderer *rdr, short k );
+
 void ent_say( Fight *fight, Renderer *rdr, char far *msg );
 
 /*

@@ -54,6 +54,13 @@ typedef struct {
 } TraceResult;
 
 /*
+ * name: pl_point_contents
+ * desc: The leaf contents at a point, walked in hull 0 -- the render
+ *       tree, not the clipnodes, which carry only EMPTY and SOLID.
+ */
+short pl_point_contents( BspVec3 *p, World *world );
+
+/*
  * name: pl_init
  * desc: Seeds the player from a spawn point. start_override, when not
  *       NULL, is used as-is (Config's `-at` override, once Config

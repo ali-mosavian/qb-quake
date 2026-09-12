@@ -394,6 +394,7 @@ int main( void )
         if ( args.walk )   input.keyboard.k[KEY_W] = -1;
         if ( args.jump )   input.keyboard.k[KEY_SPCBAR] = -1;
         if ( args.strafe ) input.keyboard.k[KEY_A] = -1;
+        if ( args.fire )   input.mouse.left = -1;
 
         cam.fps_view = -1;
         cam_up.x = 0.0f; cam_up.y = 1.0f; cam_up.z = 0.0f;
@@ -686,9 +687,9 @@ int main( void )
                 mark( buf );
             }
 
-            sprintf( buf, "fight=health %d shells %d nails %d rockets %d armor %d items %ld took %d",
+            sprintf( buf, "fight=health %d shells %d nails %d rockets %d armor %d items %ld took %d kills %d booms %d",
                      fight.health, fight.shells, fight.nails, fight.rockets,
-                     fight.armor, fight.items, item_taken( &world ) );
+                     fight.armor, fight.items, item_taken( &world ), fight.kills, fight.booms );
             mark( buf );
 
             if ( ft_n > 0 ) {

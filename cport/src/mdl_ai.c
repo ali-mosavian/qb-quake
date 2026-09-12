@@ -15,6 +15,7 @@
 #include "mdl.h"
 #include "pl_trace.h"
 #include "ent.h"
+#include "weapons.h"   /* the ray-box test, the pellet spread, the projectiles */
 
 #define DEG2RAD 0.017453293f
 
@@ -45,7 +46,7 @@ static float mdl_anglemod( float v )
 }
 
 /* PF_vectoyaw, including its (int) truncation toward zero. */
-static float mdl_vectoyaw( float dx, float dy )
+float mdl_vectoyaw( float dx, float dy )
 {
     float yaw;
 
@@ -85,62 +86,6 @@ void pl_damage( Fight *fight, Renderer *rdr, short dmg )
     if ( save >= fight->armor ) { save = fight->armor; fight->armor_type = 0.0f; }
     fight->armor  = (short) ( fight->armor - save );
     fight->health = (short) ( fight->health - ( dmg - save ) );
-}
-
-/* One axis of the ray-box test: narrows tn..tf to the slab. */
-static short mdl_slab( float lo, float hi, float o, float d,
-                        float *tn, float *tf )
-{
-    float t0, t1, sw;
-
-    if ( fabs( d ) < 0.0001 ) return ( o >= lo && o <= hi ) ? -1 : 0;
-    t0 = ( lo - o ) / d;
-    t1 = ( hi - o ) / d;
-    if ( t0 > t1 ) { sw = t0; t0 = t1; t1 = sw; }
-    if ( t0 > *tn ) *tn = t0;
-    if ( t1 < *tf ) *tf = t1;
-    return (short) ( *tn <= *tf );
-}
-
-/* Where a ray from org along dir enters the box, or -1. */
-static float pl_ray_box( BspVec3 *mins, BspVec3 *maxs, BspVec3 *org,
-                          BspVec3 *dir, float maxt )
-{
-    float tn = 0.0f, tf = maxt;
-
-    if ( !mdl_slab( mins->x, maxs->x, org->x, dir->x, &tn, &tf ) ) return -1.0f;
-    if ( !mdl_slab( mins->y, maxs->y, org->y, dir->y, &tn, &tf ) ) return -1.0f;
-    if ( !mdl_slab( mins->z, maxs->z, org->z, dir->z, &tn, &tf ) ) return -1.0f;
-    return tn;
-}
-
-static float mdl_ray_player( BspVec3 *pl, BspVec3 *org, BspVec3 *dir, float maxt )
-{
-    BspVec3 mins, maxs;
-
-    mins.x = pl->x - PL_HALF; maxs.x = pl->x + PL_HALF;
-    mins.y = pl->y - PL_HALF; maxs.y = pl->y + PL_HALF;
-    mins.z = pl->z + PL_ZLO;  maxs.z = pl->z + PL_ZHI;
-    return pl_ray_box( &mins, &maxs, org, dir, maxt );
-}
-
-/* FireBullets' pellet: dir + crandom*spread*right + crandom*spread*up. */
-static void pl_spread_dir( BspVec3 *dir, float sx, float sy, BspVec3 *out )
-{
-    float rx = dir->y, ry = -dir->x, rl;
-    float ux, uy, uz, a, b;
-
-    rl = (float) sqrt( rx*rx + ry*ry );
-    if ( rl < 0.001f ) { rx = 1.0f; ry = 0.0f; rl = 1.0f; }
-    rx /= rl; ry /= rl;
-    ux =  ry * dir->z;
-    uy = -rx * dir->z;
-    uz =  rx * dir->y - ry * dir->x;
-    a = ( 2.0f * mdl_rnd() - 1.0f ) * sx;
-    b = ( 2.0f * mdl_rnd() - 1.0f ) * sy;
-    out->x = dir->x + a * rx + b * ux;
-    out->y = dir->y + a * ry + b * uy;
-    out->z = dir->z + b * uz;
 }
 
 /* SV_movestep's FL_FLY case: a straight trace, held 30..40 above the
@@ -550,9 +495,8 @@ void mdl_think( World *world, Player *player, Fight *fight, Renderer *rdr,
 
     /* The attack set, facing the player: the knight's and the demon's
        charge the frame's distance and strike on their own frames. The
-       ogre's grenade, the zombie's gib and the wizard's spikes want the
-       projectile array the weapons subsystem owns, so those sets play
-       their frames and throw nothing yet. */
+       ogre's grenade, the zombie's gib and the wizard's spikes leave on
+       their own frames. */
     if ( ent->state == MDL_ST_ATTACK ) {
         ent->ideal_yaw = mdl_vectoyaw( player->pos.x - ent->pos.x,
                                         player->pos.y - ent->pos.y );
@@ -574,6 +518,13 @@ void mdl_think( World *world, Player *player, Fight *fight, Renderer *rdr,
              mdl_in_reach( player, ent, DEMON_CLAW_RANGE ) )
             pl_damage( fight, rdr,
                         (short) ( DEMON_CLAW_BASE + (short) ( mdl_rnd() * DEMON_CLAW_DMG ) ) );
+        if ( ogre && ent->anim_frame == OGRE_GREN_FRAME )
+            mdl_grenade( player, fight, rdr, ent );
+        if ( zombie && ent->anim_frame == ZOMBIE_GIB_FRAME )
+            mdl_gib( player, fight, rdr, ent );
+        if ( wizard && ( ent->anim_frame == WIZARD_FIRE_A ||
+                          ent->anim_frame == WIZARD_FIRE_B ) )
+            mdl_spike( world, player, fight, rdr, ent );
         if ( shambler && ( ent->anim_frame == SHAMBLER_BOLT_A ||
                             ent->anim_frame == SHAMBLER_BOLT_B ||
                             ent->anim_frame == SHAMBLER_BOLT_C ) )

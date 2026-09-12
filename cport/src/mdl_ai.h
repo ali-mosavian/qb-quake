@@ -46,7 +46,14 @@
 #define MDL_VIEW_OFS    25.0f
 #define MDL_STEPSIZE    18.0f
 
+/* army_pain: 0.6 for the short flinch, 1.1 for the others */
+#define MDL_PAIN_SHORT     0.6f
+#define MDL_PAIN_LONG      1.1f
+#define MDL_PAIN_SHORT_P   0.2f
+#define MDL_MAX_ENTS       48    /* e1m1 on hard spawns 42 */
+
 #define KNIGHT_HEALTH      75
+#define KNIGHT_PAIN        1.0f
 #define KNIGHT_MELEE_RANGE 60.0f
 #define KNIGHT_MELEE_DMG   3.0f
 #define KNIGHT_ATK_FIRST   5     /* the frames that strike, 0-based */
@@ -66,6 +73,11 @@
 #define OGRE_SAW_RANGE  100.0f
 #define OGRE_SAW_DMG    4.0f
 #define OGRE_SWING      1.4f     /* a swing's 14 frames */
+#define OGRE_GREN_FRAME 2        /* ogre_nail4, $shoot3, throws */
+#define OGRE_GREN_SPEED 600.0f
+#define OGRE_GREN_UP    200.0f
+#define OGRE_GREN_FUSE  2.5f
+#define OGRE_GREN_DMG   40.0f
 
 #define DEMON_HEALTH     300
 #define DEMON_CLAW_RANGE 100.0f
@@ -81,6 +93,16 @@
 #define DEMON_LEAP_DMG   40.0f   /* 40 + 10 * random */
 
 #define ZOMBIE_HEALTH    60
+#define ZOMBIE_PAIN_MIN  9       /* a hit under this is ignored */
+#define ZOMBIE_FALL_DMG  25      /* and one of this drops it */
+#define ZOMBIE_FALL_TIME 3.0f
+#define ZOMBIE_FLINCH    1.0f
+#define ZOMBIE_GIB_FRAME 12      /* atta13, 0-based */
+#define ZOMBIE_GIB_SPEED 600.0f
+#define ZOMBIE_GIB_UP    200.0f
+#define ZOMBIE_GIB_LIFE  2.5f
+#define ZOMBIE_GIB_DMG   10
+#define ZOMBIE_GIB_Z     6.0f    /* '-10 -22 30' less the 24 to the origin */
 #define ZOMBIE_ATK_NEAR  0.4f
 #define ZOMBIE_ATK_MID   0.1f
 
@@ -89,11 +111,18 @@
 #define WIZARD_FLY_HI     40.0f
 #define WIZARD_FLY_STEP   8.0f
 #define WIZARD_FLY_DIST   16.0f  /* wiz_run's ai_run(16) */
+#define WIZARD_FIRE_A     2      /* the attack frames the spikes leave */
+#define WIZARD_FIRE_B     7
+#define WIZARD_SPIKE_SPEED 600.0f
+#define WIZARD_SPIKE_DMG  9
+#define WIZARD_SPIKE_Z    30.0f
 #define WIZARD_ATK_NEAR   0.6f
 #define WIZARD_ATK_MID    0.2f
 #define WIZARD_ATK_WAIT   2.0f
 
 #define SHAMBLER_HEALTH     600
+#define SHAMBLER_PAIN       2.0f
+#define SHAMBLER_PAIN_ROLL  400.0f  /* a hit under random() * 400 does not flinch */
 #define SHAMBLER_SMASH_DMG  40.0f
 #define SHAMBLER_SMASH      1.2f
 #define SHAMBLER_BOLT_RANGE 600.0f
@@ -135,6 +164,13 @@ void mdl_think( World *world, Player *player, Fight *fight, Renderer *rdr,
  *       -noai is on.
  */
 void mdl_tick( World *world, Player *player, Fight *fight, Renderer *rdr );
+
+/*
+ * name: mdl_vectoyaw
+ * desc: PF_vectoyaw, truncation included. Shared with the guns: a
+ *       monster that takes a hit turns to face where it came from.
+ */
+float mdl_vectoyaw( float dx, float dy );
 
 /*
  * name: mdl_ai_stats

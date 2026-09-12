@@ -23,7 +23,7 @@
  *       move through and carry only EMPTY and SOLID; water and lava
  *       exist only as leaf contents in hull 0.
  */
-static short pl_point_contents( BspVec3 *p, World *world )
+short pl_point_contents( BspVec3 *p, World *world )
 {
     short leaf_nr = r_point_leaf( p, world );
     return r_leaf_contents( leaf_nr, world );

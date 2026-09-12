@@ -124,7 +124,7 @@ void ent_link_doors( World *world )
 
 /* door_go_up for a whole linked group: a shut or closing door sets out,
    an open one restarts its hold. */
-static void ent_door_fire( World *world, short grp )
+void ent_door_fire( World *world, short grp )
 {
     short k;
     DoorEnt far *d = world->door;
@@ -160,8 +160,8 @@ static void ent_kill_targets( World *world, short id )
         if ( world->trig[k].name == id ) world->trig[k].state = ENT_TRIG_DONE;
 }
 
-static void ent_trig_fire( World *world, Player *player, Fight *fight,
-                            Renderer *rdr, short k );
+void ent_trig_fire( World *world, Player *player, Fight *fight,
+                     Renderer *rdr, short k );
 
 void ent_use_targets( World *world, Player *player, Fight *fight,
                        Renderer *rdr, short id )
@@ -210,8 +210,8 @@ void ent_use_targets( World *world, Player *player, Fight *fight,
 
 /* multi_trigger: the message, then the targets; a once and a counter
    are done, a multiple re-arms after wait. */
-static void ent_trig_fire( World *world, Player *player, Fight *fight,
-                            Renderer *rdr, short k )
+void ent_trig_fire( World *world, Player *player, Fight *fight,
+                     Renderer *rdr, short k )
 {
     TrigEnt far *t = &world->trig[k];
 

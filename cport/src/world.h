@@ -87,6 +87,7 @@ typedef struct {
     PathCorner  far *corner;
 
     short       item_count;
+    short       item_max;        /* the map's own plus a backpack a monster */
     ItemEnt     far *item;
 
     short       crate_count;

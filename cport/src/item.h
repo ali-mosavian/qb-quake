@@ -40,6 +40,8 @@
 #define ENT_ITEM_MEGA    100     /* item_health's healamount when it is the mega one */
 #define ENT_BOX_HALF     15.0f   /* b_explob.bsp, 30 by 30 by 62 */
 #define ENT_BOX_TOP      62.0f
+#define ENT_BOX_DMG      160.0f  /* barrel_explode, less half the distance */
+#define ENT_BACKPACK     5       /* the shells a dead soldier leaves */
 
 /* flat-box colours the world's palette already has */
 #define ENT_COL_WHITE   254
@@ -83,5 +85,12 @@ void pl_items_touch( World *world, Player *player, Fight *fight, Renderer *rdr )
  *       can say whether anything was picked up at all.
  */
 short item_taken( World *world );
+
+/*
+ * name: pl_item_add
+ * desc: A dropped pickup, in the slots after the map's own -- the
+ *       backpack a soldier leaves. Silently ignored once they are full.
+ */
+void pl_item_add( World *world, short kind, short amount, BspVec3 far *org );
 
 #endif

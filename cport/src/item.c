@@ -29,8 +29,12 @@ void ent_load_items( World *world, unsigned char far *buf, long *ofs, short coun
 {
     short i;
 
+    /* Room for the map's own plus one backpack a monster: a dead
+       soldier drops one, and nothing else is ever added. */
     world->item_count = count;
-    world->item = (ItemEnt far *) qglMemAlloc( (long) ( count ? count : 1 ) * sizeof(ItemEnt) );
+    world->item_max = (short) ( count + world->mon_count );
+    world->item = (ItemEnt far *) qglMemAlloc(
+                     (long) ( world->item_max ? world->item_max : 1 ) * sizeof(ItemEnt) );
     if ( !world->item ) {
         fprintf( stderr, "ents.bin: out of memory for %d items\n", (int) count );
         exit( 1 );
@@ -246,4 +250,19 @@ short item_taken( World *world )
     short i, n = 0;
     for ( i = 0; i < world->item_count; i++ ) if ( world->item[i].gone ) n++;
     return n;
+}
+
+void pl_item_add( World *world, short kind, short amount, BspVec3 far *org )
+{
+    ItemEnt far *it;
+
+    if ( world->item_count >= world->item_max ) return;
+    it = &world->item[ world->item_count ];
+    it->kind = kind;
+    it->amount = amount;
+    it->target = 0;
+    it->crate = -1;
+    it->pos = *org;
+    it->gone = 0;
+    world->item_count++;
 }
