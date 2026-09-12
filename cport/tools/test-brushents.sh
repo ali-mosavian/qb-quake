@@ -12,7 +12,7 @@
 # brush entities. Doors, lifts and trigger brushes drew nothing, on
 # every map, and the frame was otherwise correct.
 #
-#   cport/tools/test-brushents.sh build/cport-e1m1 e1m1.bsp
+#   cport/tools/test-brushents.sh build/cport-e1m1 e1m1.qmp
 #
 # The viewpoint looks down e1m1's entry corridor at the first double
 # door (submodels *1 and *2, 220 units ahead). Drawn, the two leaves
@@ -21,7 +21,7 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 OUT="${1:?usage: test-brushents.sh <build-dir> [map]}"
-MAP="${2:-e1m1.bsp}"
+MAP="${2:-e1m1.qmp}"
 AT="${AT:--at 452 576 40 -yaw 180}"
 MIN="${MIN:-500}"
 

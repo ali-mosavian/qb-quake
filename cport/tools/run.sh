@@ -1,16 +1,16 @@
 #!/bin/bash
 # Run QCPORT.EXE headless. cport.txt/cstep.txt land in the same dir.
 #
-#   cport/tools/run.sh build/cport ["dm3ish.bsp -ticks 300"]
+#   cport/tools/run.sh build/cport ["dm3ish.qmp -ticks 300"]
 #
 # sys_parse_args needs a map name; the command line defaults to
-# "dm3ish.bsp -ticks 300" if not given -- no -ticks means unbounded
+# "dm3ish.qmp -ticks 300" if not given -- no -ticks means unbounded
 # (main.bas's own default, stops only on ESC), which a headless,
 # nobody-there-to-press-ESC run must never be left at.
 set -euo pipefail
 
 OUT="${1:?usage: run.sh <build-dir> [\"args\"]}"
-QARGS="${2:-dm3ish.bsp -ticks 300}"
+QARGS="${2:-dm3ish.qmp -ticks 300}"
 # The pinned machine, not cycles=max: a frame time is only comparable
 # if both sides ran on the same emulated CPU, and max scales with host
 # load. dosbox/template.conf says 75000 for the same reason.

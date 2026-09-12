@@ -59,6 +59,7 @@ PATH_MAX        equ     80
 ;; the listing, so the assembler is told first
 qglFileRawRead  proto   far pascal :word, :dword, :dword
 qglFileRawWrite proto   far pascal :word, :dword, :dword
+qglFileRawSeek  proto   far pascal :word, :word, :dword
 qglFileRawSize  proto   far pascal :word
 
 IFDEF __BASIC__
@@ -371,6 +372,43 @@ qglFileSize   proc    public uses bx,\
                 xor     dx, dx
                 ret
 qglFileSize   endp
+
+;;::::::::::::::
+;; qglFileSeek ( h:word, pos:dword ) -> ax nonzero on success
+;;
+;; Absolute, from the start of the FILE, and REFUSED on a member: a
+;; handle opened through a driver records how much of its window is
+;; left but never where that window began, so a seek on one would clamp
+;; against the wrong amount. A plain file is its own window, which is
+;; what a caller holding a directory of offsets has open.
+;;::::::::::::::
+qglFileSeek   proc    public uses bx cx dx,\
+                        h:word, pos:dword
+
+                mov     ax, h
+                call    qgl$Slot
+                jc      @@bad
+                cmp     D qgl$file_tb[bx].fh_row, 0
+                jne     @@bad                   ;; a member: see above
+                mov     eax, qgl$file_tb[bx].fh_size
+                cmp     eax, pos
+                jb      @@bad
+                sub     eax, pos                ;; what is left after it
+                mov     cx, qgl$file_tb[bx].fh_dos
+                push    eax
+                push    bx
+                invoke  qglFileRawSeek, cx, 0, pos
+                pop     bx
+                pop     ecx
+                test    ax, ax
+                jz      @@bad
+                mov     qgl$file_tb[bx].fh_left, ecx
+                mov     ax, 1
+                ret
+
+@@bad:          xor     ax, ax
+                ret
+qglFileSeek   endp
 
 
 ;;::::::::::::::

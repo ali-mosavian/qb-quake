@@ -56,6 +56,75 @@ def write_zip(path: str) -> None:
     raw = sum(len(v) for v in OUT.values())
     print(f"  assets.zip: {len(OUT)} members, {raw:,} -> {os.path.getsize(path):,} bytes")
 
+# ---------------------------------------------------------------------
+# The .qmp container: one file per converted map.
+#
+# A map used to be FIVE files staged together -- the .bsp itself (read
+# for its lump counts and its miptex names), assets.zip, texr.raw,
+# texs.raw and pal.raw -- and nothing tied them to each other. e1m1's
+# zip over dm3ish's atlases drew every texture as some other one and
+# ran perfectly happily; the offset table indexes whatever atlas is
+# there. One file cannot be half of another map.
+#
+# It is a flat directory, not a zip: the members are the same STORED
+# bytes, but the reader (src/qgl/qmap.asm) seeks once to a table
+# instead of walking seventeen local headers, and there is no method
+# field to get wrong. Everything is little-endian.
+#
+#     0   "QMAP"              magic
+#     4   version    long     QMAP_VER
+#     8   ndir       short    directory entries
+#    10   dirofs     long     where the directory starts
+#    14   bsp_sum    long     the source .bsp's checksum: identity only
+#    18   name       16 bytes the map's own name, NUL padded
+#    34   pad to QMAP_HEAD
+#    64   directory: ndir x { char name[16]; long ofs; long size; }
+#   ...   member data, each aligned to 16
+QMAP_VER   = 1
+QMAP_HEAD  = 64
+QMAP_NAME  = 16
+QMAP_ENT   = 24
+QMAP_ALIGN = 16
+
+
+def write_qmap(path: str, name: str, bsp: bytes, members: dict[str, bytes]) -> None:
+    if len(members) > 255:
+        raise SystemExit(f"{len(members)} members: the directory is a short count")
+    for m in members:
+        if len(m.encode()) >= QMAP_NAME:
+            raise SystemExit(f"member name {m!r} does not fit {QMAP_NAME - 1} characters")
+
+    dirofs = QMAP_HEAD
+    ofs    = dirofs + QMAP_ENT * len(members)
+    ofs   += -ofs % QMAP_ALIGN
+    dirs, blob = bytearray(), bytearray()
+    for mname, data in members.items():
+        dirs += struct.pack(f"<{QMAP_NAME}sll", mname.encode(), ofs, len(data))
+        pad   = -len(data) % QMAP_ALIGN
+        blob += data + bytes(pad)
+        ofs  += len(data) + pad
+
+    head = struct.pack(f"<4slHlL{QMAP_NAME}s", b"QMAP", QMAP_VER, len(members),
+                       dirofs, zlib.crc32(bsp) & 0xffffffff, name.encode())
+    head += bytes(QMAP_HEAD - len(head))
+    body  = head + bytes(dirs)
+    body += bytes(-len(body) % QMAP_ALIGN)
+    open(path, "wb").write(bytes(body) + bytes(blob))
+
+    # Round trip before trusting the writer: read every member back the
+    # way the driver will, by the directory alone.
+    d = open(path, "rb").read()
+    magic, ver, n, do, _, nm = struct.unpack_from(f"<4slHlL{QMAP_NAME}s", d, 0)
+    assert magic == b"QMAP" and ver == QMAP_VER and n == len(members)
+    assert nm.split(b"\0")[0].decode() == name
+    for k in range(n):
+        mn, mo, ms = struct.unpack_from(f"<{QMAP_NAME}sll", d, do + k * QMAP_ENT)
+        mn = mn.split(b"\0")[0].decode()
+        assert d[mo:mo + ms] == members[mn], mn
+    print(f"  {os.path.basename(path)}: {len(members)} members, "
+          f"{sum(len(v) for v in members.values()):,} -> {len(d):,} bytes")
+
+
 # The geometry store's row width, and the corner count a face record may
 # carry. GEOM_MAXVTX must match q_map.bi's, and d_faces.c sizes its own
 # vertex arrays as GEOM_MAXVTX + 8 -- the clipper's headroom. GEOM_W must
@@ -1143,6 +1212,34 @@ def main():
         raise SystemExit(f"{ntex} textures with the pickups': q_map.bi's ofs(1023) holds 256")
     print(f"  crates: {len(crates.used)} models, {len(crates.tex)} textures after the map's {len(offs)}")
 
+    # What the runtime used to read out of the .bsp itself, so it no
+    # longer has to open it: the lump COUNTS, and the miptex headers,
+    # whose NAMES are what say which texture is a liquid and which is
+    # one frame of an animation. bsphdr.h's DiskMipTex, 40 bytes, one
+    # per texture the map owns -- the crates' cells come after those in
+    # the atlas and have no header here. A texture the map lists with a
+    # -1 offset has none on disk either; it ships as zeros, which is a
+    # blank name, which is neither a liquid nor a chain.
+    OUT['miptex.bin'] = b''.join(
+        d[toff + o : toff + o + 40] if o >= 0 else bytes(40) for o in offs)
+    # mod.h's QmapCounts, in its field order. The divisors are
+    # bsphdr.h's DISK*_SIZE, and they are the same fact twice by
+    # necessity -- one side writes the count, the other only reads it.
+    OUT['counts.bin'] = struct.pack(
+        '<11lh',
+        lumps[7][1] // 20,      # faces      DISKFACE_SIZE
+        lumps[3][1] // 12,      # verts      DISKVERTEX_SIZE
+        lumps[12][1] // 4,      # edges      DISKEDGE_SIZE
+        lumps[13][1] // 4,      # ledges     DISKLEDGE_SIZE
+        lumps[10][1] // 28,     # leaves     DISKLEAF_SIZE
+        lumps[1][1] // 20,      # planes     DISKPLANE_SIZE
+        lumps[5][1] // 24,      # nodes      DISKNODE_SIZE
+        lumps[6][1] // 40,      # tex_infos  DISKTEXINFO_SIZE
+        lumps[9][1] // 8,       # clips      DISKCLIPNODE_SIZE
+        len(offs),              # textures, the map's own
+        lumps[11][1],           # face_lump_bytes
+        lumps[14][1] // 64 )    # models     DISKSUBMODEL_SIZE
+
     # ------------------------------------------------------------------
     # Two atlases, not 648 DCs.
     #
@@ -1236,15 +1333,19 @@ def main():
     # Truncated to exactly rows*LM_ATLAS_W: qglSfLoad reads y_res rows of
     # x_res and fails the load if any row runs short, so the file has to be
     # the surface's own size and not a byte more.
+    qmap_texr = qmap_texs = b""
     for name, at in (("texr.raw", raw_at), ("texs.raw", shd_at)):
         payload = bytes(at)[: rows * LM_ATLAS_W]
         open(os.path.join(outdir, name), "wb").write(payload)
+        if name == "texr.raw": qmap_texr = payload
+        else:                  qmap_texs = payload
         print(f"  {name}: {LM_ATLAS_W}x{rows} = {len(payload):,} bytes (flat, unzipped)")
 
     # The palette too, flat: screen.bas picks the HUD colours out of it and
     # writes it into screenshots, and reads it with a plain OPEN.
     pal_raw = pack_read(packpath, 'color/palette.lmp')[:768]
     open(os.path.join(outdir, "pal.raw"), "wb").write(pal_raw)
+    qmap_pal = pal_raw
     print(f"  pal.raw: {len(pal_raw)} bytes (flat, unzipped)")
 
     tbl = bytearray()
@@ -1278,5 +1379,13 @@ def main():
         print(f"  portals: {len(OUT['portalref.bld'])//14} refs over {len(pb.leaves)} leaves")
 
     write_zip(os.path.join(outdir, 'assets.zip'))
+
+    # And the same bytes as ONE file. The zip and the three loose ones
+    # stay for the BASIC build, which still stages five things; cport
+    # reads this and nothing else.
+    stem = os.path.splitext(os.path.basename(bsp))[0]
+    write_qmap(os.path.join(outdir, stem + '.qmp'), stem, d,
+               dict(OUT, **{'texr.raw': qmap_texr, 'texs.raw': qmap_texs,
+                            'pal.raw': qmap_pal}))
 
 main()

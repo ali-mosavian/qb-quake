@@ -27,7 +27,7 @@ OUT="${1:?usage: test-depth.sh <build-dir>}"
 # dm3ish's func_plat is in view from here; the spawn is not a test,
 # because no entity is drawn there and the mode never switches.
 TIMEOUT="${TIMEOUT:-200}" "${RUN_SH:-$HERE/run.sh}" "$OUT" \
-    "dm3ish.bsp -at 231 -37 184 -yaw 196 -ticks 4" >/dev/null 2>&1
+    "dm3ish.qmp -at 231 -37 184 -yaw 196 -ticks 4" >/dev/null 2>&1
 
 read -r lit total <<< "$(python3 - "$OUT/BENCH.BMP" <<'PY'
 import sys

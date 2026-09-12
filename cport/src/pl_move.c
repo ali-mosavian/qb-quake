@@ -562,6 +562,6 @@ void pl_move( World *world, Player *player, Camera *cam,
 
 void pl_load_hulls( World *world, short clip_count )
 {
-    world->clip = (ClipNode far *) asset_load( "assets.zip::clip.pag",
+    world->clip = (ClipNode far *) asset_load( "clip.pag",
                                                 (long) clip_count * sizeof(ClipNode) );
 }

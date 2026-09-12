@@ -30,7 +30,7 @@ QGL_SRC := $(QGL)/file.asm $(QGL)/vga.asm \
            $(QGL)/qglrow.asm $(QGL)/dct/dctmem.asm $(QGL)/dct/dctems.asm \
            $(QGL)/txt.asm $(QGL)/dr.asm \
            $(QGL)/z.asm $(QGL)/clip.asm $(QGL)/rs.asm $(QGL)/sb.asm \
-           $(QGL)/zip.asm $(QGL)/ar.asm $(QGL)/dsp.asm \
+           $(QGL)/ar.asm $(QGL)/dsp.asm \
            $(QGL)/log.asm $(QGL)/tmr.asm $(QGL)/kbd.asm $(QGL)/mouse.asm \
            $(QGL)/m4.asm \
            $(QGL)/b8/b8fill.asm $(QGL)/b8/b8span.asm
@@ -63,16 +63,19 @@ EXE  := $(BUILD)/QCPORT.EXE
 
 .PHONY: all build run clean help
 
-# assets.zip carries the lumps; TEXR/TEXS.RAW and pal.raw are loose
-# because qgl maps the atlases into EMS a page at a time, which a
-# deflated member cannot serve, and because qglVgaPalette wants the
-# 8-bit palette rather than what the DAC would give back.
+# ONE file per map: <map>.qmp carries every lump, both atlases, the
+# palette, the font and the colormap, and the run takes its name. The
+# five that used to be staged together -- the .bsp, assets.zip and
+# three loose atlases -- could be five different maps' and nothing said
+# so. There is no container driver in the file layer for it: the file
+# is opened once and every member read by qglFileSeek to its offset,
+# which is why zip.asm is off this link line.
 DATA_SRC := $(CURDIR)/../data/assets
-DATA     := assets.zip TEXR.RAW TEXS.RAW pal.raw
-# The map and the ini are read by name out of the working directory, so
-# they are staged too -- a run without them dies in config_load or
-# mod_open, several marks before anything says which file was missing.
-ROOT_DATA := dm3ish.bsp stuff.ini
+DATA     := dm3ish.qmp
+# stuff.ini is read by name out of the working directory -- it is the
+# run's configuration, not the map's, and config.c opens it with plain
+# fopen.
+ROOT_DATA := stuff.ini
 DATA_OUT := $(addprefix $(BUILD)/,$(DATA) $(ROOT_DATA))
 
 all: build                      ## build the standalone renderer (default)

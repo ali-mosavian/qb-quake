@@ -28,6 +28,7 @@
 #include "pl_move.h"
 #include "input.h"
 #include "fight.h"
+#include "assets.h"
 #include "item.h"
 #include "h_frame.h"
 #include "screen.h"
@@ -214,7 +215,6 @@ int main( void )
         HostClock  clock;
         PhaseTimes pt;
         MapCounts  counts;
-        FILE      *mapf;
         PalRgb far *       tex_pal;
         Mat4    mtx_prj;
         Vec3 cam_up;
@@ -256,7 +256,12 @@ int main( void )
            and the loading screen wants them. It used to sit after the
            textures, which is the only reason it was ever "too late" to
            label a load. */
-        font_load( &hud->font, "assets.zip::font.fnt" );
+        /* The container, before anything asks it for a member -- the
+           font is the first, and it is not the map's. */
+        asset_map( args.map_name );
+        mark( "asset_map ok" );
+
+        font_load( &hud->font, "font.fnt" );
         mark( "font_load ok" );
 
         /* Six ld_step calls follow -- keep this in step with them, or
@@ -264,7 +269,7 @@ int main( void )
         ld_begin( &ldr, v.h_video_dc, hud, 6, v.scr_x_res, v.scr_y_res );
 
         ld_stage( &ldr, v.h_video_dc, hud, "loading map" );
-        mapf = mod_load_world( &world, &rdr, &cam, &fight, args.map_name, &counts );
+        mod_load_world( &world, &rdr, &cam, &fight, args.map_name, &counts );
         ld_step( &ldr, v.h_video_dc, hud );
 
         sprintf( buf, "mod_load_world ok faces=%d leaves=%d models=%d tele=%d plat=%d item=%d",
@@ -276,12 +281,8 @@ int main( void )
                  (long) cam.start_angle );
         mark( buf );
 
-        /* mod_tex.c's own proof: textures, still on the same open file,
-           matching main.bas's real order (mod_open, mod_load_world,
-           mod_load_texinfo/mod_load_textures, THEN mod_close). */
         ld_stage( &ldr, v.h_video_dc, hud, "loading textures" );
-        tex_pal = mod_load_textures( &world, mapf, &counts );
-        mod_close( mapf );
+        tex_pal = mod_load_textures( &world, &counts );
         ld_step( &ldr, v.h_video_dc, hud );
 
         sprintf( buf, "mod_load_textures ok textures=%ld pal=%ld tex_raw=%ld tex_shaded=%ld",

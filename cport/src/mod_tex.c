@@ -111,40 +111,30 @@ static void mod_link_anims( World *world, DiskMipTex far *t_mip_inf, long textur
     }
 }
 
-PalRgb far * mod_load_textures( World *world, FILE *f, MapCounts *counts )
+PalRgb far * mod_load_textures( World *world, MapCounts *counts )
 {
-    long far *tex_offs;
     DiskMipTex far *t_mip_inf;
     long i;
     short j;
     PalRgb far *pal;
 
-    world->texinfo = (TexInfo far *) asset_load( "assets.zip::texinf.bld",
+    world->texinfo = (TexInfo far *) asset_load( "texinf.bld",
                                                   counts->tex_infos * (long) sizeof(TexInfo) );
 
-    /* The numtex offset table: one long per texture, right after the
-       lump's own leading numtex long mod_open already read. */
-    tex_offs = (long far *) qglMemAlloc( counts->textures * (long) sizeof(long) );
-    if ( !tex_offs ) modtex_fatal( "out of memory for the texture offset table" );
-    if ( fseek( f, counts->mip_tex_offs + 4, SEEK_SET ) != 0 ) modtex_fatal( "mip_tex offsets seek failed" );
-    for ( i = 0; i < counts->textures; i++ ) {
-        long o;
-        if ( fread( &o, sizeof(long), 1, f ) != 1 ) modtex_fatal( "mip_tex offsets short read" );
-        tex_offs[i] = o;
-    }
-
-    t_mip_inf = (DiskMipTex far *) qglMemAlloc( counts->textures * (long) sizeof(DiskMipTex) );
+    /* The miptex headers, which used to be seeked out of the raw .bsp
+       one at a time -- the only thing this program still opened it for.
+       mkassets ships them back to back instead, one per texture the map
+       owns; a texture the map lists with no lump is 40 zero bytes,
+       which is a blank name, which is neither a liquid nor a chain. */
+    t_mip_inf = (DiskMipTex far *) asset_load( "miptex.bin",
+                                                counts->textures * (long) sizeof(DiskMipTex) );
     world->miptex = (MipTex far *) qglMemAlloc( counts->textures * (long) sizeof(MipTex) );
-    if ( !t_mip_inf || !world->miptex ) modtex_fatal( "out of memory for texture headers" );
+    if ( !world->miptex ) modtex_fatal( "out of memory for texture headers" );
 
     for ( i = 0; i < counts->textures; i++ ) {
         DiskMipTex hdr;
 
-        if ( fseek( f, counts->mip_tex_offs + tex_offs[i], SEEK_SET ) != 0 )
-            modtex_fatal( "texture header seek failed" );
-        if ( fread( &hdr, sizeof(DiskMipTex), 1, f ) != 1 )
-            modtex_fatal( "texture header short read" );
-        _fmemcpy( &t_mip_inf[i], &hdr, sizeof(DiskMipTex) );
+        _fmemcpy( &hdr, &t_mip_inf[i], sizeof(DiskMipTex) );
 
         /* The renderer scales texture axes by the reciprocal of the
            ORIGINAL texture size, so these dimensions are still needed
@@ -162,8 +152,6 @@ PalRgb far * mod_load_textures( World *world, FILE *f, MapCounts *counts )
         if ( hdr.name[0] == '*' ) world->miptex[i].liquid = -1;
     }
 
-    qglMemFree( (long) tex_offs );
-
     /*
      * The pixels: two atlases, four views each. A cell is a FLAT run
      * of cell*cell bytes, not a window on the 8192-wide image -- the
@@ -173,8 +161,8 @@ PalRgb far * mod_load_textures( World *world, FILE *f, MapCounts *counts )
      * BMP_OPT_NO332 to stop it remapping already-correct indices into
      * its own 3-3-2 palette, and qgl has no decoder to defend against.
      */
-    world->tex_raw    = qgl_surf_from_file( "TEXR.RAW", TEX_ATLAS_W, QGL_SURF_EMS, 0 );
-    world->tex_shaded = qgl_surf_from_file( "TEXS.RAW", TEX_ATLAS_W, QGL_SURF_EMS, 0 );
+    world->tex_raw    = qgl_surf_from_member( "texr.raw", TEX_ATLAS_W, QGL_SURF_EMS, 0 );
+    world->tex_shaded = qgl_surf_from_member( "texs.raw", TEX_ATLAS_W, QGL_SURF_EMS, 0 );
     if ( !world->tex_raw || !world->tex_shaded ) modtex_fatal( "texture atlas would not load" );
 
     /* texofs.bld is sized to the map's own texture count (mkassets.py:
@@ -184,7 +172,7 @@ PalRgb far * mod_load_textures( World *world, FILE *f, MapCounts *counts )
        fill the array. asset_load_whole reads whatever the file holds. */
     {
         long n;
-        unsigned char far *ofsbuf = asset_load_whole( "assets.zip::texofs.bld", &n );
+        unsigned char far *ofsbuf = asset_load_whole( "texofs.bld", &n );
         _fmemcpy( world->tex_ofs, ofsbuf, n );
         qglMemFree( (long) ofsbuf );
     }

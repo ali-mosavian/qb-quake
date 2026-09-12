@@ -62,7 +62,7 @@ void sys_parse_args( RunArgs *args )
     }
 
     if ( argc < 1 ) {
-        printf( "Usage: qrender mapname.bsp [-ticks N]\n" );
+        printf( "Usage: qcport mapname.qmp [-ticks N]\n" );
         printf( "  -ticks N      run N simulation ticks, then write bench.bmp/bench.txt, exit\n" );
         printf( "  -lm           composite lightmaps via the surface cache\n" );
         exit( 0 );

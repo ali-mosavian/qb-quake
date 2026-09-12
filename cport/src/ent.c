@@ -269,7 +269,7 @@ void ent_check_teleport( Player *player, World *world, short scr_x_res )
 void ent_load_spawn( World *world, Camera *cam, Fight *fight )
 {
     long n;
-    unsigned char far *buf = asset_load_whole( "assets.zip::ents.bin", &n );
+    unsigned char far *buf = asset_load_whole( "ents.bin", &n );
     EntsHead h;
 
     _fmemcpy( &h, buf, sizeof(EntsHead) );
@@ -471,7 +471,7 @@ static void ent_load_msgs( World *world, unsigned char far *buf, long *ofs, shor
 void ent_load_teleports( World *world )
 {
     long n, ofs;
-    unsigned char far *buf = asset_load_whole( "assets.zip::ents.bin", &n );
+    unsigned char far *buf = asset_load_whole( "ents.bin", &n );
     EntsHead h;
     short i, j, k, mdlnum;
 

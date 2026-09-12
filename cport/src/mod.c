@@ -27,46 +27,36 @@ static void mod_fatal( char *what )
     sys_error( what );
 }
 
-FILE *mod_open( char *map_name, World *world, MapCounts *counts )
+void mod_open( char *qmp, World *world, MapCounts *counts )
 {
-    FILE *f;
-    BspHeader head;
-    long tex_count;
+    QmapCounts far *qc;
 
-    f = fopen( map_name, "rb" );
-    if ( !f ) mod_fatal( "map file would not open" );
+    (void) qmp;     /* main opened the container: the font wants it first */
+    qc = (QmapCounts far *) asset_load( "counts.bin",
+                                         (long) sizeof(QmapCounts) );
 
-    if ( fread( &head, sizeof(BspHeader), 1, f ) != 1 ) mod_fatal( "map header short read" );
+    world->face_count  = (short) qc->faces;
+    world->vert_count  = (short) qc->verts;
+    world->edge_count  = (short) qc->edges;
+    world->leaf_count  = (short) qc->leaves;
+    world->node_count  = (short) qc->nodes;
+    world->model_count = qc->models;
 
-    world->face_count  = (short) ( head.faces.size  / DISKFACE_SIZE );
-    counts->verts       = head.vertices.size / DISKVERTEX_SIZE;
-    world->vert_count  = (short) counts->verts;
-    counts->edges       = head.edges.size    / DISKEDGE_SIZE;
-    world->edge_count  = (short) counts->edges;
-    counts->ledges       = head.ledges.size   / DISKLEDGE_SIZE;
-    world->leaf_count  = (short) ( head.leaves.size / DISKLEAF_SIZE );
-    counts->planes      = head.planes.size    / DISKPLANE_SIZE;
-    counts->nodes       = head.nodes.size     / DISKNODE_SIZE;
-    world->node_count  = (short) counts->nodes;
-    world->model_count = (short) ( head.models.size / DISKSUBMODEL_SIZE );
-    counts->tex_infos    = head.tex_info.size  / DISKTEXINFO_SIZE;
-    counts->clips        = head.clip_node.size / DISKCLIPNODE_SIZE;
-    counts->face_lump_bytes = head.lface.size;
+    counts->faces           = qc->faces;
+    counts->verts           = qc->verts;
+    counts->edges           = qc->edges;
+    counts->ledges          = qc->ledges;
+    counts->leaves          = qc->leaves;
+    counts->planes          = qc->planes;
+    counts->nodes           = qc->nodes;
+    counts->tex_infos       = qc->tex_infos;
+    counts->clips           = qc->clips;
+    counts->textures        = qc->textures;
+    counts->face_lump_bytes = qc->face_lump_bytes;
 
-    counts->mip_tex_offs = head.mip_tex.offs;
-    if ( fseek( f, head.mip_tex.offs, SEEK_SET) != 0 ) mod_fatal( "mip_tex lump seek failed" );
-    if ( fread( &tex_count, sizeof(long), 1, f ) != 1 ) mod_fatal( "mip_tex header short read" );
-    counts->textures = tex_count;
-    counts->faces = world->face_count;
-    counts->leaves = world->leaf_count;
-
-    return f;
+    qglMemFree( (long) qc );
 }
 
-void mod_close( FILE *f )
-{
-    fclose( f );
-}
 
 /*
  * name: mod_load_faces
@@ -75,7 +65,7 @@ void mod_close( FILE *f )
  */
 static void mod_load_faces( World *world )
 {
-    world->faces = (Face far *) asset_load( "assets.zip::faces.pag",
+    world->faces = (Face far *) asset_load( "faces.pag",
                                              (long) world->face_count * sizeof(Face) );
 }
 
@@ -93,15 +83,13 @@ void mod_load_colormap( World *world )
     world->cmap_dc   = 0;
     world->cmap_size = 0;
 
-    if ( !( fh = qglFileOpen( "assets.zip::colmap.bin" ) ) ) return;
+    fh = asset_seek( "colmap.bin", 0 );
 
     world->cmap_dc = qglSfNew( 16384, 1, QGL_SURF_EMS );
     if ( world->cmap_dc ) {
         p = (unsigned char far *) qglSfAccessRdEx( world->cmap_dc, 0, 3 /* CM_SLOT */ );
         if ( p && qglFileRead( fh, (long) p, 16384L ) == 16384L ) world->cmap_size = 16384;
     }
-
-    qglFileClose( fh );
 
     if ( world->cmap_size == 0 ) mod_fatal( "colormap would not load" );
 }
@@ -118,7 +106,7 @@ static void mod_load_lightmaps( World *world )
     world->light_atlas = 0;
     world->light_size  = 0;
 
-    world->light_atlas = qgl_surf_from_file( "assets.zip::lm.bin", LM_ATLAS_W,
+    world->light_atlas = qgl_surf_from_member( "lm.bin", LM_ATLAS_W,
                                              QGL_SURF_EMS, &world->light_size );
     world->light_loaded = world->light_atlas ? world->light_size : 0;
 }
@@ -140,37 +128,40 @@ static void mod_load_facevtx( World *world )
        and the failure is invisible. */
     volatile short y;
     unsigned char far *p;
+    long n, want;
 
-    if ( !( fh = qglFileOpen( "assets.zip::fgeom.bin" ) ) ) mod_fatal( "fgeom.bin missing" );
+    fh = asset_seek( "fgeom.bin", &n );
 
-    world->geom_rows = (short) ( (qglFileSize( fh ) + GEOM_W - 1) / GEOM_W );
+    world->geom_rows = (short) ( (n + GEOM_W - 1) / GEOM_W );
     world->geom_dc = qglSfNew( (short) GEOM_W, world->geom_rows, QGL_SURF_EMS );
     if ( !world->geom_dc ) mod_fatal( "no EMS for the geometry store" );
 
     for ( y = 0; y < world->geom_rows; y++ ) {
         p = (unsigned char far *) qglSfAccessRdEx( world->geom_dc, y, PAGE_SLOT );
         if ( !p ) mod_fatal( "geometry store will not map" );
-        if ( qglFileRead( fh, (long) p, GEOM_W ) != GEOM_W ) mod_fatal( "fgeom.bin short read" );
+        /* The last row may be short: the member is not padded up to a
+           whole row, and the handle is the container's, so a full-row
+           read would take the bytes of whatever member follows. */
+        want = ( n - (long) y * GEOM_W < GEOM_W ) ? n - (long) y * GEOM_W : GEOM_W;
+        if ( qglFileRead( fh, (long) p, want ) != want ) mod_fatal( "fgeom.bin short read" );
     }
-
-    qglFileClose( fh );
 }
 
 static void mod_load_nodes( World *world, MapCounts *counts )
 {
-    world->nodes = (Node far *) asset_load( "assets.zip::nodes.pag",
+    world->nodes = (Node far *) asset_load( "nodes.pag",
                                              counts->nodes * (long) sizeof(Node) );
 }
 
 static void mod_load_planes( World *world, MapCounts *counts )
 {
-    world->planes = (Plane far *) asset_load( "assets.zip::planes.bld",
+    world->planes = (Plane far *) asset_load( "planes.bld",
                                                counts->planes * (long) sizeof(Plane) );
 }
 
 static void mod_load_submodels( World *world )
 {
-    world->models = (Submodel far *) asset_load( "assets.zip::models.bld",
+    world->models = (Submodel far *) asset_load( "models.bld",
                                                   (long) world->model_count * sizeof(Submodel) );
 }
 
@@ -179,15 +170,13 @@ static void mod_load_submodels( World *world )
 static void mod_load_visibility( World *world )
 {
     long n;
-    world->pvs_data = asset_load_whole( "assets.zip::pvs.bin", &n );
+    world->pvs_data = asset_load_whole( "pvs.bin", &n );
 }
 
-FILE *mod_load_world( World *world, Renderer *rdr, Camera *cam, Fight *fight, char *map_name, MapCounts *counts )
+void mod_load_world( World *world, Renderer *rdr, Camera *cam, Fight *fight, char *map_name, MapCounts *counts )
 {
-    FILE *f;
-
     memset( counts, 0, sizeof(*counts) );
-    f = mod_open( map_name, world, counts );
+    mod_open( map_name, world, counts );
 
     r_alloc_scratch( rdr, world->face_count, (short) counts->nodes, world->leaf_count );
 
@@ -206,9 +195,6 @@ FILE *mod_load_world( World *world, Renderer *rdr, Camera *cam, Fight *fight, ch
 
     ent_load_spawn( world, cam, fight );
     ent_load_teleports( world );
-
-    return f;   /* still open -- mod_tex.h's loaders want it next, then
-                   the caller closes it (mod_close) */
 }
 
 unsigned char far *mod_lm_map( World *world, short row )

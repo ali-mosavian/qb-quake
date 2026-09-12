@@ -10,23 +10,23 @@
 #
 #   cport/tools/test-items.sh build/cport-e1m1
 #
-# The map must be staged (assets.zip, TEXR/TEXS.RAW, pal.raw, the
-# bsp); the test SKIPs rather than fails when it is not.
+# The map must be staged (e1m1.qmp, which is all of it); the test
+# SKIPs rather than fails when it is not.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 OUT="${1:?usage: test-items.sh <build-dir>}"
 MIN="${MIN:-100}"
 
-[[ -f "$OUT/e1m1.bsp" ]] || { echo "SKIP: no e1m1.bsp in $OUT"; exit 0; }
+[[ -f "$OUT/e1m1.qmp" ]] || { echo "SKIP: no e1m1.qmp in $OUT"; exit 0; }
 
 run() { TIMEOUT="${TIMEOUT:-200}" "${RUN_SH:-$HERE/run.sh}" "$OUT" "$@" >/dev/null 2>&1; }
 
 # The megahealth at (944,1008,-272), seen from 108 units short of it.
 AT="-at 944 900 -240 -yaw 270 -ticks 4"
-run "e1m1.bsp -nostats $AT"          || true
+run "e1m1.qmp -nostats $AT"          || true
 cp "$OUT/BENCH.BMP" "$OUT/items-on.bmp" 2>/dev/null || { echo "FAIL: no frame written" >&2; exit 1; }
-run "e1m1.bsp -nostats -noitems $AT" || true
+run "e1m1.qmp -nostats -noitems $AT" || true
 
 diff_px=$(python3 - "$OUT/items-on.bmp" "$OUT/BENCH.BMP" <<'PY'
 import sys
@@ -47,7 +47,7 @@ else
 fi
 
 # Standing on item 21, 20 shells at (672,-40): 25 + 20, and one gone.
-run "e1m1.bsp -nostats -at 672 -40 80 -ticks 30" || true
+run "e1m1.qmp -nostats -at 672 -40 80 -ticks 30" || true
 kit=$(tr -d '\r' < "$OUT/cstep.txt" 2>/dev/null | grep -m1 '^fight=')
 shells=$(sed -n 's/.*shells \([0-9]*\).*/\1/p' <<< "$kit")
 took=$(sed -n 's/.*took \([0-9]*\).*/\1/p' <<< "$kit")

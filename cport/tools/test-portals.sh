@@ -36,7 +36,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 OUT="${1:?usage: test-portals.sh <build-dir>}"
 
 arm() {   # arm <extra-flags> -> "<md5> <ft_mean>"
-    TIMEOUT="${TIMEOUT:-400}" "${RUN_SH:-$HERE/run.sh}" "$OUT" "dm3ish.bsp -nostats -ticks 60 $1" >/dev/null 2>&1
+    TIMEOUT="${TIMEOUT:-400}" "${RUN_SH:-$HERE/run.sh}" "$OUT" "dm3ish.qmp -nostats -ticks 60 $1" >/dev/null 2>&1
     # An absent frame must not read as a matching one: without this both
     # arms return the empty string and "identical picture" passes for a
     # program that never rendered.
@@ -63,7 +63,7 @@ fi
 
 # The busiest leaf's portal count, out of the map's own index, so the
 # bound is the data's and not a number picked to make this pass.
-maxrefs=$(unzip -p "$OUT/assets.zip" portalidx.bld | python3 -c 'import sys,struct; d=sys.stdin.buffer.read(); a=struct.unpack("<%dh"%(len(d)//2),d); print(max(a[i+1]-a[i] for i in range(len(a)-1)))')
+maxrefs=$(python3 "$HERE/../../tools/qmapread.py" "$OUT/dm3ish.qmp" portalidx.bld | python3 -c 'import sys,struct; d=sys.stdin.buffer.read(); a=struct.unpack("<%dh"%(len(d)//2),d); print(max(a[i+1]-a[i] for i in range(len(a)-1)))')
 
 if [[ -z "$pops" || -z "$projs" || "$pops" -le 0 ]]; then
     echo "FAIL: no flood counters in BENCH.TXT -- the instrument is gone" >&2

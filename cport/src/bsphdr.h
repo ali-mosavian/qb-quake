@@ -2,19 +2,17 @@
 #define __BSPHDR_H__
 
 /*
- * bsphdr.h -- the raw .bsp file's own lump directory. Read once, by
- * mod_open, mostly just to derive lump COUNTS (each lump's byte size
- * divided by its on-disk record size). The actual per-map arrays
- * (faces/nodes/leaves/planes/clipnodes/...) all come from assets.zip
- * (mkassets.py's own pre-processed, already-narrowed output), read
- * through assets.h's asset_load, never parsed from the raw lumps at
- * all. The one exception is the miptex directory (mod_tex.c): its
- * per-texture NAMES are what encode animation chains and liquids
- * ("+0wall", "*water"), and mkassets.py's own texture atlas has no
- * reason to carry text mkassets already resolved into wdth/hght/
- * liquid/anim_base/anim_count -- so mod_tex.c reads DiskMipTex
- * headers straight out of the raw file, the one place this project
- * still does that.
+ * bsphdr.h -- the raw .bsp file's own layout. NOTHING HERE IS READ FROM
+ * A .bsp any more: cport opens the map container and never the map, so
+ * the lump directory and the DISK*_SIZE divisors are what mkassets.py
+ * used to derive counts.bin, kept here as the statement of the format
+ * those numbers came from. cport/tools/test-records.sh is what checks
+ * them against a real .bsp.
+ *
+ * DiskMipTex is the one record still read at run time, and it arrives
+ * as the container's miptex.bin: its per-texture NAMES are what encode
+ * animation chains and liquids ("+0wall", "*water"), which the atlas
+ * has no reason to carry as text.
  */
 typedef struct {
     long offs;

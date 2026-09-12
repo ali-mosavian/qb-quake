@@ -20,7 +20,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 OUT="${1:?usage: test-walk.sh <build-dir>}"
 
-TIMEOUT="${TIMEOUT:-150}" "${RUN_SH:-$HERE/run.sh}" "$OUT" "dm3ish.bsp -nostats -walk -ticks 200" >/dev/null 2>&1
+TIMEOUT="${TIMEOUT:-150}" "${RUN_SH:-$HERE/run.sh}" "$OUT" "dm3ish.qmp -nostats -walk -ticks 200" >/dev/null 2>&1
 
 # tr -d '\r': cstep.txt is written by the DOS program, so every line
 # ends CRLF and the last field carries the CR into $(( )).

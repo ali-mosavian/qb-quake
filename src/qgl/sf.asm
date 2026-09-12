@@ -456,6 +456,23 @@ qglSfLoad     proc    public uses bx cx dx si di es,\
 qglSfLoad     endp
 
 
+;;::::::::::::::
+;; qglSfLoadFh ( s:far ptr, fh:word ) -> ax nonzero if every row arrived
+;;
+;; The same fill as qglSfLoad, on a handle the CALLER opened and keeps:
+;; one file holding many things, positioned at this one's first byte
+;; (qglFileSeek). qglSfLoad is this with an open and a close around it,
+;; which is the wrong shape when the surface is a member of a container
+;; the caller already has open and will read again.
+;;::::::::::::::
+qglSfLoadFh   proc    public uses bx cx dx si di es,\
+                        s:dword, fh:word
+
+                invoke  qgl$SfLoadFh, s, fh
+                ret
+qglSfLoadFh   endp
+
+
 IFDEF __BASIC__
 ;;::::::::::::::
 ;; qglSfFromFileBas ( path:BasStr, wide:word, kind:word )

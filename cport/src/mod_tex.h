@@ -32,7 +32,7 @@
  *       original never checked it either); the caller owns installing
  *       and freeing it (vid.c's v_init).
  */
-PalRgb far * mod_load_textures( World *world, FILE *f, MapCounts *counts );
+PalRgb far * mod_load_textures( World *world, MapCounts *counts );
 
 /* Cell k of mip level mip, as a dc. Re-aims a view rather than owning
    one per texture. */

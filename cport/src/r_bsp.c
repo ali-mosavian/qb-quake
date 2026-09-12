@@ -344,26 +344,26 @@ void r_portal_outline( World *world, Renderer *rdr, QSurf dc, Mat4 *mtx_fin,
 
 void r_load_leaves( World *world )
 {
-    world->leaves = (Leaf far *) asset_load( "assets.zip::leaves.pag",
+    world->leaves = (Leaf far *) asset_load( "leaves.pag",
                                               (long) world->leaf_count * sizeof(Leaf) );
 }
 
 void r_load_lfaces( World *world, long lump_bytes )
 {
-    world->lfc = (short far *) asset_load( "assets.zip::lface.bld", lump_bytes );
+    world->lfc = (short far *) asset_load( "lface.bld", lump_bytes );
 }
 
 void r_load_portals( World *world, long leaf_count )
 {
     long nrefs;
 
-    world->pt_idx = (short far *) asset_load( "assets.zip::portalidx.bld",
+    world->pt_idx = (short far *) asset_load( "portalidx.bld",
                                                (leaf_count + 1) * (long) sizeof(short) );
 
     nrefs = world->pt_idx[leaf_count];
     if ( nrefs <= 0 ) { world->pt_ref = 0; return; }
 
-    world->pt_ref = (short far *) asset_load( "assets.zip::portalref.bld",
+    world->pt_ref = (short far *) asset_load( "portalref.bld",
                                                nrefs * (long) PT_REF_SHORTS * sizeof(short) );
 }
 

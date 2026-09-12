@@ -1,8 +1,6 @@
 #ifndef __MOD_H__
 #define __MOD_H__
 
-#include <stdio.h>
-
 #include "renderer.h"
 #include "world.h"
 #include "fight.h"
@@ -10,12 +8,24 @@
 /*
  * mod.h -- reading the map into World. C port of model.bas.
  *
- * Nearly everything here reads a pre-processed assets.zip member
- * (mkassets.py's own output, already in the exact runtime record
- * shape World's fields want -- see bsphdr.h's own note) rather than
- * parsing the raw .bsp lumps directly; the raw file is opened only
- * for its header, to derive the counts that size each read.
+ * Everything here reads a member of the map's own .qmp (mkassets.py's
+ * own output, already in the exact runtime record shape World's
+ * fields want). The raw .bsp is not opened at all any more: the lump
+ * counts and the miptex headers it used to be read for are members
+ * too, so a map is one file and the run takes its name.
  */
+
+/* mkassets.py's counts.bin, which is what mod_open used to derive from
+   the .bsp header. Field order is the writer's; the guard below is the
+   other half of it. */
+typedef struct {
+    long faces, verts, edges, ledges, leaves, planes, nodes;
+    long tex_infos, clips, textures, face_lump_bytes;
+    short models;
+} QmapCounts;
+
+#define REC_QMAPCOUNTS 46
+typedef char rec_qmapcounts_ok[ sizeof(QmapCounts) == REC_QMAPCOUNTS ? 1 : -1 ];
 
 /* MapCount, mod_open's own derived lump counts -- transient, unlike
    World's model_count/face_count/leaf_count: nothing outside the
@@ -25,36 +35,25 @@
 typedef struct {
     long faces, verts, edges, ledges, leaves, planes, nodes, tex_infos, clips, textures;
     long face_lump_bytes;   /* r_load_lfaces' own read size */
-    long mip_tex_offs;      /* mod_tex.h's own seek base -- every texture
-                                offset and header is relative to this */
 } MapCounts;
 
 /*
  * name: mod_open
- * desc: Opens map_name, reads the header, derives every lump count.
- *       Sets world->model_count/face_count/leaf_count (the counts real
- *       per-frame readers need); everything else comes back through
- *       *counts for mod_load_world's own use. Returns the open FILE*
- *       (mod_close's own parameter) -- fatal if the map won't open.
+ * desc: Names the map container for every later read and takes its
+ *       counts.bin. Sets world->model_count/face_count/leaf_count (the
+ *       counts real per-frame readers need); everything else comes
+ *       back through *counts for mod_load_world's own use.
  */
-FILE *mod_open( char *map_name, World *world, MapCounts *counts );
-
-/* Releases the map file. */
-void mod_close( FILE *f );
+void mod_open( char *qmp, World *world, MapCounts *counts );
 
 /*
  * name: mod_load_world
  * desc: Every lump of the map, in the order they depend on each
  *       other, EXCEPT textures -- mod_tex.h owns those, its own load
- *       phase, timed separately. Matches main.bas's own real call
- *       order: mod_open, mod_load_world, THEN mod_tex.h's
- *       mod_load_texinfo/mod_load_textures (both still want the file
- *       counts.textures pass), and only then mod_close -- so this
- *       does NOT close the file itself. *counts and the returned
- *       FILE* are both the caller's to hand to mod_tex.h's loaders
- *       and to mod_close when textures are done.
+ *       phase, timed separately. main.bas's own call order:
+ *       mod_open, mod_load_world, then mod_load_textures.
  */
-FILE *mod_load_world( World *world, Renderer *rdr, Camera *cam, Fight *fight, char *map_name, MapCounts *counts );
+void mod_load_world( World *world, Renderer *rdr, Camera *cam, Fight *fight, char *map_name, MapCounts *counts );
 
 /*
  * name: mod_load_colormap
