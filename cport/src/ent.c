@@ -284,7 +284,14 @@ void ent_load_spawn( World *world, Camera *cam, Fight *fight )
     cam->pos.x = h.spawn.x;
     cam->pos.z = h.spawn.y;
     cam->pos.y = h.spawn.z;
-    cam->start_angle = h.angle;
+    /* MIRRORED. The map's angle is CCW from +x; the freelook math
+       makes the eye direction (cos a, -sin a) in bsp x,y, so a spawn
+       that should face +y (angle 90) needs 270 here. Unmirrored, the
+       player starts facing the wall behind them: -walk from e1m1's
+       spawn went 47 units backwards and stopped, where it should walk
+       the length of the hall. */
+    cam->start_angle = 360.0f - h.angle;
+    if ( cam->start_angle >= 360.0f ) cam->start_angle -= 360.0f;
 
     /* worldspawn's, and world.qc's sv_gravity: 100 on e1m8, 800
        elsewhere. Both ride in the header rather than being guessed. */
