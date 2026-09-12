@@ -258,6 +258,17 @@ qgl$fdzdx       real4   0.0                     ;; only qgl$drawP reads them
 ;; the picture. 256 is every mode qgl has a filler for.
 QGL_COV_ROWS    equ     256
 
+;; The depth row's page, and what it mapped to. A polygon's scanlines
+;; walk one EMS page for most of its height and the dispatch that
+;; resolves a row costs more than the whole of the rest of a scanline's
+;; setup; this remembers the last answer and the page:handle it came
+;; from. Dropped at every qglRsPoly, which is exactly as long as a
+;; mapping is allowed to live -- anything else may take the window
+;; between one call and the next, and the surface builder does.
+;; 0FFFFh is no page: addrTB never holds it.
+qgl_zrow_pg     dw      0FFFFh
+qgl_zrow_seg    dw      0
+
 qgl_cov_on      dw      0
 qgl_cov_lo      dw      QGL_COV_ROWS dup (0)
 qgl_cov_hi      dw      QGL_COV_ROWS dup (0)
@@ -325,6 +336,28 @@ dead:           xor     ax, ax
                 xor     dx, dx
 have:           pop     di
                 pop     fs
+endm
+
+;; dx:ax = depth surface sf's row y, through the remembered page when it
+;; is the one this row wants. bx, es, esi gone; fs kept, which is why
+;; this does not simply inline DCTROW.
+ZEMSROW         macro   sf, y, slot
+                local   slow, have
+                mov     es, W sf+2
+                mov     bx, y
+                add     bx, es:[Surface.startSL]
+                shl     bx, 2
+                mov     esi, es:[SF_addrTB][bx]
+                cmp     si, qgl_zrow_pg
+                jne     slow
+                mov     dx, qgl_zrow_seg
+                mov     eax, esi
+                shr     eax, 16
+                jmp     short have
+slow:           DCTROW  sf, y, slot             ;; si survives it
+                mov     qgl_zrow_pg, si
+                mov     qgl_zrow_seg, dx
+have:
 endm
 
 ;; the filler call, its scanline and pixels counted; ds is the texture's
@@ -721,6 +754,7 @@ qglRsPoly     proc    public uses bx cx dx si di ds es,\
 
                 mov     ax, @data
                 mov     fs, ax                  ;; DGROUP, for every filler
+                mov     W fs:qgl_zrow_pg, 0FFFFh
                 CYLAP   -1
 
                 les     bx, d
@@ -1333,7 +1367,7 @@ qgl$drawA       proc    near private,\
 
                 cmp     qgl$zmode, QGL_Z_OFF
                 je      @@nodepth
-                WRROW   qgl$zsf, yy, <DCTROW qgl$zsf, yy, QGL_Z_SLOT>
+                WRROW   qgl$zsf, yy, <ZEMSROW qgl$zsf, yy, QGL_Z_SLOT>
                 mov     qgl$zline, ax
                 mov     zsegv, dx
 
@@ -1656,7 +1690,7 @@ qgl$drawP       proc    near private,\
 
                 cmp     qgl$zmode, QGL_Z_OFF
                 je      @@nodepth
-                WRROW   qgl$zsf, yy, <DCTROW qgl$zsf, yy, QGL_Z_SLOT>
+                WRROW   qgl$zsf, yy, <ZEMSROW qgl$zsf, yy, QGL_Z_SLOT>
                 mov     qgl$zline, ax
                 mov     zsegv, dx
 

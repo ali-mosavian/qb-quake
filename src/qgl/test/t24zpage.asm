@@ -52,6 +52,7 @@ PX1             equ     156
 PY1             equ     96
 TEXCOL          equ     99
 BGCOL           equ     0
+SBCOL           equ     7                       ;; what build leaves in sb
 
 .data
 n_zb            db      'ems depth, 4 pages     $'
@@ -67,10 +68,23 @@ n_z1            db      'depth row 40  (page 1) $'
 n_z2            db      'depth row 70  (page 2) $'
 n_z3            db      'depth row 95  (page 2) $'
 n_zclr          db      'row 2 still clear      $'
+n_sbkeep        db      'a second draw stays off sb$'
+n_zshort        db      'and still wrote its depth$'
 n_test          db      'nearer depth blocks all$'
 
 ;; z constant: the renderer's models are not, but a wrong PAGE does not
 ;; depend on the value written into it
+;; A SHORT polygon, every row of it inside ONE depth page. Two draws of
+;; it with a write through the same window in between is the only shape
+;; that catches a remembered page that was never dropped: both draws want
+;; the same page, so a cache that survives the call answers yes while the
+;; window is showing something else entirely.
+shortp          QVert   <4.0,   4.0,  1.0, 0.0, 0.0>
+                QVert   <156.0, 4.0,  1.0, 1.0, 0.0>
+                QVert   <156.0, 12.0, 1.0, 1.0, 1.0>
+                QVert   <4.0,   12.0, 1.0, 0.0, 1.0>
+shortpp         dd      0
+
 poly            QVert   <4.0,   4.0,  1.0, 0.0, 0.0>
                 QVert   <156.0, 4.0,  1.0, 1.0, 0.0>
                 QVert   <156.0, 96.0, 1.0, 1.0, 1.0>
@@ -137,6 +151,28 @@ scan            endp
 
 ;; sum of every byte of the big texture surface -> eax. Read a row at a
 ;; time through its own accessor, so every page of it gets mapped.
+;; bytes of sb that are not SBCOL -- what a depth write through a window
+;; showing sb's page would leave behind
+sbbad           proc    near private uses bx cx dx si di es
+                xor     bx, bx
+                xor     si, si
+@@row:          cmp     si, 128
+                jae     @@out
+                invoke  qglSfRow, sb, si
+                mov     di, ax
+                mov     es, dx
+                mov     cx, 128
+@@px:           cmp     B es:[di], SBCOL
+                je      @F
+                inc     bx
+@@:             inc     di
+                loop    @@px
+                inc     si
+                jmp     @@row
+@@out:          mov     ax, bx
+                ret
+sbbad           endp
+
 texsum          proc    near private uses bx cx dx si di es
 
                 xor     ebx, ebx
@@ -298,6 +334,28 @@ tmain           proc    far public uses bx cx dx si di es
                 invoke  qglRsPoly, dst, polyp, 4, QGL_M_PTEX, vw
                 invoke  scan, VIEWCOL
                 CHK     n_test, ax, 0
+
+                ;;
+                ;; 4. TWICE over one page, with the window moved between.
+                ;;    Both draws want the same depth page, so a page
+                ;;    remembered across the call still matches -- and the
+                ;;    window it named is showing sb by then.
+                ;;
+                mov     word ptr shortpp, offset shortp
+                mov     word ptr shortpp+2, ds
+
+                invoke  qglSfZClear, dst, 0
+                invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, BGCOL
+                invoke  qglSfZMode, dst, QGL_Z_SET
+                invoke  qglRsPoly, dst, shortpp, 4, QGL_M_PTEX, vw
+
+                call    build                   ;; sb's page into the window
+                invoke  qglRsPoly, dst, shortpp, 4, QGL_M_PTEX, vw
+
+                call    sbbad
+                CHK     n_sbkeep, ax, 0
+                invoke  zat, 8
+                CHK     n_zshort, ax, 100
 
                 ret
 tmain           endp
