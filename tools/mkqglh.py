@@ -200,6 +200,20 @@ def render(vals, derived, params, rets, bas_rets, decls, doc) -> tuple[str, list
         if basic and any(re.search(r"\bas string\b", a, re.I) or "()" in a for a in basic):
             skipped.append(name)
             continue
+        # The asm's width and BASIC's type are two statements about one
+        # parameter, and only the COUNT was ever checked -- so qglZScale
+        # said dword in z.asm and `as single` in qgl.decl, the asm won,
+        # and every C caller converted its float to an integer instead
+        # of handing over the bit pattern the fillers multiply.
+        for k, (pname, masm) in enumerate(params[name]):
+            if not basic:
+                continue
+            bas_f = bool(re.search(r"\bas (single|double)\b", basic[k], re.I))
+            asm_f = masm.strip().lower() in ("real4", "real8")
+            if bas_f != asm_f:
+                raise SystemExit(
+                    f"mkqglh: {name}'s {pname} is {masm.strip()} in the asm and "
+                    f"{basic[k]} in qgl.decl -- one of them is wrong.")
         args = []
         for k, (pname, masm) in enumerate(params[name]):
             c = ctype(masm, basic[k] if basic else None,

@@ -160,7 +160,7 @@ long pascal far qglVgaScreen( void );
 void pascal far qglVgaShutdown( void );
 short pascal far qglZipCheck( short fh );
 short pascal far qglZipFind( short fh, long member, long sizep );
-long pascal far qglZScale( long f );
+long pascal far qglZScale( float f );
 
 /* BASIC's own -- a string or array descriptor in the signature.
  * qgl keeps these behind *Bas wrappers; C calls the layer

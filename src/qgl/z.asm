@@ -292,10 +292,16 @@ qglSfZClear   endp
 
 
 ;;::::::::::::::
-;; qglZScale ( f:dword ) -> dx:ax = the scale that was in force
+;; qglZScale ( f:real4 ) -> dx:ax = the scale that was in force
+;;
+;; real4, not dword: the fillers read it with `fmul D qgl$zscale`,
+;; so what crosses is a float's bit pattern. Declared dword, a C
+;; caller CONVERTED 65535.0 to the integer and passed those bits,
+;; which read back as 9.2e-41 -- every depth stored was 0, and
+;; QGL_Z_TEST compared 0 against 0 on every pixel of every frame.
 ;;::::::::::::::
 qglZScale     proc    public uses bx,\
-                        f:dword
+                        f:real4
 
                 mov     ax, word ptr qgl$zscale
                 mov     dx, word ptr qgl$zscale+2

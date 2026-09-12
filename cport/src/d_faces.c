@@ -228,18 +228,12 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
             if ( vcnt > GEOM_MAXVTX ) vcnt = GEOM_MAXVTX;
             if ( vcnt < 0 ) vcnt = 0;
 
-            /* Everything WRITES and nothing tests, for now.
-               QGL_Z_TEST rejects nearly every face it is given -- with
-               the world put on it too, 1,655 of e1m1's 16,000 pixels
-               survive, so this is not an entity problem and not an
-               ordering one. Until the depth VALUES are right, a brush
-               entity that tests is a brush entity that never draws:
-               every door and lift in the game was invisible. The draw
-               order is already exact enough to carry them (that is
-               what ent_find_node's insertion node is for, 0 leaks
-               against -badorder's 49), so they ride it. */
+            /* Depth mode follows what the face belongs to: the world
+               only writes (the walk hands it over in order), a brush
+               entity tests -- nothing guarantees its own order against
+               the world's. */
             if ( dp->z_avail ) {
-                z_want = QGL_Z_SET;
+                z_want = ( facemdl[i] == 0 ) ? QGL_Z_SET : QGL_Z_TEST;
                 if ( z_want != z_have ) {
                     /* qglSfZMode returns the mode it REPLACED, so assigning
                        its result left z_have one call behind and the next
