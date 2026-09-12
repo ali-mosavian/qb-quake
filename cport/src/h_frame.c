@@ -303,6 +303,7 @@ void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
 
     /* The pickups, depth tested against the world that is already
        there. Before the outlines, which are the same depth state. */
+    t0 = sys_now( sysclk );
     d_draw_items( world, rdr, player, frustum, &mtx_fin,
                    xresh, yresh, z_near, h_dst_dc );
     rdr->mdl_drawn = d_draw_models( world, rdr, frustum, &mtx_fin,
@@ -320,6 +321,12 @@ void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
        see buries the few you are actually looking through. */
     if ( hud->portal_wire ) r_portal_outline( world, rdr, h_dst_dc, &mtx_fin,
                                                xresh, yresh, z_near );
+
+    if ( pt->n > 0 ) {
+        dt = sys_now( sysclk ) - t0;
+        pt->alias_sum += dt;
+        if ( dt > pt->alias_max ) pt->alias_max = dt;
+    }
 
     /* leave depth off for the overlay, which is 2D and would
        otherwise test itself against the scene it is drawn on top of */

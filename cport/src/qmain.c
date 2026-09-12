@@ -506,9 +506,14 @@ int main( void )
            tools/run.sh's own headless invocations pass it explicitly
            so an unattended run still terminates. */
         clock.bench_ticks = args.bench_ticks;
-        pt.n = 1;                  /* profiling armed: dp->prof, and the
-                                       pt_tick/cull/draw/hud brackets, run for
-                                       real rather than reading 0 */
+        pt.n = 0;                  /* armed per frame below, once the warm-up
+                                       is past: the first frames build every
+                                       surface in the view and no later frame
+                                       repeats it, so counting them puts most
+                                       of pt_build into a mean that then
+                                       describes no frame that ran. n is both
+                                       the count and every bracket's "armed"
+                                       test (dp->prof too). */
 
         /* Real per-frame timing, matching h_bench.bas's own ft_min/max/sum/n:
            the first few frames carry the tail of loading and the first
@@ -519,6 +524,7 @@ int main( void )
             long  ft_n = 0;
             long  poly_sum = 0, tri_sum = 0, mdl_sum = 0;
             float raw_dt, frame_dt;
+            float t_frame = 0.0f, t_ph;      /* the frame's own boundary, and one phase's */
             FILE *bf;
 
             /* -record/-play: one fixed-size record a frame -- x,y,
@@ -632,6 +638,13 @@ int main( void )
                     ft_sum += raw_dt;
                     ft_n++;
                 }
+                /* The same predicate as ft_* above, so pt_frames and ft_n
+                   are the same frames and pt_other_mean is a residual of
+                   one number and not of two populations. t_frame is the
+                   frame's own boundary rather than raw_dt, which is the
+                   PREVIOUS frame's length -- subtracting phases from that
+                   would leave a residual off by a whole frame's shift. */
+                if ( frame > 3 ) { pt.n++; t_frame = sys_now( &sysclk ); }
 
                 host_advance( &world, &player, &cam, &rdr, &input, hud, &ls, &fight,
                                &sysclk, &clock, &pt, frame_dt, v.scr_x_res, v.scr_y_res );
@@ -640,7 +653,9 @@ int main( void )
                    holds an EMS window -- the mixer takes PAGE_SLOT. It
                    runs every frame whatever is playing: the DMA never
                    stops, so what is not repainted is played again. */
+                t_ph = sys_now( &sysclk );
                 snd_frame( &player, frame_dt );
+                if ( pt.n > 0 ) pt.sound_sum += sys_now( &sysclk ) - t_ph;
 
                 if ( args.play_name[0] && rf && !play_drift ) {
                     /* The camera is NOT pinned: host_advance just
@@ -695,6 +710,7 @@ int main( void )
                               &cam_up, z_dc, v.comp, args.no_draw,
                               v.x_res, v.y_res );
                 in_screenshot_key( &input, h_dst_dc, v.x_res, v.y_res );
+                t_ph = sys_now( &sysclk );
                 v_present( &v, h_dst_dc, 0 );
 
                 /* -comp: v_present has already scaled the 3D view into
@@ -716,6 +732,7 @@ int main( void )
                     scr_draw_msg( hud, &world, &fight, &rdr, v.h_comp_dc, v.scr_x_res, v.scr_y_res );
                     qglDrBlit( v.h_video_dc, 0, 0, v.h_comp_dc );
                 }
+                if ( pt.n > 0 ) pt.present_sum += sys_now( &sysclk ) - t_ph;
 
                 /* Read rdr.polys/tris BEFORE scr_count_frame, which
                    resets them for the next frame (screen.bas's own
@@ -728,6 +745,11 @@ int main( void )
                 tri_sum  += rdr.tris;
                 mdl_sum  += rdr.mdl_drawn;
                 scr_count_frame( hud, &rdr, sc, frame_dt );
+                if ( pt.n > 0 ) {
+                    float dt = sys_now( &sysclk ) - t_frame;
+                    pt.frame_sum += dt;
+                    if ( dt > pt.frame_max ) pt.frame_max = dt;
+                }
                 frame++;
             }
 
@@ -801,18 +823,45 @@ int main( void )
                        warm-up ones. Print both counts rather than leave a
                        reader to wonder how a phase mean can exceed the frame
                        mean -- it did, by exactly the ratio of these two. */
-                    fprintf( bf, "pt_frames %d\n", frame );
+                    fprintf( bf, "pt_frames %ld\n", pt.n );
                     fprintf( bf, "fps_mean %ld.%02ld\n", (long) (ft_n/ft_sum), (long) ((ft_n/ft_sum)*100) % 100 );
-                    fprintf( bf, "pt_tick_mean %ld.%03ld\n",
-                             (long) ((pt.tick_sum/frame)*1000), (long) ((pt.tick_sum/frame)*1000000) % 1000 );
-                    fprintf( bf, "pt_cull_mean %ld.%03ld\n",
-                             (long) ((pt.cull_sum/frame)*1000), (long) ((pt.cull_sum/frame)*1000000) % 1000 );
-                    fprintf( bf, "pt_draw_mean %ld.%03ld\n",
-                             (long) ((pt.draw_sum/frame)*1000), (long) ((pt.draw_sum/frame)*1000000) % 1000 );
-                    fprintf( bf, "pt_build_mean %ld.%03ld\n",
-                             (long) ((pt.build_sum/frame)*1000), (long) ((pt.build_sum/frame)*1000000) % 1000 );
-                    fprintf( bf, "pt_raster_mean %ld.%03ld\n",
-                             (long) ((pt.raster_sum/frame)*1000), (long) ((pt.raster_sum/frame)*1000000) % 1000 );
+                    if ( pt.n > 0 ) {
+                        /* ms a frame over the frames profiled, which are ft_n's
+                           own. pt_other is what the brackets do not reach --
+                           the backbuffer clear, the input read, screen.bas's
+                           counters, and any pass added without one. */
+                        float ph[9];
+                        char *nm[9];
+                        short i;
+
+                        ph[0] = pt.frame_sum;   nm[0] = "frame";
+                        ph[1] = pt.tick_sum;    nm[1] = "tick";
+                        ph[2] = pt.cull_sum;    nm[2] = "cull";
+                        ph[3] = pt.draw_sum;    nm[3] = "draw";
+                        ph[4] = pt.alias_sum;   nm[4] = "alias";
+                        ph[5] = pt.hud_sum;     nm[5] = "hud";
+                        ph[6] = pt.sound_sum;   nm[6] = "sound";
+                        ph[7] = pt.present_sum; nm[7] = "present";
+                        ph[8] = pt.frame_sum - ( pt.tick_sum + pt.cull_sum + pt.draw_sum +
+                                                 pt.alias_sum + pt.hud_sum + pt.sound_sum +
+                                                 pt.present_sum );
+                        nm[8] = "other";
+                        for ( i = 0; i < 9; i++ ) {
+                            float ms = ph[i] / pt.n * 1000.0f;
+                            short neg = (short) ( ms < 0.0f );
+                            long  us = (long) ( ( neg ? -ms : ms ) * 1000.0f + 0.5f );
+                            fprintf( bf, "pt_%s_mean %s%ld.%03ld\n", nm[i],
+                                     neg ? "-" : "", us / 1000, us % 1000 );
+                        }
+                        /* build and raster are INSIDE draw, so they are printed
+                           apart from the sum above rather than beside it. */
+                        fprintf( bf, "pt_build_mean %ld.%03ld\n",
+                                 (long) ((pt.build_sum/pt.n)*1000), (long) ((pt.build_sum/pt.n)*1000000) % 1000 );
+                        fprintf( bf, "pt_raster_mean %ld.%03ld\n",
+                                 (long) ((pt.raster_sum/pt.n)*1000), (long) ((pt.raster_sum/pt.n)*1000000) % 1000 );
+                        fprintf( bf, "pt_frame_max %ld.%03ld\n",
+                                 (long) (pt.frame_max*1000), (long) (pt.frame_max*1000000) % 1000 );
+                    }
                     {   /* The portal flood's own work, so a cull cost can be
                            divided by something real instead of guessed at. */
                         long pops, projs, pushes;

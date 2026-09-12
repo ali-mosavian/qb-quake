@@ -113,17 +113,27 @@ typedef struct {
     short water_type;     /* CONTENTS_WATER, _SLIME or _LAVA */
 } Player;
 
-/* PhaseTimes -- where a frame's time goes, the fields host_render and
-   host_advance actually write. Not the full old PhaseTimes (present/
-   aim/span/build belong to modules not ported yet); grows as they are. */
+/* PhaseTimes -- where a frame's time goes. The phases are disjoint and
+   frame_sum is the whole frame measured at its own boundaries, so
+   bench.txt can print what they do NOT account for (pt_other_mean)
+   instead of leaving a reader to assume they account for everything:
+   every pass this port has added -- the alias models, the mixer, the
+   present -- was invisible here until it was bracketed, and an
+   unbracketed pass reads as zero rather than as missing.
+   build and raster are INSIDE draw, counted by d_faces itself. */
 typedef struct {
     float tick_sum, tick_max;
     float cull_sum, cull_max;
     float draw_sum, draw_max;
+    float alias_sum, alias_max;   /* the models, items, spikes and the gun */
     float hud_sum,  hud_max;
+    float sound_sum;
+    float present_sum;            /* the scale, the overlay on it, the blit */
+    float frame_sum, frame_max;
     float build_sum;
     float raster_sum;
-    long  n;               /* g.ft.n > 0 in the old code: profiling armed */
+    long  n;               /* frames profiled; 0 until the warm-up is past,
+                              which is also every site's "armed" test */
 } PhaseTimes;
 
 /* DrawParams -- everything d_draw_faces (d_faces.c, not yet moved into

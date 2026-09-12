@@ -2875,6 +2875,33 @@ before the draw. Only load,
 must do the same. `place_stale` in bench.txt re-derives every placement
 at exit and counts the ones that disagree; `check.sh --e1m1` wants 0.
 
+**The frame profile has to account for the frame, or it describes one
+that is not running.** cport's `pt_tick/cull/draw/hud` looked reasonable
+for weeks while three passes had no bracket at all -- the alias models
+(7.6 ms of e1m1's 53), the mixer and the present -- and an unbracketed
+pass reads as ZERO, not as missing. `pt_frame_mean` is the frame timed
+at its own boundaries and `pt_other_mean` is the frame less every
+phase, so the instrument now reports what it cannot see: 0.2 ms of 53.
+`pt_frame_mean` against `ft_mean` is a second check, the profiler's
+rdtsc against `sys_frame_time`'s PIT ticks -- 53.264 and 53.361.
+Profiling arms after frame 3, the same predicate `ft_*` uses, so the
+warm-up frames that build every surface in the view are not averaged
+into a mean describing no frame that ran. Frame counts and `ft_mean`
+repeat exactly run to run; the phase microseconds repeat to about half
+a percent, the interrupts landing an instruction apart, which is what
+`cport/tools/test-prof.sh` sets its 2% residual bound from. Its third
+arm is the one that catches a bracket around the wrong lines: with
+`-nomdl -noitems -noview` the alias phase has to fall to nothing.
+
+**e1m1 in cport draws UNLIT, and one mark is the only trace.** `sc_init`
+fails there -- 5,516 faces of `CacheSlot` plus five `SC_NBLK` arrays --
+so `sc_ready` is 0, `d_faces` takes the unlit path for every face, and
+`-lm` changes nothing: two runs with and without it gave the same
+BENCH.BMP md5 and the same 14.12 ms of raster. Nothing says why; the
+mark is `sc_init FAILED` and sc.c prints no reason. dm3ish is lit
+(`pt_build_mean` 0.089). So any cport frame timing quoted for e1m1 is
+the unlit fill, and a lit one will be larger.
+
 **bench.txt timers are `name min mean max`, three decimals.** `pt_<phase>`
 is ms a frame; `pt_tk_<call>` is one `host_tick` call in ms, over the
 ticks it ran in. `sys_rdtsc` wraps about once a minute, and
