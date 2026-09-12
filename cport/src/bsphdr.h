@@ -53,6 +53,7 @@ typedef struct {
 #define DISKCLIPNODE_SIZE  8  /* plane_num(long)+front+back */
 #define DISKEDGE_SIZE      4  /* 2 shorts */
 #define DISKLEDGE_SIZE     4  /* 1 long */
+#define DISKSUBMODEL_SIZE 64  /* box(24)+origin(12)+4 hulls+vis_leafs+first_face+num_faces */
 
 /* bspfile.bi's DiskMipTex -- the one on-disk record mod_tex.c actually
    reads fields out of (see this file's own header). Quake's own

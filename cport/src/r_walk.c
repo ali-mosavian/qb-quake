@@ -23,7 +23,7 @@ extern void r_emit_entities( World *world, Renderer *rdr, DiskPlane far *frustum
                               short nodenr, Vec3 *campos, short ign );
 
 void r_recursive_world_node( World *world, Renderer *rdr, DiskPlane far *frustum,
-                              short nodenr, Vec3 *campos, short ign )
+                              short nodenr, Vec3 *campos, short ign, short mask )
 {
     short side, i, frst, last, leafnr;
 
@@ -40,7 +40,7 @@ void r_recursive_world_node( World *world, Renderer *rdr, DiskPlane far *frustum
            then ignored it. The tell was the HUD itself -- "leaves
            portal-cut" moved while polys did not. */
         if ( (ign || rdr->pvs_now[leafnr]) &&
-             r_cull_box( &world->leaves[leafnr].bound, frustum ) ) {
+             r_cull_box( &world->leaves[leafnr].bound, frustum, mask ) >= 0 ) {
             frst = world->leaves[leafnr].lface_id;
             last = frst + world->leaves[leafnr].lface_num;
             for ( i = frst; i < last; i++ )
@@ -56,21 +56,22 @@ void r_recursive_world_node( World *world, Renderer *rdr, DiskPlane far *frustum
         return;
     }
 
-    if ( !r_cull_box( &world->nodes[nodenr].bound, frustum ) ) return;
+    mask = r_cull_box( &world->nodes[nodenr].bound, frustum, mask );
+    if ( mask < 0 ) return;
 
     side = ( r_cam_plane_dist( campos, &world->planes[ world->nodes[nodenr].plane_id ] ) >= 0.0f );
 
     if ( side ) {
-        r_recursive_world_node( world, rdr, frustum, world->nodes[nodenr].child1, campos, ign );
+        r_recursive_world_node( world, rdr, frustum, world->nodes[nodenr].child1, campos, ign, mask );
         if ( rdr->ent_left )
             r_emit_entities( world, rdr, frustum, nodenr, campos, ign );
         rdr->ord[ rdr->ord_count++ ] = nodenr;
-        r_recursive_world_node( world, rdr, frustum, world->nodes[nodenr].child0, campos, ign );
+        r_recursive_world_node( world, rdr, frustum, world->nodes[nodenr].child0, campos, ign, mask );
     } else {
-        r_recursive_world_node( world, rdr, frustum, world->nodes[nodenr].child0, campos, ign );
+        r_recursive_world_node( world, rdr, frustum, world->nodes[nodenr].child0, campos, ign, mask );
         if ( rdr->ent_left )
             r_emit_entities( world, rdr, frustum, nodenr, campos, ign );
         rdr->ord[ rdr->ord_count++ ] = nodenr;
-        r_recursive_world_node( world, rdr, frustum, world->nodes[nodenr].child1, campos, ign );
+        r_recursive_world_node( world, rdr, frustum, world->nodes[nodenr].child1, campos, ign, mask );
     }
 }

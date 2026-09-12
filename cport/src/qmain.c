@@ -132,8 +132,6 @@ int main( void )
         qglSfFree( probe );
     }
 
-    v.use_paging = cfg.use_paging;
-    v.pages      = cfg.pages;
     v.c_fmt      = 0;      /* UGL.8BIT% */
     v.scr_x_res  = cfg.scr_x_res;
     v.scr_y_res  = cfg.scr_y_res;

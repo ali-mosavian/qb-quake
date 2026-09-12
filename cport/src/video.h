@@ -21,8 +21,6 @@ typedef struct {
     short scr_x_res, scr_y_res;
     short view_x, view_y, view_scale;
     short c_fmt;
-    short pages;
-    short use_paging;
     short comp;
 } Video;
 

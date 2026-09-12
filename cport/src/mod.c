@@ -48,7 +48,7 @@ FILE *mod_open( char *map_name, World *world, MapCounts *counts )
     counts->planes      = head.planes.size    / DISKPLANE_SIZE;
     counts->nodes       = head.nodes.size     / DISKNODE_SIZE;
     world->node_count  = (short) counts->nodes;
-    world->model_count = (short) ( head.models.size / sizeof(Submodel) );
+    world->model_count = (short) ( head.models.size / DISKSUBMODEL_SIZE );
     counts->tex_infos    = head.tex_info.size  / DISKTEXINFO_SIZE;
     counts->clips        = head.clip_node.size / DISKCLIPNODE_SIZE;
     counts->face_lump_bytes = head.lface.size;

@@ -30,14 +30,16 @@ typedef struct {
 #define F_ZN     0x0004L
 #define F_ZF     0x0008L
 #define F_CMSCR  0x0010L
-#define F_PAGE   0x0020L
-#define F_USEPG  0x0040L
 #define F_CLEAR  0x0080L
 #define F_CMINP  0x0100L
 #define F_CMMDE  0x0200L
 #define F_FOV    0x0400L
-#define F_SOUND  0x0800L
-#define ALL_REQUIRED (F_XRES|F_YRES|F_ZN|F_ZF|F_CMSCR|F_PAGE|F_USEPG|F_CLEAR|F_CMINP|F_CMMDE|F_FOV|F_SOUND)
+/* display.pages, display.usepaging and sound.enabled are gone from
+   stuff.ini: paging was mgl's and needed mgl to own the mode, and there
+   is no sound here. A key this list demands and the file no longer
+   carries is "Incorrect ini file..." and nothing else -- the message
+   names neither the key nor the line. */
+#define ALL_REQUIRED (F_XRES|F_YRES|F_ZN|F_ZF|F_CMSCR|F_CLEAR|F_CMINP|F_CMMDE|F_FOV)
 
 static CfgField fields[] = {
     { "display.xres",       K_SHORT,   offsetof(Config, scr_x_res),  F_XRES,  1 },
@@ -45,15 +47,12 @@ static CfgField fields[] = {
     { "render.xres",        K_SHORT,   offsetof(Config, x_res),      0,       0 },
     { "render.yres",        K_SHORT,   offsetof(Config, y_res),      0,       0 },
     { "display.clear",      K_BOOL,    offsetof(Config, clear_screen), F_CLEAR, 1 },
-    { "display.pages",      K_SHORT,   offsetof(Config, pages),      F_PAGE,  1 },
-    { "display.usepaging",  K_BOOL,    offsetof(Config, use_paging), F_USEPG, 1 },
     { "world.frustum.zn",   K_FLOAT,   offsetof(Config, z_near),     F_ZN,    1 },
     { "world.frustum.zf",   K_FLOAT,   offsetof(Config, z_far),      F_ZF,    1 },
     { "world.camera.script",K_STRING,  offsetof(Config, cam_script), F_CMSCR, 1 },
     { "world.camera.interp",K_SHORT,   offsetof(Config, cam_interp), F_CMINP, 1 },
     { "world.camera.mode",  K_CAMMODE, offsetof(Config, cam_mode),   F_CMMDE, 1 },
-    { "world.camera.fov",   K_FLOAT,   offsetof(Config, cam_fov),    F_FOV,   1 },
-    { "sound.enabled",      K_BOOL,    offsetof(Config, sound),      F_SOUND, 1 }
+    { "world.camera.fov",   K_FLOAT,   offsetof(Config, cam_fov),    F_FOV,   1 }
 };
 #define NFIELDS (sizeof(fields)/sizeof(fields[0]))
 

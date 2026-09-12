@@ -37,6 +37,10 @@ OUT="${1:?usage: test-portals.sh <build-dir>}"
 
 arm() {   # arm <extra-flags> -> "<md5> <ft_mean>"
     TIMEOUT="${TIMEOUT:-400}" "${RUN_SH:-$HERE/run.sh}" "$OUT" "dm3ish.bsp -nostats -ticks 60 $1" >/dev/null 2>&1
+    # An absent frame must not read as a matching one: without this both
+    # arms return the empty string and "identical picture" passes for a
+    # program that never rendered.
+    [[ -s "$OUT/BENCH.BMP" ]] || { echo "MISSING-$1"; return; }
     md5 -q "$OUT/BENCH.BMP" 2>/dev/null || md5sum "$OUT/BENCH.BMP" | cut -d' ' -f1
 }
 
@@ -47,7 +51,10 @@ on_md5="$(arm '')"
 pops="$(field pt_pops)"; projs="$(field pt_projs)"
 
 fail=0
-if [[ "$off_md5" != "$on_md5" ]]; then
+if [[ "$off_md5" == MISSING-* || "$on_md5" == MISSING-* ]]; then
+    echo "FAIL: no frame written ($off_md5 / $on_md5) -- the run did not render" >&2
+    fail=1
+elif [[ "$off_md5" != "$on_md5" ]]; then
     echo "FAIL: portals change the picture ($off_md5 off, $on_md5 on)" >&2
     fail=1
 else

@@ -27,17 +27,12 @@ typedef struct {
     short x_res, y_res;           /* render.xres/yres -- optional, defaults
                                       to the screen size */
     short clear_screen;           /* display.clear */
-    short pages;                  /* display.pages */
-    short use_paging;             /* display.usepaging */
     float z_near, z_far;          /* world.frustum.zn/zf */
     char  cam_script[64];         /* world.camera.script */
     short cam_interp;             /* world.camera.interp */
     short cam_mode;                /* world.camera.mode: 0 freelook,
                                        1 script_play, 2 script_edit */
     float cam_fov;                /* world.camera.fov */
-    short sound;                  /* sound.enabled -- parsed for stuff.ini
-                                      compatibility; nothing in cport/ reads
-                                      it, sound is dropped project-wide */
 
     /* Derived by config_load itself, same formulas as the original's
        own tail end: the largest whole-number backbuffer scale that

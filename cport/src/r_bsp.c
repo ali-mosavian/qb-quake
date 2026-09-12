@@ -69,71 +69,43 @@ short r_node_side( short node_idx, Vec3 *pt, World *world )
     return 0;
 }
 
-/* Same 8-way branch on the frustum plane's normal sign to pick the
-   box's near corner, same y/z swap copying from bbox (BSP, z-up) into
-   near_point (renderer, y-up). bbox.min/max are Vec3i; the assignment
-   into a float BspVec3 is BASIC's own implicit int-to-single conversion,
-   done explicitly here instead. */
-short r_cull_box( Bounds far *bbox, DiskPlane far *frustum )
+/* r_bsp.bas's r_cull_box with Quake's clip flags (R_RecursiveWorldNode):
+   mask holds the frustum planes the box may still cross. The near corner
+   outside a plane rejects the box, -1; the far corner inside it too means
+   every box below this one is inside, so that plane leaves the mask the
+   children get -- a child's box lies in its parent's, so a dropped test
+   could only have passed. The box arrives packed, a byte a coordinate,
+   and the y/z swap is r_cam_plane_dist's: renderer y is bsp z. */
+short r_cull_box( PackedBounds far *bbox, DiskPlane far *frustum, short mask )
 {
-    BspVec3 near_point;
-    float dp;
+    BspVec3 n, f;
+    float lo[3], hi[3], dp;
     short i;
 
+    if ( !mask ) return 0;
+
+    lo[0] = (float) bbox->q[0] * BOUND_Q + BOUND_BASE;
+    lo[1] = (float) bbox->q[2] * BOUND_Q + BOUND_BASE;
+    lo[2] = (float) bbox->q[1] * BOUND_Q + BOUND_BASE;
+    hi[0] = (float) bbox->q[3] * BOUND_Q + BOUND_BASE;
+    hi[1] = (float) bbox->q[5] * BOUND_Q + BOUND_BASE;
+    hi[2] = (float) bbox->q[4] * BOUND_Q + BOUND_BASE;
+
     for ( i = 0; i < 6; i++ ) {
-        if ( frustum[i].norm.x > 0.0f ) {
-            if ( frustum[i].norm.y > 0.0f ) {
-                if ( frustum[i].norm.z > 0.0f ) {
-                    near_point.x = (float) bbox->min.x;
-                    near_point.y = (float) bbox->min.z;
-                    near_point.z = (float) bbox->min.y;
-                } else {
-                    near_point.x = (float) bbox->min.x;
-                    near_point.y = (float) bbox->min.z;
-                    near_point.z = (float) bbox->max.y;
-                }
-            } else {
-                if ( frustum[i].norm.z > 0.0f ) {
-                    near_point.x = (float) bbox->min.x;
-                    near_point.y = (float) bbox->max.z;
-                    near_point.z = (float) bbox->min.y;
-                } else {
-                    near_point.x = (float) bbox->min.x;
-                    near_point.y = (float) bbox->max.z;
-                    near_point.z = (float) bbox->max.y;
-                }
-            }
-        } else {
-            if ( frustum[i].norm.y > 0.0f ) {
-                if ( frustum[i].norm.z > 0.0f ) {
-                    near_point.x = (float) bbox->max.x;
-                    near_point.y = (float) bbox->min.z;
-                    near_point.z = (float) bbox->min.y;
-                } else {
-                    near_point.x = (float) bbox->max.x;
-                    near_point.y = (float) bbox->min.z;
-                    near_point.z = (float) bbox->max.y;
-                }
-            } else {
-                if ( frustum[i].norm.z > 0.0f ) {
-                    near_point.x = (float) bbox->max.x;
-                    near_point.y = (float) bbox->max.z;
-                    near_point.z = (float) bbox->min.y;
-                } else {
-                    near_point.x = (float) bbox->max.x;
-                    near_point.y = (float) bbox->max.z;
-                    near_point.z = (float) bbox->max.y;
-                }
-            }
-        }
+        if ( !( mask & ( 1 << i ) ) ) continue;
 
-        dp = frustum[i].norm.x*near_point.x + frustum[i].norm.y*near_point.y +
-             frustum[i].norm.z*near_point.z;
+        if ( frustum[i].norm.x > 0.0f ) { n.x = lo[0]; f.x = hi[0]; } else { n.x = hi[0]; f.x = lo[0]; }
+        if ( frustum[i].norm.y > 0.0f ) { n.y = lo[1]; f.y = hi[1]; } else { n.y = hi[1]; f.y = lo[1]; }
+        if ( frustum[i].norm.z > 0.0f ) { n.z = lo[2]; f.z = hi[2]; } else { n.z = hi[2]; f.z = lo[2]; }
 
-        if ( (dp + frustum[i].dist) > 0.0f ) return 0;
+        dp = frustum[i].norm.x*n.x + frustum[i].norm.y*n.y + frustum[i].norm.z*n.z;
+        if ( (dp + frustum[i].dist) > 0.0f ) return -1;
+
+        dp = frustum[i].norm.x*f.x + frustum[i].norm.y*f.y + frustum[i].norm.z*f.z;
+        if ( (dp + frustum[i].dist) <= 0.0f ) mask &= ~( 1 << i );
     }
 
-    return -1;
+    return mask;
 }
 
 /* Six planes off the concatenated view*projection matrix (Gribb/Hartmann),
@@ -272,7 +244,7 @@ void r_emit_entities( World *world, Renderer *rdr, DiskPlane far *frustum,
     for ( m = 1; m < world->model_count; m++ ) {
         if ( world->brush[m].draw && world->brush[m].node == nodenr ) {
             rdr->ent_left--;
-            r_recursive_world_node( world, rdr, frustum, (short) world->models[m].head_node0, campos, 1 );
+            r_recursive_world_node( world, rdr, frustum, (short) world->models[m].head_node0, campos, 1, CLIP_ALL );
         }
     }
 }
@@ -338,7 +310,7 @@ void r_draw_world( World *world, Renderer *rdr, DiskPlane far *frustum,
     for ( i = 1; i < world->model_count; i++ )
         if ( world->brush[i].draw ) rdr->ent_left++;
 
-    r_recursive_world_node( world, rdr, frustum, (short) world->models[model].head_node0, campos, 0 );
+    r_recursive_world_node( world, rdr, frustum, (short) world->models[model].head_node0, campos, 0, CLIP_ALL );
 
     /* -badorder reproduces what this used to do: every brush entity
        appended once the world is finished, so all of them draw in
@@ -347,7 +319,7 @@ void r_draw_world( World *world, Renderer *rdr, DiskPlane far *frustum,
     if ( rdr->bad_order && !rdr->no_ents ) {
         for ( i = 1; i < world->model_count; i++ ) {
             if ( world->brush[i].draw ) {
-                r_recursive_world_node( world, rdr, frustum, (short) world->models[i].head_node0, campos, 1 );
+                r_recursive_world_node( world, rdr, frustum, (short) world->models[i].head_node0, campos, 1, CLIP_ALL );
             }
         }
     }

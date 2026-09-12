@@ -295,7 +295,9 @@ void ent_load_teleports( World *world )
     short i, j, k, mdlnum;
 
     _fmemcpy( &h, buf, sizeof(EntsHead) );
-    ofs = sizeof(EntsHead);
+    /* The monsters come first in the file and nothing here draws or
+       simulates one, so they are skipped by size rather than read. */
+    ofs = sizeof(EntsHead) + (long) h.nmon * sizeof(EntsMon);
 
     if ( h.nmodels != world->model_count ) {
         fprintf( stderr, "ents.bin is from another map\n" );

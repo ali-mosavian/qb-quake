@@ -19,7 +19,13 @@ short r_point_leaf( BspVec3 *p, World *world );
 short r_leaf_contents( short leaf_nr, World *world );
 float r_cam_plane_dist( Vec3 *pt, Plane far *pl );
 short r_node_side( short node_idx, Vec3 *pt, World *world );
-short r_cull_box( Bounds far *bbox, DiskPlane far *frustum );
+/* Every frustum plane still worth testing. The walk starts here and
+   r_cull_box hands each subtree the narrower mask its own box earned. */
+#define CLIP_ALL 0x3f
+
+/* -1 culled; otherwise the mask the children should be tested with
+   (0 = the box is wholly inside, no plane left to cross). */
+short r_cull_box( PackedBounds far *bbox, DiskPlane far *frustum, short mask );
 void  r_set_frustum( DiskPlane far *frustum, Mat4 *mtx );
 
 /*

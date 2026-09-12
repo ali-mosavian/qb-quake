@@ -24,7 +24,11 @@ if [[ -z "$DOSBOX_BIN" ]]; then
 fi
 [[ -n "$DOSBOX_BIN" ]] || { echo "no dosbox-x found; set DOSBOX_BIN" >&2; exit 1; }
 
-rm -f "$OUT/cport.txt" "$OUT/cstep.txt" "$OUT/error.log"
+# BENCH.* too, or a run that dies before rendering leaves the previous
+# run's frame and numbers in place and every test downstream reads them
+# as this run's. Three of them reported ok that way once.
+rm -f "$OUT/cport.txt" "$OUT/cstep.txt" "$OUT/error.log" \
+      "$OUT/BENCH.BMP" "$OUT/BENCH.TXT"
 
 { printf '[sdl]\nautolock=false\n[dosbox]\nmemsize=32\nstartbanner=false\nquit warning=false\n'
   printf '[cpu]\ncore=dynamic\ncycles=%s\n[dos]\nxms=true\nems=true\n[autoexec]\n' "$CYCLES"

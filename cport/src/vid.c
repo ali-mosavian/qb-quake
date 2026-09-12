@@ -46,8 +46,6 @@ void v_init_ugl( void )
  */
 void v_init( Video *v, long pal )
 {
-    short pages = v->use_paging ? v->pages : 1;
-
     /* qgl owns the mode: one call takes it and hands back the screen
        surface, whose shape is the mode's own (320x200x8). There is no
        page count -- qgl does not page, and v_present blits. */
@@ -57,7 +55,7 @@ void v_init( Video *v, long pal )
         exit( 1 );
     }
 
-    if ( !v->use_paging ) {
+    {
         v->h_back_bdc = qglSfNew( v->x_res, v->y_res, QGL_SURF_CMEM );
         if ( v->h_back_bdc == 0 ) {
             fprintf( stderr, "0x0002, Could not create a backbuffer...\n" );

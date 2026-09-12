@@ -18,15 +18,14 @@
 #define CONTENTS_LAVA  (-5)
 #define CONTENTS_SKY   (-6)
 
-/* bspfile.bi's Vec3i -- same axes as BspVec3, quantized to a short. Node/
-   Leaf bounds are stored this way on disk; NOT a premature-optimization
-   choice made here, so it stays Vec3i rather than the BspVec3 this file
-   originally (and wrongly) gave it before anything actually read a
-   bound -- see r_cull_box's own int-to-single conversion below, which
-   only makes sense against a genuinely integer Bounds. */
-typedef struct { short x, y, z; } Vec3i;
-
-typedef struct { Vec3i min, max; } Bounds;
+/* bspfile.bi's PackedBounds -- a node or leaf box in six bytes, min xyz
+   then max xyz, each (v - BOUND_BASE) / BOUND_Q with the min rounded
+   down and the max up. A box therefore only ever grows, so r_cull_box
+   culls less than it might, never more. mkassets.py's bound_bytes is
+   the other half of this and the two must change together. */
+typedef struct { unsigned char q[6]; } PackedBounds;
+#define BOUND_Q    32.0f
+#define BOUND_BASE (-4096.0f)
 
 typedef struct {
     short plane_id;
@@ -34,13 +33,12 @@ typedef struct {
     short child1;
     short lface_id;
     short lface_num;
-    Bounds bound;
+    PackedBounds bound;
 } Node;
 
 typedef struct {
     BspVec3  norm;
     float dist;
-    short ptype;
 } Plane;
 
 /* bspfile.bi's DiskPlane -- the frustum's own plane record. Same shape
@@ -60,15 +58,18 @@ typedef struct {
 typedef struct {
     short  cont;
     long   vis_list;
-    Bounds bound;
+    PackedBounds bound;
     short  lface_id;
     short  lface_num;
 } Leaf;
 
+/* bspfile.bi's Submodel -- 32 bytes, not the BSP's own 64. mkassets
+   keeps the box and the two hulls the renderer and the player trace
+   use, and narrows the rest away; origin, hulls 2 and 3 and vis_leafs
+   have no reader here. */
 typedef struct {
-    BspVec3 mins, maxs, origin;
-    long head_node0, head_node1, head_node2, head_node3;
-    long vis_leafs, first_face, num_faces;
+    BspVec3 mins, maxs;
+    short head_node0, head_node1, first_face, num_faces;
 } Submodel;
 
 /* bspfile.bi's Face. geom_row/geom_ofs locate the face's fetched
@@ -120,6 +121,28 @@ typedef struct {
     short front;
     short back;
 } ClipNode;
+
+/* The record sizes mkassets.py writes. A struct that drifts from its
+   file is a "short read" several load marks after the structure that
+   actually changed, so it is caught here instead: a mismatch is a
+   negative array bound and the build stops on this line.
+   cport/tools/test-records.sh reads these same numbers and checks the
+   assets against them, which is the other half of the same fact. */
+#define REC_PLANE     16
+#define REC_NODE      16
+#define REC_LEAF      16
+#define REC_FACE      10
+#define REC_CLIPNODE   6
+#define REC_SUBMODEL  32
+#define REC_TEXINFO   34
+
+typedef char rec_plane_ok   [ sizeof(Plane)    == REC_PLANE    ? 1 : -1 ];
+typedef char rec_node_ok    [ sizeof(Node)     == REC_NODE     ? 1 : -1 ];
+typedef char rec_leaf_ok    [ sizeof(Leaf)     == REC_LEAF     ? 1 : -1 ];
+typedef char rec_face_ok    [ sizeof(Face)     == REC_FACE     ? 1 : -1 ];
+typedef char rec_clip_ok    [ sizeof(ClipNode) == REC_CLIPNODE ? 1 : -1 ];
+typedef char rec_submodel_ok[ sizeof(Submodel) == REC_SUBMODEL ? 1 : -1 ];
+typedef char rec_texinfo_ok [ sizeof(TexInfo)  == REC_TEXINFO  ? 1 : -1 ];
 
 /* q_ent.bi's Teleporter. */
 typedef struct {
