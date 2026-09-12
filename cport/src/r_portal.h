@@ -40,4 +40,8 @@ short r_portal_mark( World *world, Renderer *rdr, Mat4 *m, short cam_leaf, short
 void  r_portal_draw( QSurf dc, Mat4 *m, short visleafs, float xresh, float yresh, float z_near,
                       long clr, World *world, Renderer *rdr );
 
+/* Flood totals for the whole run: leaves popped, portal boxes
+   projected, rectangles pushed. bench.txt reports them. */
+void r_portal_stats( long *pops, long *projs, long *pushes );
+
 #endif

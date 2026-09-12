@@ -11,6 +11,10 @@ set -euo pipefail
 
 OUT="${1:?usage: run.sh <build-dir> [\"args\"]}"
 QARGS="${2:-dm3ish.bsp -ticks 300}"
+# The pinned machine, not cycles=max: a frame time is only comparable
+# if both sides ran on the same emulated CPU, and max scales with host
+# load. dosbox/template.conf says 75000 for the same reason.
+CYCLES="${CYCLES:-75000}"
 
 DOSBOX_BIN="${DOSBOX_BIN:-}"
 if [[ -z "$DOSBOX_BIN" ]]; then
@@ -23,7 +27,7 @@ fi
 rm -f "$OUT/cport.txt" "$OUT/cstep.txt" "$OUT/error.log"
 
 { printf '[sdl]\nautolock=false\n[dosbox]\nmemsize=32\nstartbanner=false\nquit warning=false\n'
-  printf '[cpu]\ncore=dynamic\ncycles=max\n[dos]\nxms=true\nems=true\n[autoexec]\n'
+  printf '[cpu]\ncore=dynamic\ncycles=%s\n[dos]\nxms=true\nems=true\n[autoexec]\n' "$CYCLES"
   echo "@echo off"
   echo "mount w $OUT"
   echo "w:"

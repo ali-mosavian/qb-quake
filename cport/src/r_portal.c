@@ -79,8 +79,18 @@ static char far used[PT_MAX_REFS];
 static short far stk_leaf[PT_MAX_STACK];
 static short far stk_rect[PT_MAX_STACK][4];
 
-static long culled_run;
 static short culled_frame;
+
+/* Run totals for bench.txt. The flood's cost is pops x the refs on each
+   popped leaf, and a leaf is popped once per rectangle that widens its
+   union -- so neither figure is bounded by the leaf count and neither
+   can be estimated from the map. Counted, not reasoned about. */
+static long pt_pops, pt_projs, pt_pushes;
+
+void r_portal_stats( long *pops, long *projs, long *pushes )
+{
+    *pops = pt_pops; *projs = pt_projs; *pushes = pt_pushes;
+}
 
 /*
  * A portal's box projected to a screen rectangle -- src/r_ptproj.asm.
@@ -125,6 +135,14 @@ short r_portal_mark( World *world, Renderer *rdr, Mat4 *mtx, short cam_leaf, sho
     long work = 0;
 
     culled_frame = 0;
+    /* No adjacency loaded -- r_load_portals never ran, or the map has
+       none. Without this the flood indexes off a null far pointer,
+       reads the interrupt vector table as a portal index, and finds
+       leaf ranges thousands of entries wide: 4.75 million projections a
+       frame, 2.38 seconds of a 2.39 second frame, and 28 leaves culled
+       on the strength of it. It did not fault and it did not look
+       broken; it looked slow. */
+    if ( !index || !refs ) return -5;
     if ( visleafs <= 0 || visleafs >= PT_MAX_LEAVES ) return -2;
     if ( cam_leaf < 0 || cam_leaf > visleafs ) return -3;
 
@@ -154,6 +172,7 @@ short r_portal_mark( World *world, Renderer *rdr, Mat4 *mtx, short cam_leaf, sho
         rect.x0 = stk_rect[sp][0]; rect.y0 = stk_rect[sp][1];
         rect.x1 = stk_rect[sp][2]; rect.y1 = stk_rect[sp][3];
 
+        pt_pops++;
         first = index[li];
         last  = index[li + 1];
         for ( k = first; k < last; k++ ) {
@@ -161,6 +180,7 @@ short r_portal_mark( World *world, Renderer *rdr, Mat4 *mtx, short cam_leaf, sho
             nb = e[0];
             if ( nb < 0 || nb > visleafs ) continue;
 
+            pt_projs++;
             if ( !r_ptproj( e + 1, m, xresh, yresh, z_near, &pr ) ) continue;
             if ( !r_rclip( &pr, &rect, &sub ) ) continue;
 
@@ -183,6 +203,7 @@ short r_portal_mark( World *world, Renderer *rdr, Mat4 *mtx, short cam_leaf, sho
             }
 
             if ( sp >= PT_MAX_STACK ) return -4;
+            pt_pushes++;
             if ( ++work >= PT_MAX_WORK ) return -1;
             if ( k < PT_MAX_REFS ) used[k] = 1;
             stk_leaf[sp] = nb;
@@ -206,7 +227,6 @@ short r_portal_mark( World *world, Renderer *rdr, Mat4 *mtx, short cam_leaf, sho
             culled_frame++;
         }
     }
-    culled_run += culled_frame;
     return culled_frame;
 }
 

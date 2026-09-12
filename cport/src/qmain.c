@@ -32,6 +32,7 @@
 #include "config.h"
 #include "sys.h"
 #include "loadscr.h"
+#include "r_portal.h"   /* r_portal_stats -- the flood totals in bench.txt */
 
 /* Step log: opened and closed per mark so it survives a fault that
    never returns -- the technique this project records for exactly
@@ -663,17 +664,30 @@ int main( void )
                     fprintf( bf, "ft_max %ld.%03ld\n", (long) (ft_max*1000), (long) (ft_max*1000000) % 1000 );
                     fprintf( bf, "ft_mean %ld.%03ld\n", (long) ((ft_sum/ft_n)*1000), (long) ((ft_sum/ft_n)*1000000) % 1000 );
                     fprintf( bf, "ft_n %ld\n", ft_n );
+                    /* The phase sums below cover EVERY frame; ft_* skip the
+                       warm-up ones. Print both counts rather than leave a
+                       reader to wonder how a phase mean can exceed the frame
+                       mean -- it did, by exactly the ratio of these two. */
+                    fprintf( bf, "pt_frames %d\n", frame );
                     fprintf( bf, "fps_mean %ld.%02ld\n", (long) (ft_n/ft_sum), (long) ((ft_n/ft_sum)*100) % 100 );
                     fprintf( bf, "pt_tick_mean %ld.%03ld\n",
-                             (long) ((pt.tick_sum/ft_n)*1000), (long) ((pt.tick_sum/ft_n)*1000000) % 1000 );
+                             (long) ((pt.tick_sum/frame)*1000), (long) ((pt.tick_sum/frame)*1000000) % 1000 );
                     fprintf( bf, "pt_cull_mean %ld.%03ld\n",
-                             (long) ((pt.cull_sum/ft_n)*1000), (long) ((pt.cull_sum/ft_n)*1000000) % 1000 );
+                             (long) ((pt.cull_sum/frame)*1000), (long) ((pt.cull_sum/frame)*1000000) % 1000 );
                     fprintf( bf, "pt_draw_mean %ld.%03ld\n",
-                             (long) ((pt.draw_sum/ft_n)*1000), (long) ((pt.draw_sum/ft_n)*1000000) % 1000 );
+                             (long) ((pt.draw_sum/frame)*1000), (long) ((pt.draw_sum/frame)*1000000) % 1000 );
                     fprintf( bf, "pt_build_mean %ld.%03ld\n",
-                             (long) ((pt.build_sum/ft_n)*1000), (long) ((pt.build_sum/ft_n)*1000000) % 1000 );
+                             (long) ((pt.build_sum/frame)*1000), (long) ((pt.build_sum/frame)*1000000) % 1000 );
                     fprintf( bf, "pt_raster_mean %ld.%03ld\n",
-                             (long) ((pt.raster_sum/ft_n)*1000), (long) ((pt.raster_sum/ft_n)*1000000) % 1000 );
+                             (long) ((pt.raster_sum/frame)*1000), (long) ((pt.raster_sum/frame)*1000000) % 1000 );
+                    {   /* The portal flood's own work, so a cull cost can be
+                           divided by something real instead of guessed at. */
+                        long pops, projs, pushes;
+                        r_portal_stats( &pops, &projs, &pushes );
+                        fprintf( bf, "pt_pops %ld\n", pops );
+                        fprintf( bf, "pt_projs %ld\n", projs );
+                        fprintf( bf, "pt_pushes %ld\n", pushes );
+                    }
                 }
                 fclose( bf );
             }

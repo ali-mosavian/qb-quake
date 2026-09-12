@@ -197,6 +197,7 @@ FILE *mod_load_world( World *world, Renderer *rdr, Camera *cam, char *map_name, 
     mod_load_facevtx( world );
     r_load_leaves( world );
     r_load_lfaces( world, counts->face_lump_bytes );
+    r_load_portals( world, counts->leaves );
     mod_load_nodes( world, counts );
     mod_load_planes( world, counts );
     mod_load_submodels( world );
