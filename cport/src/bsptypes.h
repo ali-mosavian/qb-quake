@@ -190,6 +190,21 @@ typedef struct {
     short   gone;
 } ItemEnt;
 
+/* q_ent.bi's CrateModel: a pickup's b_*.bsp as mkassets cut it -- the
+   box's size and five textured faces, the bottom being on the floor and
+   never shipped. A corner is a bit per axis and its u,v in 32nds, the
+   texture an atlas id past the map's own. 92 bytes, which is what
+   ents.bin holds; only d_alias.c reads the faces. */
+typedef struct {
+    short       tex, frames;
+    signed char v[12];
+} CrateFace;
+
+typedef struct {
+    BspVec3   size;
+    CrateFace f[5];
+} CrateModel;
+
 /* q_ent.bi's PathCorner. nxt -1 stays. */
 typedef struct {
     BspVec3 org;

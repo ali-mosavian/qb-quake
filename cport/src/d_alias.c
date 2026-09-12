@@ -13,6 +13,7 @@
 #include "d_alias.h"
 #include "item.h"
 #include "qgl.h"
+#include "mod_tex.h"
 
 /* One quad at a time; nothing here recurses or holds two. */
 static QVert qv[4];
@@ -108,6 +109,54 @@ static short mdl_draw_box( BspVec3 *org, float half, float top,
     return 6;
 }
 
+/*
+ * A pickup as its b_*.bsp: five textured quads from org's corner -- the
+ * bottom is on the floor and never shipped. A +N chain steps at 10 Hz
+ * like the world's. A face with a corner behind the near plane is
+ * dropped; the rest of the box still draws.
+ */
+static short mdl_draw_crate( World *world, BspVec3 *org, CrateModel far *c,
+                              float *m, float xresh, float yresh, float z_near,
+                              QSurf dst, short mip, float anim_time )
+{
+    float bx[8], by[8], bw[8];
+    float rx, ry, rz, rw;
+    QSurf src;
+    long  step;
+    short i, k, ci, drawn = 0;
+    CrateFace far *cf;
+
+    step = (long) ( anim_time * 10.0f );
+    for ( i = 0; i < 8; i++ ) {
+        rx = org->x + ( (i & 1) ? c->size.x : 0.0f );
+        rz = org->y + ( (i & 2) ? c->size.y : 0.0f );
+        ry = org->z + ( (i & 4) ? c->size.z : 0.0f );
+        bw[i] = rx*m[3] + ry*m[7] + rz*m[11] + m[15];
+        bx[i] = rx*m[0] + ry*m[4] + rz*m[ 8] + m[12];
+        by[i] = rx*m[1] + ry*m[5] + rz*m[ 9] + m[13];
+    }
+    for ( i = 0; i < 5; i++ ) {
+        cf = &c->f[i];
+        for ( k = 0; k < 4; k++ ) if ( bw[ cf->v[k*3] ] < z_near ) break;
+        if ( k < 4 ) continue;
+        src = mod_tex_shaded( world,
+                (short) ( cf->tex + ( cf->frames > 1 ? (short) ( step % cf->frames ) : 0 ) ), mip );
+        if ( src == 0 ) continue;
+        for ( k = 0; k < 4; k++ ) {
+            ci = cf->v[k*3];
+            rw = 1.0f / bw[ci];
+            qv[k].x = xresh + bx[ci] * rw * xresh;
+            qv[k].y = yresh - by[ci] * rw * yresh;
+            qv[k].z = rw;
+            qv[k].u = (float) cf->v[k*3+1] / 32.0f;
+            qv[k].v = (float) cf->v[k*3+2] / 32.0f;
+        }
+        qglRsPoly( dst, (void far *) qv, 4, QGL_M_TEX, src );
+        drawn++;
+    }
+    return drawn;
+}
+
 short d_draw_items( World *world, Renderer *rdr, Player *player,
                      DiskPlane far *frustum, Mat4 *mtx_fin,
                      float xresh, float yresh, float z_near, QSurf dst )
@@ -131,6 +180,32 @@ short d_draw_items( World *world, Renderer *rdr, Player *player,
         bob = it->pos;
         if ( !d_mdl_visible( world, rdr, frustum, &bob,
                               ENT_BOX_HALF * 1.5f, 0.0f, ENT_BOX_TOP + 8.0f ) ) continue;
+
+        if ( it->crate >= 0 && it->crate < world->crate_count ) {
+            /* the map's own b_*.bsp, still, and centred on the origin
+               as the touch already is -- Quake's spans origin to
+               origin + size. The mip by distance, d_faces.c's own
+               thresholds. */
+            CrateModel far *cm = &world->crate[ it->crate ];
+            BspVec3 corg = it->pos;
+            float dx, dy, dz2, cdist;
+            short cmip = 0;
+
+            corg.x -= cm->size.x * 0.5f;
+            corg.y -= cm->size.y * 0.5f;
+            dx = corg.x - player->pos.x;
+            dy = corg.y - player->pos.y;
+            dz2 = corg.z - player->pos.z;
+            cdist = (float) sqrt( dx*dx + dy*dy + dz2*dz2 );
+            if ( rdr->use_mips ) {
+                if      ( cdist >= 1400.0f ) cmip = 3;
+                else if ( cdist >= 560.0f )  cmip = 2;
+                else if ( cdist >= 280.0f )  cmip = 1;
+            }
+            drawn = (short) ( drawn + mdl_draw_crate( world, &corg, cm, m,
+                                 xresh, yresh, z_near, dst, cmip, rdr->anim_time ) );
+            continue;
+        }
 
         if ( it->kind == ENT_ITEM_EXPLOBOX ) {
             /* the box stands still, b_explob's size */

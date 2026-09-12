@@ -51,6 +51,18 @@ void ent_load_items( World *world, unsigned char far *buf, long *ofs, short coun
     }
 }
 
+void ent_load_crates( World *world, unsigned char far *buf, long *ofs, short count )
+{
+    world->crate_count = count;
+    world->crate = (CrateModel far *) qglMemAlloc( (long) ( count ? count : 1 ) * sizeof(CrateModel) );
+    if ( !world->crate ) {
+        fprintf( stderr, "ents.bin: out of memory for %d crates\n", (int) count );
+        exit( 1 );
+    }
+    if ( count ) _fmemcpy( world->crate, buf + *ofs, (long) count * sizeof(CrateModel) );
+    *ofs += (long) count * sizeof(CrateModel);
+}
+
 /*
  * The trace starts PL_FEET ABOVE the origin, not at it:
  * SV_ClipMoveToEntity offsets the hull's clip_mins against the item's

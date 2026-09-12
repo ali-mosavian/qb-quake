@@ -58,6 +58,13 @@
 void ent_load_items( World *world, unsigned char far *buf, long *ofs, short count );
 
 /*
+ * name: ent_load_crates
+ * desc: The b_*.bsp boxes, straight out of ents.bin -- they sit between
+ *       the corners and the messages, and only d_alias.c reads them.
+ */
+void ent_load_crates( World *world, unsigned char far *buf, long *ofs, short count );
+
+/*
  * name: pl_items_drop
  * desc: Every item onto the floor under it, once, at load.
  */

@@ -88,6 +88,9 @@ typedef struct {
     short       item_count;
     ItemEnt     far *item;
 
+    short       crate_count;
+    CrateModel  far *crate;
+
     /* The message table, last in ents.bin: ENT_MSG_LEN bytes each, not
        NUL-terminated. A door's or a trigger's msg is a 1-based id into
        this, 0 for none. */

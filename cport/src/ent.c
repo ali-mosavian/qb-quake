@@ -589,9 +589,7 @@ void ent_load_teleports( World *world )
     ent_load_trains( world, buf, &ofs, h.ntrain );
     ent_load_corners( world, buf, &ofs, h.ncorner );
 
-    /* crates: a CrateModel is a size and five 16-byte faces, and only
-       d_alias.c reads them. Skipped by size to reach the messages. */
-    ofs += (long) h.ncrate * ( (long) sizeof(BspVec3) + 5L * 16L );
+    ent_load_crates( world, buf, &ofs, h.ncrate );
 
     ent_load_msgs( world, buf, &ofs, h.nmsg, n );
 

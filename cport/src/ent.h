@@ -113,6 +113,7 @@ typedef struct {
 #define REC_ENTSTELE 18
 #define REC_ENTSPLAT 10
 #define REC_ENTSITEM 20
+#define REC_CRATE    92
 #define REC_ENTSDOOR 50
 #define REC_ENTSTRIG 52
 #define REC_ENTSAMB  16
@@ -124,6 +125,7 @@ typedef char rec_entsmon_ok [ sizeof(EntsMon)  == REC_ENTSMON  ? 1 : -1 ];
 typedef char rec_entstele_ok[ sizeof(EntsTele) == REC_ENTSTELE ? 1 : -1 ];
 typedef char rec_entsplat_ok[ sizeof(EntsPlat) == REC_ENTSPLAT ? 1 : -1 ];
 typedef char rec_entsitem_ok[ sizeof(EntsItem) == REC_ENTSITEM ? 1 : -1 ];
+typedef char rec_crate_ok[ sizeof(CrateModel) == REC_CRATE ? 1 : -1 ];
 typedef char rec_entsdoor_ok[ sizeof(EntsDoor) == REC_ENTSDOOR ? 1 : -1 ];
 typedef char rec_entstrig_ok[ sizeof(EntsTrig) == REC_ENTSTRIG ? 1 : -1 ];
 typedef char rec_entsamb_ok [ sizeof(EntsAmb)  == REC_ENTSAMB  ? 1 : -1 ];
