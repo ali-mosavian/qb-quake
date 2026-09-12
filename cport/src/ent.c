@@ -21,6 +21,7 @@
 #include "pl_move.h"    /* PL_FEET/PL_TELE_LIFT -- shared with pl_move.c, one fact one place */
 #include "r_bsp.h"      /* r_point_leaf -- r_bsp.bas, not yet ported */
 #include "assets.h"
+#include "item.h"   /* ent_load_items -- the records sit between the hides and the doors */
 
 /* Neither toolchain here defines F_FTOL@, the runtime helper bcc emits
    for a float/double-to-integer cast (checked bcpp31's and tc201's
@@ -577,9 +578,7 @@ void ent_load_teleports( World *world )
         }
     }
 
-    /* items: the pickups are not drawn or taken yet, so their records
-       are stepped over. They sit between the hides and the doors. */
-    ofs += (long) h.nitem * sizeof(EntsItem);
+    ent_load_items( world, buf, &ofs, h.nitem );
 
     ent_load_doors( world, buf, &ofs, h.ndoor );
     ent_load_trigs( world, buf, &ofs, h.ntrig );
@@ -601,6 +600,11 @@ void ent_load_teleports( World *world )
     for ( i = 0; i < world->plat_count; i++ )
         if ( world->plat[i].kind == ENT_PLAT_KIND_TRAIN ) ent_train_init( world, &world->plat[i] );
     ent_link_doors( world );
+
+    /* and every pickup onto the floor under it, which needs every plat
+       and door already at the position it loaded in: the trace walks
+       their hulls too. */
+    pl_items_drop( world );
 
     qglMemFree( (long) buf );
 }

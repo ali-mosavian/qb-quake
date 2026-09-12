@@ -54,6 +54,7 @@ typedef struct {
     short no_z;               /* -noz */
     short no_portal;          /* -noportal */
     short no_ents;            /* -noents */
+    short no_items;           /* -noitems: the reference frame for the pickups */
     short bad_order;          /* -badorder */
     short comp;                /* -comp */
     short use_lm;              /* -lm */

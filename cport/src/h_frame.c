@@ -21,6 +21,8 @@
 #include "d_faces.h"
 #include "ent.h"
 #include "ent_move.h"
+#include "item.h"
+#include "d_alias.h"
 #include "input.h"
 #include "r_bsp.h"
 #include "mod_tex.h"
@@ -123,6 +125,10 @@ void host_tick( World *world, Player *player, Camera *cam, Renderer *rdr,
     ent_move_doors( world, player, fight, rdr, dt );
     ent_move_trigs( world, player, fight, rdr, dt );
     ent_move_trains( world, player, dt );
+
+    /* and what the player picked up on the way. After the movers: a
+       plat can carry an item's floor out from under the player. */
+    pl_items_touch( world, player, fight, rdr );
 
     /* where each mover ended up, so the draw order can place it */
     ent_place_models( world );
@@ -262,6 +268,11 @@ void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
         pt->draw_sum += dt;
         if ( dt > pt->draw_max ) pt->draw_max = dt;
     }
+
+    /* The pickups, depth tested against the world that is already
+       there. Before the outlines, which are the same depth state. */
+    d_draw_items( world, rdr, player, frustum, &mtx_fin,
+                   xresh, yresh, z_near, h_dst_dc );
 
     /* Portal outlines, while the depth test is still on, so a portal
        behind a wall is hidden by it. Drawn after depth goes off they

@@ -66,6 +66,7 @@ typedef struct {
     short pt_culled;      /* leaves the portal flood removed from the
                               PVS this frame, or -1 when it gave up */
     short no_ents;        /* -noents */
+    short no_items;       /* -noitems */
     short bad_order;      /* -badorder */
 
     /* r_mark_leaves's own memory, not reset by r_draw_world: the

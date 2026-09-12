@@ -179,6 +179,17 @@ typedef struct {
     float wait_left;
 } PlatEnt;
 
+/* q_ent.bi's ItemEnt: a pickup where the map put it, dropped to the
+   floor at load. Single player, so taken is taken. */
+typedef struct {
+    short   kind;
+    short   amount;      /* healamount, or the ammo, or a powerup's seconds */
+    short   target;      /* fired when taken */
+    short   crate;       /* CrateModel index, or -1: a flat box */
+    BspVec3 pos;         /* BSP space, on the floor */
+    short   gone;
+} ItemEnt;
+
 /* q_ent.bi's PathCorner. nxt -1 stays. */
 typedef struct {
     BspVec3 org;

@@ -75,6 +75,7 @@ void sys_parse_args( RunArgs *args )
         else if ( stricmp( argv[i], "-jump" )    == 0 ) args->jump = -1;
         else if ( stricmp( argv[i], "-strafe" )  == 0 ) args->strafe = -1;
         else if ( stricmp( argv[i], "-noents" )  == 0 ) args->no_ents = -1;
+        else if ( stricmp( argv[i], "-noitems" ) == 0 ) args->no_items = -1;
         else if ( stricmp( argv[i], "-badorder" )== 0 ) args->bad_order = -1;
         else if ( stricmp( argv[i], "-noz" )     == 0 ) args->no_z = -1;
         else if ( stricmp( argv[i], "-nocull" )  == 0 ) args->no_cull = -1;

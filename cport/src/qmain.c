@@ -28,6 +28,7 @@
 #include "pl_move.h"
 #include "input.h"
 #include "fight.h"
+#include "item.h"
 #include "h_frame.h"
 #include "screen.h"
 #include "config.h"
@@ -224,6 +225,11 @@ int main( void )
 
         memset( &world, 0, sizeof(world) );
         memset( &fight, 0, sizeof(fight) );
+        /* what a level starts with: PlayerCombat's own, not zero */
+        fight.health  = PL_HEALTH;
+        fight.shells  = PL_SHELLS;
+        fight.items   = PL_IT_SHOTGUN;
+        fight.weapon  = PL_IT_SHOTGUN;
         memset( &rdr, 0, sizeof(rdr) );
         memset( &cam, 0, sizeof(cam) );
         memset( &player, 0, sizeof(player) );
@@ -261,9 +267,9 @@ int main( void )
         mapf = mod_load_world( &world, &rdr, &cam, &fight, args.map_name, &counts );
         ld_step( &ldr, v.h_video_dc, hud );
 
-        sprintf( buf, "mod_load_world ok faces=%d leaves=%d models=%d tele=%d plat=%d",
+        sprintf( buf, "mod_load_world ok faces=%d leaves=%d models=%d tele=%d plat=%d item=%d",
                  world.face_count, world.leaf_count, world.model_count,
-                 world.tele_count, world.plat_count );
+                 world.tele_count, world.plat_count, world.item_count );
         mark( buf );
         sprintf( buf, "spawn=%ld,%ld,%ld angle=%ld",
                  (long) cam.pos.x, (long) cam.pos.y, (long) cam.pos.z,
@@ -384,6 +390,7 @@ int main( void )
         rdr.backface = (short) ( args.no_cull ? 0 : -1 );
         rdr.portal   = (short) ( args.no_portal ? 0 : -1 );
         rdr.no_ents   = args.no_ents;
+        rdr.no_items  = args.no_items;
         rdr.bad_order = args.bad_order;
         hud->portal_wire = args.ptwire;
         /* Off unless asked for. F12 still toggles it; -nostats stays
@@ -647,6 +654,13 @@ int main( void )
             sprintf( buf, "frames=%d polys=%ld tris=%ld pos=%ld,%ld,%ld",
                      frame, poly_sum, tri_sum,
                      (long) cam.pos.x, (long) cam.pos.y, (long) cam.pos.z );
+            mark( buf );
+
+            /* what the player is carrying when the run ends: the only
+               headless view of a pickup actually happening */
+            sprintf( buf, "fight=health %d shells %d nails %d rockets %d armor %d items %ld took %d",
+                     fight.health, fight.shells, fight.nails, fight.rockets,
+                     fight.armor, fight.items, item_taken( &world ) );
             mark( buf );
 
             if ( ft_n > 0 ) {
