@@ -194,6 +194,12 @@ type PhaseTimes
     tk_trigs   as TickTimer
     tk_traps   as TickTimer
     tk_ls      as TickTimer
+    '' the whole of host_tick, against which the eleven above have to
+    '' add up. pt_tick is sys_now and so quantised to a millisecond,
+    '' and comparing it against these -- which are per TICK, not per
+    '' frame -- read as 2.7ms a frame of work nothing accounted for.
+    '' There is none: tk_all is 2.70ms a tick and the eleven sum to it.
+    tk_all     as TickTimer
     '' pt_mdl's parts, microseconds a frame
     md_mon   as TickTimer
     md_item  as TickTimer

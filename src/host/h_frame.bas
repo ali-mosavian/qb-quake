@@ -455,7 +455,9 @@ sub host_tick ( _
     dim mdl_i as integer
     dim fire as integer, ndead as integer
     dim t0 as long
+    dim t_all as long
 
+    t_all = sys_rdtsc()
     '' what the player asked for
     in_handle_toggles g
 
@@ -550,6 +552,7 @@ sub host_tick ( _
     '' the test dynamic light, following the player -- field by field,
     '' not a whole-UDT assignment, matching how every other Vec3 copy in
     '' this codebase is written
+    host_tk g.ft.n > 0, t_all, g.pt.tk_all
     g.rdr.dlight.pos.x = g.pl.pos.x
     g.rdr.dlight.pos.y = g.pl.pos.y
     g.rdr.dlight.pos.z = g.pl.pos.z
