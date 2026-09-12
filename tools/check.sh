@@ -126,6 +126,15 @@ if [[ "${1:-}" == "--depth" ]]; then
     build_exe
     rc=0
     for m in dm3ish e1m6; do
+        # Each arm draws its own map, so it stages it the way GOMAP.BAT
+        # does. dm3ish is whatever the build already put beside the exe.
+        # Staged from MAPS\<m> the way GOMAP.BAT does, and SKIPPED when
+        # that is not there. Not from whatever is lying beside the exe:
+        # the loose copy is the last map somebody ran, so dm3ish.bsp with
+        # e1m6's ents.bin beside it is what this used to do, and the run
+        # died with "ents.bin is from another map" rather than skipping.
+        [[ -d "$VBD_OUT/MAPS/$m" ]] || { echo "SKIP  $m: no MAPS/$m in the build"; continue; }
+        cp "$VBD_OUT/MAPS/$m"/* "$VBD_OUT/"
         [[ "$m" == dm3ish ]] && BENCH="-lm -nostats -yaw 182 -bench 40 -ticks 60" \
                              || BENCH="-lm -nostats -walk -bench 400 -ticks 600"
         run_frame "$BENCH"      "$VBD_OUT/depth-z.bmp"   "$m.bsp"
