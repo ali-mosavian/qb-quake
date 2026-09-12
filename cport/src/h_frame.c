@@ -141,7 +141,10 @@ void host_tick( World *world, Player *player, Camera *cam, Renderer *rdr,
        air. The shot goes after the monsters' think so it hits them
        where this frame drew them. */
     pl_select_weapon( input, fight );
-    if ( input->mouse.left ) pl_fire( world, player, cam, fight, rdr );
+    /* fire is mouse 1 or ctrl, as it has always been; mouse 1 also
+       walks forward, which is the original's binding too */
+    if ( input->mouse.left || input->keyboard.k[KEY_CTRL] )
+        pl_fire( world, player, cam, fight, rdr );
     pl_traps_tick( world, fight, rdr );
     pl_spikes_tick( world, player, fight, rdr, dt );
 
