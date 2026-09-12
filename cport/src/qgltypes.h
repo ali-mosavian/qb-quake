@@ -31,8 +31,19 @@ typedef struct {
 typedef struct { unsigned char red, green, blue; } PalRgb;
 
 /* qgl$KbdIsr writes a word per scancode and puts the last code in
-   slot 0, so this is one table and not 87 named fields. */
-#define QGL_KEYS 87
+   slot 0, so this is one table and not 87 named fields.
+
+   128, because that is what the ISR writes: qglKbdInit clears the
+   table with `mov cx, 128; rep stosw`, and the handler indexes it at
+   `scancode & 7Fh`. Sized at 87 -- the number of NAMED fields in
+   in.bi's Keys -- it was 82 bytes short, and in_init cleared them
+   straight through whatever the compiler had placed next on the
+   stack. What that was here was the Camera: the spawn was read out of
+   the map correctly and then zeroed before pl_init could use it, so
+   the player started at the origin inside solid geometry and no key
+   moved anything -- which reads as broken input, not as a clobbered
+   struct. */
+#define QGL_KEYS 128
 typedef struct { short k[QGL_KEYS]; } Keys;
 
 
@@ -125,8 +136,11 @@ typedef struct { short k[QGL_KEYS]; } Keys;
 #define KEY_INS     82
 #define KEY_DEL     83
 #define KEY_SYSREQ  84
-#define KEY_F11     85
-#define KEY_F12     86
+/* 87/88, not 85/86: scancodes 85 and 86 are unassigned, so the field
+   ORDER in in.bi's Keys stops matching the scancode here. Every name
+   above this point happens to agree; these two do not. */
+#define KEY_F11     87
+#define KEY_F12     88
 
 typedef struct {
     short x, y;
