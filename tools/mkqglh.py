@@ -102,16 +102,34 @@ def parse_asm(root: pathlib.Path) -> tuple[dict, dict, dict]:
     return params, rets, doc
 
 
-def parse_decls(path: pathlib.Path) -> dict[str, list[str]]:
-    """name -> raw BASIC parameter list, for sharpening and arity."""
-    out: dict[str, list[str]] = {}
+RET_BAS = {"integer": "short", "long": "long", "single": "float"}
+
+
+def parse_decls(path: pathlib.Path) -> tuple[dict, dict]:
+    """(name -> raw BASIC parameters, name -> C return type).
+
+    The return half matters as much as the parameters: the asm says what
+    it leaves in ax or dx:ax only where someone wrote the signature
+    comment that way, and reading a missing one as void turns a
+    value-returning entry into a silent discard -- qglSfPget did exactly
+    that here. BASIC had to declare the return to call it at all, so
+    where a declare exists it is the authority.
+    """
+    args: dict[str, list[str]] = {}
+    rets: dict[str, str] = {}
     for line in path.read_text(encoding="latin-1").splitlines():
-        m = re.match(r"\s*declare\s+(?:function|sub)\s+(qgl\w*)\s*\((.*?)\)\s*(?:as\s+\w+)?\s*$",
+        m = re.match(r"\s*declare\s+(function|sub)\s+(qgl\w*)\s*\((.*?)\)\s*(?:as\s+(\w+))?\s*$",
                      line, re.I)
-        if m:
-            out.setdefault(m.group(1),
-                           [a.strip() for a in m.group(2).split(",") if a.strip()])
-    return out
+        if not m:
+            continue
+        kind, name, blob, ret = m.groups()
+        args.setdefault(name, [a.strip() for a in blob.split(",") if a.strip()])
+        r = RET_BAS.get((ret or "").lower(), "void") if kind.lower() == "function" else "void"
+        # A `sub` declare is a caller discarding the answer, not proof
+        # there is none -- qglRsPoly is declared both ways.
+        if r != "void" or name not in rets:
+            rets[name] = r
+    return args, rets
 
 
 def sharpen(basic: str | None) -> str | None:
@@ -144,7 +162,7 @@ def ctype(masm: str, basic: str | None, docty: str | None) -> str | None:
     return None
 
 
-def render(vals, derived, params, rets, decls, doc) -> tuple[str, list[str], list[str]]:
+def render(vals, derived, params, rets, bas_rets, decls, doc) -> tuple[str, list[str], list[str]]:
     L = ["/*",
          " * qgl.h -- the qgl layer, for C callers.",
          " *",
@@ -193,7 +211,19 @@ def render(vals, derived, params, rets, decls, doc) -> tuple[str, list[str], lis
         if args is None:
             unsure.append(name)
             continue
-        ret = rets.get(name, "void")
+        # The asm states what it leaves in ax, and that is the fact.
+        # BASIC fills the gap where no signature comment says: it had to
+        # declare a return to call the entry at all, so `as integer` is
+        # evidence, while `sub` is only this caller discarding the
+        # answer -- qglTxtChar does return the glyph advance and BASIC
+        # declares it a sub, and qglRsPoly is declared both ways.
+        # Two non-void answers that differ is a real contradiction.
+        ret = rets.get(name) or bas_rets.get(name, "void")
+        a, b = rets.get(name, "void"), bas_rets.get(name, "void")
+        if a != "void" and b != "void" and a != b:
+            raise SystemExit(
+                f"mkqglh: {name} returns {b} per qgl.decl and {a} per the "
+                f"asm signature comment. One is wrong -- fix the source.")
         L.append(f"{ret} pascal far {name}( {', '.join(args) or 'void'} );")
 
     L.append("")
@@ -218,8 +248,8 @@ def main(argv: list[str]) -> int:
     check = "--check" in argv
     vals, derived = mkqglbi.constants((root / "qgl.inc").read_text(encoding="latin-1"))
     params, rets, doc = parse_asm(root)
-    decls = parse_decls(root / "qgl.decl")
-    want, skipped, unsure = render(vals, derived, params, rets, decls, doc)
+    decls, bas_rets = parse_decls(root / "qgl.decl")
+    want, skipped, unsure = render(vals, derived, params, rets, bas_rets, decls, doc)
     have = out.read_text(encoding="latin-1") if out.exists() else ""
     if have == want:
         return 0

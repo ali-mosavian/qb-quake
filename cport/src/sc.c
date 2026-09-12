@@ -293,7 +293,7 @@ static short sc_store_open( SurfCache far *sc )
     /* Shaped so its own scanline table stays tiny. bps is capped at
        one EMS page, so a 16384-wide DC is exactly one page per
        scanline. */
-    sc->hnd = qglNew( QGL_SURF_EMS, QGL_FMT_8BIT, (int) SC_PGBYTES, SC_PAGES );
+    sc->hnd = qglSfNew( (short) SC_PGBYTES, SC_PAGES, QGL_SURF_EMS );
     if ( sc->hnd == 0 ) {
         sc->cap = 0;
         return 0;
@@ -649,8 +649,8 @@ static short sc_selftest_run( SurfCache far *sc )
 
     /* a write into the last row of the largest class, the 16K page edge */
     for ( i = 0; i < 32; i++ ) { wr[i] = (unsigned char) ((i * 7 + 3) & 255); rd[i] = 0; }
-    qglRowWrite( d0, 0, 127, 32, QGL_FMT_8BIT, wr );
-    qglRowRead( d0, 0, 127, 32, QGL_FMT_8BIT, rd );
+    qglRowWrite( d0, 0, 127, 32, QGL_FMT_8BIT, (long) wr );
+    qglRowRead( d0, 0, 127, 32, QGL_FMT_8BIT, (long) rd );
     for ( i = 0; i < 32; i++ ) if ( rd[i] != wr[i] ) return -12;
 
     /* a flush must retire the slots and hand the DCs back, not make more */

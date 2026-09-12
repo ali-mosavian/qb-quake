@@ -361,7 +361,7 @@ static void put_u32( unsigned long v, FILE *f ) { fwrite( &v, 4, 1, f ); }
 void scr_screenshot( char *flname, QSurf dc, short w, short h )
 {
     FILE *f;
-    short x, y, pad;
+    short x, y, pad, i;
     long  rowlen, imgsz, off_bits;
     PalRgb   palbuf[256];
     unsigned char row[2048];   /* w+pad never exceeds this at any mode
@@ -409,7 +409,10 @@ void scr_screenshot( char *flname, QSurf dc, short w, short h )
 
     /* Pixels, bottom row first. Pad bytes stay zero. */
     for ( y = (short)( h - 1 ); y >= 0; y-- ) {
-        for ( x = 0; x < w; x++ ) row[x] = (unsigned char) ( qglSfPget( dc, x, y ) & 255 );
+        for ( x = 0; x < w; x++ ) {
+            short px = qglSfPget( dc, x, y );
+            row[x] = (unsigned char) ( px & 255 );
+        }
         for ( ; x < rowlen; x++ ) row[x] = 0;
         fwrite( row, 1, (size_t) rowlen, f );
     }

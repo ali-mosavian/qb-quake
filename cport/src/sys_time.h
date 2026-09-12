@@ -1,6 +1,8 @@
 #ifndef __SYS_TIME_H__
 #define __SYS_TIME_H__
 
+#include "qgl.h"
+
 
 /*
  * sys_time.h -- the frame clock. C port of sys.bas's sys_time_init/

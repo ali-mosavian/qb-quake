@@ -20,7 +20,7 @@ if [[ -z "$DOSBOX_BIN" ]]; then
 fi
 [[ -n "$DOSBOX_BIN" ]] || { echo "no dosbox-x found; set DOSBOX_BIN" >&2; exit 1; }
 
-rm -f "$OUT/cport.txt" "$OUT/cstep.txt"
+rm -f "$OUT/cport.txt" "$OUT/cstep.txt" "$OUT/error.log"
 
 { printf '[sdl]\nautolock=false\n[dosbox]\nmemsize=32\nstartbanner=false\nquit warning=false\n'
   printf '[cpu]\ncore=dynamic\ncycles=max\n[dos]\nxms=true\nems=true\n[autoexec]\n'

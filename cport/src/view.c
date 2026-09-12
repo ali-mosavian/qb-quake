@@ -21,10 +21,10 @@ void v_update_camera( Camera *cam, Player *player, World *world, Input *input,
 
     /* Screen coordinates throughout: the mouse spans the MODE, not
        the view, so a smaller view must not shrink the look range. */
-    if ( input->mouse.x < 1 )          mousePos( x_res - 4, input->mouse.y );
-    if ( input->mouse.x > x_res - 3 )  mousePos( 1, input->mouse.y );
-    if ( input->mouse.y < 0 )          mousePos( input->mouse.x, 0 );
-    if ( input->mouse.y > y_res )      mousePos( input->mouse.x, y_res - 1 );
+    if ( input->mouse.x < 1 )          qglMousePos( x_res - 4, input->mouse.y );
+    if ( input->mouse.x > x_res - 3 )  qglMousePos( 1, input->mouse.y );
+    if ( input->mouse.y < 0 )          qglMousePos( input->mouse.x, 0 );
+    if ( input->mouse.y > y_res )      qglMousePos( input->mouse.x, y_res - 1 );
 
     tmx = input->mouse.x + 1;
     tmy = input->mouse.y + 2;
@@ -43,10 +43,10 @@ void v_update_camera( Camera *cam, Player *player, World *world, Input *input,
        because pl_move clamps to PL_MAXSPEED. */
     fwd    = 0.0f;
     strafe = 0.0f;
-    if ( input->keyboard.w )     fwd    += 1.0f;
-    if ( input->keyboard.s )     fwd    -= 1.0f;
-    if ( input->keyboard.a )     strafe += 1.0f;
-    if ( input->keyboard.d )     strafe -= 1.0f;
+    if ( input->keyboard.k[KEY_W] )     fwd    += 1.0f;
+    if ( input->keyboard.k[KEY_S] )     fwd    -= 1.0f;
+    if ( input->keyboard.k[KEY_A] )     strafe += 1.0f;
+    if ( input->keyboard.k[KEY_D] )     strafe -= 1.0f;
     if ( input->mouse.left )     fwd    += 1.0f;
     if ( input->mouse.right )    fwd    -= 1.0f;
 
@@ -84,7 +84,7 @@ void v_update_camera( Camera *cam, Player *player, World *world, Input *input,
         }
 
         jump = 0;
-        if ( input->keyboard.spcbar ) jump = -1;
+        if ( input->keyboard.k[KEY_SPCBAR] ) jump = -1;
 
         pl_move( world, player, cam, fwd, strafe, dir_x, dir_y, jump, dt );
     }

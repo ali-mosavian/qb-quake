@@ -95,7 +95,7 @@ void mod_load_colormap( World *world )
 
     if ( !( fh = qglFileOpen( "assets.zip::colmap.bin" ) ) ) return;
 
-    world->cmap_dc = qglNew( QGL_SURF_EMS, QGL_FMT_8BIT, 16384, 1 );
+    world->cmap_dc = qglSfNew( 16384, 1, QGL_SURF_EMS );
     if ( world->cmap_dc ) {
         p = (unsigned char far *) qglSfAccessRdEx( world->cmap_dc, 0, 3 /* CM_SLOT */ );
         if ( p && qglFileRead( fh, (long) p, 16384L ) == 16384L ) world->cmap_size = 16384;
@@ -144,7 +144,7 @@ static void mod_load_facevtx( World *world )
     if ( !( fh = qglFileOpen( "assets.zip::fgeom.bin" ) ) ) mod_fatal( "fgeom.bin missing" );
 
     world->geom_rows = (short) ( (qglFileSize( fh ) + GEOM_W - 1) / GEOM_W );
-    world->geom_dc = qglNew( QGL_SURF_EMS, QGL_FMT_8BIT, (int) GEOM_W, world->geom_rows );
+    world->geom_dc = qglSfNew( (short) GEOM_W, world->geom_rows, QGL_SURF_EMS );
     if ( !world->geom_dc ) mod_fatal( "no EMS for the geometry store" );
 
     for ( y = 0; y < world->geom_rows; y++ ) {

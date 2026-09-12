@@ -21,12 +21,18 @@
    isn't ported yet, and nothing else can run without a mouse anyway. */
 void in_init( Input *input, QSurf h_video_dc )
 {
-    if ( !mouseInit( h_video_dc, &input->mouse ) ) {
+    /* qgl clips the cursor to a rectangle rather than to a surface, so
+       the mode's own size is read off the video surface and handed over
+       -- qglSfSize answers the size, where mgl's uglDcSize answered one
+       less and every caller added it back. */
+    if ( !qglMouseInit( &input->mouse,
+                        (short) ( qglSfSize( h_video_dc, 0 ) - 1 ),
+                        (short) ( qglSfSize( h_video_dc, 1 ) - 1 ) ) ) {
         fprintf( stderr, "0x0006, Could not init mouse...\n" );
         exit( 1 );
     }
 
-    kbdInit( &input->keyboard );
+    qglKbdInit( &input->keyboard );
     qglTmrInit( 1000 );   /* 1 ms; sys_time_init measures what arrives */
 }
 

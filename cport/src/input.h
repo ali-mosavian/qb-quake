@@ -8,7 +8,7 @@
 
 /*
  * Input -- mouse, keyboard, and the screenshot counter that rides
- * along with the F5 key. Caller-owned, one instance for the run: kbdInit
+ * along with the F5 key. Caller-owned, one instance for the run: qglKbdInit
  * registers an interrupt handler that writes into &input->keyboard for
  * as long as the program runs, so this can't be a short-lived local --
  * see in_init.
@@ -22,7 +22,7 @@ typedef struct {
 /*
  * name: in_init
  * desc: Mouse, keyboard and the one-second timer. h_video_dc is the
- *       video DC mouseInit clips the cursor to -- Video's, not Input's
+ *       video surface qglMouseInit takes its clip rect from -- Video's, not Input's
  *       own, so it's a parameter rather than a field here.
  */
 void in_init( Input *input, QSurf h_video_dc );

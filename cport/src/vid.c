@@ -58,7 +58,7 @@ void v_init( Video *v, long pal )
     }
 
     if ( !v->use_paging ) {
-        v->h_back_bdc = qglNew( QGL_SURF_CMEM, v->c_fmt, v->x_res, v->y_res );
+        v->h_back_bdc = qglSfNew( v->x_res, v->y_res, QGL_SURF_CMEM );
         if ( v->h_back_bdc == 0 ) {
             fprintf( stderr, "0x0002, Could not create a backbuffer...\n" );
             exit( 1 );
@@ -73,7 +73,7 @@ void v_init( Video *v, long pal )
                live-input crash (docs/bugs/); it did not fix that crash
                and it cost the map the whole port was meant to unblock,
                so it is the wrong trade twice over. */
-            v->h_comp_dc = qglNew( QGL_SURF_EMS, v->c_fmt, v->scr_x_res, v->scr_y_res );
+            v->h_comp_dc = qglSfNew( v->scr_x_res, v->scr_y_res, QGL_SURF_EMS );
             if ( v->h_comp_dc == 0 ) {
                 fprintf( stderr, "0x0003, Could not create the composite buffer...\n" );
                 exit( 1 );

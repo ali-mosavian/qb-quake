@@ -112,6 +112,24 @@ int main( void )
 
     v_init_ugl();
     mark( "v_init_ugl ok" );
+    {   /* One EMS surface, asked for at init.
+
+           qglNew's `typ` is the dispatch-table OFFSET, not the SURF_
+           kind; SURF_EMS is 2 and SF_EMS is 2*64, so qglNew( SURF_EMS,
+           ... ) indexes into the conventional-memory entry and every
+           EMS surface came back null. SURF_CMEM is 0 either way, so the
+           back buffer worked and nothing said otherwise until three
+           loaders later, as "no EMS for the geometry store". qglSfNew
+           is the boundary that converts, and this is the smallest
+           question that distinguishes the two. */
+        char  gb[64];
+        QSurf probe = qglSfNew( 64, 4, QGL_SURF_EMS );
+
+        sprintf( gb, "ems frame=%04X probe=%ld", qglGemFrame(), probe );
+        mark( gb );
+        if ( !probe ) sys_error( "EMS is up but qglSfNew(SURF_EMS) returned null" );
+        qglSfFree( probe );
+    }
 
     v.use_paging = cfg.use_paging;
     v.pages      = cfg.pages;
@@ -230,7 +248,7 @@ int main( void )
            and the loading screen wants them. It used to sit after the
            textures, which is the only reason it was ever "too late" to
            label a load. */
-        font_load( &hud->font, "base.dat::font/4x6.fnt" );
+        font_load( &hud->font, "assets.zip::font.fnt" );
         mark( "font_load ok" );
 
         /* Six ld_step calls follow -- keep this in step with them, or
@@ -328,7 +346,7 @@ int main( void )
         /* Seeds the mouse position from the spawn yaw -- the camera
            reads its angle from the mouse, so the mouse is what has to
            move, the same trick a teleport uses (ent_check_teleport). */
-        mousePos( (short) ( (v.scr_x_res - 1) * cam.start_angle / 360.0f ), 110 );
+        qglMousePos( (short) ( (v.scr_x_res - 1) * cam.start_angle / 360.0f ), 110 );
 
         /* -walk/-jump/-strafe hold an input the way a real keypress
            would -- there is no real keyboard under a headless run, so
@@ -564,7 +582,7 @@ int main( void )
                     }
                 }
 
-                qglDrFill( h_dst_dc, 0, 0, (short)(x_res - 1), (short)(y_res - 1), 0 );
+                qglDrFill( h_dst_dc, 0, 0, (short)(v.x_res - 1), (short)(v.y_res - 1), 0 );
                 host_render( &world, &rdr, &cam, &player, sc, &ls, hud, &pt, &sysclk,
                               h_dst_dc, &mtx_prj, (float) v.x_res / 2.0f, (float) v.y_res / 2.0f,
                               cfg.z_near, cfg.z_far,

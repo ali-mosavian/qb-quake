@@ -32,8 +32,13 @@ QGL_SRC := $(QGL)/file.asm $(QGL)/vga.asm \
            $(QGL)/z.asm $(QGL)/clip.asm $(QGL)/rs.asm $(QGL)/sb.asm \
            $(QGL)/zip.asm $(QGL)/ar.asm $(QGL)/dsp.asm \
            $(QGL)/log.asm $(QGL)/tmr.asm $(QGL)/kbd.asm $(QGL)/mouse.asm \
-           $(QGL)/m4.asm $(QGL)/cpi4.asm \
+           $(QGL)/m4.asm \
            $(QGL)/b8/b8fill.asm $(QGL)/b8/b8span.asm
+# cpi4.asm is deliberately absent: it replaces VBDOS runtime routines
+# (B$CPI4 and friends) and calls the BASIC runtime's own __aFldiv /
+# __aFlrem, so it has nothing to attach to here. It is the only qgl
+# module with a hard BASIC-runtime dependency -- the __BASIC__-gated
+# ones assemble clean without the define.
 QGL_MODS := $(basename $(notdir $(QGL_SRC)))
 QGL_INC  := $(wildcard $(QGL)/*.inc)
 
@@ -64,7 +69,11 @@ EXE  := $(BUILD)/QCPORT.EXE
 # 8-bit palette rather than what the DAC would give back.
 DATA_SRC := $(CURDIR)/../data/assets
 DATA     := assets.zip TEXR.RAW TEXS.RAW pal.raw
-DATA_OUT := $(addprefix $(BUILD)/,$(DATA))
+# The map and the ini are read by name out of the working directory, so
+# they are staged too -- a run without them dies in config_load or
+# mod_open, several marks before anything says which file was missing.
+ROOT_DATA := dm3ish.bsp stuff.ini
+DATA_OUT := $(addprefix $(BUILD)/,$(DATA) $(ROOT_DATA))
 
 all: build                      ## build the standalone renderer (default)
 build: $(EXE) $(DATA_OUT)
@@ -73,11 +82,18 @@ build: $(EXE) $(DATA_OUT)
 # matches $(BUILD)/<anything>.obj and would compete with the compile
 # rules for every object.
 $(foreach f,$(DATA),$(eval $(BUILD)/$(f): $(DATA_SRC)/$(f) | $(BUILD); cp $$< $$@))
+$(foreach f,$(ROOT_DATA),$(eval $(BUILD)/$(f): $(CURDIR)/../data/$(f) | $(BUILD); cp $$< $$@))
 
 $(BUILD):
 	mkdir -p $(BUILD)
 
-$(BUILD)/%.obj: src/%.c | $(BUILD)
+# On every header, not just the .c: without this an edit to qgl.h or a
+# struct changes what the objects mean while leaving the sources
+# untouched, LINK is happy, and the EXE runs old declarations against
+# new code. That is this project's own stale-object trap.
+C_HDRS := $(wildcard src/*.h)
+
+$(BUILD)/%.obj: src/%.c $(C_HDRS) | $(BUILD)
 	$(BCC) $< $@
 
 $(BUILD)/%.obj: src/%.asm | $(BUILD)

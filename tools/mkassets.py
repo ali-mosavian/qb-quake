@@ -21,21 +21,15 @@ import zlib
 OUT: dict[str, bytes] = {}
 
 
-def deflate12(data: bytes) -> bytes:
-    c = zlib.compressobj(9, zlib.DEFLATED, -12)
-    return c.compress(data) + c.flush()
-
-
 def write_zip(path: str) -> None:
-    # hand-rolled: members >= 1K are DEFLATEd at windowBits=-12 and tagged
-    # with the decoder's ring ('UW' extra field); zipfile offers neither
+    # STORED, every member. qgl's zip driver has no inflate at all -- it
+    # walks the local headers and rejects anything that is not stored --
+    # and a deflated member comes back from qglFileOpen as a plain zero,
+    # which the caller reports as "missing". Members used to be DEFLATEd
+    # at windowBits=-12 for uGL's decoder ring; uGL is gone.
     locs, cens, pos = [], [], 0
     for name, data in OUT.items():
-        payload = deflate12(data) if len(data) >= 1024 else data
-        method = 8 if len(payload) < len(data) or len(data) >= 1024 else 0
-        if method == 0:
-            payload = data
-        xtra = struct.pack("<HHH", 0x5755, 2, 4096) if method == 8 else b""
+        payload, method, xtra = data, 0, b""
         crc = zlib.crc32(data)
         nm = name.encode()
         locs.append(struct.pack("<4sHHHHHLLLHH", b"PK\x03\x04", 20, 0, method,
@@ -53,6 +47,8 @@ def write_zip(path: str) -> None:
     with zipfile.ZipFile(path) as z:
         for name, data in OUT.items():
             assert z.read(name) == data, name
+            assert z.getinfo(name).compress_type == zipfile.ZIP_STORED, \
+                f"{name} is not stored; qgl cannot inflate it"
     raw = sum(len(v) for v in OUT.values())
     print(f"  assets.zip: {len(OUT)} members, {raw:,} -> {os.path.getsize(path):,} bytes")
 
@@ -687,6 +683,9 @@ def main():
     if len(cmap) < 64*256:
         raise SystemExit(f"colormap is {len(cmap)} bytes, need >= {64*256}")
     OUT['colmap.bin'] = bytes(cmap[:64*256])
+    # qgl links a zip driver and no PACK driver, so the font travels in
+    # assets.zip; the BASIC build reads it straight out of base.dat.
+    OUT['font.fnt'] = pack_read(packpath, 'font/4x6.fnt')
     print(f"  colmap.bin    {64*256:7,} bytes  (64 shades x 256)")
     print("building inverse palette cube ...", flush=True)
     cube, bits = inverse_palette(pal)

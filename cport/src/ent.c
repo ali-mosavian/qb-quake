@@ -243,7 +243,7 @@ void ent_check_teleport( Player *player, World *world, short scr_x_res )
             /* Face the way the destination says. The camera reads its
                angle from the mouse, so the mouse is what has to move --
                the same trick host_main uses to apply the spawn angle. */
-            mousePos( ftol_short( (scr_x_res - 1) * t->yaw / 360.0f ), 110 );
+            qglMousePos( ftol_short( (scr_x_res - 1) * t->yaw / 360.0f ), 110 );
 
             return;
         }
