@@ -117,7 +117,7 @@ static short near pl_hull_check_c(
 /*
  * A brush entity is traced by moving the LINE rather than the hull:
  * its tree sits where the map compiled it, so subtracting the entity's
- * zofs from both ends of the sweep asks the same question of a
+ * its offset from both ends of the sweep asks the same question of a
  * stationary tree that moving the tree would ask of a stationary line.
  *
  * tr keeps the earliest hit by itself -- pl_hull_check_c only writes
@@ -145,8 +145,12 @@ void pl_trace( World *world, BspVec3 *start, BspVec3 *fin, TraceResult *tr )
         if ( world->brush[i].solid ) {
             s2 = *start;
             f2 = *fin;
-            s2.z -= world->brush[i].zofs;
-            f2.z -= world->brush[i].zofs;
+            s2.x -= world->brush[i].ofs.x;
+            s2.y -= world->brush[i].ofs.y;
+            s2.z -= world->brush[i].ofs.z;
+            f2.x -= world->brush[i].ofs.x;
+            f2.y -= world->brush[i].ofs.y;
+            f2.z -= world->brush[i].ofs.z;
 
             tr->all_solid = 1;
             pl_hull_check_c( (short) world->models[i].head_node1, 0.0f, 1.0f, &s2, &f2, tr, world->clip, world->planes );

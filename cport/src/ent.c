@@ -17,6 +17,7 @@
 #include <stdlib.h>
 
 #include "ent.h"
+#include "ent_move.h"
 #include "pl_move.h"    /* PL_FEET/PL_TELE_LIFT -- shared with pl_move.c, one fact one place */
 #include "r_bsp.h"      /* r_point_leaf -- r_bsp.bas, not yet ported */
 #include "assets.h"
@@ -64,10 +65,10 @@ short ent_find_node( short m, World *world )
     short node_nr = 0;
     short pid;
     float dnear, dfar;
-    float x0 = sm->mins.x, x1 = sm->maxs.x;
-    float y0 = sm->mins.y, y1 = sm->maxs.y;
-    float z0 = sm->mins.z + world->brush[m].zofs;
-    float z1 = sm->maxs.z + world->brush[m].zofs;
+    BspVec3 far *ofs = &world->brush[m].ofs;
+    float x0 = sm->mins.x + ofs->x, x1 = sm->maxs.x + ofs->x;
+    float y0 = sm->mins.y + ofs->y, y1 = sm->maxs.y + ofs->y;
+    float z0 = sm->mins.z + ofs->z, z1 = sm->maxs.z + ofs->z;
 
     while ( (node_nr & 0x8000) == 0 ) {
         Node far *n = &world->nodes[node_nr];
@@ -124,8 +125,13 @@ short ent_point_leaf( BspVec3 *p, World *world )
 void ent_place_models( World *world )
 {
     short m;
+    /* Only the brushes that moved. ent_find_node for every submodel
+       every tick was 81ms of e1m3's 131ms frame; a mover stamps its
+       own brush ENT_NODE_DIRTY when its offset changes, and a brush
+       that did not move is still where it was placed. */
     for ( m = 1; m < world->model_count; m++ ) {
-        world->brush[m].node = ent_find_node( m, world );
+        if ( world->brush[m].node == ENT_NODE_DIRTY )
+            world->brush[m].node = ent_find_node( m, world );
     }
 }
 
@@ -148,7 +154,7 @@ short ent_plat_touched( Player *player, World *world, short p )
 
     /* Above its surface and within a body's height of it. Anything
        higher is someone on a walkway over the shaft, not a passenger. */
-    top = plt->maxs.z + world->brush[plt->model].zofs;
+    top = plt->maxs.z + world->brush[plt->model].ofs.z;
 
     if ( player->pos.z - PL_FEET < top - 8.0f  ) return 0;
     if ( player->pos.z - PL_FEET > top + 64.0f ) return 0;
@@ -182,17 +188,18 @@ void ent_move_plats( World *world, Player *player, float dt )
         plt->state = riding ? ENT_PLAT_UP : ENT_PLAT_DOWN;
         goal = ( plt->state == ENT_PLAT_UP ) ? 0.0f : -plt->travel;
 
-        was = br->zofs;
-        if ( br->zofs < goal ) {
+        was = br->ofs.z;
+        if ( br->ofs.z < goal ) {
             step_z = plt->speed * dt;
-            br->zofs += step_z;
-            if ( br->zofs > goal ) br->zofs = goal;
-        } else if ( br->zofs > goal ) {
+            br->ofs.z += step_z;
+            if ( br->ofs.z > goal ) br->ofs.z = goal;
+        } else if ( br->ofs.z > goal ) {
             step_z = plt->speed * dt;
-            br->zofs -= step_z;
-            if ( br->zofs < goal ) br->zofs = goal;
+            br->ofs.z -= step_z;
+            if ( br->ofs.z < goal ) br->ofs.z = goal;
         }
-        moved = br->zofs - was;
+        moved = br->ofs.z - was;
+        if ( moved != 0.0f ) br->node = ENT_NODE_DIRTY;
 
         /* Carry the rider. Only upward: a descending plat drops out
            from under the player and gravity does the rest, which is
@@ -258,7 +265,7 @@ void ent_check_teleport( Player *player, World *world, short scr_x_res )
  *       is 45,762, which cport/ has no reason to inherit but keeps
  *       reading the same pre-resolved header regardless.
  */
-void ent_load_spawn( World *world, Camera *cam )
+void ent_load_spawn( World *world, Camera *cam, Fight *fight )
 {
     long n;
     unsigned char far *buf = asset_load_whole( "assets.zip::ents.bin", &n );
@@ -277,6 +284,179 @@ void ent_load_spawn( World *world, Camera *cam )
     cam->pos.z = h.spawn.y;
     cam->pos.y = h.spawn.z;
     cam->start_angle = h.angle;
+
+    /* worldspawn's, and world.qc's sv_gravity: 100 on e1m8, 800
+       elsewhere. Both ride in the header rather than being guessed. */
+    fight->worldtype = h.worldtype;
+    fight->gravity   = h.gravity > 0.0f ? h.gravity : 800.0f;
+}
+
+
+/*
+ * The movers, in the order ents.bin puts them. Each takes the running
+ * offset by pointer: a record skipped by the wrong size lands the next
+ * loader in the middle of a record, and the only symptom is nonsense
+ * geometry several loaders later.
+ */
+static void ent_load_doors( World *world, unsigned char far *buf, long *ofs, short count )
+{
+    short i, m;
+    float fx, fz;
+
+    world->door_count = 0;
+    world->door = (DoorEnt far *) qglMemAlloc( (long) ( count ? count : 1 ) * sizeof(DoorEnt) );
+    if ( !world->door ) { fprintf( stderr, "ents.bin: no room for the doors\n" ); exit( 1 ); }
+
+    for ( i = 0; i < count; i++ ) {
+        EntsDoor dr;
+        DoorEnt far *d;
+
+        _fmemcpy( &dr, buf + *ofs, sizeof(EntsDoor) ); *ofs += sizeof(EntsDoor);
+        m = dr.model;
+        if ( m <= 0 || m >= world->model_count ) continue;
+
+        d = &world->door[ world->door_count ];
+        d->model   = m;
+        d->speed   = dr.speed;
+        d->hold    = dr.hold;
+        d->hold_left = 0.0f;
+        d->pause_left = 0.0f;
+        d->nolink  = dr.nolink;
+        d->targeted = dr.targeted;
+        d->secret  = dr.secret;
+        d->shoot   = dr.shoot;
+        d->snd     = dr.snd;
+        d->key     = dr.key;
+        d->say_at  = 0.0f;
+        d->ofs_mid = dr.mid;
+        d->msg     = dr.msg;
+        d->state   = ENT_DOOR_SHUT;
+        d->link    = world->door_count;
+
+        /* DOOR_START_OPEN: drawn shut where the map put it, which is
+           the far end of its travel. */
+        d->ofs_shut.x = d->ofs_shut.y = d->ofs_shut.z = 0.0f;
+        d->ofs_open = dr.travel;
+        if ( dr.start_open ) {
+            d->ofs_shut = dr.travel;
+            d->ofs_open.x = d->ofs_open.y = d->ofs_open.z = 0.0f;
+        }
+        world->brush[m].ofs = d->ofs_shut;
+
+        /* spawn_field: the brush where it sits, grown 60 in x and y and
+           8 in z. A targeted, secret or key door has no field -- touching
+           the brush itself is what says its message (door_touch). */
+        fx = ENT_DOOR_FIELD; fz = ENT_DOOR_FIELDZ;
+        if ( d->targeted || d->secret || d->key ) { fx = ENT_TOUCH_SLACK; fz = ENT_TOUCH_SLACK; }
+        d->mins.x = world->models[m].mins.x + d->ofs_shut.x - fx;
+        d->mins.y = world->models[m].mins.y + d->ofs_shut.y - fx;
+        d->mins.z = world->models[m].mins.z + d->ofs_shut.z - fz;
+        d->maxs.x = world->models[m].maxs.x + d->ofs_shut.x + fx;
+        d->maxs.y = world->models[m].maxs.y + d->ofs_shut.y + fx;
+        d->maxs.z = world->models[m].maxs.z + d->ofs_shut.z + fz;
+
+        world->door_count++;
+    }
+}
+
+static void ent_load_trigs( World *world, unsigned char far *buf, long *ofs, short count )
+{
+    short i, m;
+
+    world->trig_count = 0;
+    world->trig = (TrigEnt far *) qglMemAlloc( (long) ( count ? count : 1 ) * sizeof(TrigEnt) );
+    if ( !world->trig ) { fprintf( stderr, "ents.bin: no room for the triggers\n" ); exit( 1 ); }
+
+    for ( i = 0; i < count; i++ ) {
+        EntsTrig xr;
+        TrigEnt far *t;
+
+        _fmemcpy( &xr, buf + *ofs, sizeof(EntsTrig) ); *ofs += sizeof(EntsTrig);
+        m = xr.model;
+        if ( m < 0 || m >= world->model_count ) continue;
+
+        t = &world->trig[ world->trig_count ];
+        t->model = m;
+        t->kind  = xr.kind;
+        t->target = xr.target;
+        t->name  = xr.name;
+        t->kill  = xr.kill;
+        t->state = ENT_TRIG_READY;
+        t->left  = xr.count;
+        t->count = xr.count;
+        t->wait  = xr.wait;
+        t->wait_left = 0.0f;
+        t->speed = xr.speed;
+        t->snd   = xr.snd;
+        t->ofs_out = xr.travel;
+        t->delay = xr.delay;
+        t->delay_left = 0.0f;
+        t->msg   = xr.msg;
+        t->mins  = world->models[m].mins;
+        t->maxs  = world->models[m].maxs;
+        /* A shooter and a fireball have no brush: their origin IS the
+           volume, so mins and maxs are the same point. */
+        if ( xr.kind == ENT_TRIG_SHOOTER || xr.kind == ENT_TRIG_FIREBALL ) {
+            t->mins = xr.org;
+            t->maxs = xr.org;
+        }
+        world->trig_count++;
+    }
+}
+
+static void ent_load_trains( World *world, unsigned char far *buf, long *ofs, short count )
+{
+    short i, m;
+
+    for ( i = 0; i < count; i++ ) {
+        EntsTrain tr;
+        PlatEnt far *p;
+
+        _fmemcpy( &tr, buf + *ofs, sizeof(EntsTrain) ); *ofs += sizeof(EntsTrain);
+        m = tr.model;
+        if ( m <= 0 || m >= world->model_count ) continue;
+        if ( world->plat_count >= world->plat_max ) continue;
+
+        p = &world->plat[ world->plat_count ];
+        p->model = m;
+        p->speed = tr.speed > 0.0f ? tr.speed : 100.0f;
+        p->travel = 0.0f;
+        p->kind  = ENT_PLAT_KIND_TRAIN;
+        p->targeted = tr.targeted;
+        p->first = tr.first;
+        p->corner = tr.first;
+        p->wait_left = 0.0f;
+        p->state = ENT_TRAIN_IDLE;
+        p->mins  = world->models[m].mins;
+        p->maxs  = world->models[m].maxs;
+        world->plat_count++;
+    }
+}
+
+static void ent_load_corners( World *world, unsigned char far *buf, long *ofs, short count )
+{
+    world->corner_count = count;
+    world->corner = (PathCorner far *) qglMemAlloc( (long) ( count ? count : 1 ) * sizeof(PathCorner) );
+    if ( !world->corner ) { fprintf( stderr, "ents.bin: no room for the path corners\n" ); exit( 1 ); }
+    if ( count ) _fmemcpy( world->corner, buf + *ofs, (long) count * sizeof(PathCorner) );
+    *ofs += (long) count * sizeof(PathCorner);
+}
+
+/* The message table is last, so what is left of the file is what it
+   holds -- and a header that disagrees with that is the tell that some
+   record above was skipped by the wrong size. */
+static void ent_load_msgs( World *world, unsigned char far *buf, long *ofs, short count, long total )
+{
+    if ( *ofs + (long) count * ENT_MSG_LEN != total ) {
+        fprintf( stderr, "ents.bin: %ld bytes of messages, header says %d\n",
+                 total - *ofs, (int) count );
+        exit( 1 );
+    }
+    world->msg_count = count;
+    world->msgs = (char far *) qglMemAlloc( (long) ( count ? count : 1 ) * ENT_MSG_LEN );
+    if ( !world->msgs ) { fprintf( stderr, "ents.bin: no room for the messages\n" ); exit( 1 ); }
+    if ( count ) _fmemcpy( world->msgs, buf + *ofs, (long) count * ENT_MSG_LEN );
+    *ofs += (long) count * ENT_MSG_LEN;
 }
 
 /*
@@ -309,7 +489,9 @@ void ent_load_teleports( World *world )
     world->brush = (BrushModel far *) qglMemAlloc( (long) world->model_count * sizeof(BrushModel) );
     world->face_mdl = (short far *) qglMemAlloc( (long) world->face_count * sizeof(short) );
     world->tele = (Teleporter far *) qglMemAlloc( (long) (h.ntele ? h.ntele : 1) * sizeof(Teleporter) );
-    world->plat = (PlatEnt far *) qglMemAlloc( (long) (h.nplat ? h.nplat : 1) * sizeof(PlatEnt) );
+    /* the trains ride this array too, so it is sized for both */
+    world->plat_max = (short) ( h.nplat + h.ntrain );
+    world->plat = (PlatEnt far *) qglMemAlloc( (long) (world->plat_max ? world->plat_max : 1) * sizeof(PlatEnt) );
     if ( !world->brush || !world->face_mdl || !world->tele || !world->plat ) {
         fprintf( stderr, "ents.bin: out of memory\n" );
         exit( 1 );
@@ -322,7 +504,10 @@ void ent_load_teleports( World *world )
     for ( i = 0; i < world->model_count; i++ ) {
         world->brush[i].draw  = 1;
         world->brush[i].solid = 1;
-        world->brush[i].zofs  = 0.0f;
+        world->brush[i].ofs.x = 0.0f;
+        world->brush[i].ofs.y = 0.0f;
+        world->brush[i].ofs.z = 0.0f;
+        world->brush[i].node  = ENT_NODE_DIRTY;
     }
 
     /* Which submodel owns each face. The world's faces come first and
@@ -372,7 +557,11 @@ void ent_load_teleports( World *world )
             /* Quake positions the brush raised, so a lift at rest is
                one full travel below where the map drew it. */
             p->state = ENT_PLAT_DOWN;
-            world->brush[mdlnum].zofs = -p->travel;
+            p->kind  = ENT_PLAT_KIND_PLAT;
+            p->targeted = 0;
+            p->first = p->corner = -1;
+            p->wait_left = 0.0f;
+            world->brush[mdlnum].ofs.z = -p->travel;
 
             world->plat_count++;
         }
@@ -387,6 +576,31 @@ void ent_load_teleports( World *world )
             world->brush[hideidx].solid = 0;
         }
     }
+
+    /* items: the pickups are not drawn or taken yet, so their records
+       are stepped over. They sit between the hides and the doors. */
+    ofs += (long) h.nitem * sizeof(EntsItem);
+
+    ent_load_doors( world, buf, &ofs, h.ndoor );
+    ent_load_trigs( world, buf, &ofs, h.ntrig );
+
+    /* ambients: snd_mix is not ported */
+    ofs += (long) h.namb * sizeof(EntsAmb);
+
+    ent_load_trains( world, buf, &ofs, h.ntrain );
+    ent_load_corners( world, buf, &ofs, h.ncorner );
+
+    /* crates: a CrateModel is a size and five 16-byte faces, and only
+       d_alias.c reads them. Skipped by size to reach the messages. */
+    ofs += (long) h.ncrate * ( (long) sizeof(BspVec3) + 5L * 16L );
+
+    ent_load_msgs( world, buf, &ofs, h.nmsg, n );
+
+    /* Every train stands on its first corner, which needs the corner
+       table, and every door learns its group, which needs them all. */
+    for ( i = 0; i < world->plat_count; i++ )
+        if ( world->plat[i].kind == ENT_PLAT_KIND_TRAIN ) ent_train_init( world, &world->plat[i] );
+    ent_link_doors( world );
 
     qglMemFree( (long) buf );
 }

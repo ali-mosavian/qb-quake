@@ -20,6 +20,7 @@
 #include "d_poly.h"
 #include "d_faces.h"
 #include "ent.h"
+#include "ent_move.h"
 #include "input.h"
 #include "r_bsp.h"
 #include "mod_tex.h"
@@ -52,7 +53,8 @@
  *       varies.
  */
 void host_advance( World *world, Player *player, Camera *cam, Renderer *rdr,
-                    Input *input, Hud far *hud, LightStyles *ls, SysClock *sysclk,
+                    Input *input, Hud far *hud, LightStyles *ls, Fight *fight,
+                    SysClock *sysclk,
                     HostClock *clock, PhaseTimes *pt, float real_dt,
                     short scr_x_res, short scr_y_res )
 {
@@ -72,7 +74,7 @@ void host_advance( World *world, Player *player, Camera *cam, Renderer *rdr,
         if ( clock->bench_ticks > 0 && clock->ticks >= clock->bench_ticks ) {
             break;
         }
-        host_tick( world, player, cam, rdr, input, hud, ls, HOST_DT, scr_x_res, scr_y_res );
+        host_tick( world, player, cam, rdr, input, hud, ls, fight, HOST_DT, scr_x_res, scr_y_res );
         clock->accum -= HOST_DT;
         clock->ticks++;
         steps++;
@@ -102,8 +104,8 @@ void host_advance( World *world, Player *player, Camera *cam, Renderer *rdr,
  *       without the routine knowing or caring.
  */
 void host_tick( World *world, Player *player, Camera *cam, Renderer *rdr,
-                 Input *input, Hud far *hud, LightStyles *ls, float dt,
-                 short scr_x_res, short scr_y_res )
+                 Input *input, Hud far *hud, LightStyles *ls, Fight *fight,
+                 float dt, short scr_x_res, short scr_y_res )
 {
     /* what the player asked for */
     in_handle_toggles( input, rdr, cam, player, hud );
@@ -114,8 +116,13 @@ void host_tick( World *world, Player *player, Camera *cam, Renderer *rdr,
     /* and anything the world does to the player as a result of moving */
     ent_check_teleport( player, world, scr_x_res );
 
-    /* movers, after the player has moved and before anything is drawn */
+    /* movers, after the player has moved and before anything is drawn.
+       Doors before triggers, because a button's target is a door and a
+       door fired this tick should start moving on it. */
     ent_move_plats( world, player, dt );
+    ent_move_doors( world, player, fight, rdr, dt );
+    ent_move_trigs( world, player, fight, rdr, dt );
+    ent_move_trains( world, player, dt );
 
     /* where each mover ended up, so the draw order can place it */
     ent_place_models( world );
@@ -141,7 +148,7 @@ void host_tick( World *world, Player *player, Camera *cam, Renderer *rdr,
  */
 void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
                    SurfCache far *sc, LightStyles *ls,
-                   Hud far *hud, PhaseTimes *pt, SysClock *sysclk,
+                   Hud far *hud, Fight *fight, PhaseTimes *pt, SysClock *sysclk,
                    QSurf h_dst_dc, Mat4 *mtx_prj, float xresh, float yresh,
                    float z_near, float z_far,
                    Vec3 *cam_up, QSurf z_dc, short comp, short no_draw,
@@ -198,7 +205,15 @@ void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
     /* Clear to the far plane before the frame. Depth is 1/z and
        larger is nearer, so zero is infinitely distant and the first
        surface to cover a pixel always wins. */
-    if ( z_dc != 0 ) qglSfZClear( z_dc, 0 );
+    /* The DESTINATION surface, not the depth surface: qglSfZClear
+       follows surf->zsf to find the buffer, and a depth surface's own
+       zsf is null -- so passing z_dc here cleared nothing at all and
+       returned quietly. The buffer then held whatever its allocation
+       left, every QGL_Z_TEST face failed against it for the life of
+       the run, and the world still looked right because QGL_Z_SET
+       writes without testing. Brush entities are the only thing that
+       tests, and they were invisible: no doors, no lifts. */
+    if ( z_dc != 0 ) qglSfZClear( h_dst_dc, 0 );
 
     /* -nodraw stops HERE: the walk above has run and filled the draw
        order, so everything node paging touches has happened. What is
@@ -262,7 +277,10 @@ void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
     t0 = sys_now( sysclk );
     /* Under -comp the host loop draws this onto the composite after
        the scale, at the mode's own resolution. */
-    if ( !comp ) scr_draw_hud( world, rdr, cam, player, sc, hud, h_dst_dc, x_res, y_res );
+    if ( !comp ) {
+        scr_draw_hud( world, rdr, cam, player, sc, hud, h_dst_dc, x_res, y_res );
+        scr_draw_msg( hud, fight, rdr, h_dst_dc, x_res, y_res );
+    }
 
     if ( pt->n > 0 ) {
         dt = sys_now( sysclk ) - t0;

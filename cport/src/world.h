@@ -73,7 +73,23 @@ typedef struct {
     Teleporter  far *tele;
 
     short       plat_count;
+    short       plat_max;        /* func_trains share the plat array */
     PlatEnt     far *plat;
+
+    short       door_count;
+    DoorEnt     far *door;
+
+    short       trig_count;
+    TrigEnt     far *trig;
+
+    short       corner_count;
+    PathCorner  far *corner;
+
+    /* The message table, last in ents.bin: ENT_MSG_LEN bytes each, not
+       NUL-terminated. A door's or a trigger's msg is a 1-based id into
+       this, 0 for none. */
+    short       msg_count;
+    char        far *msgs;
 
     short       far *face_mdl;   /* which submodel owns each face -- the
                                      world's own faces read 0, a brush

@@ -103,16 +103,22 @@ typedef struct {
     short anim_count;
 } MipTex;
 
-/* q_map.bi's BrushModel -- per-submodel draw/solid/vertical-offset
-   state, one entry per Submodel, index 0 is the world and always
-   draw=solid=true, zofs=0. */
+/* q_map.bi's BrushModel -- per-submodel draw/solid/offset state, one
+   entry per Submodel, index 0 is the world and always draw=solid=true,
+   ofs zero. The offset is all three axes because a door slides along
+   whichever one its movedir names; a plat uses ofs.z alone. */
 typedef struct {
     short draw;
     short solid;
-    float zofs;
+    BspVec3 ofs;
     short node;      /* ent_find_node's answer: where this submodel
-                         belongs in the world's back-to-front order */
+                         belongs in the world's back-to-front order, or
+                         ENT_NODE_DIRTY once the brush has moved */
 } BrushModel;
+
+/* A brush that moved since it was placed. Leaf 32767, which no map has
+   -- -1 would be leaf 0, the answer for a box in solid. */
+#define ENT_NODE_DIRTY ((short)0x8000)
 
 /* bspfile.bi's ClipNode -- the pre-expanded collision hulls. A negative
    front/back is not a node index but a CONTENTS_ code. */
@@ -151,15 +157,96 @@ typedef struct {
     float yaw;
 } Teleporter;
 
-/* q_ent.bi's PlatEnt. ENT_PLAT_DOWN=0, ENT_PLAT_UP=1. */
-#define ENT_PLAT_DOWN 0
-#define ENT_PLAT_UP   1
+/* q_ent.bi's PlatEnt. A func_train shares the array: same brush, same
+   speed, a different state machine. */
+#define ENT_PLAT_DOWN  0
+#define ENT_PLAT_UP    1
+#define ENT_TRAIN_IDLE 2        /* a targeted train, before its trigger */
+#define ENT_TRAIN_WAIT 3        /* at a corner for wait_left */
+#define ENT_TRAIN_MOVE 4
+#define ENT_PLAT_KIND_PLAT  0
+#define ENT_PLAT_KIND_TRAIN 1
 typedef struct {
     short model;
     float travel;
     float speed;
     short state;
     BspVec3  mins, maxs;
+    short kind;
+    short targeted;      /* a train's name id; 0 starts by itself */
+    short first;         /* its first path_corner */
+    short corner;        /* the one it is at, or bound for */
+    float wait_left;
 } PlatEnt;
+
+/* q_ent.bi's PathCorner. nxt -1 stays. */
+typedef struct {
+    BspVec3 org;
+    float   wait;
+    short   nxt;
+} PathCorner;
+
+/* q_ent.bi's DoorEnt -- doors.qc. A touch anywhere in the field sends
+   every door of its linked group to the open end, where it holds and
+   comes back; a touch while closing sends it out again. A secret door
+   goes in two legs with a pause between, and comes home the same way. */
+#define ENT_DOOR_SHUT       0
+#define ENT_DOOR_OPENING    1
+#define ENT_DOOR_OPEN       2
+#define ENT_DOOR_CLOSING    3
+#define ENT_DOOR_OUT1       4   /* a secret door's first leg, to ofs_mid */
+#define ENT_DOOR_PAUSE_OUT  5
+#define ENT_DOOR_PAUSE_BACK 6
+#define ENT_DOOR_BACK2      7
+#define ENT_DOOR_PAUSE   1.0f
+#define ENT_DOOR_FIELD  60.0f   /* spawn_field grows the touch box this
+                                   much in x and y ... */
+#define ENT_DOOR_FIELDZ  8.0f   /* ... and this much in z */
+#define ENT_TOUCH_SLACK  2.0f   /* a brush is touched from this close */
+typedef struct {
+    short   model;
+    BspVec3 ofs_shut, ofs_open;
+    BspVec3 ofs_mid;     /* a secret door's corner */
+    float   speed, hold, hold_left, pause_left;
+    short   state, secret, shoot;
+    short   link;        /* lowest door index of its linked group */
+    short   nolink, targeted, snd;
+    short   key;         /* 1 silver, 2 gold */
+    float   say_at;      /* door_touch's attack_finished: the refusal
+                            is said two seconds apart, not every tick */
+    BspVec3 mins, maxs;  /* the touch field */
+    short   msg;
+} DoorEnt;
+
+/* q_ent.bi's TrigEnt -- triggers.qc and buttons.qc. All four kinds do
+   one thing, fire a target, so they share an array. */
+#define ENT_TRIG_ONCE     0
+#define ENT_TRIG_MULTI    1
+#define ENT_TRIG_COUNTER  2
+#define ENT_TRIG_BUTTON   3
+#define ENT_TRIG_EXIT     4     /* trigger_changelevel */
+#define ENT_TRIG_SHOOT    5     /* a trigger with health: a pellet fires it */
+#define ENT_TRIG_SECRET   6
+#define ENT_TRIG_SHOOTER  7     /* trap_spikeshooter */
+#define ENT_TRIG_RELAY    8
+#define ENT_TRIG_BOSS     9     /* Chthon, unseen */
+#define ENT_TRIG_BOLT    10     /* event_lightning */
+#define ENT_TRIG_FIREBALL 11
+#define ENT_TRIG_READY 0
+#define ENT_TRIG_GOING 1        /* a button on its way in */
+#define ENT_TRIG_HELD  2        /* pressed, or waiting to re-arm */
+#define ENT_TRIG_BACK  3        /* a button on its way out */
+#define ENT_TRIG_DONE  4
+#define ENT_TRIG_ARMED 5        /* a shooter used this tick */
+typedef struct {
+    short   model, kind, target, name, kill;
+    short   state, left, count;
+    float   wait, wait_left, speed;
+    BspVec3 ofs_out;     /* a button's pressed offset */
+    short   snd;
+    BspVec3 mins, maxs;  /* the volume, or the button's brush */
+    short   msg;
+    float   delay, delay_left;
+} TrigEnt;
 
 #endif

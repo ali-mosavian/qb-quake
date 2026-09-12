@@ -182,7 +182,7 @@ static void mod_load_visibility( World *world )
     world->pvs_data = asset_load_whole( "assets.zip::pvs.bin", &n );
 }
 
-FILE *mod_load_world( World *world, Renderer *rdr, Camera *cam, char *map_name, MapCounts *counts )
+FILE *mod_load_world( World *world, Renderer *rdr, Camera *cam, Fight *fight, char *map_name, MapCounts *counts )
 {
     FILE *f;
 
@@ -204,7 +204,7 @@ FILE *mod_load_world( World *world, Renderer *rdr, Camera *cam, char *map_name, 
     mod_load_visibility( world );
     pl_load_hulls( world, (short) counts->clips );
 
-    ent_load_spawn( world, cam );
+    ent_load_spawn( world, cam, fight );
     ent_load_teleports( world );
 
     return f;   /* still open -- mod_tex.h's loaders want it next, then

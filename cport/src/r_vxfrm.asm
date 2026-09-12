@@ -76,7 +76,8 @@
 ;;       output array is MAXV floats, indexed 0..vcnt-1.
 ;; args: [in]  gv     | far ptr, short[], BSP vertex ints (Q13.3)
 ;;             vcnt   | word, vertex count
-;;             zofs   | float, brush entity's renderer-y offset
+;;             ofs    | near ptr, float[3], the brush entity's
+;;                      | offset, BSP-space (x, y, z)
 ;;             suv    | near ptr, float[8]: su0..su3, sv0..sv3
 ;;             m      | near ptr, float[16], the transform matrix
 ;;             vt_x, vt_y, vt_z, vt_w, vt_u, vt_v | near ptr, float[MAXV] out
@@ -127,13 +128,15 @@ DOT3M           MACRO   o0, o1, o2, o3, a, b, c
 
 ;;::::::::::::::
 r_vxfrm         proc    public uses bx cx dx si di,\
-                        gv:dword, vcnt:word, zofs:dword, suv:word, m:word,\
+                        gv:dword, vcnt:word, ofs:word, suv:word, m:word,\
                         vt_x:word, vt_y:word, vt_z:word, vt_w:word,\
                         vt_u:word, vt_v:word
 
                 LOCAL   su0:dword, su1:dword, su2:dword, su3:dword
                 LOCAL   sv0:dword, sv1:dword, sv2:dword, sv3:dword
-                LOCAL   vxL:dword, vyL:dword, vzL:dword, vzpL:dword
+                LOCAL   vxL:dword, vyL:dword, vzL:dword
+                LOCAL   vxpL:dword, vypL:dword, vzpL:dword
+                LOCAL   oxL:dword, oyL:dword, ozL:dword
 
                 mov     cx, vcnt
                 jcxz    vxfrm_zero      ;; jcxz is short-range only; the
@@ -163,6 +166,15 @@ vxfrm_cont:
                 fld     dword ptr [si+28]
                 fstp    sv3
 
+                ;; the brush entity's offset, BSP-space, three floats
+                mov     si, ofs
+                fld     dword ptr [si+0]
+                fstp    oxL
+                fld     dword ptr [si+4]
+                fstp    oyL
+                fld     dword ptr [si+8]
+                fstp    ozL
+
                 push    es
                 les     bx, gv          ;; ES:BX -> gv, loaded ONCE
                 add     bx, 18          ;; GEOM_VTX0 (9 shorts) * 2
@@ -185,12 +197,20 @@ vxfrm_loop:
                 fmul    dword ptr vtx_unsc
                 fstp    vzL
 
-                ;; vt_y[j] = vz + zofs, rounded once -- same rounding
-                ;; point the original's store to vt_y[j] had, reused
-                ;; below in all four transform rows instead of re-added.
+                ;; The swapped, offset point, each coordinate rounded
+                ;; once -- the same rounding point the original's stores
+                ;; to vt_x/y/z[j] had, reused below in all four transform
+                ;; rows instead of re-added. BSP is Z-up and the renderer
+                ;; Y-up, so the offset swaps with the axes it rides on.
+                fld     vxL
+                fadd    oxL
+                fstp    vxpL
                 fld     vzL
-                fadd    dword ptr zofs
+                fadd    ozL
                 fstp    vzpL
+                fld     vyL
+                fadd    oyL
+                fstp    vypL
 
                 ;; tu, tv -- BSP-space (pre-swap) vx, vy, vz.
                 DOT3L   su0, su1, su2, su3, vxL, vyL, vzL
@@ -204,23 +224,24 @@ vxfrm_loop:
                 fstp    dword ptr [di]
 
                 ;; Transform. vx,vy,vz (transform's own naming) are the
-                ;; SWAPPED inputs: vt_x[j]=vxL, vt_y[j]=vzpL, vt_z[j]=vyL.
-                DOT3M   0, 16, 32, 48, vxL, vzpL, vyL
+                ;; SWAPPED, offset inputs: vt_x[j]=vxpL, vt_y[j]=vzpL,
+                ;; vt_z[j]=vypL.
+                DOT3M   0, 16, 32, 48, vxpL, vzpL, vypL
                 mov     di, vt_x
                 add     di, dx
                 fstp    dword ptr [di]
 
-                DOT3M   4, 20, 36, 52, vxL, vzpL, vyL
+                DOT3M   4, 20, 36, 52, vxpL, vzpL, vypL
                 mov     di, vt_y
                 add     di, dx
                 fstp    dword ptr [di]
 
-                DOT3M   8, 24, 40, 56, vxL, vzpL, vyL
+                DOT3M   8, 24, 40, 56, vxpL, vzpL, vypL
                 mov     di, vt_z
                 add     di, dx
                 fstp    dword ptr [di]
 
-                DOT3M   12, 28, 44, 60, vxL, vzpL, vyL
+                DOT3M   12, 28, 44, 60, vxpL, vzpL, vypL
                 mov     di, vt_w
                 add     di, dx
                 fstp    dword ptr [di]

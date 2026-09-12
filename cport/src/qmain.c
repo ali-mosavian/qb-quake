@@ -27,6 +27,7 @@
 #include "mod_tex.h"
 #include "pl_move.h"
 #include "input.h"
+#include "fight.h"
 #include "h_frame.h"
 #include "screen.h"
 #include "config.h"
@@ -203,6 +204,7 @@ int main( void )
         Renderer   rdr;
         Camera     cam;
         Player     player;
+        Fight      fight;
         Input      input;
         Hud far   *hud;
         LightStyles ls;
@@ -221,6 +223,7 @@ int main( void )
         short      frame;
 
         memset( &world, 0, sizeof(world) );
+        memset( &fight, 0, sizeof(fight) );
         memset( &rdr, 0, sizeof(rdr) );
         memset( &cam, 0, sizeof(cam) );
         memset( &player, 0, sizeof(player) );
@@ -255,7 +258,7 @@ int main( void )
         ld_begin( &ldr, v.h_video_dc, hud, 6, v.scr_x_res, v.scr_y_res );
 
         ld_stage( &ldr, v.h_video_dc, hud, "loading map" );
-        mapf = mod_load_world( &world, &rdr, &cam, args.map_name, &counts );
+        mapf = mod_load_world( &world, &rdr, &cam, &fight, args.map_name, &counts );
         ld_step( &ldr, v.h_video_dc, hud );
 
         sprintf( buf, "mod_load_world ok faces=%d leaves=%d models=%d tele=%d plat=%d",
@@ -545,8 +548,8 @@ int main( void )
                     ft_n++;
                 }
 
-                host_advance( &world, &player, &cam, &rdr, &input, hud, &ls, &sysclk,
-                               &clock, &pt, frame_dt, v.scr_x_res, v.scr_y_res );
+                host_advance( &world, &player, &cam, &rdr, &input, hud, &ls, &fight,
+                               &sysclk, &clock, &pt, frame_dt, v.scr_x_res, v.scr_y_res );
 
                 if ( args.play_name[0] && rf && !play_drift ) {
                     /* The camera is NOT pinned: host_advance just
@@ -595,7 +598,7 @@ int main( void )
                 }
 
                 qglDrFill( h_dst_dc, 0, 0, (short)(v.x_res - 1), (short)(v.y_res - 1), 0 );
-                host_render( &world, &rdr, &cam, &player, sc, &ls, hud, &pt, &sysclk,
+                host_render( &world, &rdr, &cam, &player, sc, &ls, hud, &fight, &pt, &sysclk,
                               h_dst_dc, &mtx_prj, (float) v.x_res / 2.0f, (float) v.y_res / 2.0f,
                               cfg.z_near, cfg.z_far,
                               &cam_up, z_dc, v.comp, args.no_draw,
@@ -618,6 +621,7 @@ int main( void )
                 if ( v.comp ) {
                     scr_draw_hud( &world, &rdr, &cam, &player, sc, hud,
                                   v.h_comp_dc, v.scr_x_res, v.scr_y_res );
+                    scr_draw_msg( hud, &fight, &rdr, v.h_comp_dc, v.scr_x_res, v.scr_y_res );
                     qglDrBlit( v.h_video_dc, 0, 0, v.h_comp_dc );
                 }
 

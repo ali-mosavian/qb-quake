@@ -5,6 +5,7 @@
 
 #include "renderer.h"
 #include "world.h"
+#include "fight.h"
 
 /*
  * mod.h -- reading the map into World. C port of model.bas.
@@ -53,7 +54,7 @@ void mod_close( FILE *f );
  *       FILE* are both the caller's to hand to mod_tex.h's loaders
  *       and to mod_close when textures are done.
  */
-FILE *mod_load_world( World *world, Renderer *rdr, Camera *cam, char *map_name, MapCounts *counts );
+FILE *mod_load_world( World *world, Renderer *rdr, Camera *cam, Fight *fight, char *map_name, MapCounts *counts );
 
 /*
  * name: mod_load_colormap

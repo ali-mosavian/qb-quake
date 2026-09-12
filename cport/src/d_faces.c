@@ -52,7 +52,7 @@
 #define MAXV (GEOM_MAXVTX + 8)
 
 extern void pascal far r_vxfrm(
-    short far *gv, short vcnt, float zofs, float *suv, float *m,
+    short far *gv, short vcnt, float *ofs, float *suv, float *m,
     float *vt_x, float *vt_y, float *vt_z, float *vt_w,
     float *vt_u, float *vt_v );
 
@@ -153,7 +153,8 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
     long  rt0, raster_cyc = 0;
     float su0, su1, su2, su3, sv0, sv1, sv2, sv3;
     float suv[8];
-    float tw, th, zofs, dp_dist, turbph, zl, zsum;
+    float tw, th, dp_dist, turbph, zl, zsum;
+    float ofs3[3];          /* the owning submodel's offset, BSP-space */
     float vx, vy, vz, tu, tv, rw, lm_su, lm_sv;
     float dl_pdist;
     Plane far *pl;
@@ -216,7 +217,9 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
             tex    = tri[i].tex_info_id;
             tex_id = texinf[tex].mip_tex;
             liquid = mipinf[tex_id].liquid;
-            zofs   = brush[ facemdl[i] ].zofs;
+            ofs3[0] = brush[ facemdl[i] ].ofs.x;
+            ofs3[1] = brush[ facemdl[i] ].ofs.y;
+            ofs3[2] = brush[ facemdl[i] ].ofs.z;
 
             /* No early reject on vcnt: a degenerate face still passes
                through the lightmap gate below in the original, and
@@ -225,11 +228,18 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
             if ( vcnt > GEOM_MAXVTX ) vcnt = GEOM_MAXVTX;
             if ( vcnt < 0 ) vcnt = 0;
 
-            /* Depth mode follows what the face belongs to: the world
-               only writes (it arrives front to back already), a brush
-               entity tests (nothing guarantees its own order). */
+            /* Everything WRITES and nothing tests, for now.
+               QGL_Z_TEST rejects nearly every face it is given -- with
+               the world put on it too, 1,655 of e1m1's 16,000 pixels
+               survive, so this is not an entity problem and not an
+               ordering one. Until the depth VALUES are right, a brush
+               entity that tests is a brush entity that never draws:
+               every door and lift in the game was invisible. The draw
+               order is already exact enough to carry them (that is
+               what ent_find_node's insertion node is for, 0 leaks
+               against -badorder's 49), so they ride it. */
             if ( dp->z_avail ) {
-                z_want = ( facemdl[i] == 0 ) ? QGL_Z_SET : QGL_Z_TEST;
+                z_want = QGL_Z_SET;
                 if ( z_want != z_have ) {
                     /* qglSfZMode returns the mode it REPLACED, so assigning
                        its result left z_have one call behind and the next
@@ -307,10 +317,11 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
                     vz = gv[v0 + 2] * VTX_UNSCALE;
 
                     /* BSP is Z-up, renderer is Y-up: y and z swap, and
-                       the brush entity's offset rides on renderer y. */
-                    vt_x[j] = vx;
-                    vt_y[j] = vz + zofs;
-                    vt_z[j] = vy;
+                       the brush entity's offset swaps with them. A door
+                       slides along whichever axis its movedir names. */
+                    vt_x[j] = vx + ofs3[0];
+                    vt_y[j] = vz + ofs3[2];
+                    vt_z[j] = vy + ofs3[1];
 
                     tu = su0*vx + su1*vy + su2*vz + su3;
                     tv = sv0*vx + sv1*vy + sv2*vz + sv3;
@@ -336,7 +347,7 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
                 /* r_vxfrm.asm: unpack, UV, transform, one pass. */
                 suv[0] = su0; suv[1] = su1; suv[2] = su2; suv[3] = su3;
                 suv[4] = sv0; suv[5] = sv1; suv[6] = sv2; suv[7] = sv3;
-                r_vxfrm( gv, vcnt, zofs, suv, (float *) m,
+                r_vxfrm( gv, vcnt, ofs3, suv, (float *) m,
                          vt_x, vt_y, vt_z, vt_w, vt_u, vt_v );
             }
 
