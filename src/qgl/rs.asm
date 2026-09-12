@@ -276,7 +276,9 @@ qgl_cov_hi      dw      QGL_COV_ROWS dup (0)
 ;; qglRsPoly's phases in RDTSC cycles, and its calls: settex, gradients,
 ;; clip, fixup-to-scan, scan, count; then scanlines and pixels filled,
 ;; affine then perspective. qglPrfTake reads one and zeroes it.
-qgl_cy          dd      10 dup (0)
+;; slot 10 is clip.asm's: polygons that needed no clipping at all.
+qgl_cy          dd      11 dup (0)
+                public  qgl_cy
 
 .data?
 qgl$fx          QVertFx QGL_CLIPV dup (<>)

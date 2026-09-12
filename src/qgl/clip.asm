@@ -41,6 +41,8 @@ sofs            dw      ?               ;; offset of +1.0 or -1.0
 ClipEdge        ends
 
 
+                extrn   qgl_cy:dword
+
 .data
 qgl$one         real4   1.0
 qgl$mone        real4   -1.0
@@ -469,6 +471,7 @@ qglClPolyEx   proc    public uses bx cx dx si di ds es,\
                 jge     @@clip
                 add     si, SIZEOF QVert
                 loop    @@acc
+                inc     D qgl_cy+40             ;; wholly inside: no clip needed
                 mov     si, offset qgl$buf0
                 jmp     @@out
 
@@ -496,12 +499,15 @@ qglClPolyEx   proc    public uses bx cx dx si di ds es,\
                 ;; si now points at the last pass's OUTPUT, because the
                 ;; xchg above ran after it
                 ;;
+;; One block move, not one call a vertex. The ring is contiguous in
+;; both buffers by here -- only pass 0 walks it with a step -- and
+;; qgl$Copyv's call, push, cld and pop cost about as much again as
+;; the five movsd they wrap.
 @@out:          les     di, dst
                 mov     cx, cnt
-                mov     ax, cx
-@@copy:         call    qgl$Copyv
-                dec     ax
-                jnz     @@copy
+                imul    cx, SIZEOF QVert / 4
+                cld
+                rep     movsd
 
                 mov     ax, cnt
                 ret

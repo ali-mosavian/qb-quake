@@ -104,6 +104,18 @@ run_frame() {   # $1 = flags, $2 = where to keep BENCH.BMP, $3 = map (default dm
     local bf
     bf=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1 == "mdl_bf_bad" {print $2}')
     [[ -n "$bf" && "$bf" -eq 0 ]] || { echo "FAIL  mdl_bf_bad ${bf:-absent}: clip-space facing disagrees with the projected one"; exit 1; }
+
+    # pt_q_noclip counts the polygons qglClPolyEx found wholly inside, so
+    # it can never exceed the polygons it was handed. A counter wired to
+    # the wrong slot, or one never zeroed per frame, shows up here rather
+    # than as a quietly wrong ratio nobody rechecks.
+    local qn qnc
+    qn=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1 == "pt_q_n" {print $3}')
+    qnc=$(tr -d '\r' < "$VBD_OUT/bench.txt" | awk '$1 == "pt_q_noclip" {print $3}')
+    if [[ -n "$qn" && -n "$qnc" ]]; then
+        awk -v a="$qnc" -v b="$qn" 'BEGIN{exit !(a <= b && a >= 0)}' || {
+            echo "FAIL  pt_q_noclip $qnc of pt_q_n $qn: the clip counter cannot exceed the polygons"; exit 1; }
+    fi
     echo "  $(tr -d '\r' < "$VBD_OUT/bench.txt" |
         awk '/^(frames|ticks|polys|sc_evict) /{printf "%s=%s ",$1,$2}')"
 }

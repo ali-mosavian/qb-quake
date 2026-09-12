@@ -173,6 +173,7 @@ sub host_bench_report ( _
         host_pt_put benchf, "pt_q_fix", g.pt.q_fix.lo, g.pt.q_fix.sum, g.pt.q_fix.hi, g.pt.q_fix.n, 0.001
         host_pt_put benchf, "pt_q_scan", g.pt.q_scan.lo, g.pt.q_scan.sum, g.pt.q_scan.hi, g.pt.q_scan.n, 0.001
         host_pt_put benchf, "pt_q_n", g.pt.q_n.lo, g.pt.q_n.sum, g.pt.q_n.hi, g.pt.q_n.n, 1.0
+        host_pt_put benchf, "pt_q_noclip", g.pt.q_noclip.lo, g.pt.q_noclip.sum, g.pt.q_noclip.hi, g.pt.q_noclip.n, 1.0
         host_pt_put benchf, "pt_q_lines", g.pt.q_lines.lo, g.pt.q_lines.sum, g.pt.q_lines.hi, g.pt.q_lines.n, 1.0
         host_pt_put benchf, "pt_q_px", g.pt.q_px.lo, g.pt.q_px.sum, g.pt.q_px.hi, g.pt.q_px.n, 1.0
         host_pt_put benchf, "pt_q_plines", g.pt.q_plines.lo, g.pt.q_plines.sum, g.pt.q_plines.hi, g.pt.q_plines.n, 1.0
@@ -341,6 +342,7 @@ sub host_pt_init ( g as Game )
     g.pt.q_fix.lo = 1E+09
     g.pt.q_scan.lo = 1E+09
     g.pt.q_n.lo = 1E+09
+    g.pt.q_noclip.lo = 1E+09
     g.pt.q_lines.lo = 1E+09
     g.pt.q_px.lo = 1E+09
     g.pt.q_plines.lo = 1E+09

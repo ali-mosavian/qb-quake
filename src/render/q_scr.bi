@@ -223,6 +223,7 @@ type PhaseTimes
     q_px      as TickTimer
     q_plines  as TickTimer    '' and perspective
     q_ppx     as TickTimer
+    q_noclip  as TickTimer   '' polys the clipper found wholly inside
     present_sum as single     '' vid_update: blit to the screen
     present_max as single
     present_n   as long       '' the last frame exits before present and loop

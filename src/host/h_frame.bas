@@ -599,9 +599,9 @@ end sub
 
 '' qglRsPoly's accumulators into their timers, zeroed every frame.
 sub host_q_take ( byval timing as integer, pt as PhaseTimes )
-    dim c(9) as single, cpu as single, k as integer
+    dim c(10) as single, cpu as single, k as integer
     cpu = sys_rdtsc_hz() / 1000000.0
-    for k = 0 to 9
+    for k = 0 to 10
         c(k) = qglPrfTake( k )
     next k
     if ( timing = 0 ) then exit sub
@@ -621,6 +621,7 @@ sub host_q_take ( byval timing as integer, pt as PhaseTimes )
     host_tt_add pt.q_px, c(7)
     host_tt_add pt.q_plines, c(8)
     host_tt_add pt.q_ppx, c(9)
+    host_tt_add pt.q_noclip, c(10)
 end sub
 
 sub host_tt_add ( tt as TickTimer, byval v as single )
