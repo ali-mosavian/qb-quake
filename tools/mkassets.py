@@ -99,6 +99,23 @@ MDL_SETS = {
 }
 
 
+def build_sbar(pak: str, tmp: str) -> dict[str, bytes]:
+    """sbar.raw and sbnum.raw out of gfx.wad, as container members."""
+    import subprocess
+
+    if not pak or not os.path.exists(pak):
+        # The runtime is fatal on a missing sbar.raw, by name -- say so
+        # here too, where the fix is.
+        print("  sbar: no PAK, so no status bar in the container")
+        return {}
+    os.makedirs(tmp, exist_ok=True)
+    r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "mkgfx.py"), pak, tmp],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        raise SystemExit(f"mkgfx: {r.stderr.strip() or r.stdout.strip()}")
+    return {n: open(os.path.join(tmp, n), "rb").read() for n in ("sbar.raw", "sbnum.raw")}
+
+
 def build_models(pak: str, kinds: set[int], tmp: str) -> dict[str, bytes]:
     """<name>.geo/.vtx/.skn for each kind, as container members."""
     import subprocess
@@ -1434,8 +1451,9 @@ def main():
     nmon = struct.unpack_from('<13h', OUT['ents.bin'], head)[7]
     kinds = {struct.unpack_from('<h', OUT['ents.bin'], 76 + i * 20)[0] for i in range(nmon)}
     models = build_models(pak, kinds, os.path.join(outdir, '.mdl'))
+    sbar = build_sbar(pak, os.path.join(outdir, '.gfx'))
     write_qmap(os.path.join(outdir, stem + '.qmp'), stem, d,
-               dict(OUT, **models, **{'texr.raw': qmap_texr, 'texs.raw': qmap_texs,
-                                      'pal.raw': qmap_pal}))
+               dict(OUT, **models, **sbar, **{'texr.raw': qmap_texr, 'texs.raw': qmap_texs,
+                                              'pal.raw': qmap_pal}))
 
 main()

@@ -86,6 +86,11 @@ typedef struct {
     short   toss;         /* a hostile one under gravity: the lava ball */
 } Spike;
 
+/* Fight.state: what the tick and the overlay do. */
+#define GS_PLAY  1
+#define GS_DEAD  2            /* the pause, then pl_respawn */
+#define PL_DEATH_PAUSE 1.5f   /* seconds YOU DIED stays before the respawn */
+
 #define ENT_MSG_TIME 2.0f     /* scr_centertime */
 #define ENT_MSG_LEN  40       /* one line of the overlay's font */
 
@@ -112,6 +117,9 @@ typedef struct {
                                  until the player has a weapon */
     short leaps;              /* dogs and demons that left the ground */
     short kills, deaths, booms;
+    short state;              /* GS_* */
+    float state_until;        /* when GS_DEAD ends */
+    BspVec3 spawn;            /* where a respawn puts the player back */
     float next_fire;          /* attack_finished */
     float fire_at;            /* when the last shot left, for the view model */
     float flash_until;        /* the muzzle flash shows until then */

@@ -31,6 +31,7 @@
 #include "assets.h"
 #include "mdl.h"
 #include "mdl_ai.h"
+#include "sbar.h"
 #include "item.h"
 #include "h_frame.h"
 #include "screen.h"
@@ -232,6 +233,7 @@ int main( void )
         fight.shells  = PL_SHELLS;
         fight.items   = PL_IT_SHOTGUN;
         fight.weapon  = PL_IT_SHOTGUN;
+        fight.state   = GS_PLAY;
         memset( &rdr, 0, sizeof(rdr) );
         memset( &cam, 0, sizeof(cam) );
         memset( &player, 0, sizeof(player) );
@@ -265,6 +267,9 @@ int main( void )
 
         font_load( &hud->font, "font.fnt" );
         mark( "font_load ok" );
+
+        scr_sbar_load();
+        mark( "scr_sbar_load ok" );
 
         /* Six ld_step calls follow -- keep this in step with them, or
            the bar simply stops short of (or runs past) the end. */
@@ -362,6 +367,9 @@ int main( void )
         } else {
             pl_init( &player, &cam, 0 );
         }
+        /* where a respawn puts them back: wherever this run started,
+           so -at is the spawn for a headless run too */
+        fight.spawn = player.pos;
 
         /* -yaw overrides the spawn's own angle, wrapped into [0,360)
            already by sys_parse_args -- same reasoning as
@@ -647,6 +655,7 @@ int main( void )
                    slow enough to cost frames (matches main.bas's own
                    reasoning for doing it this way). */
                 if ( v.comp ) {
+                    scr_sbar_draw( &fight, v.h_comp_dc, v.scr_x_res, v.scr_y_res );
                     scr_draw_hud( &world, &rdr, &cam, &player, sc, hud,
                                   v.h_comp_dc, v.scr_x_res, v.scr_y_res );
                     scr_draw_msg( hud, &fight, &rdr, v.h_comp_dc, v.scr_x_res, v.scr_y_res );
@@ -687,9 +696,9 @@ int main( void )
                 mark( buf );
             }
 
-            sprintf( buf, "fight=health %d shells %d nails %d rockets %d armor %d items %ld took %d kills %d booms %d",
+            sprintf( buf, "fight=health %d shells %d nails %d rockets %d armor %d items %ld took %d kills %d booms %d deaths %d",
                      fight.health, fight.shells, fight.nails, fight.rockets,
-                     fight.armor, fight.items, item_taken( &world ), fight.kills, fight.booms );
+                     fight.armor, fight.items, item_taken( &world ), fight.kills, fight.booms, fight.deaths );
             mark( buf );
 
             if ( ft_n > 0 ) {

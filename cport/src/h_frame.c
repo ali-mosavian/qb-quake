@@ -31,6 +31,8 @@
 #include "qgl.h"
 #include "view.h"
 #include "screen.h"
+#include "sbar.h"
+#include "gstate.h"
 
 /* q_scr.bi's HOST_DT#/HOST_MAXSTEPS. */
 #define HOST_DT       0.0166666f
@@ -134,19 +136,25 @@ void host_tick( World *world, Player *player, Camera *cam, Renderer *rdr,
 
     /* the monsters, after the player has moved: FindTarget sees where
        they are now, not where they were at the top of the tick */
-    mdl_tick( world, player, fight, rdr );
+    if ( fight->state == GS_PLAY ) mdl_tick( world, player, fight, rdr );
 
     /* and the fight: what the player is holding, what they fired, the
        traps a trigger armed this tick, and everything already in the
        air. The shot goes after the monsters' think so it hits them
-       where this frame drew them. */
-    pl_select_weapon( input, fight );
-    /* fire is mouse 1 or ctrl, as it has always been; mouse 1 also
-       walks forward, which is the original's binding too */
-    if ( input->mouse.left || input->keyboard.k[KEY_CTRL] )
-        pl_fire( world, player, cam, fight, rdr );
+       where this frame drew them. A dead player fires nothing, but
+       what is already in the air keeps flying. */
+    if ( fight->state == GS_PLAY ) {
+        pl_select_weapon( input, fight );
+        /* fire is mouse 1 or ctrl, as it has always been; mouse 1 also
+           walks forward, which is the original's binding too */
+        if ( input->mouse.left || input->keyboard.k[KEY_CTRL] )
+            pl_fire( world, player, cam, fight, rdr );
+    }
     pl_traps_tick( world, fight, rdr );
     pl_spikes_tick( world, player, fight, rdr, dt );
+
+    /* dying, and coming back */
+    host_state( world, player, cam, fight, rdr, scr_x_res );
 
     /* where each mover ended up, so the draw order can place it */
     ent_place_models( world );
@@ -310,6 +318,8 @@ void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
     /* Under -comp the host loop draws this onto the composite after
        the scale, at the mode's own resolution. */
     if ( !comp ) {
+        /* Quake's own bar first; the stats overlay may cover its edge */
+        scr_sbar_draw( fight, h_dst_dc, x_res, y_res );
         scr_draw_hud( world, rdr, cam, player, sc, hud, h_dst_dc, x_res, y_res );
         scr_draw_msg( hud, fight, rdr, h_dst_dc, x_res, y_res );
     }
