@@ -13,14 +13,13 @@
 
 #include <mem.h>    /* _fmemcpy */
 #include <stdio.h>
+#include "qgl.h"
 #include <stdlib.h>
 
 #include "ent.h"
-#include "mouse.h"
 #include "pl_move.h"    /* PL_FEET/PL_TELE_LIFT -- shared with pl_move.c, one fact one place */
 #include "r_bsp.h"      /* r_point_leaf -- r_bsp.bas, not yet ported */
 #include "assets.h"
-#include "dos.h"        /* memFree, for asset_load_whole's own block */
 
 /* Neither toolchain here defines F_FTOL@, the runtime helper bcc emits
    for a float/double-to-integer cast (checked bcpp31's and tc201's
@@ -103,7 +102,7 @@ short ent_find_node( short m, World *world )
  *       pl_point_contents, stopping one step earlier: that wants what
  *       is at the point, this wants where the point is.
  */
-short ent_point_leaf( Vec3 *p, World *world )
+short ent_point_leaf( BspVec3 *p, World *world )
 {
     return r_point_leaf( p, world );
 }
@@ -218,7 +217,7 @@ void ent_move_plats( World *world, Player *player, float dt )
 void ent_check_teleport( Player *player, World *world, short scr_x_res )
 {
     short i;
-    Vec3 pmin, pmax;
+    BspVec3 pmin, pmax;
 
     if ( player->no_clip ) return;
 
@@ -266,7 +265,7 @@ void ent_load_spawn( World *world, Camera *cam )
     EntsHead h;
 
     _fmemcpy( &h, buf, sizeof(EntsHead) );
-    memFree( (void far *) buf );
+    qglMemFree( (long) buf );
 
     if ( h.nmodels != world->model_count ) {
         fprintf( stderr, "ents.bin is from another map\n" );
@@ -305,10 +304,10 @@ void ent_load_teleports( World *world )
 
     /* Sized to the map, not a fixed bound: e1m3 has 106 submodels, and
        ent_place_models/pl_trace walk every one of them. */
-    world->brush = (BrushModel far *) memAlloc( (long) world->model_count * sizeof(BrushModel) );
-    world->face_mdl = (short far *) memAlloc( (long) world->face_count * sizeof(short) );
-    world->tele = (Teleporter far *) memAlloc( (long) (h.ntele ? h.ntele : 1) * sizeof(Teleporter) );
-    world->plat = (PlatEnt far *) memAlloc( (long) (h.nplat ? h.nplat : 1) * sizeof(PlatEnt) );
+    world->brush = (BrushModel far *) qglMemAlloc( (long) world->model_count * sizeof(BrushModel) );
+    world->face_mdl = (short far *) qglMemAlloc( (long) world->face_count * sizeof(short) );
+    world->tele = (Teleporter far *) qglMemAlloc( (long) (h.ntele ? h.ntele : 1) * sizeof(Teleporter) );
+    world->plat = (PlatEnt far *) qglMemAlloc( (long) (h.nplat ? h.nplat : 1) * sizeof(PlatEnt) );
     if ( !world->brush || !world->face_mdl || !world->tele || !world->plat ) {
         fprintf( stderr, "ents.bin: out of memory\n" );
         exit( 1 );
@@ -387,5 +386,5 @@ void ent_load_teleports( World *world )
         }
     }
 
-    memFree( (void far *) buf );
+    qglMemFree( (long) buf );
 }

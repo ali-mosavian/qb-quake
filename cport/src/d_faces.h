@@ -21,6 +21,6 @@
  * nothing here changes that shape.
  */
 void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *ls,
-                    DrawParams *dp, u3dMtrx *mtx, u3dVector3f *campos, SysClock *sysclk );
+                    DrawParams *dp, Mat4 *mtx, Vec3 *campos, SysClock *sysclk );
 
 #endif

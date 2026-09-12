@@ -23,7 +23,7 @@
  *       move through and carry only EMPTY and SOLID; water and lava
  *       exist only as leaf contents in hull 0.
  */
-static short pl_point_contents( Vec3 *p, World *world )
+static short pl_point_contents( BspVec3 *p, World *world )
 {
     short leaf_nr = r_point_leaf( p, world );
     return r_leaf_contents( leaf_nr, world );
@@ -37,7 +37,7 @@ static short pl_point_contents( Vec3 *p, World *world )
  */
 static void pl_water_level( Player *player, World *world )
 {
-    Vec3 p;
+    BspVec3 p;
     short c;
 
     player->water_level = 0;
@@ -66,7 +66,7 @@ static void pl_water_level( Player *player, World *world )
  * desc: Removes the component of v that points into the plane, which
  *       is what turns a head-on stop into a slide along the wall.
  */
-static void pl_clip_velocity( Vec3 *v, Vec3 *norm )
+static void pl_clip_velocity( BspVec3 *v, BspVec3 *norm )
 {
     float backoff = v->x*norm->x + v->y*norm->y + v->z*norm->z;
 
@@ -86,11 +86,11 @@ static void pl_clip_velocity( Vec3 *v, Vec3 *norm )
  *       and the remaining time is retried, so an inside corner
  *       resolves in two bumps and a dead end stops.
  */
-static void pl_slide_move( World *world, Vec3 *org, Vec3 *vel, float dt, TraceResult *tr )
+static void pl_slide_move( World *world, BspVec3 *org, BspVec3 *vel, float dt, TraceResult *tr )
 {
     short bump;
     float time_left = dt;
-    Vec3 fin;
+    BspVec3 fin;
 
     for ( bump = 0; bump < 4; bump++ ) {
         if ( vel->x == 0.0f && vel->y == 0.0f && vel->z == 0.0f ) break;
@@ -131,11 +131,11 @@ static void pl_slide_move( World *world, Vec3 *org, Vec3 *vel, float dt, TraceRe
  *       doorframe lip, because a 16 unit stair and a wall are the same
  *       thing to a trace.
  */
-static void pl_step_move( World *world, Player *player, Vec3 *org, Vec3 *vel, float dt, TraceResult *tr )
+static void pl_step_move( World *world, Player *player, BspVec3 *org, BspVec3 *vel, float dt, TraceResult *tr )
 {
-    Vec3 flat_pos, flat_vel;
-    Vec3 up_pos, down_pos;
-    Vec3 step_vel;
+    BspVec3 flat_pos, flat_vel;
+    BspVec3 up_pos, down_pos;
+    BspVec3 step_vel;
     float old_vel_z;
 
     /* the ordinary slide, kept in case the step attempt is worse */
@@ -233,7 +233,7 @@ static void pl_step_move( World *world, Player *player, Vec3 *org, Vec3 *vel, fl
  */
 static void pl_gravity( World *world, Player *player, float dt, TraceResult *tr )
 {
-    Vec3 below = player->pos;
+    BspVec3 below = player->pos;
     below.z -= 1.0f;
 
     pl_trace( world, &player->pos, &below, tr );
@@ -261,11 +261,11 @@ static void pl_gravity( World *world, Player *player, float dt, TraceResult *tr 
  *       matter: acceleration, top speed, and how fast the player
  *       stops.
  */
-static void pl_ground_friction( World *world, Vec3 *org, Vec3 *vel, float dt, TraceResult *tr )
+static void pl_ground_friction( World *world, BspVec3 *org, BspVec3 *vel, float dt, TraceResult *tr )
 {
     float speed, speed_floor, newspeed;
     float fric;
-    Vec3 edge_a, edge_b;
+    BspVec3 edge_a, edge_b;
 
     speed = (float) sqrt( vel->x*vel->x + vel->y*vel->y );
     if ( speed == 0.0f ) return;
@@ -311,7 +311,7 @@ static void pl_ground_friction( World *world, Vec3 *org, Vec3 *vel, float dt, Tr
  *       off approaching top speed rather than adding a flat amount
  *       every tick.
  */
-static void pl_ground_accel( Vec3 *vel, Vec3 *wishdir, float wishspeed, float dt )
+static void pl_ground_accel( BspVec3 *vel, BspVec3 *wishdir, float wishspeed, float dt )
 {
     float currentspeed, addspeed, accelspeed;
 
@@ -337,7 +337,7 @@ static void pl_ground_accel( Vec3 *vel, Vec3 *wishdir, float wishspeed, float dt
  *       suggests -- it's Quake's own arithmetic, not a bug to tidy up
  *       here.
  */
-static void pl_air_accel( Vec3 *vel, Vec3 *wishdir, float wishspeed, float dt )
+static void pl_air_accel( BspVec3 *vel, BspVec3 *wishdir, float wishspeed, float dt )
 {
     float wishspd, currentspeed;
     float addspeed, accelspeed;
@@ -374,9 +374,9 @@ static void pl_air_accel( Vec3 *vel, Vec3 *wishdir, float wishspeed, float dt )
  *       horizontal look, and no pitch reaches this module -- ported
  *       exactly as the BASIC left it, not extended.
  */
-static void pl_water_move( Vec3 *vel, float fwd, float strafe, float dir_x, float dir_y, float dt )
+static void pl_water_move( BspVec3 *vel, float fwd, float strafe, float dir_x, float dir_y, float dt )
 {
-    Vec3 wishvel, wishdir;
+    BspVec3 wishvel, wishdir;
     float wishspeed, wishlen, scale;
     float speed, newspeed;
     float addspeed, accelspeed;
@@ -437,7 +437,7 @@ static void pl_water_move( Vec3 *vel, float fwd, float strafe, float dir_x, floa
  *       inside the floor on others, where every direction traces solid
  *       and it can't move at all.
  */
-void pl_init( Player *player, Camera *cam, Vec3 *start_override )
+void pl_init( Player *player, Camera *cam, BspVec3 *start_override )
 {
     if ( start_override ) {
         player->pos = *start_override;
@@ -465,7 +465,7 @@ void pl_move( World *world, Player *player, Camera *cam,
               short jump, float dt )
 {
     TraceResult tr;
-    Vec3 wishvel, wishdir;
+    BspVec3 wishvel, wishdir;
     float wishspeed;
 
     /*

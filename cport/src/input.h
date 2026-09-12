@@ -1,9 +1,7 @@
 #ifndef __INPUT_H__
 #define __INPUT_H__
 
-#include "ugl.h"     /* PDC */
-#include "kbd.h"     /* KBD */
-#include "mouse.h"   /* MOUSE */
+#include "qgl.h"     /* QSurf */
 
 #include "renderer.h"
 #include "hud.h"
@@ -16,8 +14,8 @@
  * see in_init.
  */
 typedef struct {
-    MOUSE mouse;
-    KBD   keyboard;
+    MouseInf mouse;
+    Keys   keyboard;
     short screenie;    /* screenshot counter -- scrn0.bmp, scrn1.bmp, ... */
 } Input;
 
@@ -27,7 +25,7 @@ typedef struct {
  *       video DC mouseInit clips the cursor to -- Video's, not Input's
  *       own, so it's a parameter rather than a field here.
  */
-void in_init( Input *input, PDC h_video_dc );
+void in_init( Input *input, QSurf h_video_dc );
 
 /*
  * name: in_handle_toggles
@@ -42,6 +40,6 @@ void in_handle_toggles( Input *input, Renderer *rdr, Camera *cam, Player *player
  *       screen.c's (screen.h) -- w/h are the DC's own size, Config's
  *       x_res/y_res once Config exists.
  */
-void in_screenshot_key( Input *input, PDC h_dst_dc, short w, short h );
+void in_screenshot_key( Input *input, QSurf h_dst_dc, short w, short h );
 
 #endif

@@ -11,11 +11,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "qgl.h"
+
 #include "mod_tex.h"
 #include "bsphdr.h"  /* DiskMipTex */
 #include "assets.h"
-#include "dos.h"     /* memAlloc/memFree */
 #include "sys.h"     /* sys_error */
+#include "qglsurf.h"  /* qgl_surf_from_file, TEX_ATLAS_W/LM_ATLAS_W */
 
 static void modtex_fatal( char *what )
 {
@@ -67,7 +69,7 @@ static void mod_link_anims( World *world, DiskMipTex far *t_mip_inf, long textur
                  t_mip_inf[i].name[1] >= '0' && t_mip_inf[i].name[1] <= '9' )
                 want++;
         if ( want < 2 ) return;
-        world->anim_tab = (short far *) memAlloc( want * (long) sizeof(short) );
+        world->anim_tab = (short far *) qglMemAlloc( want * (long) sizeof(short) );
         if ( !world->anim_tab ) modtex_fatal( "out of memory for the animation table" );
     }
 
@@ -109,20 +111,20 @@ static void mod_link_anims( World *world, DiskMipTex far *t_mip_inf, long textur
     }
 }
 
-PRGB mod_load_textures( World *world, FILE *f, MapCounts *counts )
+PalRgb far * mod_load_textures( World *world, FILE *f, MapCounts *counts )
 {
     long far *tex_offs;
     DiskMipTex far *t_mip_inf;
     long i;
     short j;
-    PRGB pal;
+    PalRgb far *pal;
 
     world->texinfo = (TexInfo far *) asset_load( "assets.zip::texinf.bld",
                                                   counts->tex_infos * (long) sizeof(TexInfo) );
 
     /* The numtex offset table: one long per texture, right after the
        lump's own leading numtex long mod_open already read. */
-    tex_offs = (long far *) memAlloc( counts->textures * (long) sizeof(long) );
+    tex_offs = (long far *) qglMemAlloc( counts->textures * (long) sizeof(long) );
     if ( !tex_offs ) modtex_fatal( "out of memory for the texture offset table" );
     if ( fseek( f, counts->mip_tex_offs + 4, SEEK_SET ) != 0 ) modtex_fatal( "mip_tex offsets seek failed" );
     for ( i = 0; i < counts->textures; i++ ) {
@@ -131,8 +133,8 @@ PRGB mod_load_textures( World *world, FILE *f, MapCounts *counts )
         tex_offs[i] = o;
     }
 
-    t_mip_inf = (DiskMipTex far *) memAlloc( counts->textures * (long) sizeof(DiskMipTex) );
-    world->miptex = (MipTex far *) memAlloc( counts->textures * (long) sizeof(MipTex) );
+    t_mip_inf = (DiskMipTex far *) qglMemAlloc( counts->textures * (long) sizeof(DiskMipTex) );
+    world->miptex = (MipTex far *) qglMemAlloc( counts->textures * (long) sizeof(MipTex) );
     if ( !t_mip_inf || !world->miptex ) modtex_fatal( "out of memory for texture headers" );
 
     for ( i = 0; i < counts->textures; i++ ) {
@@ -160,19 +162,19 @@ PRGB mod_load_textures( World *world, FILE *f, MapCounts *counts )
         if ( hdr.name[0] == '*' ) world->miptex[i].liquid = -1;
     }
 
-    memFree( (void far *) tex_offs );
+    qglMemFree( (long) tex_offs );
 
     /*
      * The pixels: two atlases, four views each. A cell is a FLAT run
      * of cell*cell bytes, not a window on the 8192-wide image -- the
      * fillers map one page and walk the cell by the VIEW's own bps.
      * The placement is READ, not re-derived: mkassets.py owns the
-     * layout. BMP_OPT_NO332 matters: without it uGL remaps the image
-     * to its own 3-3-2 palette and the indices, already correct,
-     * would be destroyed.
+     * layout. These are RAW byte streams, not BMPs: mgl needed
+     * BMP_OPT_NO332 to stop it remapping already-correct indices into
+     * its own 3-3-2 palette, and qgl has no decoder to defend against.
      */
-    world->tex_raw    = uglNewBMPEx( UGL_EMS, UGL_8BIT, "assets.zip::texr.bmp", BMP_OPT_NO332 );
-    world->tex_shaded = uglNewBMPEx( UGL_EMS, UGL_8BIT, "assets.zip::texs.bmp", BMP_OPT_NO332 );
+    world->tex_raw    = qgl_surf_from_file( "TEXR.RAW", TEX_ATLAS_W, QGL_SURF_EMS, 0 );
+    world->tex_shaded = qgl_surf_from_file( "TEXS.RAW", TEX_ATLAS_W, QGL_SURF_EMS, 0 );
     if ( !world->tex_raw || !world->tex_shaded ) modtex_fatal( "texture atlas would not load" );
 
     /* texofs.bld is sized to the map's own texture count (mkassets.py:
@@ -184,7 +186,7 @@ PRGB mod_load_textures( World *world, FILE *f, MapCounts *counts )
         long n;
         unsigned char far *ofsbuf = asset_load_whole( "assets.zip::texofs.bld", &n );
         _fmemcpy( world->tex_ofs, ofsbuf, n );
-        memFree( (void far *) ofsbuf );
+        qglMemFree( (long) ofsbuf );
     }
 
     for ( j = 0; j < 4; j++ ) {
@@ -192,35 +194,39 @@ PRGB mod_load_textures( World *world, FILE *f, MapCounts *counts )
         world->tex_aim_raw[j] = -1;
         world->tex_aim_shd[j] = -1;
 
-        world->tex_v_raw[j]    = uglNewView( world->tex_raw, 0, world->tex_cell[j], world->tex_cell[j] );
-        world->tex_v_shaded[j] = uglNewView( world->tex_shaded, 0, world->tex_cell[j], world->tex_cell[j] );
+        world->tex_v_raw[j]    = qglNewView( world->tex_raw, 0, world->tex_cell[j], world->tex_cell[j] );
+        world->tex_v_shaded[j] = qglNewView( world->tex_shaded, 0, world->tex_cell[j], world->tex_cell[j] );
         if ( !world->tex_v_raw[j] || !world->tex_v_shaded[j] ) modtex_fatal( "no room for a texture view" );
     }
 
     mod_link_anims( world, t_mip_inf, counts->textures );
-    memFree( (void far *) t_mip_inf );
+    qglMemFree( (long) t_mip_inf );
 
-    /* The palette is still loaded here because vid.c's v_init
-       installs it and frees it -- nothing in this routine looks at
-       its contents. */
-    pal = uglPalLoad( "base.dat::color/palette.lmp", PAL_RGB );
+    /* pal.raw, not base.dat: base.dat is a Quake PACK and qgl links a
+       zip driver only, so there is nothing to open it with. mkassets
+       writes the 768 bytes loose beside the exe and the qgl renderer
+       reads them the same way -- r, g, b per entry, 8 bits each.
+
+       Still loaded here because vid.c's v_init installs it and frees
+       it; nothing in this routine looks at its contents. */
+    pal = (PalRgb far *) asset_load( "pal.raw", 768L );
 
     return pal;
 }
 
-PDC mod_tex_raw( World *world, short k, short mip )
+QSurf mod_tex_raw( World *world, short k, short mip )
 {
     if ( world->tex_aim_raw[mip] != k ) {
-        if ( !uglSetView( world->tex_v_raw[mip], world->tex_ofs[ (long) k*4 + mip ] ) ) return 0;
+        if ( !qglSetView( world->tex_v_raw[mip], world->tex_ofs[ (long) k*4 + mip ] ) ) return 0;
         world->tex_aim_raw[mip] = k;
     }
     return world->tex_v_raw[mip];
 }
 
-PDC mod_tex_shaded( World *world, short k, short mip )
+QSurf mod_tex_shaded( World *world, short k, short mip )
 {
     if ( world->tex_aim_shd[mip] != k ) {
-        if ( !uglSetView( world->tex_v_shaded[mip], world->tex_ofs[ (long) k*4 + mip ] ) ) return 0;
+        if ( !qglSetView( world->tex_v_shaded[mip], world->tex_ofs[ (long) k*4 + mip ] ) ) return 0;
         world->tex_aim_shd[mip] = k;
     }
     return world->tex_v_shaded[mip];

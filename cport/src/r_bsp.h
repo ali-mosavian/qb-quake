@@ -14,13 +14,13 @@
  * rule (the old BASIC r_leaf_contents read a `dim shared` leaves()
  * array implicitly instead of taking one).
  */
-float r_plane_dist( Vec3 *p, Plane far *pl );
-short r_point_leaf( Vec3 *p, World *world );
+float r_plane_dist( BspVec3 *p, Plane far *pl );
+short r_point_leaf( BspVec3 *p, World *world );
 short r_leaf_contents( short leaf_nr, World *world );
-float r_cam_plane_dist( u3dVector3f *pt, Plane far *pl );
-short r_node_side( short node_idx, u3dVector3f *pt, World *world );
+float r_cam_plane_dist( Vec3 *pt, Plane far *pl );
+short r_node_side( short node_idx, Vec3 *pt, World *world );
 short r_cull_box( Bounds far *bbox, DiskPlane far *frustum );
-void  r_set_frustum( DiskPlane far *frustum, u3dMtrx *mtx );
+void  r_set_frustum( DiskPlane far *frustum, Mat4 *mtx );
 
 /*
  * name: r_mark_leaves
@@ -28,7 +28,7 @@ void  r_set_frustum( DiskPlane far *frustum, u3dMtrx *mtx );
  *       last frame, decompresses that leaf's PVS entry into rdr->pvsb
  *       (one entry per world leaf: -1 visible, 0 not).
  */
-void  r_mark_leaves( World *world, Renderer *rdr, short nodenr, u3dVector3f *campos );
+void  r_mark_leaves( World *world, Renderer *rdr, short nodenr, Vec3 *campos );
 
 /*
  * name: r_draw_world
@@ -38,13 +38,13 @@ void  r_mark_leaves( World *world, Renderer *rdr, short nodenr, u3dVector3f *cam
  *       (rdr->ord) the rasteriser follows.
  */
 void  r_draw_world( World *world, Renderer *rdr, DiskPlane far *frustum,
-                     short model, u3dVector3f *campos, u3dMtrx *mtx_fin,
+                     short model, Vec3 *campos, Mat4 *mtx_fin,
                      float xresh, float yresh, float z_near );
 
 /* Outline every portal of every leaf still visible after the flood --
    r_portal.c's r_portal_draw, wrapped with World's/Renderer's own
    portal store and pvs_now. */
-void  r_portal_outline( World *world, Renderer *rdr, PDC dc, u3dMtrx *mtx_fin,
+void  r_portal_outline( World *world, Renderer *rdr, QSurf dc, Mat4 *mtx_fin,
                          float xresh, float yresh, float z_near );
 
 /* Builds world->leaves: leaf_count entries from assets.zip's own

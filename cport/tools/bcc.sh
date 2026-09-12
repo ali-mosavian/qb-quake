@@ -19,7 +19,6 @@ OUT="${2:?usage: bcc.sh <src-c> <out-obj>}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CPORT="$ROOT/cport"
 TOOLCHAINS="${TOOLCHAINS:-$HOME/work/other/d32x/toolchains}"
-MGL="${MGL:-$HOME/work/badlogic/mgl}"
 
 DOSBOX_BIN="${DOSBOX_BIN:-}"
 if [[ -z "$DOSBOX_BIN" ]]; then
@@ -42,7 +41,6 @@ cp "$CPORT"/src/*.h "$W/" 2>/dev/null || true
   echo "mount w $W"
   echo "mount b $TOOLCHAINS/bcpp31"
   echo "mount t $TOOLCHAINS/tasm50/TASM/BIN"
-  echo "mount m $MGL/inc"
   echo "path b:\\bin;t:"
   echo "w:"
   # -B: bcc's own built-in inline assembler predates FSIN (same
@@ -50,20 +48,7 @@ cp "$CPORT"/src/*.h "$W/" 2>/dev/null || true
   # TASM's fuller instruction set accepts it. Harmless for files with
   # no inline asm, so passed unconditionally rather than special-cased.
   #
-  # -IM:\ : mgl's own real headers (UAR, u3dVector3f/u3dMtrx, MOUSEINF,
-  # TKBD, TMR, RGB and most of ugl.h itself) -- used directly rather
-  # than hand-transcribed. uglpatch.h supplies only the handful of
-  # entries the shipped headers haven't caught up to yet
-  # (uglPolyTP/uglBuildSurf/uglNewView/uglSetView/uglZMode/uglClearZ).
-  #
-  # -f87: without it, TASM emits FNSTCW/FLDCW (control-word save/
-  # restore, needed for a truncating float-to-int cast -- see ent.c's
-  # ftol_short) through its 8087-emulation macros, which don't cover
-  # those two opcodes and fail with "Can't emulate 8087 instruction".
-  # -f87 tells bcc to assume real FPU hardware and emit the plain
-  # opcodes instead, consistent with this project already assuming a
-  # real 8087 everywhere else (r_ptproj.asm and friends).
-  echo "b:\\bin\\bcc.exe -c -B -3 -f87 -mm -Ox -IW:\\ -IM:\\ -IB:\\INCLUDE $base.c > w:\\cc.txt"
+  echo "b:\\bin\\bcc.exe -c -B -3 -f87 -mm -Ox -IW:\\ -IB:\\INCLUDE $base.c > w:\\cc.txt"
   echo "exit"
 } > "$W/build.conf"
 

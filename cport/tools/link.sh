@@ -1,8 +1,8 @@
 #!/bin/bash
-# Link the standalone-cport objects into QCPORT.EXE, medium model,
-# against uGL built with __CMP__=BC (not __CMP__=VBD -- that one pulls
-# B$SETM and drags VBDCL10E.LIB back in). One DOSBox session: unlike
-# compiling, linking needs every object at once.
+# Link the standalone-cport objects into QCPORT.EXE, medium model. The
+# graphics layer is qgl, assembled natively into the same object list --
+# there is no UGLV.LIB here and no BASIC runtime. One DOSBox session:
+# unlike compiling, linking needs every object at once.
 #
 #   cport/tools/link.sh build/cport "qmain vid d_poly"
 set -euo pipefail
@@ -11,7 +11,6 @@ OUT="${1:?usage: link.sh <build-dir> <obj-names>}"
 OBJS="${2:?usage: link.sh <build-dir> <obj-names>}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 TOOLCHAINS="${TOOLCHAINS:-$HOME/work/other/d32x/toolchains}"
-UGL="${CPORT_UGL:-$ROOT/build/native-mgl-bc/UGLV.LIB}"
 
 DOSBOX_BIN="${DOSBOX_BIN:-}"
 if [[ -z "$DOSBOX_BIN" ]]; then
@@ -20,9 +19,6 @@ if [[ -z "$DOSBOX_BIN" ]]; then
     done
 fi
 [[ -n "$DOSBOX_BIN" ]] || { echo "no dosbox-x found; set DOSBOX_BIN" >&2; exit 1; }
-[[ -f "$UGL" ]] || { echo "no C-convention uGL at $UGL -- build it: make -f tools/native/Makefile BUILD=\$PWD/build/native-mgl-bc JWASMFLAGS=\"-c -Cp -Zg -D__CMP__=BC -I\$MGL/src/inc -omf\"" >&2; exit 1; }
-
-cp "$UGL" "$OUT/UGLC.LIB"
 
 objlist=""
 for o in $OBJS; do
@@ -55,7 +51,7 @@ objlist="${objlist#+}"
   # modules MATHM.LIB doesn't already satisfy -- a library only pulls
   # in an object for a symbol still unresolved when it's scanned, so
   # this can't collide with anything MATHM.LIB already provided.
-  echo "UGLC.LIB+T:\\LIB\\MATHM.LIB+T:\\LIB\\CM.LIB+T:\\LIB\\FP87.LIB+B:\\LIB\\CC.LIB+B:\\LIB\\MATHC.LIB"
+  echo "T:\\LIB\\MATHM.LIB+T:\\LIB\\CM.LIB+T:\\LIB\\FP87.LIB+B:\\LIB\\CC.LIB+B:\\LIB\\MATHC.LIB"
 } > "$OUT/LINK.RSP"
 
 { printf '[sdl]\nautolock=false\n[dosbox]\nmemsize=32\nstartbanner=false\nquit warning=false\n'

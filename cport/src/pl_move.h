@@ -43,8 +43,8 @@
    plane it stopped against. */
 typedef struct {
     float frac;
-    Vec3  end_pos;
-    Vec3  norm;
+    BspVec3  end_pos;
+    BspVec3  norm;
     short all_solid;      /* the whole sweep was inside solid */
     short start_solid;    /* it began inside solid */
 } TraceResult;
@@ -58,7 +58,7 @@ typedef struct {
  *       of the old pl_init, the only one reachable today since cport/
  *       has no Config yet to carry start_set/start_x/y/z.
  */
-void pl_init( Player *player, Camera *cam, Vec3 *start_override );
+void pl_init( Player *player, Camera *cam, BspVec3 *start_override );
 
 /*
  * name: pl_move

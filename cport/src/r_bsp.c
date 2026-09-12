@@ -15,6 +15,7 @@
  */
 
 #include <math.h>
+#include "qgl.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -22,18 +23,17 @@
 #include "r_walk.h"
 #include "r_portal.h"
 #include "assets.h"
-#include "dos.h"    /* memAlloc, for r_alloc_scratch */
 
 /* Takes a RENDERER point: Y-up there, Z-up in the BSP, so y pairs with
    norm.z. Single, not double: returning double moved two edge-on faces
    onto the other side of their plane in the original BASIC. */
-float r_plane_dist( Vec3 *p, Plane far *pl )
+float r_plane_dist( BspVec3 *p, Plane far *pl )
 {
     return p->x*pl->norm.x + p->y*pl->norm.y + p->z*pl->norm.z - pl->dist;
 }
 
 /* The leaf holding p, walking hull 0. Bit 15 marks a leaf; ~ is its index. */
-short r_point_leaf( Vec3 *p, World *world )
+short r_point_leaf( BspVec3 *p, World *world )
 {
     short nodenr = 0;
 
@@ -56,13 +56,13 @@ short r_leaf_contents( short leaf_nr, World *world )
     return world->leaves[leaf_nr].cont;
 }
 
-float r_cam_plane_dist( u3dVector3f *pt, Plane far *pl )
+float r_cam_plane_dist( Vec3 *pt, Plane far *pl )
 {
     return pt->x*pl->norm.x + pt->y*pl->norm.z + pt->z*pl->norm.y - pl->dist;
 }
 
 /* Which side of a node's splitting plane a point falls on: -1 front, 0 behind. */
-short r_node_side( short node_idx, u3dVector3f *pt, World *world )
+short r_node_side( short node_idx, Vec3 *pt, World *world )
 {
     Node far *n = &world->nodes[node_idx];
     if ( r_cam_plane_dist( pt, &world->planes[n->plane_id] ) > 0.0f ) return -1;
@@ -72,11 +72,11 @@ short r_node_side( short node_idx, u3dVector3f *pt, World *world )
 /* Same 8-way branch on the frustum plane's normal sign to pick the
    box's near corner, same y/z swap copying from bbox (BSP, z-up) into
    near_point (renderer, y-up). bbox.min/max are Vec3i; the assignment
-   into a float Vec3 is BASIC's own implicit int-to-single conversion,
+   into a float BspVec3 is BASIC's own implicit int-to-single conversion,
    done explicitly here instead. */
 short r_cull_box( Bounds far *bbox, DiskPlane far *frustum )
 {
-    Vec3 near_point;
+    BspVec3 near_point;
     float dp;
     short i;
 
@@ -138,7 +138,7 @@ short r_cull_box( Bounds far *bbox, DiskPlane far *frustum )
 
 /* Six planes off the concatenated view*projection matrix (Gribb/Hartmann),
    normalized so r_cull_box's distances are in real units. */
-void r_set_frustum( DiskPlane far *frustum, u3dMtrx *mtx )
+void r_set_frustum( DiskPlane far *frustum, Mat4 *mtx )
 {
     short i;
     float d;
@@ -198,7 +198,7 @@ void r_set_frustum( DiskPlane far *frustum, u3dMtrx *mtx )
  *       a packed long) with a plain far pointer -- same address, no
  *       segment arithmetic to get wrong.
  */
-void r_mark_leaves( World *world, Renderer *rdr, short nodenr, u3dVector3f *campos )
+void r_mark_leaves( World *world, Renderer *rdr, short nodenr, Vec3 *campos )
 {
     unsigned char far *v;
     short leafnr, l, j, byte, bit;
@@ -263,7 +263,7 @@ void r_mark_leaves( World *world, Renderer *rdr, short nodenr, u3dVector3f *camp
  *       correctly, so it's skipped.
  */
 void r_emit_entities( World *world, Renderer *rdr, DiskPlane far *frustum,
-                       short nodenr, u3dVector3f *campos, short ign )
+                       short nodenr, Vec3 *campos, short ign )
 {
     short m;
 
@@ -285,7 +285,7 @@ void r_emit_entities( World *world, Renderer *rdr, DiskPlane far *frustum,
  *       draw order, then walks the tree.
  */
 void r_draw_world( World *world, Renderer *rdr, DiskPlane far *frustum,
-                    short model, u3dVector3f *campos, u3dMtrx *mtx_fin,
+                    short model, Vec3 *campos, Mat4 *mtx_fin,
                     float xresh, float yresh, float z_near )
 {
     short i;
@@ -363,7 +363,7 @@ void r_draw_world( World *world, Renderer *rdr, DiskPlane far *frustum,
  *       anyway since h_frame.c already calls it as r_bsp.bas's own
  *       entry point.
  */
-void r_portal_outline( World *world, Renderer *rdr, PDC dc, u3dMtrx *mtx_fin,
+void r_portal_outline( World *world, Renderer *rdr, QSurf dc, Mat4 *mtx_fin,
                         float xresh, float yresh, float z_near )
 {
     r_portal_draw( dc, mtx_fin, (short) (world->leaf_count - 1),
@@ -397,10 +397,10 @@ void r_load_portals( World *world, long leaf_count )
 
 void r_alloc_scratch( Renderer *rdr, short face_count, short node_count, short leaf_count )
 {
-    rdr->pflag   = (short far *) memAlloc( (long) face_count * sizeof(short) );
-    rdr->ord     = (short far *) memAlloc( (long) node_count * sizeof(short) );
-    rdr->pvsb    = (short far *) memAlloc( (long) leaf_count * sizeof(short) );
-    rdr->pvs_now = (short far *) memAlloc( (long) leaf_count * sizeof(short) );
+    rdr->pflag   = (short far *) qglMemAlloc( (long) face_count * sizeof(short) );
+    rdr->ord     = (short far *) qglMemAlloc( (long) node_count * sizeof(short) );
+    rdr->pvsb    = (short far *) qglMemAlloc( (long) leaf_count * sizeof(short) );
+    rdr->pvs_now = (short far *) qglMemAlloc( (long) leaf_count * sizeof(short) );
 
     if ( !rdr->pflag || !rdr->ord || !rdr->pvsb || !rdr->pvs_now ) {
         fprintf( stderr, "r_alloc_scratch: out of memory\n" );

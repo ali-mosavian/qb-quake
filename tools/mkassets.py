@@ -392,8 +392,12 @@ def convert_lightmaps(d, lumps, out):
     # same path the textures take. BMPOPT.NO332 keeps the bytes verbatim, so
     # the palette below is never consulted; it is an identity ramp purely so
     # the file is a valid BMP.
-    out['lm.bmp'] = bmp8_bytes(LM_ATLAS_W, atlas_h, bytes(atlas),
-                               [(i, i, i) for i in range(256)])
+    # A flat byte stream, not a BMP. qgl has no image decoder and wants
+    # none -- the atlas was never an image, only a container for the run
+    # of cells the fillers walk, and qgl_surf_from_file derives the
+    # height from the length. mgl needed the BMP wrapper because
+    # uglNewBMPEx was the only loader that reached an EMS dc.
+    out['lm.bin'] = bytes(atlas)
     blob = atlas
 
     # The table is not written out on its own any more: convert_lumps folds
@@ -771,9 +775,20 @@ def main():
         if len(at) % LM_ATLAS_W:
             at += bytes(LM_ATLAS_W - (len(at) % LM_ATLAS_W))
     rows = len(raw_at) // LM_ATLAS_W
-    for name, at in (("texr.bmp", raw_at), ("texs.bmp", shd_at)):
-        write_bmp8(os.path.join(outdir, name), LM_ATLAS_W, rows, bytes(at), pal)
+    # Loose and raw, beside the exe, for the same reason lm.bin is raw --
+    # and loose rather than zipped because qgl maps them into EMS a page
+    # at a time, which a deflated member cannot serve.
+    for name, at in (("TEXR.RAW", raw_at), ("TEXS.RAW", shd_at)):
+        with open(os.path.join(outdir, name), "wb") as fh:
+            fh.write(bytes(at))
         print(f"  {name}: {LM_ATLAS_W}x{rows} = {len(at):,} bytes")
+
+    # The game palette, flat: 256 entries, r g b, 8 bits each.
+    # qglVgaPalette shifts to the DAC's 6 itself, so these stay 8-bit and
+    # nothing has to read them back off the hardware to know what they were.
+    with open(os.path.join(outdir, "pal.raw"), "wb") as fh:
+        fh.write(bytes(bytearray(c for e in pal[:256] for c in e[:3])))
+    print(f"  pal.raw: 768 bytes (flat, unzipped)")
 
     tbl = bytearray()
     for k in range(ntex):

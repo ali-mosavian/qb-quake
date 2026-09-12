@@ -1,7 +1,6 @@
 #ifndef __SYS_TIME_H__
 #define __SYS_TIME_H__
 
-#include "tmr.h"
 
 /*
  * sys_time.h -- the frame clock. C port of sys.bas's sys_time_init/
@@ -28,8 +27,7 @@
  * measurements (Renderer's counters, PhaseTimes' sums).
  */
 typedef struct {
-    TMR   frame_tmr;
-    float tick_hz;      /* frame_tmr's MEASURED rate -- see sys_time_init
+    float tick_hz;      /* the timer's MEASURED rate -- see sys_time_init
                             on why this is calibrated, not trusted from
                             the rate asked for */
     long  last_tick;
@@ -45,7 +43,7 @@ typedef struct {
                              delta with no rounding on either side */
 } SysClock;
 
-/* Starts the frame clock. Must run after tmrInit (in_init). */
+/* Starts the frame clock. Must run after qglTmrInit (in_init). */
 void sys_time_init( SysClock *clk );
 
 /* Seconds since the previous call, clamped to [0.001, 0.1] so a frame
@@ -76,7 +74,7 @@ float sys_now( SysClock *clk );
  *       sample and discard it (the dynamic core's own RDTSC
  *       virtualization has been observed resetting near zero on some
  *       internal event) -- exactly as sys_frame_time already does for
- *       frame_tmr wrapping.
+ *       the tick counter wrapping.
  */
 long sys_rdtsc( SysClock *clk );
 

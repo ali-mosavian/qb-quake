@@ -13,7 +13,7 @@
 
 #include "pl_trace.h"
 
-static short near pl_hull_contents_c( short node, Vec3 far *p, ClipNode far *clip, Plane far *planes )
+static short near pl_hull_contents_c( short node, BspVec3 far *p, ClipNode far *clip, Plane far *planes )
 {
     short pid;
     float d;
@@ -39,14 +39,14 @@ static short near pl_hull_contents_c( short node, Vec3 far *p, ClipNode far *cli
    is EMS-backed, but the read order is kept identical regardless. */
 static short near pl_hull_check_c(
     short node, float p1f, float p2f,
-    Vec3 far *p1, Vec3 far *p2,
+    BspVec3 far *p1, BspVec3 far *p2,
     TraceResult *tr,
     ClipNode far *clip, Plane far *planes
 )
 {
     short pid, side, other;
     float t1, t2, frac, midf;
-    Vec3 midp;
+    BspVec3 midp;
 
     if ( node < 0 ) {
         tr->all_solid = ( node == CONTENTS_SOLID ) ? 1 : 0;
@@ -125,10 +125,10 @@ static short near pl_hull_check_c(
  * all_solid is the exception: each walk sets it, so it's gathered by
  * hand into any_solid.
  */
-void pl_trace( World *world, Vec3 *start, Vec3 *fin, TraceResult *tr )
+void pl_trace( World *world, BspVec3 *start, BspVec3 *fin, TraceResult *tr )
 {
     short i, any_solid;
-    Vec3 s2, f2;
+    BspVec3 s2, f2;
 
     tr->frac        = 1.0f;
     tr->end_pos     = *fin;

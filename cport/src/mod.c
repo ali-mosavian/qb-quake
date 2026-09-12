@@ -9,11 +9,10 @@
 #include "mod.h"
 #include "bsphdr.h"
 #include "assets.h"
-#include "dos.h"        /* memAlloc, and arch.h's DOSFILE */
-#include "arch.h"       /* UAR */
-#include "uglpatch.h"   /* uglNewView/uglSetView -- not used here, but
-                            ugl.h alone (below) already brings PDC/uglNew */
-#include "ugl.h"
+#include "qgl.h"
+#include "qglsurf.h"   /* qglNewView/qglSetView -- not used here, but
+                            ugl.h alone (below) already brings QSurf/qglNew */
+#include "qgl.h"
 #include "r_bsp.h"       /* r_load_leaves/r_load_lfaces/r_load_portals/r_alloc_scratch */
 #include "pl_move.h"     /* pl_load_hulls */
 #include "ent.h"         /* ent_load_spawn/ent_load_teleports */
@@ -83,26 +82,26 @@ static void mod_load_faces( World *world )
 /*
  * name: mod_load_colormap
  * desc: The 64-shade table the builder shades through. EMS, not
- *       memAlloc: by the time this loads, conventional memory no
+ *       qglMemAlloc: by the time this loads, conventional memory no
  *       longer has 16K contiguous to spare.
  */
 void mod_load_colormap( World *world )
 {
-    UAR u;
+    short fh;
     unsigned char far *p;
 
     world->cmap_dc   = 0;
     world->cmap_size = 0;
 
-    if ( !uarOpen( &u, "assets.zip::colmap.bin", F4READ ) ) return;
+    if ( !( fh = qglFileOpen( "assets.zip::colmap.bin" ) ) ) return;
 
-    world->cmap_dc = uglNew( UGL_EMS, UGL_8BIT, 16384, 1 );
+    world->cmap_dc = qglNew( QGL_SURF_EMS, QGL_FMT_8BIT, 16384, 1 );
     if ( world->cmap_dc ) {
-        p = (unsigned char far *) uglMapEx( world->cmap_dc, 0, 3 /* CM_SLOT */ );
-        if ( p && uarReadH( &u, (void far *) p, 16384 ) == 16384 ) world->cmap_size = 16384;
+        p = (unsigned char far *) qglSfAccessRdEx( world->cmap_dc, 0, 3 /* CM_SLOT */ );
+        if ( p && qglFileRead( fh, (long) p, 16384L ) == 16384L ) world->cmap_size = 16384;
     }
 
-    uarClose( &u );
+    qglFileClose( fh );
 
     if ( world->cmap_size == 0 ) mod_fatal( "colormap would not load" );
 }
@@ -116,16 +115,11 @@ void mod_load_colormap( World *world )
  */
 static void mod_load_lightmaps( World *world )
 {
-    UAR u;
-
     world->light_atlas = 0;
     world->light_size  = 0;
 
-    if ( uarOpen( &u, "assets.zip::lm.bmp", F4READ ) ) {
-        world->light_size = uarSize( &u );
-        uarClose( &u );
-    }
-    world->light_atlas = uglNewBMPEx( UGL_EMS, UGL_8BIT, "assets.zip::lm.bmp", BMP_OPT_NO332 );
+    world->light_atlas = qgl_surf_from_file( "assets.zip::lm.bin", LM_ATLAS_W,
+                                             QGL_SURF_EMS, &world->light_size );
     world->light_loaded = world->light_atlas ? world->light_size : 0;
 }
 
@@ -136,35 +130,30 @@ static void mod_load_lightmaps( World *world )
  */
 static void mod_load_facevtx( World *world )
 {
-    UAR u;
-    /* volatile, defensively: mgl's own uarReadH (src/mods/mdarch.asm)
-       used to clobber SI without listing it in its `uses` clause, and
-       Borland C's optimizer treats SI/DI/BP as preserved across ANY
-       call when deciding what is safe to keep live in a register --
-       so a plain `short y` here (and, independently, a fresh read of
-       world->geom_rows right after the call) both came back wrong,
-       exactly matching whatever the DEFLATE decoder's own internal
-       byte count happened to leave in SI. Fixed at the source (`si`
-       added to uarReadH's own `uses` clause, __CMP__=BC's UGLV.LIB
-       rebuilt) -- see [[masm-uses-missing-si]] -- so this is no
-       longer strictly needed, but costs nothing and stays as a second
-       line of defence against ever linking a stale library again. */
+    short fh;
+    /* volatile against a MASM `uses` omission, which is a class of
+       bug and not one library's instance: Borland C treats SI/DI/BP as
+       preserved across ANY call when deciding what to keep live, so a
+       reader that clobbers SI silently corrupts the loop counter here.
+       mgl's uarReadH did exactly that and cost a session; qgl.inc makes
+       the rule explicit for qgl, but the cost of the defence is zero
+       and the failure is invisible. */
     volatile short y;
     unsigned char far *p;
 
-    if ( !uarOpen( &u, "assets.zip::fgeom.bin", F4READ ) ) mod_fatal( "fgeom.bin missing" );
+    if ( !( fh = qglFileOpen( "assets.zip::fgeom.bin" ) ) ) mod_fatal( "fgeom.bin missing" );
 
-    world->geom_rows = (short) ( (uarSize( &u ) + GEOM_W - 1) / GEOM_W );
-    world->geom_dc = uglNew( UGL_EMS, UGL_8BIT, (int) GEOM_W, world->geom_rows );
+    world->geom_rows = (short) ( (qglFileSize( fh ) + GEOM_W - 1) / GEOM_W );
+    world->geom_dc = qglNew( QGL_SURF_EMS, QGL_FMT_8BIT, (int) GEOM_W, world->geom_rows );
     if ( !world->geom_dc ) mod_fatal( "no EMS for the geometry store" );
 
     for ( y = 0; y < world->geom_rows; y++ ) {
-        p = (unsigned char far *) uglMapEx( world->geom_dc, y, PAGE_SLOT );
+        p = (unsigned char far *) qglSfAccessRdEx( world->geom_dc, y, PAGE_SLOT );
         if ( !p ) mod_fatal( "geometry store will not map" );
-        if ( uarReadH( &u, (void far *) p, GEOM_W ) != GEOM_W ) mod_fatal( "fgeom.bin short read" );
+        if ( qglFileRead( fh, (long) p, GEOM_W ) != GEOM_W ) mod_fatal( "fgeom.bin short read" );
     }
 
-    uarClose( &u );
+    qglFileClose( fh );
 }
 
 static void mod_load_nodes( World *world, MapCounts *counts )
@@ -185,7 +174,7 @@ static void mod_load_submodels( World *world )
                                                   (long) world->model_count * sizeof(Submodel) );
 }
 
-/* memAlloc'd rather than a uGL store: r_bsp reaches it as a plain far
+/* qglMemAlloc'd rather than a uGL store: r_bsp reaches it as a plain far
    pointer plus a byte offset (leaf.vis_list), never as an array. */
 static void mod_load_visibility( World *world )
 {
@@ -223,15 +212,15 @@ FILE *mod_load_world( World *world, Renderer *rdr, Camera *cam, char *map_name, 
 
 unsigned char far *mod_lm_map( World *world, short row )
 {
-    return (unsigned char far *) uglMapEx( world->light_atlas, row, PAGE_SLOT );
+    return (unsigned char far *) qglSfAccessRdEx( world->light_atlas, row, PAGE_SLOT );
 }
 
 unsigned char far *mod_cm_map( World *world )
 {
-    return (unsigned char far *) uglMapEx( world->cmap_dc, 0, 3 /* CM_SLOT */ );
+    return (unsigned char far *) qglSfAccessRdEx( world->cmap_dc, 0, 3 /* CM_SLOT */ );
 }
 
 unsigned char far *mod_geom_map( World *world, short row )
 {
-    return (unsigned char far *) uglMapEx( world->geom_dc, row, PAGE_SLOT );
+    return (unsigned char far *) qglSfAccessRdEx( world->geom_dc, row, PAGE_SLOT );
 }

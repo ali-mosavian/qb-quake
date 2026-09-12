@@ -5,7 +5,7 @@
 #include "renderer.h"
 #include "hud.h"
 #include "sc.h"
-#include "ugl.h"
+#include "qgl.h"
 
 /*
  * screen.h -- the overlay. C port of a slice of screen.bas: the
@@ -38,15 +38,15 @@ void font_load( Font far *font, char *flname );
    colour instead, folding hud_num's own "any colour" case into the
    same function. 4 pixels advance per character, matching the font's
    own 4-wide glyphs. */
-void draw_string( Hud far *hud, PDC dc, short x, short y, char *text, long col );
+void draw_string( Hud far *hud, QSurf dc, short x, short y, char *text, long col );
 
 /* Right-aligned against x -- x is the text's own right edge. */
-void draw_string_r( Hud far *hud, PDC dc, short x, short y, char *text, long col );
+void draw_string_r( Hud far *hud, QSurf dc, short x, short y, char *text, long col );
 
 /* A number at sc pixels per glyph-pixel, with a one-pixel shadow so it
    sits on the slab instead of floating -- hud_panel's own big fps
    counter is the only caller that wants this over plain draw_string. */
-void hud_num( Hud far *hud, PDC dc, short x, short y, short sc, char *txt, long col );
+void hud_num( Hud far *hud, QSurf dc, short x, short y, short sc, char *txt, long col );
 
 /*
  * name: scr_hud_colors
@@ -57,18 +57,18 @@ void hud_num( Hud far *hud, PDC dc, short x, short y, short sc, char *txt, long 
 void scr_hud_colors( Hud far *hud );
 
 /* Tinted glass: darkens the scene under a rect through Quake's own
-   colormap (uglShadeRect), or falls back to an opaque slab when
+   colormap (qglDrShade), or falls back to an opaque slab when
    world's colormap never loaded -- the overlay never depends on -lm's
    data being there. */
-void hud_shade( World *world, Hud far *hud, PDC dc, short x0, short y0, short x1, short y1, short rw );
+void hud_shade( World *world, Hud far *hud, QSurf dc, short x0, short y0, short x1, short y1, short rw );
 
-void hud_panel( World *world, Hud far *hud, PDC dc, short x, short y, short w, short h, char *title );
-void hud_row( Hud far *hud, PDC dc, short x, short w, short y, char *label, char *value );
-void hud_bar( Hud far *hud, PDC dc, short x, short y, short w, short h, float percent );
+void hud_panel( World *world, Hud far *hud, QSurf dc, short x, short y, short w, short h, char *title );
+void hud_row( Hud far *hud, QSurf dc, short x, short w, short y, char *label, char *value );
+void hud_bar( Hud far *hud, QSurf dc, short x, short y, short w, short h, float percent );
 
 /* One pixel column per remembered frame, oldest at the left; buf is
    one of Hud's own GRAPH_N-sized rings (g_bld/g_fps). */
-void hud_graph( Hud far *hud, PDC dc, short x, short y, short h, short *buf, short mx );
+void hud_graph( Hud far *hud, QSurf dc, short x, short y, short h, short *buf, short mx );
 
 /* Sound VU bars, the statistics overlay and the watermark -- minus
    the VU bars themselves (see this file's own header note on why).
@@ -77,7 +77,7 @@ void hud_graph( Hud far *hud, PDC dc, short x, short y, short h, short *buf, sho
    player->pos (pl.pos, not cam.pos -- -at takes the hull origin, and
    the eye sits PL_EYE above it, matching the original's own note). */
 void scr_draw_hud( World *world, Renderer *rdr, Camera *cam, Player *player,
-                    SurfCache far *sc, Hud far *hud, PDC h_dst_dc, short w, short h );
+                    SurfCache far *sc, Hud far *hud, QSurf h_dst_dc, short w, short h );
 
 /* Rolls fps once a second (off SysClock's own frame_dt rather than a
    dedicated hardware timer channel -- see hud.h's own note) and
@@ -87,6 +87,6 @@ void scr_count_frame( Hud far *hud, Renderer *rdr, SurfCache far *sc, float fram
 
 /* Writes an 8-bit BMP of dc's own w by h pixels, in the currently
    installed palette, to flname. */
-void scr_screenshot( char *flname, PDC dc, short w, short h );
+void scr_screenshot( char *flname, QSurf dc, short w, short h );
 
 #endif

@@ -3,10 +3,10 @@
  */
 
 #include <math.h>
+#include "qgl.h"
 
 #include "view.h"
 #include "pl_move.h"   /* PL_NOCLIP/PL_EYE */
-#include "mouse.h"      /* mousePos */
 
 #define PI 3.14159f
 

@@ -1,7 +1,7 @@
 #ifndef __BSPTYPES_H__
 #define __BSPTYPES_H__
 
-#include "renderer.h"   /* Vec3 */
+#include "renderer.h"   /* BspVec3 */
 
 /* BSP-domain types -- qb-qrender's own, not mgl's (mgl has no notion
    of a map). Mirror the old bspfile.bi/q_ent.bi field-for-field; the
@@ -18,9 +18,9 @@
 #define CONTENTS_LAVA  (-5)
 #define CONTENTS_SKY   (-6)
 
-/* bspfile.bi's Vec3i -- same axes as Vec3, quantized to a short. Node/
+/* bspfile.bi's Vec3i -- same axes as BspVec3, quantized to a short. Node/
    Leaf bounds are stored this way on disk; NOT a premature-optimization
-   choice made here, so it stays Vec3i rather than the Vec3 this file
+   choice made here, so it stays Vec3i rather than the BspVec3 this file
    originally (and wrongly) gave it before anything actually read a
    bound -- see r_cull_box's own int-to-single conversion below, which
    only makes sense against a genuinely integer Bounds. */
@@ -38,7 +38,7 @@ typedef struct {
 } Node;
 
 typedef struct {
-    Vec3  norm;
+    BspVec3  norm;
     float dist;
     short ptype;
 } Plane;
@@ -48,7 +48,7 @@ typedef struct {
    of these from the view matrix, so there's no on-disk instance to
    confuse it with. */
 typedef struct {
-    Vec3  norm;
+    BspVec3  norm;
     float dist;
     long  ptype;
 } DiskPlane;
@@ -66,7 +66,7 @@ typedef struct {
 } Leaf;
 
 typedef struct {
-    Vec3 mins, maxs, origin;
+    BspVec3 mins, maxs, origin;
     long head_node0, head_node1, head_node2, head_node3;
     long vis_leafs, first_face, num_faces;
 } Submodel;
@@ -123,8 +123,8 @@ typedef struct {
 
 /* q_ent.bi's Teleporter. */
 typedef struct {
-    Vec3  mins, maxs;
-    Vec3  dest;
+    BspVec3  mins, maxs;
+    BspVec3  dest;
     float yaw;
 } Teleporter;
 
@@ -136,7 +136,7 @@ typedef struct {
     float travel;
     float speed;
     short state;
-    Vec3  mins, maxs;
+    BspVec3  mins, maxs;
 } PlatEnt;
 
 #endif

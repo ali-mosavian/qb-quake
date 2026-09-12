@@ -5,7 +5,7 @@
 
 #include "world.h"
 #include "mod.h"
-#include "uglpatch.h"   /* PRGB */
+#include "qgl.h"   /* PalRgb far * */
 
 /*
  * mod_tex.h -- texture headers and the preprocessed atlas bitmaps. C
@@ -32,12 +32,12 @@
  *       original never checked it either); the caller owns installing
  *       and freeing it (vid.c's v_init).
  */
-PRGB mod_load_textures( World *world, FILE *f, MapCounts *counts );
+PalRgb far * mod_load_textures( World *world, FILE *f, MapCounts *counts );
 
 /* Cell k of mip level mip, as a dc. Re-aims a view rather than owning
    one per texture. */
-PDC mod_tex_raw( World *world, short k, short mip );
-PDC mod_tex_shaded( World *world, short k, short mip );
+QSurf mod_tex_raw( World *world, short k, short mip );
+QSurf mod_tex_shaded( World *world, short k, short mip );
 
 /* world->tex_ofs as a far pointer, packed into a long -- DrawParams'
    own tex_ofs_ptr field (d_faces.c, not yet ported) carries every far

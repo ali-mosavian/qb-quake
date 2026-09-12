@@ -11,7 +11,7 @@
 /*
  * assets.h -- one shared shape behind most of model.bas's/r_bsp.bas's/
  * pl_move.bas's/ent.bas's loaders: open one member of assets.zip (a UAR
- * archive, mkassets.py's own output), memAlloc a far block, read the
+ * archive, mkassets.py's own output), qglMemAlloc a far block, read the
  * member into it whole. That covers every "MEM store" and "mod_load_flat"
  * site in the original -- the EMS-fallback half of the MEM/EMS choice
  * those sites offered is NOT here: cport/'s existing node/leaf/clip
@@ -23,7 +23,7 @@
 
 /*
  * name: asset_load
- * desc: memAlloc(bytes), then read exactly that many bytes of flname
+ * desc: qglMemAlloc(bytes), then read exactly that many bytes of flname
  *       (an assets.zip member, "archive::member") into it. Fatal (writes
  *       to stderr and exits) on a missing member, a short read, or a
  *       failed allocation -- matching sys_error's old role, since

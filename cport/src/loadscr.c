@@ -9,8 +9,8 @@
 
 #include "loadscr.h"
 #include "screen.h"   /* draw_string */
-#include "dos.h"       /* memAlloc/memFree -- mgl's, not Borland's */
-#include "uglpatch.h"
+#include "qgl.h"
+#include "pal.h"
 
 /* screen.bas's own names, same offsets into the ramps above. */
 #define C_PANEL    (LP_STN0 + 6)    /* the sunken well the bar sits in */
@@ -45,12 +45,14 @@ static short pan_x, pan_y;   /* set by ld_begin, read by the drawing below */
  */
 static void ld_palette( void )
 {
-    RGB far *pal = (RGB far *) memAlloc( 256L * (long) sizeof(RGB) );
+    PalRgb far *pal;
     short i;
     float f;
 
+    pal = (PalRgb far *) qglMemAlloc( 256L * (long) sizeof(PalRgb) );
+
     if ( !pal ) return;   /* no palette is survivable; a failed load is not */
-    _fmemset( pal, 0, 256 * sizeof(RGB) );
+    _fmemset( pal, 0, 256 * sizeof(PalRgb) );
 
     for ( i = 0; i < LP_STNN; i++ ) {
         f = (float) i / (float)( LP_STNN - 1 );
@@ -77,20 +79,20 @@ static void ld_palette( void )
         pal[LP_NEU0+i].blue  = (char)( 26 + f * 112 );
     }
 
-    uglPalSet( 0, 256, pal );
-    memFree( (void far *) pal );
+    pal_install( (PalRgb far *) pal );
+    qglMemFree( (long) pal );
 }
 
 /* A pressed-metal edge: light on top and left, dark on bottom and
    right, and the pair swapped when something is meant to look sunken.
    That one trick is most of what makes the original read as Quake. */
-static void ld_bevel( PDC dc, short x, short y, short w, short h,
+static void ld_bevel( QSurf dc, short x, short y, short w, short h,
                        long hi, long lo )
 {
-    uglHLine( dc, x, y, x + w, hi );
-    uglVLine( dc, x, y, y + h, hi );
-    uglHLine( dc, x, y + h, x + w, lo );
-    uglVLine( dc, x + w, y, y + h, lo );
+    qglDrHline( dc, x, y, x + w, hi );
+    qglDrVline( dc, x, y, y + h, hi );
+    qglDrHline( dc, x, y + h, x + w, lo );
+    qglDrVline( dc, x + w, y, y + h, lo );
 }
 
 /*
@@ -101,7 +103,7 @@ static void ld_bevel( PDC dc, short x, short y, short w, short h,
  *       once: the fill only grows here, but redrawing costs nothing at
  *       load time and a stale tail is worse than the redraw.
  */
-static void ld_bar( PDC dc, short x, short y, short w, short h, float pct )
+static void ld_bar( QSurf dc, short x, short y, short w, short h, float pct )
 {
     short fill, i, k;
 
@@ -109,19 +111,19 @@ static void ld_bar( PDC dc, short x, short y, short w, short h, float pct )
     if ( pct > 100.0f ) pct = 100.0f;
     fill = (short)( ( (long) w * (long) pct ) / 100L );
 
-    uglRectF( dc, x, y, x + w, y + h, C_TROUGH );
+    qglDrFill( dc, x, y, x + w, y + h, C_TROUGH );
     ld_bevel( dc, x, y, w, h, C_EDGE, C_EDGEHI );
 
     if ( fill < 1 ) return;
 
     for ( i = 1; i < h; i++ ) {
         k = (short)( LP_ACC0 + LP_ACCN - 1 - ( ( i * ( LP_ACCN - 4 ) ) / h ) );
-        uglHLine( dc, x + 1, y + i, x + fill, k );
+        qglDrHline( dc, x + 1, y + i, x + fill, k );
     }
-    uglHLine( dc, x + 1, y + 1, x + fill, C_ACCHI );
+    qglDrHline( dc, x + 1, y + 1, x + fill, C_ACCHI );
 }
 
-static void ld_redraw( LoadScreen *ld, PDC dc, Hud far *hud )
+static void ld_redraw( LoadScreen *ld, QSurf dc, Hud far *hud )
 {
     char pct[8];
 
@@ -129,13 +131,13 @@ static void ld_redraw( LoadScreen *ld, PDC dc, Hud far *hud )
              (short)( PAN_W - 2 * BAR_INSET ), BAR_H, ld->pct );
 
     sprintf( pct, "%d%%", (int) ld->pct );
-    uglRectF( dc, (short)( pan_x + PAN_W - 34 ), (short)( pan_y + 7 ),
+    qglDrFill( dc, (short)( pan_x + PAN_W - 34 ), (short)( pan_y + 7 ),
                   (short)( pan_x + PAN_W - 8 ),  (short)( pan_y + 14 ), C_PANEL );
     draw_string_r( hud, dc, (short)( pan_x + PAN_W - 10 ),
                     (short)( pan_y + 8 ), pct, C_TEXT );
 }
 
-void ld_begin( LoadScreen *ld, PDC dc, Hud far *hud, short steps,
+void ld_begin( LoadScreen *ld, QSurf dc, Hud far *hud, short steps,
                 short w, short h )
 {
     ld->pct   = 0.0f;
@@ -147,13 +149,13 @@ void ld_begin( LoadScreen *ld, PDC dc, Hud far *hud, short steps,
 
     ld_palette();
 
-    uglRectF( dc, 0, 0, (short)( w - 1 ), (short)( h - 1 ), C_BACK );
+    qglDrFill( dc, 0, 0, (short)( w - 1 ), (short)( h - 1 ), C_BACK );
 
     /* the raised plate, then the sunken well inside it */
-    uglRectF( dc, pan_x, pan_y, (short)( pan_x + PAN_W ), (short)( pan_y + PAN_H ),
+    qglDrFill( dc, pan_x, pan_y, (short)( pan_x + PAN_W ), (short)( pan_y + PAN_H ),
               C_PLATE );
     ld_bevel( dc, pan_x, pan_y, PAN_W, PAN_H, C_PLATEHI, C_PLATELO );
-    uglRectF( dc, (short)( pan_x + 6 ), (short)( pan_y + 5 ),
+    qglDrFill( dc, (short)( pan_x + 6 ), (short)( pan_y + 5 ),
                   (short)( pan_x + PAN_W - 6 ), (short)( pan_y + PAN_H - 6 ),
               C_PANEL );
     ld_bevel( dc, (short)( pan_x + 6 ), (short)( pan_y + 5 ),
@@ -162,16 +164,16 @@ void ld_begin( LoadScreen *ld, PDC dc, Hud far *hud, short steps,
     ld_stage( ld, dc, hud, "starting up" );
 }
 
-void ld_stage( LoadScreen *ld, PDC dc, Hud far *hud, char *what )
+void ld_stage( LoadScreen *ld, QSurf dc, Hud far *hud, char *what )
 {
-    uglRectF( dc, (short)( pan_x + 9 ), (short)( pan_y + 7 ),
+    qglDrFill( dc, (short)( pan_x + 9 ), (short)( pan_y + 7 ),
                   (short)( pan_x + PAN_W - 36 ), (short)( pan_y + 14 ), C_PANEL );
     draw_string( hud, dc, (short)( pan_x + 10 ), (short)( pan_y + 8 ),
                   what, C_TEXTDIM );
     ld_redraw( ld, dc, hud );
 }
 
-void ld_step( LoadScreen *ld, PDC dc, Hud far *hud )
+void ld_step( LoadScreen *ld, QSurf dc, Hud far *hud )
 {
     ld->done++;
     ld->pct = ( 100.0f * (float) ld->done ) / (float) ld->steps;

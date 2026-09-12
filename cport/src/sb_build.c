@@ -14,7 +14,7 @@
  * KNOWN BUG, NOT YET FIXED HERE: srow is computed ONCE from
  * mod_lm_map(world, lmy) and then walked across lmh rows by
  * `srow += sb_pot(lmw)`, exactly as the original did. That's the same
- * shape as the uglBuildSurf destination-pointer bug already fixed in
+ * shape as the qglSbBuild destination-pointer bug already fixed in
  * mgl (src/ugl/uglsurf.asm, commit b0abc01): an EMS page window mapped
  * once and read across multiple rows is only valid until the NEXT
  * acquire evicts it, and nothing here holds a lock across the loop.
@@ -27,14 +27,14 @@
  * the crash needs a working build to diagnose, not a guess. Fix this
  * once model.bas's own mod_lm_map is real, with a churn test
  * (tools/check.sh --churn's own method: same camera, two runs, diff
- * the picture) as the gate -- exactly how the uglBuildSurf fix was
+ * the picture) as the gate -- exactly how the qglSbBuild fix was
  * verified.
  */
 
 #include <mem.h>
 
 #include "sb_build.h"
-#include "uglpatch.h"   /* uglBuildSurf */
+#include "qgl.h"   /* qglSbBuild */
 
 #define GEOM_LMOFS 1
 #define LS_NEUTRAL 120
@@ -61,7 +61,7 @@ static unsigned char ls_scratch_c[1024];
 static unsigned char lm_flat_c = 0;
 
 void sb_build( SurfCache far *sc, World *world, Renderer *rdr, LightStyles *ls,
-               PDC dc, PDC tex, short face, short mip, short sw, short sh,
+               QSurf dc, QSurf tex, short face, short mip, short sw, short sh,
                short far *gv )
 {
     Face    far *f  = &world->faces[face];
@@ -174,7 +174,7 @@ void sb_build( SurfCache far *sc, World *world, Renderer *rdr, LightStyles *ls,
     sbp.shft = 4 - mip;
     sbp.msk  = msk;
 
-    if ( !uglBuildSurf( dc, tex, (long) (void far *) &sbp ) ) {
+    if ( !qglSbBuild( dc, tex, (long) (void far *) &sbp ) ) {
         /* only a luxel grid too big for the builder's stack buffer
            gets here; leave the surface as it is rather than
            half-composite it */

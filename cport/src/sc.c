@@ -12,7 +12,7 @@
  * fit 16,384 bytes entire: 128x128, or 256x64, and no more.
  *
  * DCs are pooled by size class and recycled rather than deleted,
- * because a miss should cost a build, not a uglNew. sc_flush hands
+ * because a miss should cost a build, not a qglNew. sc_flush hands
  * every DC back to its class and bumps the generation, which is what
  * makes every slot stale at once.
  *
@@ -29,9 +29,7 @@
 
 #include <string.h>
 #include "sc.h"
-#include "dos.h"       /* memAlloc/memFree -- mgl's, not Borland's */
-#include "uglpatch.h"
-#include "ems.h"
+#include "qgl.h"
 
 /* Smallest power-of-two shift that covers v, clamped to the classes
    the filler can address. */
@@ -253,12 +251,12 @@ short sc_init( SurfCache far *sc, short face_count )
     sc->tbuilds = 0;
     sc->dlit    = 0;
 
-    sc->slot = (CacheSlot far *) memAlloc( (long) face_count * (long) sizeof(CacheSlot) );
-    sc->bgrn  = (short far *) memAlloc( (long) SC_NBLK * (long) sizeof(short) );
-    sc->bord  = (short far *) memAlloc( (long) SC_NBLK * (long) sizeof(short) );
-    sc->bown  = (short far *) memAlloc( (long) SC_NBLK * (long) sizeof(short) );
-    sc->bprev = (short far *) memAlloc( (long) SC_NBLK * (long) sizeof(short) );
-    sc->bnext = (short far *) memAlloc( (long) SC_NBLK * (long) sizeof(short) );
+    sc->slot = (CacheSlot far *) qglMemAlloc( (long) face_count * (long) sizeof(CacheSlot) );
+    sc->bgrn  = (short far *) qglMemAlloc( (long) SC_NBLK * (long) sizeof(short) );
+    sc->bord  = (short far *) qglMemAlloc( (long) SC_NBLK * (long) sizeof(short) );
+    sc->bown  = (short far *) qglMemAlloc( (long) SC_NBLK * (long) sizeof(short) );
+    sc->bprev = (short far *) qglMemAlloc( (long) SC_NBLK * (long) sizeof(short) );
+    sc->bnext = (short far *) qglMemAlloc( (long) SC_NBLK * (long) sizeof(short) );
     if ( !sc->slot || !sc->bgrn || !sc->bord || !sc->bown || !sc->bprev || !sc->bnext ) {
         sc->ok = 0;
         return 0;
@@ -273,7 +271,7 @@ short sc_init( SurfCache far *sc, short face_count )
     sc->next = 0;
     sc->cap  = 0;
 
-    if ( !emsCheck() ) {
+    if ( !qglGemInit() ) {
         sc->ok = 0;
         return 1;
     }
@@ -295,7 +293,7 @@ static short sc_store_open( SurfCache far *sc )
     /* Shaped so its own scanline table stays tiny. bps is capped at
        one EMS page, so a 16384-wide DC is exactly one page per
        scanline. */
-    sc->hnd = uglNew( UGL_EMS, UGL_8BIT, (int) SC_PGBYTES, SC_PAGES );
+    sc->hnd = qglNew( QGL_SURF_EMS, QGL_FMT_8BIT, (int) SC_PGBYTES, SC_PAGES );
     if ( sc->hnd == 0 ) {
         sc->cap = 0;
         return 0;
@@ -326,10 +324,10 @@ void sc_shutdown( SurfCache far *sc )
     /* views first: they borrow the store's pixels, so the store
        outlives them */
     for ( i = 0; i < SC_NCLS; i++ ) {
-        if ( sc->desc[i] != 0 ) uglDel( &sc->desc[i] );
+        if ( sc->desc[i] != 0 ) qglSfFree( sc->desc[i] );
         sc->desc[i] = 0;
     }
-    if ( sc->hnd != 0 ) uglDel( &sc->hnd );
+    if ( sc->hnd != 0 ) qglSfFree( sc->hnd );
     sc->hnd  = 0;
     sc->cap  = 0;
     sc->next = 0;
@@ -362,9 +360,9 @@ void sc_flush( SurfCache far *sc, short face_count )
     sc->bcnt = 0;
 }
 
-PDC sc_find( SurfCache far *sc, short face, short mip, short w, short h, short stag, long *aim_ofs )
+QSurf sc_find( SurfCache far *sc, short face, short mip, short w, short h, short stag, long *aim_ofs )
 {
-    PDC dc;
+    QSurf dc;
     short a, b, vcls;
 
     if ( !sc->ok ) return 0;
@@ -387,7 +385,7 @@ PDC sc_find( SurfCache far *sc, short face, short mip, short w, short h, short s
     dc = sc->desc[vcls];
     if ( dc != 0 ) {
         *aim_ofs = (long) sc->bgrn[ sc->slot[face].blk ] * SC_GRAN;
-        if ( !uglSetView( dc, *aim_ofs ) ) dc = 0;
+        if ( !qglSetView( dc, *aim_ofs ) ) dc = 0;
     }
     if ( dc != 0 ) {
         sc->hits++;
@@ -397,11 +395,11 @@ PDC sc_find( SurfCache far *sc, short face, short mip, short w, short h, short s
     return dc;
 }
 
-PDC sc_alloc( SurfCache far *sc, short face, short mip, short w, short h, short fw, short fh,
+QSurf sc_alloc( SurfCache far *sc, short face, short mip, short w, short h, short fw, short fh,
               short stag, short face_count, long *aim_ofs )
 {
     short a, b, cidx, bord;
-    PDC dc;
+    QSurf dc;
     short vic, blk, j, b2;
     long ofs, sz;
 
@@ -426,7 +424,7 @@ PDC sc_alloc( SurfCache far *sc, short face, short mip, short w, short h, short 
        time -- every DC the cache ever makes, 25 at the very most,
        against one per cached surface before. */
     if ( sc->desc[cidx] == 0 ) {
-        dc = uglNewView( sc->hnd, 0, (short) (1 << a), (short) (1 << b) );
+        dc = qglNewView( sc->hnd, 0, (short) (1 << a), (short) (1 << b) );
         if ( dc == 0 ) return 0;
         sc->desc[cidx] = dc;
         sc->made++;
@@ -534,7 +532,7 @@ PDC sc_alloc( SurfCache far *sc, short face, short mip, short w, short h, short 
 
     /* aim it at the bytes just claimed, ready for the builder to write */
     *aim_ofs = ofs;
-    if ( !uglSetView( dc, ofs ) ) return 0;
+    if ( !qglSetView( dc, ofs ) ) return 0;
 
     return dc;
 }
@@ -611,7 +609,7 @@ void sc_note_dlit( SurfCache far *sc )
  */
 static short sc_selftest_run( SurfCache far *sc )
 {
-    PDC d0, d1, d2;
+    QSurf d0, d1, d2;
     short gen0, made0;
     unsigned char wr[32], rd[32];
     long ofs0, live0, flush0, next0;
@@ -651,8 +649,8 @@ static short sc_selftest_run( SurfCache far *sc )
 
     /* a write into the last row of the largest class, the 16K page edge */
     for ( i = 0; i < 32; i++ ) { wr[i] = (unsigned char) ((i * 7 + 3) & 255); rd[i] = 0; }
-    uglRowWrite( d0, 0, 127, 32, UGL_8BIT, wr );
-    uglRowRead( d0, 0, 127, 32, UGL_8BIT, rd );
+    qglRowWrite( d0, 0, 127, 32, QGL_FMT_8BIT, wr );
+    qglRowRead( d0, 0, 127, 32, QGL_FMT_8BIT, rd );
     for ( i = 0; i < 32; i++ ) if ( rd[i] != wr[i] ) return -12;
 
     /* a flush must retire the slots and hand the DCs back, not make more */
@@ -764,7 +762,7 @@ short sc_selftest( void )
     short face_count = 10;
     short result;
 
-    sc = (SurfCache far *) memAlloc( (long) sizeof(SurfCache) );
+    sc = (SurfCache far *) qglMemAlloc( (long) sizeof(SurfCache) );
     if ( !sc ) return -1;
 
     if ( !sc_init( sc, face_count ) ) {

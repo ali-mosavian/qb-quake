@@ -1,21 +1,20 @@
 #ifndef __RENDERER_H__
 #define __RENDERER_H__
 
-#include "u3d.h"
-#include "ugl.h"
+#include "qgl.h"
 
-/* Vec3: BSP space, Z-up -- qb-qrender's own distinction, not mgl's;
-   u3d.h has no notion of it. u3dVector3f (renderer space, Y-up) is
-   used directly everywhere renderer space is meant. Kept as two types
-   on purpose -- same three-float layout, but collapsing them into one
-   compiles and runs identically right up until a Y-up value gets
-   passed somewhere a Z-up one was expected, or the reverse. This
-   codebase's own notes describe paying for exactly that confusion more
-   than once. */
-typedef struct { float x, y, z; } Vec3;
+/* BspVec3 is BSP space, Z-up; Vec3 -- qgl's own three-float record,
+   declared in qgltypes.h -- is renderer space, Y-up, and is used
+   directly everywhere renderer space is meant. Two types on purpose:
+   same layout, but collapsing them compiles and runs identically right
+   up until a Y-up value is passed where a Z-up one was expected. This
+   codebase's notes describe paying for exactly that more than once,
+   and collapsing them is precisely what a blanket rename off mgl's
+   u3dVector3f does if it is not watched. */
+typedef struct { float x, y, z; } BspVec3;
 
 typedef struct {
-    u3dVector3f pos;
+    Vec3 pos;
     float radius;
 } DynLight;
 
@@ -82,8 +81,8 @@ typedef struct {
 
 /* Camera -- eye and look direction. */
 typedef struct {
-    u3dVector3f pos;
-    u3dVector3f look_at;
+    Vec3 pos;
+    Vec3 look_at;
     short fps_view;        /* false = the fixed overhead view */
     float start_angle;     /* spawn yaw, seeds the mouse position (the
                                same trick teleporting uses -- the camera
@@ -100,8 +99,8 @@ typedef struct {
    struct held (zero, for a fresh one), same as the BASIC's implicit
    struct-zero of a fresh Game. */
 typedef struct {
-    Vec3  pos;
-    Vec3  vel;
+    BspVec3  pos;
+    BspVec3  vel;
     short no_clip;
     short on_ground;
     float peak_z;         /* highest z reached, so -jump is checkable */
@@ -135,7 +134,7 @@ typedef struct {
    d_faces.c's own real per-face loop (uglPolyTP) never touches it.
    Not ported; a deliberate scope cut, not an oversight. */
 typedef struct {
-    PDC   h_dst_dc;
+    QSurf   h_dst_dc;
     long  tex_ofs_ptr;
     long  turb_ptr;
     float xresh, yresh;

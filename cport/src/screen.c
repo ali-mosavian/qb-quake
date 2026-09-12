@@ -9,9 +9,9 @@
 #include <mem.h>       /* _fmemcpy */
 
 #include "screen.h"
-#include "uglpatch.h"  /* RGB/uglPalGet/uglPSet/uglShadeRect/uglPalBestFit */
+#include "qgl.h"  /* qglSfPset/qglDrShade */
+#include "pal.h"  /* pal_bestfit/pal_current */
 #include "assets.h"    /* asset_load_whole */
-#include "dos.h"       /* memFree */
 #include "mod.h"       /* mod_cm_map */
 
 /* One bit of glyph[ch][bit/16], MSB first within each word -- ported
@@ -32,10 +32,10 @@ void font_load( Font far *font, char *flname )
     unsigned char far *buf = asset_load_whole( flname, &n );
     /* 4-byte "font" id, then 256 glyphs of 4 words (8 bytes) each. */
     _fmemcpy( font->glyph, buf + 4, 256 * 8 );
-    memFree( (void far *) buf );
+    qglMemFree( (long) buf );
 }
 
-void draw_string( Hud far *hud, PDC dc, short x, short y, char *text, long col )
+void draw_string( Hud far *hud, QSurf dc, short x, short y, char *text, long col )
 {
     short i, gx, gy, posx = x;
 
@@ -44,17 +44,17 @@ void draw_string( Hud far *hud, PDC dc, short x, short y, char *text, long col )
         for ( gy = 0; gy < 8; gy++ )
             for ( gx = 0; gx < 8; gx++ )
                 if ( font_bit( &hud->font, ch, gx, gy ) )
-                    uglPSet( dc, (short)(posx+gx), (short)(y+gy), col );
+                    qglSfPset( dc, (short)(posx+gx), (short)(y+gy), col );
         posx = (short) ( posx + 4 );
     }
 }
 
-void draw_string_r( Hud far *hud, PDC dc, short x, short y, char *text, long col )
+void draw_string_r( Hud far *hud, QSurf dc, short x, short y, char *text, long col )
 {
     draw_string( hud, dc, (short) ( x - 4 * (short) strlen( text ) ), y, text, col );
 }
 
-void hud_num( Hud far *hud, PDC dc, short x, short y, short sc, char *txt, long col )
+void hud_num( Hud far *hud, QSurf dc, short x, short y, short sc, char *txt, long col )
 {
     short i, gx, gy, px, bx, by, pass;
 
@@ -68,9 +68,9 @@ void hud_num( Hud far *hud, PDC dc, short x, short y, short sc, char *txt, long 
                         bx = (short) ( px + gx*sc );
                         by = (short) ( y + gy*sc );
                         if ( pass == 0 )
-                            uglRectF( dc, (short)(bx+1), (short)(by+1), (short)(bx+sc), (short)(by+sc), hud->hc_slablo );
+                            qglDrFill( dc, (short)(bx+1), (short)(by+1), (short)(bx+sc), (short)(by+sc), hud->hc_slablo );
                         else
-                            uglRectF( dc, bx, by, (short)(bx+sc-1), (short)(by+sc-1), col );
+                            qglDrFill( dc, bx, by, (short)(bx+sc-1), (short)(by+sc-1), col );
                     }
                 }
             }
@@ -81,89 +81,85 @@ void hud_num( Hud far *hud, PDC dc, short x, short y, short sc, char *txt, long 
 
 void scr_hud_colors( Hud far *hud )
 {
-    RGB pal[256];
-
-    uglPalGet( 0, 256, (RGB far *) pal );
-
-    hud->hc_bg     = uglPalBestFit( (RGB far *) pal,  12,  10,   8 );
-    hud->hc_slab   = uglPalBestFit( (RGB far *) pal,  52,  40,  28 );
-    hud->hc_slabhi = uglPalBestFit( (RGB far *) pal, 104,  84,  60 );
-    hud->hc_slablo = uglPalBestFit( (RGB far *) pal,  18,  14,  10 );
-    hud->hc_hist   = uglPalBestFit( (RGB far *) pal, 150, 104,  56 );
-    hud->hc_peak   = uglPalBestFit( (RGB far *) pal, 252, 216, 128 );
-    hud->hc_meter  = uglPalBestFit( (RGB far *) pal, 200, 128,  56 );
-    hud->hc_good   = uglPalBestFit( (RGB far *) pal, 244, 196,  92 );
-    hud->hc_warn   = uglPalBestFit( (RGB far *) pal, 224, 164,  48 );
-    hud->hc_bad    = uglPalBestFit( (RGB far *) pal, 216,  52,  36 );
+    hud->hc_bg     = pal_bestfit( 12,  10,   8 );
+    hud->hc_slab   = pal_bestfit( 52,  40,  28 );
+    hud->hc_slabhi = pal_bestfit( 104,  84,  60 );
+    hud->hc_slablo = pal_bestfit( 18,  14,  10 );
+    hud->hc_hist   = pal_bestfit( 150, 104,  56 );
+    hud->hc_peak   = pal_bestfit( 252, 216, 128 );
+    hud->hc_meter  = pal_bestfit( 200, 128,  56 );
+    hud->hc_good   = pal_bestfit( 244, 196,  92 );
+    hud->hc_warn   = pal_bestfit( 224, 164,  48 );
+    hud->hc_bad    = pal_bestfit( 216,  52,  36 );
     /* stands in for the original's fixed LP_TEXT index -- see hud.h's
        own note on why this is best-fit rather than assumed. */
-    hud->hc_text   = uglPalBestFit( (RGB far *) pal, 240, 232, 216 );
+    hud->hc_text   = pal_bestfit( 240, 232, 216 );
 
     hud->hud_flash  = 0;
     hud->hud_pevict = 0;
     hud->hud_pflush = 0;
 }
 
-void hud_shade( World *world, Hud far *hud, PDC dc, short x0, short y0, short x1, short y1, short rw )
+void hud_shade( World *world, Hud far *hud, QSurf dc, short x0, short y0, short x1, short y1, short rw )
 {
     if ( world->cmap_dc == 0 ) {
-        uglRectF( dc, x0, y0, x1, y1, hud->hc_slab );
+        qglDrFill( dc, x0, y0, x1, y1, hud->hc_slab );
         return;
     }
-    uglShadeRect( dc, x0, y0, x1, y1, (long) (void far *) mod_cm_map( world ), rw );
+    qglDrShade( dc, x0, y0, x1, y1, (long) (void far *) mod_cm_map( world ), rw );
 }
 
-void hud_panel( World *world, Hud far *hud, PDC dc, short x, short y, short w, short h, char *title )
+void hud_panel( World *world, Hud far *hud, QSurf dc, short x, short y, short w, short h, char *title )
 {
     hud_shade( world, hud, dc, x, y, (short)(x+w), (short)(y+h), 46 );
-    uglHLine( dc, x, y, (short)(x+w), hud->hc_slabhi );
-    uglVLine( dc, x, y, (short)(y+h), hud->hc_slabhi );
-    uglHLine( dc, x, (short)(y+h), (short)(x+w), hud->hc_slablo );
-    uglVLine( dc, (short)(x+w), y, (short)(y+h), hud->hc_slablo );
+    qglDrHline( dc, x, y, (short)(x+w), hud->hc_slabhi );
+    qglDrVline( dc, x, y, (short)(y+h), hud->hc_slabhi );
+    qglDrHline( dc, x, (short)(y+h), (short)(x+w), hud->hc_slablo );
+    qglDrVline( dc, (short)(x+w), y, (short)(y+h), hud->hc_slablo );
 
-    uglPSet( dc, (short)(x+2),   (short)(y+2),   hud->hc_slabhi );
-    uglPSet( dc, (short)(x+3),   (short)(y+3),   hud->hc_slablo );
-    uglPSet( dc, (short)(x+w-3), (short)(y+2),   hud->hc_slabhi );
-    uglPSet( dc, (short)(x+w-2), (short)(y+3),   hud->hc_slablo );
-    uglPSet( dc, (short)(x+2),   (short)(y+h-3), hud->hc_slabhi );
-    uglPSet( dc, (short)(x+3),   (short)(y+h-2), hud->hc_slablo );
-    uglPSet( dc, (short)(x+w-3), (short)(y+h-3), hud->hc_slabhi );
-    uglPSet( dc, (short)(x+w-2), (short)(y+h-2), hud->hc_slablo );
+    qglSfPset( dc, (short)(x+2),   (short)(y+2),   hud->hc_slabhi );
+    qglSfPset( dc, (short)(x+3),   (short)(y+3),   hud->hc_slablo );
+    qglSfPset( dc, (short)(x+w-3), (short)(y+2),   hud->hc_slabhi );
+    qglSfPset( dc, (short)(x+w-2), (short)(y+3),   hud->hc_slablo );
+    qglSfPset( dc, (short)(x+2),   (short)(y+h-3), hud->hc_slabhi );
+    qglSfPset( dc, (short)(x+3),   (short)(y+h-2), hud->hc_slablo );
+    qglSfPset( dc, (short)(x+w-3), (short)(y+h-3), hud->hc_slabhi );
+    qglSfPset( dc, (short)(x+w-2), (short)(y+h-2), hud->hc_slablo );
 
     /* the title sits in the top rule, so blank the run it occupies */
-    uglHLine( dc, (short)(x+5), y, (short)( x+8+(short)strlen(title)*4 ), hud->hc_slab );
+    qglDrHline( dc, (short)(x+5), y, (short)( x+8+(short)strlen(title)*4 ), hud->hc_slab );
     draw_string( hud, dc, (short)(x+7), (short)(y-3), title, hud->hc_text );
 }
 
-void hud_row( Hud far *hud, PDC dc, short x, short w, short y, char *label, char *value )
+void hud_row( Hud far *hud, QSurf dc, short x, short w, short y, char *label, char *value )
 {
     draw_string( hud, dc, (short)(x+5), y, label, hud->hc_text );
     draw_string_r( hud, dc, (short)(x+w-5), y, value, hud->hc_text );
 }
 
-void hud_bar( Hud far *hud, PDC dc, short x, short y, short w, short h, float percent )
+void hud_bar( Hud far *hud, QSurf dc, short x, short y, short w, short h, float percent )
 {
     short f;
     if ( percent < 0.0f ) percent = 0.0f;
     if ( percent > 100.0f ) percent = 100.0f;
     f = (short) ( ( w * percent ) / 100.0f );
 
-    uglRectF( dc, x, y, (short)(x+w), (short)(y+h), hud->hc_bg );
-    uglRect( dc, x, y, (short)(x+w), (short)(y+h), hud->hc_slablo );
-    if ( f > 1 ) uglRectF( dc, (short)(x+1), (short)(y+1), (short)(x+f-1), (short)(y+h-1), hud->hc_meter );
+    qglDrFill( dc, x, y, (short)(x+w), (short)(y+h), hud->hc_bg );
+    qglDrRect( dc, x, y, (short)(x+w), (short)(y+h), hud->hc_slablo );
+    if ( f > 1 ) qglDrFill( dc, (short)(x+1), (short)(y+1), (short)(x+f-1), (short)(y+h-1), hud->hc_meter );
 }
 
-void hud_graph( Hud far *hud, PDC dc, short x, short y, short h, short *buf, short mx )
+void hud_graph( Hud far *hud, QSurf dc, short x, short y, short h, short *buf, short mx )
 {
     short i, k, v, c, top;
 
     if ( mx < 1 ) mx = 1;
 
-    uglRectF( dc, x, y, (short)(x+GRAPH_N), (short)(y+h), hud->hc_bg );
+    qglDrFill( dc, x, y, (short)(x+GRAPH_N), (short)(y+h), hud->hc_bg );
 
     for ( i = 0; i < GRAPH_N; i += 3 ) {
-        uglPSet( dc, (short)(x+i), (short)(y+1), hud->hc_slablo );
-        uglPSet( dc, (short)(x+i), (short)(y+h/2), hud->hc_slablo );
+        qglSfPset( dc, (short)(x+i), (short)(y+1), hud->hc_slablo );
+        qglSfPset( dc, (short)(x+i), (short)(y+h/2), hud->hc_slablo );
     }
 
     for ( i = 0; i < GRAPH_N; i++ ) {
@@ -173,14 +169,14 @@ void hud_graph( Hud far *hud, PDC dc, short x, short y, short h, short *buf, sho
             top = (short) ( ( (long) v * h ) / mx );
             if ( top > h ) top = h;
             c = (short) ( v >= mx ? hud->hc_peak : hud->hc_hist );
-            uglVLine( dc, (short)(x+i), (short)(y+h-top), (short)(y+h), c );
+            qglDrVline( dc, (short)(x+i), (short)(y+h-top), (short)(y+h), c );
         }
     }
-    uglRect( dc, x, y, (short)(x+GRAPH_N), (short)(y+h), hud->hc_slablo );
+    qglDrRect( dc, x, y, (short)(x+GRAPH_N), (short)(y+h), hud->hc_slablo );
 }
 
 void scr_draw_hud( World *world, Renderer *rdr, Camera *cam, Player *player,
-                    SurfCache far *sc, Hud far *hud, PDC h_dst_dc, short w, short h )
+                    SurfCache far *sc, Hud far *hud, QSurf h_dst_dc, short w, short h )
 {
     CacheStats scs;
     short lx, rx, cw, yy, fcol, wide;
@@ -235,7 +231,7 @@ void scr_draw_hud( World *world, Renderer *rdr, Camera *cam, Player *player,
         hud->hud_pflush = scs.flushes;
         if ( hud->hud_flash > 0 ) {
             if ( ( hud->hud_flash & 2 ) != 0 )
-                uglRect( h_dst_dc, lx, 90, (short)(lx+cw), (short)(90+78), hud->hc_bad );
+                qglDrRect( h_dst_dc, lx, 90, (short)(lx+cw), (short)(90+78), hud->hc_bad );
             hud->hud_flash--;
         }
 
@@ -291,8 +287,8 @@ void scr_draw_hud( World *world, Renderer *rdr, Camera *cam, Player *player,
         strcat( ftr, "   F12 hide" );
 
         yy = (short) ( h - 9 );
-        uglRectF( h_dst_dc, 0, (short)(yy-2), w, h, hud->hc_bg );
-        uglHLine( h_dst_dc, 0, (short)(yy-2), w, hud->hc_slabhi );
+        qglDrFill( h_dst_dc, 0, (short)(yy-2), w, h, hud->hc_bg );
+        qglDrHline( h_dst_dc, 0, (short)(yy-2), w, hud->hc_slabhi );
         draw_string( hud, h_dst_dc, 4, yy, ftr, hud->hc_text );
     } else {
         yy = (short) ( h - 9 );
@@ -325,7 +321,7 @@ void scr_draw_hud( World *world, Renderer *rdr, Camera *cam, Player *player,
     sprintf( buf, "at: [%d,%d,%d]  yaw: [%d]",
              (int) player->pos.x, (int) player->pos.y, (int) player->pos.z, (int) yawd );
 
-    uglRectF( h_dst_dc, 0, 0, w, 9, hud->hc_bg );
+    qglDrFill( h_dst_dc, 0, 0, w, 9, hud->hc_bg );
     draw_string( hud, h_dst_dc, 4, 1, buf, hud->hc_text );
 
     /* Frame rate, top right, in the same always-drawn bar -- worth
@@ -362,12 +358,12 @@ void scr_count_frame( Hud far *hud, Renderer *rdr, SurfCache far *sc, float fram
 static void put_u16( unsigned v, FILE *f ) { fwrite( &v, 2, 1, f ); }
 static void put_u32( unsigned long v, FILE *f ) { fwrite( &v, 4, 1, f ); }
 
-void scr_screenshot( char *flname, PDC dc, short w, short h )
+void scr_screenshot( char *flname, QSurf dc, short w, short h )
 {
     FILE *f;
     short x, y, pad;
     long  rowlen, imgsz, off_bits;
-    RGB   palbuf[256];
+    PalRgb   palbuf[256];
     unsigned char row[2048];   /* w+pad never exceeds this at any mode
                                    this renderer supports (max 1600 wide) */
 
@@ -378,7 +374,7 @@ void scr_screenshot( char *flname, PDC dc, short w, short h )
 
     if ( rowlen > (long) sizeof(row) ) return;   /* wider than any real mode */
 
-    uglPalGet( 0, 256, (RGB far *) palbuf );
+    for ( i = 0; i < 256; i++ ) palbuf[i] = pal_current()[i];
 
     f = fopen( flname, "wb" );
     if ( !f ) return;
@@ -413,7 +409,7 @@ void scr_screenshot( char *flname, PDC dc, short w, short h )
 
     /* Pixels, bottom row first. Pad bytes stay zero. */
     for ( y = (short)( h - 1 ); y >= 0; y-- ) {
-        for ( x = 0; x < w; x++ ) row[x] = (unsigned char) ( uglPGet( dc, x, y ) & 255 );
+        for ( x = 0; x < w; x++ ) row[x] = (unsigned char) ( qglSfPget( dc, x, y ) & 255 );
         for ( ; x < rowlen; x++ ) row[x] = 0;
         fwrite( row, 1, (size_t) rowlen, f );
     }

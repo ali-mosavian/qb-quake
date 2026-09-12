@@ -6,25 +6,23 @@
  * -- genuine ports of the old vid.bas/d_poly.bas, no BASIC glue left
  * in either -- link and run together in that EXE.
  *
- * Uses mgl's own shipped inc/*.h directly (via uglpatch.h, which
- * #includes ugl.h) rather than a generated header: they're accurate
- * for everything except a handful of newer entries -- uglpatch.h
- * supplies just those (uglPolyTP/uglBuildSurf/uglNewView/uglSetView/
- * uglZMode/uglClearZ), confirmed missing by grep, not assumed.
+ * The graphics layer is qgl, whose C binding (qgl.h) is generated
+ * by tools/mkqglh.py from the asm itself -- parameters from the
+ * `proc` directives, return types from the signature comments --
+ * so a drifted declare fails the build instead of miscompiling.
  */
 
 #include <stdio.h>
 #include <string.h>
 #include <math.h>   /* atan2 -- -record's diagnostic yaw */
 #include <mem.h>    /* _fmemset */
-#include "dos.h"    /* memAlloc/memFree -- mgl's, so every allocation is on one accountable path */
-#include "uglpatch.h"
+#include "qgl.h"
+#include "pal.h"
 #include "video.h"
 #include "d_poly.h"
 #include "ls.h"
 #include "sc.h"
 #include "sys_time.h"
-#include "tmr.h"
 #include "mod.h"
 #include "mod_tex.h"
 #include "pl_move.h"
@@ -128,7 +126,7 @@ int main( void )
     v.view_scale = cfg.view_scale;
 
     /* No real palette load yet -- a null handle is enough to prove
-       uglPalSet/memFree link and don't fault on a degenerate call;
+       uglPalSet/qglMemFree link and don't fault on a degenerate call;
        the real palette loader is a later module. */
     pal = 0;
     v_init( &v, pal );
@@ -161,13 +159,13 @@ int main( void )
            emulator, ~142-148), not the 1000 sys_time_init would fall
            back to uncalibrated -- that fallback silently ran the whole
            game 7x too slow once already, which is the entire reason
-           this measures rather than trusts the requested rate. tmrInit
+           this measures rather than trusts the requested rate. qglTmrInit
            needs no mouse/keyboard (in_init's other half), just the
            timer. */
         SysClock clk;
         float n0, n1;
         char buf[64];
-        tmrInit();
+        qglTmrInit( 1000 );
         sys_time_init( &clk );
         n0 = sys_now( &clk );
         n1 = sys_now( &clk );
@@ -197,10 +195,10 @@ int main( void )
         PhaseTimes pt;
         MapCounts  counts;
         FILE      *mapf;
-        PRGB       tex_pal;
-        u3dMtrx    mtx_prj;
-        u3dVector3f cam_up;
-        PDC        z_dc, h_dst_dc;
+        PalRgb far *       tex_pal;
+        Mat4    mtx_prj;
+        Vec3 cam_up;
+        QSurf        z_dc, h_dst_dc;
         LoadScreen ldr;
         char       buf[96];
         short      frame;
@@ -223,7 +221,7 @@ int main( void )
            holds the stack too, so a large-enough local overruns
            whatever the compiler happened to place next to it, not a
            guard page. */
-        hud = (Hud far *) memAlloc( (long) sizeof(Hud) );
+        hud = (Hud far *) qglMemAlloc( (long) sizeof(Hud) );
         if ( !hud ) sys_error( "out of far memory for Hud" );
         _fmemset( hud, 0, sizeof(*hud) );
 
@@ -282,7 +280,7 @@ int main( void )
         ld_step( &ldr, v.h_video_dc, hud );
 
         ld_stage( &ldr, v.h_video_dc, hud, "surface cache" );
-        sc = (SurfCache far *) memAlloc( (long) sizeof(SurfCache) );
+        sc = (SurfCache far *) qglMemAlloc( (long) sizeof(SurfCache) );
         if ( !sc || !sc_init( sc, world.face_count ) ) {
             mark( "sc_init FAILED" );
         } else {
@@ -303,8 +301,8 @@ int main( void )
            best-fits the overlay's colours against whatever palette is
            live, so it has to follow this, not precede it. */
         if ( tex_pal ) {
-            uglPalSet( 0, 256, (RGB far *) tex_pal );
-            memFree( (void far *) tex_pal );
+            pal_install( (PalRgb far *) tex_pal );
+            qglMemFree( (long) tex_pal );
         }
         scr_hud_colors( hud );
         mark( "scr_hud_colors ok" );
@@ -314,7 +312,7 @@ int main( void )
            this replaces (which instead swaps cam.pos's Y-up down to
            Z-up). */
         if ( args.at_set ) {
-            Vec3 start;
+            BspVec3 start;
             start.x = args.at_x; start.y = args.at_y; start.z = args.at_z;
             pl_init( &player, &cam, &start );
         } else {
@@ -334,13 +332,13 @@ int main( void )
 
         /* -walk/-jump/-strafe hold an input the way a real keypress
            would -- there is no real keyboard under a headless run, so
-           spoofing the KBD fields v_update_camera already reads is
+           spoofing the Keys fields v_update_camera already reads is
            simpler than threading a second, parallel set of "held"
            flags through it the way the original's own g.env.bench_walk
            does. */
-        if ( args.walk )   input.keyboard.w = -1;
-        if ( args.jump )   input.keyboard.spcbar = -1;
-        if ( args.strafe ) input.keyboard.a = -1;
+        if ( args.walk )   input.keyboard.k[KEY_W] = -1;
+        if ( args.jump )   input.keyboard.k[KEY_SPCBAR] = -1;
+        if ( args.strafe ) input.keyboard.k[KEY_A] = -1;
 
         cam.fps_view = -1;
         cam_up.x = 0.0f; cam_up.y = 1.0f; cam_up.z = 0.0f;
@@ -368,17 +366,18 @@ int main( void )
         {
             float aspect = ( (float) cfg.view_w * cfg.scr_y_res * 4.0f )
                           / ( (float) cfg.view_h * cfg.scr_x_res * 3.0f );
-            u3dMtrxPersp( &mtx_prj, cfg.cam_fov, aspect, cfg.z_near, cfg.z_far );
+            qglM4Persp( &mtx_prj, cfg.cam_fov, aspect, cfg.z_near, cfg.z_far );
         }
 
         h_dst_dc = v.h_back_bdc;
 
         z_dc = 0;
         if ( !args.no_z ) {
-            z_dc = uglNewZ( h_dst_dc, UGL_EMS );
+            z_dc = qglSfZNew( h_dst_dc, QGL_SURF_EMS );
             if ( z_dc ) {
-                uglSetZ( z_dc );
-                uglZScale( 65535.0f * cfg.z_near );
+                /* qgl binds the depth buffer to the surface it was made
+                   for, so there is no separate "current z" to set. */
+                qglZScale( 65535.0f * cfg.z_near );
             }
         }
 
@@ -444,7 +443,7 @@ int main( void )
             short play_drift = 0;   /* reported once, then stop checking */
 
             if ( args.record_name[0] ) {
-                rec_buf = (RecBuf far *) memAlloc( (long) sizeof(RecBuf) );
+                rec_buf = (RecBuf far *) qglMemAlloc( (long) sizeof(RecBuf) );
                 if ( !rec_buf ) sys_error( "out of far memory for -record buffer" );
                 rec_buf->count = 0;
                 {
@@ -461,7 +460,7 @@ int main( void )
 
             frame = 0;
             while ( ( clock.bench_ticks == 0 || clock.ticks < clock.bench_ticks )
-                    && !input.keyboard.esc ) {
+                    && !input.keyboard.k[KEY_ESC] ) {
                 frame_dt = sys_frame_time( &sysclk, &raw_dt );
 
                 if ( args.play_name[0] && rf ) {
@@ -476,18 +475,18 @@ int main( void )
                        one below, so a divergence is reported rather
                        than papered over. */
                     if ( fread( &rec, sizeof(rec), 1, rf ) != 1 ) {
-                        input.keyboard.esc = -1;   /* recording ended: stop here, same as the live run did */
+                        input.keyboard.k[KEY_ESC] = -1;   /* recording ended: stop here, same as the live run did */
                         continue;
                     }
                     input.mouse.x       = rec.in[0];
                     input.mouse.y       = rec.in[1];
                     input.mouse.left    = rec.in[2];
                     input.mouse.right   = rec.in[3];
-                    input.keyboard.w      = rec.in[4];
-                    input.keyboard.a      = rec.in[5];
-                    input.keyboard.s      = rec.in[6];
-                    input.keyboard.d      = rec.in[7];
-                    input.keyboard.spcbar = rec.in[8];
+                    input.keyboard.k[KEY_W]      = rec.in[4];
+                    input.keyboard.k[KEY_A]      = rec.in[5];
+                    input.keyboard.k[KEY_S]      = rec.in[6];
+                    input.keyboard.k[KEY_D]      = rec.in[7];
+                    input.keyboard.k[KEY_SPCBAR] = rec.in[8];
                 } else if ( args.record_name[0] ) {
                     /* NOT gated on rf: recording goes to the far buffer,
                        and rf is deliberately 0 here. It used to read
@@ -499,11 +498,11 @@ int main( void )
                     rec.in[1] = (short) input.mouse.y;
                     rec.in[2] = (short) input.mouse.left;
                     rec.in[3] = (short) input.mouse.right;
-                    rec.in[4] = (short) input.keyboard.w;
-                    rec.in[5] = (short) input.keyboard.a;
-                    rec.in[6] = (short) input.keyboard.s;
-                    rec.in[7] = (short) input.keyboard.d;
-                    rec.in[8] = (short) input.keyboard.spcbar;
+                    rec.in[4] = (short) input.keyboard.k[KEY_W];
+                    rec.in[5] = (short) input.keyboard.k[KEY_A];
+                    rec.in[6] = (short) input.keyboard.k[KEY_S];
+                    rec.in[7] = (short) input.keyboard.k[KEY_D];
+                    rec.in[8] = (short) input.keyboard.k[KEY_SPCBAR];
                 }
 
                 if ( frame > 3 && raw_dt > 0.0f ) {
@@ -565,7 +564,7 @@ int main( void )
                     }
                 }
 
-                uglClear( h_dst_dc, 0 );
+                qglDrFill( h_dst_dc, 0, 0, (short)(x_res - 1), (short)(y_res - 1), 0 );
                 host_render( &world, &rdr, &cam, &player, sc, &ls, hud, &pt, &sysclk,
                               h_dst_dc, &mtx_prj, (float) v.x_res / 2.0f, (float) v.y_res / 2.0f,
                               cfg.z_near, cfg.z_far,
@@ -581,7 +580,7 @@ int main( void )
                    case. Draw the overlay onto the composite now, at
                    the mode's own resolution (not the small render
                    target the panels were clipping against), then one
-                   uglPut carries the whole thing to video. Drawing it
+                   qglDrBlit carries the whole thing to video. Drawing it
                    onto live video memory after a present instead would
                    be a second pass over VRAM -- it tears, and VRAM is
                    slow enough to cost frames (matches main.bas's own
@@ -589,7 +588,7 @@ int main( void )
                 if ( v.comp ) {
                     scr_draw_hud( &world, &rdr, &cam, &player, sc, hud,
                                   v.h_comp_dc, v.scr_x_res, v.scr_y_res );
-                    uglPut( v.h_video_dc, 0, 0, v.h_comp_dc );
+                    qglDrBlit( v.h_video_dc, 0, 0, v.h_comp_dc );
                 }
 
                 /* Read rdr.polys/tris BEFORE scr_count_frame, which
@@ -663,9 +662,9 @@ int main( void )
         }
     }
 
-    if ( v.h_back_bdc ) uglDel( &v.h_back_bdc );
-    uglRestore();
-    uglEnd();
+    if ( v.h_back_bdc ) qglSfFree( v.h_back_bdc );
+    qglVgaShutdown();
+    qglMemShutdown();
     mark( "restored" );
 
     {

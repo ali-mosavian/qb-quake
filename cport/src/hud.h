@@ -15,12 +15,12 @@
  * Font -- the 4x6 bitmap font, as loaded straight from base.dat's own
  * file, NOT baked into 256 uGL-managed DCs the way the original's
  * draw_load_font does. uglNewMult (the call that would fill an array
- * of DC handles) takes a `PDC ARRAY *` -- mgl's own BASIC-array-
- * descriptor type, the identical incompatibility uglpatch.h's own note
- * already covers for uglArrNew/uglArrMap/uglArrLoad: C has no
+ * of DC handles) takes a `QSurf ARRAY *` -- mgl's own BASIC-array-
+ * descriptor type, the identical incompatibility qgl.h's own note
+ * already covers for qglArNew/qglArWin/qglArLoad: C has no
  * descriptor for it to fill. There is also no reason to want one here
  * -- draw_string is called a handful of times a frame, not per pixel,
- * so a direct bit-test against a 2 KB buffer plus uglPSet costs
+ * so a direct bit-test against a 2 KB buffer plus qglSfPset costs
  * nothing worth avoiding, and it is simpler than baking 256 masked
  * DCs (a real conventional-memory cost the atlas work elsewhere in
  * this project fought hard to avoid) just to call uglPutMsk.

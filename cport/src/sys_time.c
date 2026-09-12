@@ -9,7 +9,7 @@
  * own 18.2065 Hz (1193182/65536) -- what QuickBASIC's own TIMER reads
  * under the hood in real mode, and the one clock DOS guarantees without
  * calling into any library. Cast directly rather than including dos.h
- * for MK_FP: mgl ships its OWN inc/dos.h (memAlloc/memCopy, unrelated to
+ * for MK_FP: mgl ships its OWN inc/dos.h (qglMemAlloc/qglMemCopy, unrelated to
  * the standard library's), and bcc.sh's include order (-IM:\ before
  * -IB:\INCLUDE) means <dos.h> would resolve to that one, not Borland's.
  * A Borland far pointer is segment:offset packed exactly as this cast
@@ -62,25 +62,26 @@ static unsigned long near rdtsc_raw( void )
  */
 void sys_time_init( SysClock *clk )
 {
-    long  hz;
     unsigned long t0, c0, c1;
     unsigned long r0, r1;
     float elapsed;
 
-    hz = tmrMs2Freq( 1 );
-    tmrNew( &clk->frame_tmr, TMR_AUTOINIT, hz );
-
+    /* qgl owns one timer, started by qglTmrInit and read by
+       qglTmrTicks -- there is no per-caller TMR to place, which is
+       also one fewer intrusive list node for a stray write to
+       corrupt. The rate asked for is still not the rate believed:
+       the calibration below measures what arrived. */
     t0 = bios_ticks();
     while ( bios_ticks() == t0 ) { /* align to a tick edge */ }
 
     t0 = bios_ticks();
-    c0 = (unsigned long) clk->frame_tmr.counter;
+    c0 = (unsigned long) qglTmrTicks();
     r0 = rdtsc_raw();
 
     while ( (float) (bios_ticks() - t0) / BIOS_TICK_HZ < 0.5f ) { /* wait */ }
 
     elapsed = (float) (bios_ticks() - t0) / BIOS_TICK_HZ;
-    c1 = (unsigned long) clk->frame_tmr.counter;
+    c1 = (unsigned long) qglTmrTicks();
     r1 = rdtsc_raw();
 
     /*
@@ -100,7 +101,7 @@ void sys_time_init( SysClock *clk )
     if ( elapsed > 0.0f && c1 > c0 ) clk->tick_hz = (float) (c1 - c0) / elapsed;
     else                             clk->tick_hz = 1000.0f;
 
-    clk->last_tick  = clk->frame_tmr.counter;
+    clk->last_tick  = qglTmrTicks();
     clk->timing_on  = -1;
 }
 
@@ -117,7 +118,7 @@ float sys_frame_time( SysClock *clk, float *raw_dt )
 
     if ( !clk->timing_on ) return 1.0f / 60.0f;
 
-    tick = clk->frame_tmr.counter;
+    tick = qglTmrTicks();
     dt   = (float) (tick - clk->last_tick) / clk->tick_hz;
     clk->last_tick = tick;
 
@@ -143,7 +144,7 @@ float sys_tick_hz( SysClock *clk )
 
 float sys_now( SysClock *clk )
 {
-    return (float) clk->frame_tmr.counter / clk->tick_hz;
+    return (float) qglTmrTicks() / clk->tick_hz;
 }
 
 long sys_rdtsc( SysClock *clk )

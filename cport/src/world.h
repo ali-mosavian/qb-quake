@@ -86,14 +86,14 @@ typedef struct {
        out of through mod_lm_map/mod_cm_map/mod_geom_map (sb_build.c
        already calls these, with exactly this World-taking signature,
        since before mod.c existed to implement them). */
-    PDC   geom_dc;      /* one face record per lookup, through mod_geom_map */
+    QSurf   geom_dc;      /* one face record per lookup, through mod_geom_map */
     short geom_rows;
 
-    PDC   light_atlas;  /* every luxel in the map, one 8-bit EMS dc */
+    QSurf   light_atlas;  /* every luxel in the map, one 8-bit EMS dc */
     long  light_size;   /* bytes on disk */
     long  light_loaded; /* bytes that actually arrived */
 
-    PDC   cmap_dc;       /* the 64-shade table sb_build/hud_shade shade through */
+    QSurf   cmap_dc;       /* the 64-shade table sb_build/hud_shade shade through */
     long  cmap_size;
 
     /* q_map.bi's TexStore -- every texture, in two atlas dcs (raw
@@ -101,10 +101,10 @@ typedef struct {
        mip: a dc costs conventional memory for its scanline table
        whatever its pixels cost, and e1m1 would make 648 of them. Four
        VIEWS per atlas instead, one per mip size, re-aimed per face
-       with uglSetView -- no allocation, no copy, the same trick the
+       with qglSetView -- no allocation, no copy, the same trick the
        surface cache uses to avoid a dc per surface. */
-    PDC   tex_raw, tex_shaded;
-    PDC   tex_v_raw[4], tex_v_shaded[4];  /* a view per mip size */
+    QSurf   tex_raw, tex_shaded;
+    QSurf   tex_v_raw[4], tex_v_shaded[4];  /* a view per mip size */
     short tex_cell[4];      /* texels per side at that mip */
     short tex_aim_raw[4];    /* cell each view is already aimed at, -1
                                  none -- re-aiming rewrites a scanline

@@ -1,7 +1,7 @@
 #ifndef __LOADSCR_H__
 #define __LOADSCR_H__
 
-#include "ugl.h"    /* PDC */
+#include "qgl.h"    /* QSurf */
 #include "hud.h"    /* Hud, for the glyphs draw_string reads */
 
 /*
@@ -51,7 +51,7 @@ typedef struct {
  *       wholesale by the map's own later (uglPalSet in main), which is
  *       why this can own the low 128 entries outright.
  */
-void ld_begin( LoadScreen *ld, PDC dc, Hud far *hud, short steps,
+void ld_begin( LoadScreen *ld, QSurf dc, Hud far *hud, short steps,
                 short w, short h );
 
 /*
@@ -60,12 +60,12 @@ void ld_begin( LoadScreen *ld, PDC dc, Hud far *hud, short steps,
  *       the bar too, so a caller that only ever calls this still shows
  *       progress.
  */
-void ld_stage( LoadScreen *ld, PDC dc, Hud far *hud, char *what );
+void ld_stage( LoadScreen *ld, QSurf dc, Hud far *hud, char *what );
 
 /*
  * name: ld_step
  * desc: One phase done. Advances the bar by 1/steps and redraws.
  */
-void ld_step( LoadScreen *ld, PDC dc, Hud far *hud );
+void ld_step( LoadScreen *ld, QSurf dc, Hud far *hud );
 
 #endif

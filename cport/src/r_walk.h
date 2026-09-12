@@ -20,6 +20,6 @@
  *       of that).
  */
 void r_recursive_world_node( World *world, Renderer *rdr, DiskPlane far *frustum,
-                              short nodenr, u3dVector3f *campos, short ign );
+                              short nodenr, Vec3 *campos, short ign );
 
 #endif

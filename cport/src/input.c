@@ -9,12 +9,9 @@
  */
 
 #include <stdio.h>
+#include "qgl.h"
 #include <stdlib.h>
 
-#include "tmr.h"    /* tmrInit -- pascal convention; without this
-                        prototype in scope bcc assumes cdecl for an
-                        undeclared call and TLINK looks for the wrong
-                        symbol name entirely (_tmrInit, not TMRINIT) */
 #include "input.h"
 
 /* screen.bas, not yet ported. */
@@ -22,7 +19,7 @@
 
 /* Fatal on failure, same as v_init_ugl (vid.c) -- sys_error (sys.bas)
    isn't ported yet, and nothing else can run without a mouse anyway. */
-void in_init( Input *input, PDC h_video_dc )
+void in_init( Input *input, QSurf h_video_dc )
 {
     if ( !mouseInit( h_video_dc, &input->mouse ) ) {
         fprintf( stderr, "0x0006, Could not init mouse...\n" );
@@ -30,12 +27,12 @@ void in_init( Input *input, PDC h_video_dc )
     }
 
     kbdInit( &input->keyboard );
-    tmrInit();
+    qglTmrInit( 1000 );   /* 1 ms; sys_time_init measures what arrives */
 }
 
 /*
  * True once per press, not once per frame: the key is read through a
- * pointer into the live KBD struct the keyboard ISR writes, so waiting
+ * pointer into the live Keys struct the keyboard ISR writes, so waiting
  * for it to clear here is what makes one press read as one toggle.
  */
 static short in_keystroke( int *key_down )
@@ -49,29 +46,29 @@ static short in_keystroke( int *key_down )
 
 void in_handle_toggles( Input *input, Renderer *rdr, Camera *cam, Player *player, Hud far *hud )
 {
-    KBD *k = &input->keyboard;
+    Keys *k = &input->keyboard;
 
-    if ( in_keystroke( &k->f1 ) ) rdr->use_mips = !rdr->use_mips;
+    if ( in_keystroke( &k->k[KEY_F1] ) ) rdr->use_mips = !rdr->use_mips;
 
     /* Perspective / wireframe only -- affine dropped with the fan path
        that was its only renderer (uglPolyTP has no affine equivalent). */
-    if ( in_keystroke( &k->f2 ) ) rdr->rend_mode = ( rdr->rend_mode == 0 ) ? 2 : 0;
+    if ( in_keystroke( &k->k[KEY_F2] ) ) rdr->rend_mode = ( rdr->rend_mode == 0 ) ? 2 : 0;
 
-    if ( in_keystroke( &k->f3  ) ) cam->fps_view    = !cam->fps_view;
-    if ( in_keystroke( &k->f12 ) ) hud->stats       = !hud->stats;
-    if ( in_keystroke( &k->b   ) ) rdr->backface    = !rdr->backface;
-    if ( in_keystroke( &k->l   ) ) rdr->lightmap    = !rdr->lightmap;
-    if ( in_keystroke( &k->p   ) ) rdr->portal      = !rdr->portal;
-    if ( in_keystroke( &k->o   ) ) hud->portal_wire = !hud->portal_wire;
-    if ( in_keystroke( &k->f4  ) ) player->no_clip  = !player->no_clip;
+    if ( in_keystroke( &k->k[KEY_F3] ) ) cam->fps_view    = !cam->fps_view;
+    if ( in_keystroke( &k->k[KEY_F12] ) ) hud->stats       = !hud->stats;
+    if ( in_keystroke( &k->k[KEY_B] ) ) rdr->backface    = !rdr->backface;
+    if ( in_keystroke( &k->k[KEY_L] ) ) rdr->lightmap    = !rdr->lightmap;
+    if ( in_keystroke( &k->k[KEY_P] ) ) rdr->portal      = !rdr->portal;
+    if ( in_keystroke( &k->k[KEY_O] ) ) hud->portal_wire = !hud->portal_wire;
+    if ( in_keystroke( &k->k[KEY_F4] ) ) player->no_clip  = !player->no_clip;
 }
 
 /* F5, not S: S walks backwards. */
-void in_screenshot_key( Input *input, PDC h_dst_dc, short w, short h )
+void in_screenshot_key( Input *input, QSurf h_dst_dc, short w, short h )
 {
     char name[16];
 
-    if ( input->keyboard.f5 ) {
+    if ( input->keyboard.k[KEY_F5] ) {
         sprintf( name, "scrn%d.bmp", input->screenie );
         scr_screenshot( name, h_dst_dc, w, h );
         input->screenie++;

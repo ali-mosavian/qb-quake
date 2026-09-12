@@ -1,7 +1,7 @@
 #ifndef __SC_H__
 #define __SC_H__
 
-#include "ugl.h"   /* PDC */
+#include "qgl.h"   /* QSurf */
 
 /*
  * sc.h -- the surface cache: where a face's texture and its lightmap,
@@ -11,7 +11,7 @@
  * SurfCache is heap-sized, not stack/DGROUP-sized -- its five block
  * tables alone are 10 KB (SC_NBLK entries x 5 arrays x 2 bytes), and
  * medium model's DGROUP is 64 KB shared with the stack and every other
- * near global. Its owner allocates it with memAlloc (mgl's dos.h, the
+ * near global. Its owner allocates it with qglMemAlloc (mgl's dos.h, the
  * standard far heap, not a MEM/EMS uGL store -- this is bookkeeping,
  * not surface bytes) and every function here takes SurfCache far*,
  * not SurfCache* -- the one struct in cport/ that has to be far,
@@ -72,7 +72,7 @@ typedef struct {
     short     gen;      /* bumped on every flush; a stale tag from a
                             prior generation is always a miss */
 
-    PDC       hnd;      /* the DC owning every surface's bytes -- 0 if
+    QSurf       hnd;      /* the DC owning every surface's bytes -- 0 if
                             the store hasn't been claimed yet */
     long      next;      /* bump pointer within it */
     long      cap;       /* how big it is */
@@ -80,7 +80,7 @@ typedef struct {
     CacheSlot far *slot; /* one per face -- far-allocated in sc_init to
                              world->face_count entries */
 
-    PDC       desc[SC_NCLS];   /* one view DC per size class, made on
+    QSurf       desc[SC_NCLS];   /* one view DC per size class, made on
                                    demand and re-aimed per surface; 0 =
                                    not made yet */
 
@@ -151,7 +151,7 @@ short sc_shift( short v );
    miss. On a hit, *aim_ofs is where the class view now points -- the
    caller needs this to draw the right surface, since one view serves
    every surface of a size class. */
-PDC   sc_find( SurfCache far *sc, short face, short mip, short w, short h, short stag, long *aim_ofs );
+QSurf   sc_find( SurfCache far *sc, short face, short mip, short w, short h, short stag, long *aim_ofs );
 
 /* A DC big enough for w by h, remembered against face. Returns 0 if
    the surface is larger than the filler can address or EMS is out.
@@ -162,7 +162,7 @@ PDC   sc_find( SurfCache far *sc, short face, short mip, short w, short h, short
    already has them. face_count is only for the backstop path (every
    size class exhausted -- should be unreachable): it has to flush the
    WHOLE cache then, and a flush needs to know how many slots exist. */
-PDC   sc_alloc( SurfCache far *sc, short face, short mip, short w, short h, short fw, short fh,
+QSurf   sc_alloc( SurfCache far *sc, short face, short mip, short w, short h, short fw, short fh,
                 short stag, short face_count, long *aim_ofs );
 
 /* Which mip this face already has resident, or -1 for none. */

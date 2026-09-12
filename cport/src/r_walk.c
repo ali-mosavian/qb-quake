@@ -20,10 +20,10 @@
    only caller (same reasoning the original module gave for keeping it
    out of a shared .bi). */
 extern void r_emit_entities( World *world, Renderer *rdr, DiskPlane far *frustum,
-                              short nodenr, u3dVector3f *campos, short ign );
+                              short nodenr, Vec3 *campos, short ign );
 
 void r_recursive_world_node( World *world, Renderer *rdr, DiskPlane far *frustum,
-                              short nodenr, u3dVector3f *campos, short ign )
+                              short nodenr, Vec3 *campos, short ign )
 {
     short side, i, frst, last, leafnr;
 

@@ -5,9 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "dos.h"    /* memAlloc/memFree, and arch.h's own UAR needs
-                        dos.h's DOSFILE included first */
-#include "arch.h"   /* UAR, uarOpen/uarRead/uarReadH/uarSize/uarClose */
+#include "qgl.h"    /* qglFileOpen/qglFileRead/qglFileSize/qglFileClose */
 #include "assets.h" /* F4READ */
 #include "sys.h"    /* sys_error */
 
@@ -20,43 +18,43 @@ static void asset_fatal( char *flname, char *why )
 
 unsigned char far *asset_load( char *flname, long bytes )
 {
-    UAR u;
+    short fh;
     unsigned char far *p;
 
-    if ( !uarOpen( &u, flname, F4READ ) ) asset_fatal( flname, "missing" );
+    if ( !( fh = qglFileOpen( flname ) ) ) asset_fatal( flname, "missing" );
 
-    p = (unsigned char far *) memAlloc( bytes );
-    if ( !p ) { uarClose( &u ); asset_fatal( flname, "out of memory" ); }
+    p = (unsigned char far *) qglMemAlloc( bytes );
+    if ( !p ) { qglFileClose( fh ); asset_fatal( flname, "out of memory" ); }
 
-    if ( uarReadH( &u, (void far *) p, bytes ) != bytes ) {
-        uarClose( &u );
-        memFree( (void far *) p );
+    if ( qglFileRead( fh, (long) p, bytes ) != bytes ) {
+        qglFileClose( fh );
+        qglMemFree( (long) p );
         asset_fatal( flname, "short read" );
     }
 
-    uarClose( &u );
+    qglFileClose( fh );
     return p;
 }
 
 unsigned char far *asset_load_whole( char *flname, long *out_bytes )
 {
-    UAR u;
+    short fh;
     long n;
     unsigned char far *p;
 
-    if ( !uarOpen( &u, flname, F4READ ) ) asset_fatal( flname, "missing" );
+    if ( !( fh = qglFileOpen( flname ) ) ) asset_fatal( flname, "missing" );
 
-    n = uarSize( &u );
-    p = (unsigned char far *) memAlloc( n );
-    if ( !p ) { uarClose( &u ); asset_fatal( flname, "out of memory" ); }
+    n = qglFileSize( fh );
+    p = (unsigned char far *) qglMemAlloc( n );
+    if ( !p ) { qglFileClose( fh ); asset_fatal( flname, "out of memory" ); }
 
-    if ( uarReadH( &u, (void far *) p, n ) != n ) {
-        uarClose( &u );
-        memFree( (void far *) p );
+    if ( qglFileRead( fh, (long) p, n ) != n ) {
+        qglFileClose( fh );
+        qglMemFree( (long) p );
         asset_fatal( flname, "short read" );
     }
 
-    uarClose( &u );
+    qglFileClose( fh );
     if ( out_bytes ) *out_bytes = n;
     return p;
 }

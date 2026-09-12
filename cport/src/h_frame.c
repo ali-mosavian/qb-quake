@@ -23,7 +23,7 @@
 #include "input.h"
 #include "r_bsp.h"
 #include "mod_tex.h"
-#include "uglpatch.h"
+#include "qgl.h"
 #include "view.h"
 #include "screen.h"
 
@@ -34,7 +34,7 @@
 /* q_draw.bi's DL_RADIUS#: Quake's own rocket dlight radius. */
 #define DL_RADIUS 200.0f
 
-#define UGL_Z_OFF 0
+#define QGL_Z_OFF 0
 
 /*
  * name: host_advance
@@ -142,20 +142,20 @@ void host_tick( World *world, Player *player, Camera *cam, Renderer *rdr,
 void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
                    SurfCache far *sc, LightStyles *ls,
                    Hud far *hud, PhaseTimes *pt, SysClock *sysclk,
-                   PDC h_dst_dc, u3dMtrx *mtx_prj, float xresh, float yresh,
+                   QSurf h_dst_dc, Mat4 *mtx_prj, float xresh, float yresh,
                    float z_near, float z_far,
-                   u3dVector3f *cam_up, PDC z_dc, short comp, short no_draw,
+                   Vec3 *cam_up, QSurf z_dc, short comp, short no_draw,
                    short x_res, short y_res )
 {
-    u3dMtrx mtx_mdl, mtx_fin;
-    u3dVector3f cam_pos_b;
+    Mat4 mtx_mdl, mtx_fin;
+    Vec3 cam_pos_b;
     DrawParams dp;
     DiskPlane frustum[6];
     float t0, dt;
 
     t0 = sys_now( sysclk );
-    u3dMtrxLookAt( &mtx_mdl, &cam->pos, &cam->look_at, cam_up );
-    u3dMtrxConc( &mtx_fin, &mtx_mdl, mtx_prj );
+    qglM4LookAt( &mtx_mdl, &cam->pos, &cam->look_at, cam_up );
+    qglM4Conc( &mtx_fin, &mtx_mdl, mtx_prj );
     r_set_frustum( frustum, &mtx_fin );
 
     /*
@@ -179,8 +179,8 @@ void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
         cam_pos_b = cam->pos;
     }
 
-    u3dMtrxLookAt( &mtx_mdl, &cam_pos_b, &cam->look_at, cam_up );
-    u3dMtrxConc( &mtx_fin, &mtx_mdl, mtx_prj );
+    qglM4LookAt( &mtx_mdl, &cam_pos_b, &cam->look_at, cam_up );
+    qglM4Conc( &mtx_fin, &mtx_mdl, mtx_prj );
 
     /* Walk BSP tree */
     r_draw_world( world, rdr, frustum, 0, &cam->pos, &mtx_fin,
@@ -198,7 +198,7 @@ void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
     /* Clear to the far plane before the frame. Depth is 1/z and
        larger is nearer, so zero is infinitely distant and the first
        surface to cover a pixel always wins. */
-    if ( z_dc != 0 ) uglClearZ( z_dc, 0 );
+    if ( z_dc != 0 ) qglSfZClear( z_dc, 0 );
 
     /* -nodraw stops HERE: the walk above has run and filled the draw
        order, so everything node paging touches has happened. What is
@@ -257,7 +257,7 @@ void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
 
     /* leave depth off for the overlay, which is 2D and would
        otherwise test itself against the scene it is drawn on top of */
-    if ( z_dc != 0 ) uglZMode( UGL_Z_OFF );
+    if ( z_dc != 0 ) qglSfZMode( h_dst_dc, QGL_Z_OFF );
 
     t0 = sys_now( sysclk );
     /* Under -comp the host loop draws this onto the composite after

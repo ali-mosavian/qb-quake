@@ -29,7 +29,7 @@
  *       caller falls back to using pvsb unchanged, which is always
  *       correct, just unnarrowed.
  */
-short r_portal_mark( World *world, Renderer *rdr, u3dMtrx *m, short cam_leaf, short visleafs,
+short r_portal_mark( World *world, Renderer *rdr, Mat4 *m, short cam_leaf, short visleafs,
                       float xresh, float yresh, float z_near );
 
 /*
@@ -37,7 +37,7 @@ short r_portal_mark( World *world, Renderer *rdr, u3dMtrx *m, short cam_leaf, sh
  * desc: Draws the wireframe box of every portal the flood actually
  *       went through this frame, for every leaf still in rdr->pvs_now.
  */
-void  r_portal_draw( PDC dc, u3dMtrx *m, short visleafs, float xresh, float yresh, float z_near,
+void  r_portal_draw( QSurf dc, Mat4 *m, short visleafs, float xresh, float yresh, float z_near,
                       long clr, World *world, Renderer *rdr );
 
 #endif

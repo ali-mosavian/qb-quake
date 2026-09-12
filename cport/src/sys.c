@@ -8,12 +8,12 @@
 #include <mem.h>   /* _fmemcpy */
 
 #include "sys.h"
-#include "uglpatch.h"
+#include "qgl.h"
 
 /* Borland/tc201 both provide this from their own C startup regardless
    of which C0*.OBJ is linked -- see sys.h's own note on why that
    matters here. Not declared through <dos.h>/<stdlib.h>: mgl ships
-   its own "dos.h" (memAlloc/memCopy) that bcc.sh's include order
+   its own "dos.h" (qglMemAlloc/qglMemCopy) that bcc.sh's include order
    resolves first, so the real one never gets included. */
 extern unsigned _psp;
 
@@ -22,8 +22,8 @@ void sys_error( char *msg )
     FILE *errf = fopen( "error.log", "w" );
     if ( errf ) { fprintf( errf, "%s\n", msg ); fclose( errf ); }
 
-    uglRestore();
-    uglEnd();
+    qglVgaShutdown();
+    qglMemShutdown();
 
     fprintf( stderr, "Error: %s\n", msg );
     exit( 1 );

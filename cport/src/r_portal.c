@@ -25,11 +25,11 @@
  *
  * World-/Renderer-taking adaptation of the BASIC-linked build's own
  * src/r_portal.c -- same mechanical change pl_trace.c and r_walk.c
- * already got. m stays a raw float* internally (not u3dMtrx*): both
+ * already got. m stays a raw float* internally (not Mat4*): both
  * r_ptproj.asm and the flat-index math below (m[0]..m[15]) already
- * treated a byref u3dMtrx as 16 contiguous floats, row-major, which is
+ * treated a byref Mat4 as 16 contiguous floats, row-major, which is
  * exactly u3d.h's own layout (m11..m14, m21..m24, ...) -- the public
- * header takes u3dMtrx* for type safety at the call site and this file
+ * header takes Mat4* for type safety at the call site and this file
  * casts once, at the top of r_portal_mark.
  */
 
@@ -68,7 +68,7 @@ typedef struct { float x0, y0, x1, y1; } Rect;
 static short far seen[PT_MAX_LEAVES][4];
 static short far reached[PT_MAX_LEAVES];
 
-/* Which portal refs the flood actually went through this frame. uglLine
+/* Which portal refs the flood actually went through this frame. qglDrLine
    carries no z and so cannot be depth-tested, which is the obvious way to
    hide a portal behind a wall and is not available; this is better anyway.
    A portal the flood traversed is one visibility genuinely came through,
@@ -112,7 +112,7 @@ extern short pascal far r_rclip( Rect *a, Rect *b, Rect *outp );
  * (r_draw_world) falls back to using pvsb unchanged, which is always
  * correct, just unnarrowed.
  */
-short r_portal_mark( World *world, Renderer *rdr, u3dMtrx *mtx, short cam_leaf, short visleafs,
+short r_portal_mark( World *world, Renderer *rdr, Mat4 *mtx, short cam_leaf, short visleafs,
                       float xresh, float yresh, float z_near )
 {
     float *m = (float *) mtx;
@@ -223,7 +223,7 @@ short r_portal_mark( World *world, Renderer *rdr, u3dMtrx *mtx, short cam_leaf, 
  * Drawn into the render target, not the composite -- these are world-space
  * lines and belong in the view, scaled with it.
  */
-void r_portal_draw( PDC dc, u3dMtrx *mtx, short visleafs, float xresh, float yresh, float z_near,
+void r_portal_draw( QSurf dc, Mat4 *mtx, short visleafs, float xresh, float yresh, float z_near,
                      long clr, World *world, Renderer *rdr )
 {
     static short edge[12][2] = {
@@ -299,7 +299,7 @@ void r_portal_draw( PDC dc, u3dMtrx *mtx, short visleafs, float xresh, float yre
             for ( c = 0; c < 12; c++ ) {
                 short a = edge[c][0], b = edge[c][1];
                 if ( ok[a] && ok[b] )
-                    uglLine( dc, sx[a], sy[a], sx[b], sy[b], clr );
+                    qglDrLine( dc, sx[a], sy[a], sx[b], sy[b], clr );
             }
         }
     }

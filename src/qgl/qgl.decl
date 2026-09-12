@@ -1,0 +1,97 @@
+declare function qgl_arr_count ( n as long ) as integer
+declare function qgl_arr_fill ( byval h as long, byval cnt as long ) as integer
+declare function qgl_chk_kind ( byval kind as integer, nm as string, byval fh as integer ) as integer
+declare function qgl_diff_case ( byval mode as integer, byval qdst as long, byval qtex as long, byval kind as integer, byval shape as integer, nm as string, byval want_n as integer, byval bound as integer, byval fh as integer ) as integer
+declare function qgl_diff_dev ( byval s as long, v() as QVertB, byval kind as integer, byval persp as integer ) as integer
+declare function qgl_diff_drew ( byval s as long ) as integer
+declare sub qgl_diff_fill_tex ( byval qtex as long, byval kind as integer )
+declare function qgl_diff_plane ( byval f0 as single, byval f1 as single, byval f2 as single, v() as QVertB, byval x as single, byval y as single ) as single
+declare sub qgl_diff_probe ( byval s as long, byval shape as integer, byval fh as integer )
+declare function qgl_diff_texel ( byval x as integer, byval y as integer, byval kind as integer ) as integer
+declare sub qgl_diff_tri ( v() as QVertB, byval shape as integer )
+declare function qgl_diff_want ( v() as QVertB, byval kind as integer, byval persp as integer, byval px as integer, byval py as integer ) as integer
+declare sub qglArFree ( byval h as long )
+declare function qglArHandle ( byval h as long ) as integer
+declare function qglArLoadBas ( flname as string, byval typ as integer, byval elsz as integer, byval cnt as long, byval slot as integer ) as long
+declare function qglArMap ( byval h as long, a() as any, byval idx as long ) as long
+declare function qglArNew ( byval typ as integer, byval elsz as integer, byval cnt as long, byval slot as integer ) as long
+declare function qglArPages ( byval h as long ) as integer
+declare function qglArPerpg ( byval h as long ) as integer
+declare function qglArrAll () as integer
+declare function qglArWin ( byval h as long, byval idx as long ) as long
+declare function qglCheckAll () as integer
+declare sub qglClRect ( byval x0 as integer, byval y0 as integer, byval x1 as integer, byval y1 as integer )
+declare function qglDiffAll () as integer
+declare sub qglDrBlit ( byval d as long, byval x as integer, byval y as integer, byval s as long )
+declare sub qglDrBlitScl ( byval d as long, byval x as integer, byval y as integer, byval w as integer, byval h as integer, byval s as long )
+declare sub qglDrFill ( byval d as long, byval x0 as integer, byval y0 as integer, byval x1 as integer, byval y1 as integer, byval col as integer )
+declare sub qglDrHline ( byval d as long, byval x0 as integer, byval y as integer, byval x1 as integer, byval col as integer )
+declare sub qglDrLine ( byval d as long, byval x0 as integer, byval y0 as integer, byval x1 as integer, byval y1 as integer, byval col as integer )
+declare sub qglDrRect ( byval d as long, byval x0 as integer, byval y0 as integer, byval x1 as integer, byval y1 as integer, byval col as integer )
+declare sub qglDrShade ( byval d as long, byval x0 as integer, byval y0 as integer, byval x1 as integer, byval y1 as integer, byval lut as long, byval row as integer )
+declare sub qglDrVline ( byval d as long, byval x as integer, byval y0 as integer, byval y1 as integer, byval col as integer )
+declare function qglDspBuf ( ) as long
+declare function qglDspInit ( byval rate as integer ) as integer
+declare function qglDspPos ( ) as integer
+declare function qglDspScratch ( ) as long
+declare function qglDspScratchBytes ( ) as integer
+declare sub qglDspShutdown ( )
+declare function qglFaceAll () as integer
+declare function qglFaceCnt () as integer
+declare sub qglFaceFetch ( seg dst as any )
+declare function qglFaceOfs () as long
+declare function qglFaceTex () as long
+declare sub qglFileClose ( byval h as integer )
+declare function qglFileOpenBas ( flname as string ) as integer
+declare function qglFileRead ( byval h as integer, byval dst as long, byval nbytes as long ) as long
+declare function qglFileSize ( byval h as integer ) as long
+declare function qglGemAlloc ( byval nbytes as long ) as integer
+declare function qglGemFrame () as integer
+declare sub qglGemFree ( byval h as integer )
+declare function qglGemMap ( byval h as integer, byval pg as integer, byval slot as integer ) as integer
+declare sub qglKbdInit ( seg keys as Keys )
+declare sub qglKbdShutdown ()
+declare sub qglM4Conc ( seg m as Mat4, seg a as Mat4, seg b as Mat4 )
+declare sub qglM4LookAt ( seg m as Mat4, seg eye as Vec3, seg at as Vec3, seg up as Vec3 )
+declare sub qglM4Persp ( seg m as Mat4, byval fov as single, byval asp as single, byval zn as single, byval zf as single )
+declare function qglMemAlloc ( byval nbytes as long ) as long
+declare function qglMemAvail ( byval what as integer ) as long
+declare sub qglMemCopy ( byval dst as long, byval src as long, byval nbytes as long )
+declare sub qglMemFree ( byval p as long )
+declare sub qglMemInit ()
+declare sub qglMemShutdown ()
+declare function qglMouseInit ( seg m as MouseInf, byval xmax as integer, byval ymax as integer ) as integer
+declare sub qglMousePos ( byval x as integer, byval y as integer )
+declare sub qglMouseShutdown ()
+declare function qglPrfTake ( byval k as integer ) as long
+declare function qglRsPoly ( byval d as long, seg v as any, byval cnt as integer, byval mode as integer, byval src as long ) as integer
+declare function qglSbReserve ( ) as integer
+declare sub qglSfFree ( byval s as long )
+declare function qglSfFromFileBas& ( path as string, byval wide as integer, byval kind as integer )
+declare function qglSfInit ( ) as integer
+declare function qglSfNew ( byval wid as integer, byval hgt as integer, byval whr as integer ) as long
+declare function qglSfPget ( byval s as long, byval x as integer, byval y as integer ) as integer
+declare sub qglSfPset ( byval s as long, byval x as integer, byval y as integer, byval c as integer )
+declare function qglSfRdRow ( byval s as long, byval y as integer ) as long
+declare function qglSfSize ( byval s as long, byval sel as integer ) as integer
+declare function qglSfViewAim ( byval s as long, byval ofs as long ) as integer
+declare function qglSfViewNew ( byval parent as long, byval wid as integer, byval hgt as integer, byval bps as integer ) as long
+declare function qglSfViewShape ( byval v as long, byval wid as integer, byval ofs as long ) as integer
+declare function qglSfWrRow ( byval s as long, byval y as integer ) as long
+declare sub qglSfZClear ( byval surf as long, byval z as integer )
+declare function qglSfZMode ( byval surf as long, byval mode as integer ) as integer
+declare function qglSfZNew ( byval surf as long, byval kind as integer ) as long
+declare function qglTmrCycles () as long
+declare function qglTmrHz () as long
+declare sub qglTmrInit ( byval hz as integer )
+declare sub qglTmrShutdown ()
+declare function qglTmrTicks () as long
+declare sub qglTxtChar ( byval dst as long, byval x as integer, byval y as integer, byval f as long, byval glyph as integer, byval col as integer )
+declare sub qglTxtFree ( byval f as long )
+declare function qglTxtLoadBas ( flname as string ) as long
+declare function qglTxtRow ( byval f as long, byval glyph as integer, byval row as integer ) as integer
+declare function qglVgaInit ( ) as long
+declare sub qglVgaPalette ( seg pal as PalRgb )
+declare function qglVgaScreen ( ) as long
+declare sub qglVgaShutdown ()
+declare function qglZScale ( byval f as single ) as long

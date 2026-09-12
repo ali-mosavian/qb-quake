@@ -36,9 +36,9 @@ void host_tick( World *world, Player *player, Camera *cam, Renderer *rdr,
 void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
                    SurfCache far *sc, LightStyles *ls,
                    Hud far *hud, PhaseTimes *pt, SysClock *sysclk,
-                   PDC h_dst_dc, u3dMtrx *mtx_prj, float xresh, float yresh,
+                   QSurf h_dst_dc, Mat4 *mtx_prj, float xresh, float yresh,
                    float z_near, float z_far,
-                   u3dVector3f *cam_up, PDC z_dc, short comp, short no_draw,
+                   Vec3 *cam_up, QSurf z_dc, short comp, short no_draw,
                    short x_res, short y_res );
 
 #endif

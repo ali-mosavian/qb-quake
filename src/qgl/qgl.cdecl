@@ -1,0 +1,10 @@
+void pascal far qglClRect( short x0, short y0, short x1, short y1 );
+void pascal far qglDrLine( long d, short x0, short y0, short x1, short y1, short col );
+short pascal far qglGemMap( short h, short pg, short slot );
+void pascal far qglMemCopy( long dst, long src, long bytes );
+void pascal far qglRsCover( short on );
+void pascal far qglRsCoverClear( void );
+short pascal far qglRsPoly( long dst, void far *v, short cnt, short mode, long src );
+short pascal far qglSbBuild( long dstDc, long texDc, long parm );
+short pascal far qglSfZMode( long surf, short mode );
+long pascal far qglTmrCycles( void );

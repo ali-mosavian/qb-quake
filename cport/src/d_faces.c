@@ -22,7 +22,7 @@
 
 #include "d_faces.h"
 #include "d_poly.h"
-#include "uglpatch.h"
+#include "qgl.h"
 #include "mod.h"
 #include "mod_tex.h"
 #include "r_bsp.h"
@@ -44,9 +44,9 @@
 #define TURB_RATE    40.74f
 
 /* ugl.bi's UGL.Z.* */
-#define UGL_Z_OFF    0
-#define UGL_Z_WRITE  1
-#define UGL_Z_TEST   2
+#define QGL_Z_OFF    0
+#define QGL_Z_SET  1
+#define QGL_Z_TEST   2
 
 /* The clipper adds at most one vertex per plane, so input + 2 suffices. */
 #define MAXV (GEOM_MAXVTX + 8)
@@ -65,7 +65,7 @@ static float near vt_u[MAXV], vt_v[MAXV];
 static float near cl_x[MAXV], cl_y[MAXV], cl_z[MAXV], cl_w[MAXV];
 static float near cl_u[MAXV], cl_v[MAXV];
 static float near px[MAXV], py[MAXV], pw[MAXV], pu[MAXV], pv[MAXV];
-static uglvtx near pvtx[MAXV];
+static QVert near pvtx[MAXV];
 
 /* d_surf.bas's old gv_buf: one face's geometry record, fetched fresh
    every face (see the copy site below for why it is never hoisted).
@@ -127,7 +127,7 @@ static short near clip_w(
 }
 
 void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *ls,
-                    DrawParams *dp, u3dMtrx *m, u3dVector3f *campos, SysClock *sysclk )
+                    DrawParams *dp, Mat4 *m, Vec3 *campos, SysClock *sysclk )
 {
     Face       far *tri     = world->faces;
     TexInfo    far *texinf  = world->texinfo;
@@ -229,8 +229,9 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
                only writes (it arrives front to back already), a brush
                entity tests (nothing guarantees its own order). */
             if ( dp->z_avail ) {
-                z_want = ( facemdl[i] == 0 ) ? UGL_Z_WRITE : UGL_Z_TEST;
-                if ( z_want != z_have ) z_have = uglZMode( z_want );
+                z_want = ( facemdl[i] == 0 ) ? QGL_Z_SET : QGL_Z_TEST;
+                if ( z_want != z_have )
+                    z_have = qglSfZMode( dp->h_dst_dc, z_want );
             }
 
             tw = mipinf[tex_id].wdth;
@@ -313,7 +314,7 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
                     vt_v[j] = tv + turb_sin[ (short)( ifloor( tu*TURB_FREQ + turbph ) & 255 ) ];
                 }
 
-                /* Row-vector times a 4x4 with w = 1. u3dMtrx's fields
+                /* Row-vector times a 4x4 with w = 1. Mat4's fields
                    (m11..m44) are a row-major flatten with no padding,
                    same layout the original read through a flat
                    float[16] -- m[0]=m11 .. m[15]=m44 -- so indexing
@@ -423,7 +424,7 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
                            fill writes, so a narrower build leaves a
                            black seam of recycled DC along two sides. */
                         tex_dc = (long) (void far *) mod_tex_raw( world, tex_id, lm_mip );
-                        sb_build( sc, world, rdr, ls, (PDC) lm_dc, (PDC) tex_dc, i, lm_mip,
+                        sb_build( sc, world, rdr, ls, (QSurf) lm_dc, (QSurf) tex_dc, i, lm_mip,
                                   (short)( 1 << sc_shift( lm_sw ) ),
                                   (short)( 1 << sc_shift( lm_sh ) ), gv );
                     }
@@ -473,7 +474,7 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
 
             /* One convex polygon, one call -- no fan pivot, so no
                internal edges to seam along. cnt > MAXV cannot reach
-               uglPolyTP -- its own ceiling -- so it is turned away
+               qglRsPoly -- its own ceiling -- so it is turned away
                here instead of relying on the library's silent
                refusal. */
             if ( cnt > MAXV ) continue;
@@ -490,11 +491,17 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
                    internal diagonals. */
                 for ( j = 0; j < cnt; j++ ) {
                     p2 = (short)( ( j + 1 == cnt ) ? 0 : j + 1 );
-                    uglLine( dp->h_dst_dc, (short) px[j], (short) py[j],
+                    qglDrLine( dp->h_dst_dc, (short) px[j], (short) py[j],
                                            (short) px[p2], (short) py[p2], 0 );
                 }
             } else {
-                uglPolyTP( dp->h_dst_dc, (uglvtx far *) pvtx, cnt, 0, (PDC) src_dc );
+                /* pu/pv are u/z and pw is 1/z in perspective mode, which
+                   is the convention the perspective filler wants; the
+                   other mode hands it plain u and v. Nothing is
+                   converted here -- only the mode differs. */
+                qglRsPoly( dp->h_dst_dc, (QVert far *) pvtx, cnt,
+                           dp->rend_mode == 0 ? QGL_M_PTEX : QGL_M_TEX,
+                           src_dc );
             }
             dp->tris = (short)( dp->tris + cnt - 2 );
 

@@ -5,7 +5,7 @@
 #include "world.h"
 
 short ent_find_node( short m, World *world );
-short ent_point_leaf( Vec3 *p, World *world );
+short ent_point_leaf( BspVec3 *p, World *world );
 short ent_plat_touched( Player *player, World *world, short p );
 void  ent_check_teleport( Player *player, World *world, short scr_x_res );
 void  ent_move_plats( World *world, Player *player, float dt );
@@ -17,7 +17,7 @@ void  ent_place_models( World *world );
    map's entity TEXT, which BASIC's own 32,767-byte string cap made
    impossible for some maps in the first place). */
 typedef struct {
-    Vec3  spawn;
+    BspVec3  spawn;
     float angle;
     short nmodels;   /* stamp: must equal the map's model count, or
                          these assets are from another map */
@@ -28,7 +28,7 @@ typedef struct {
 
 typedef struct {
     short model;
-    Vec3  dest;
+    BspVec3  dest;
     float yaw;
 } EntsTele;
 
