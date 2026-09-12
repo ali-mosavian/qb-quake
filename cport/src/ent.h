@@ -151,4 +151,7 @@ void ent_load_spawn( World *world, Camera *cam, Fight *fight );
  */
 void ent_load_teleports( World *world );
 
+/* the map's trigger_secret count, for the intermission's tally */
+short ent_secret_total( World *world );
+
 #endif

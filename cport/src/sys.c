@@ -79,6 +79,7 @@ void sys_parse_args( RunArgs *args )
         else if ( stricmp( argv[i], "-nomdl" )   == 0 ) args->no_mdl = -1;
         else if ( stricmp( argv[i], "-noai" )    == 0 ) args->no_ai = -1;
         else if ( stricmp( argv[i], "-fire" )    == 0 ) args->fire = -1;
+        else if ( stricmp( argv[i], "-carry" )   == 0 ) args->carry = -1;
         else if ( stricmp( argv[i], "-badorder" )== 0 ) args->bad_order = -1;
         else if ( stricmp( argv[i], "-noz" )     == 0 ) args->no_z = -1;
         else if ( stricmp( argv[i], "-nocull" )  == 0 ) args->no_cull = -1;

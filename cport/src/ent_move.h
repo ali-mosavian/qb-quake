@@ -34,8 +34,8 @@ void ent_move_doors( World *world, Player *player, Fight *fight,
  * desc: The touches, and every button's travel. A button fires when it
  *       ARRIVES, not when it is pressed, as button_wait does.
  */
-void ent_move_trigs( World *world, Player *player, Fight *fight,
-                      Renderer *rdr, float dt );
+void ent_move_trigs( World *world, Player *player, Camera *cam, Fight *fight,
+                      Renderer *rdr, float dt, short scr_x_res, short scr_y_res );
 
 /*
  * name: ent_move_trains

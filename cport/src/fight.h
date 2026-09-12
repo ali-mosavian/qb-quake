@@ -89,7 +89,22 @@ typedef struct {
 /* Fight.state: what the tick and the overlay do. */
 #define GS_PLAY  1
 #define GS_DEAD  2            /* the pause, then pl_respawn */
+#define GS_WON   3            /* every monster down; fire starts them again */
+#define GS_EXIT  4            /* the slipgate: the tally, and fire goes on */
+#define GS_NEXT  5            /* leaving for the next map: the host loop ends */
 #define PL_DEATH_PAUSE 1.5f   /* seconds YOU DIED stays before the respawn */
+#define PL_INTER_HOLD  2.0f   /* intermission_exittime: the tally stays this long */
+#define PL_CARRY_MIN   50     /* SetChangeParms: health goes on at 50 at least */
+
+/* The kit CARRY.BIN holds between maps. Written whole, so its layout is
+   the file format: change it and an old CARRY.BIN reads as nonsense
+   rather than short. */
+typedef struct {
+    long  items;
+    short health, armor;
+    float armor_type;
+    short shells, nails, rockets, weapon;
+} PlayerCarry;
 
 #define ENT_MSG_TIME 2.0f     /* scr_centertime */
 #define ENT_MSG_LEN  40       /* one line of the overlay's font */
@@ -119,6 +134,15 @@ typedef struct {
     short kills, deaths, booms;
     short state;              /* GS_* */
     float state_until;        /* when GS_DEAD ends */
+    float exit_time;          /* anim_time the slipgate was reached */
+    float level_start;        /* anim_time this level began, for the tally */
+    short secret_total;       /* trigger_secrets the map has */
+    short fire_prev;          /* fire last tick: a fresh press, not a hold */
+    BspVec3 inter;            /* info_intermission, and where it looks */
+    float inter_pitch, inter_yaw;
+    char  next_map[9];        /* worldspawn's, blank for none */
+    char  next_flags[80];     /* the flags this run was started with, so the
+                                 next map's process describes the same run */
     BspVec3 spawn;            /* where a respawn puts the player back */
     float next_fire;          /* attack_finished */
     float fire_at;            /* when the last shot left, for the view model */

@@ -333,16 +333,42 @@ void scr_draw_hud( World *world, Renderer *rdr, Camera *cam, Player *player,
 /* Quake's centerprint, and it draws under -nostats too: a door or a
    trigger that says something has to be readable in a reference frame,
    which is what proves the message reached the screen at all. */
-void scr_draw_msg( Hud far *hud, Fight *fight, Renderer *rdr, QSurf h_dst_dc, short w, short h )
+void scr_draw_msg( Hud far *hud, World *world, Fight *fight, Renderer *rdr,
+                    QSurf h_dst_dc, short w, short h )
 {
-    short len;
+    short len, secs;
+    char *msg;
+    char buf[48];
 
-    if ( rdr->anim_time >= fight->msg_until ) return;
-    len = (short) strlen( fight->msg );
-    if ( !len ) return;
+    if ( rdr->anim_time < fight->msg_until ) {
+        len = (short) strlen( fight->msg );
+        if ( len )
+            draw_string( hud, h_dst_dc, (short) ( ( w - 4 * len ) / 2 ), (short) ( h / 3 ),
+                         fight->msg, hud->hc_text );
+    }
 
-    draw_string( hud, h_dst_dc, (short) ( ( w - 4 * len ) / 2 ), (short) ( h / 3 ),
-                 fight->msg, hud->hc_text );
+    /* what the fight has to say, centred: the font is 4 wide */
+    switch ( fight->state ) {
+    case GS_DEAD: msg = "YOU DIED"; break;
+    case GS_WON:  msg = "AREA CLEARED - FIRE TO GO AGAIN"; break;
+    case GS_EXIT: msg = "LEVEL COMPLETE - HOLD FIRE TO GO ON"; break;
+    default:      return;
+    }
+    len = (short) strlen( msg );
+    if ( fight->state == GS_DEAD )
+        qglDrFill( h_dst_dc, 0, (short)( h / 2 - 8 ), w, (short)( h / 2 + 8 ), hud->hc_bad );
+    draw_string( hud, h_dst_dc, (short)( ( w - 4 * len ) / 2 ), (short)( h / 2 - 3 ),
+                 msg, hud->hc_text );
+
+    if ( fight->state != GS_EXIT ) return;
+    secs = (short) ( fight->exit_time - fight->level_start );
+    sprintf( buf, "KILLS %d/%d  SECRETS %d/%d  TIME %d:%02d",
+             (int) fight->kills, (int) world->mon_count,
+             (int) fight->secrets, (int) fight->secret_total,
+             (int) ( secs / 60 ), (int) ( secs % 60 ) );
+    len = (short) strlen( buf );
+    draw_string( hud, h_dst_dc, (short)( ( w - 4 * len ) / 2 ), (short)( h / 2 + 5 ),
+                 buf, hud->hc_text );
 }
 
 void scr_count_frame( Hud far *hud, Renderer *rdr, SurfCache far *sc, float frame_dt )

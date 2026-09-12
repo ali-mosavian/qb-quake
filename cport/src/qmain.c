@@ -33,6 +33,7 @@
 #include "mdl_ai.h"
 #include "sbar.h"
 #include "item.h"
+#include "gstate.h"
 #include "h_frame.h"
 #include "screen.h"
 #include "config.h"
@@ -371,6 +372,34 @@ int main( void )
            so -at is the spawn for a headless run too */
         fight.spawn = player.pos;
 
+        /* the kit the last map ended with, over the starting one --
+           marked, because the end-of-run counters are what the NEXT
+           map did to it and cannot say what arrived */
+        if ( args.carry ) {
+            pl_carry_load( &fight );
+            sprintf( buf, "carry health %d shells %d nails %d rockets %d armor %d items %ld weapon %d",
+                     fight.health, fight.shells, fight.nails, fight.rockets,
+                     fight.armor, fight.items, fight.weapon );
+            mark( buf );
+        }
+
+        /* what the next map's process is told about this run: the
+           flags that describe HOW it runs, never where it started --
+           -at and -yaw belong to this map's geometry and would aim the
+           next one's camera into a wall. */
+        {   char *nf = fight.next_flags;
+            nf[0] = '\0';
+            if ( args.use_lm )   strcat( nf, " -lm" );
+            if ( args.no_stats ) strcat( nf, " -nostats" );
+            if ( args.no_ai )    strcat( nf, " -noai" );
+            if ( args.no_mdl )   strcat( nf, " -nomdl" );
+            if ( args.no_items ) strcat( nf, " -noitems" );
+            if ( args.comp )     strcat( nf, " -comp" );
+            if ( args.fire )     strcat( nf, " -fire" );
+            if ( args.bench_ticks > 0 )
+                sprintf( nf + strlen( nf ), " -ticks %ld", args.bench_ticks );
+        }
+
         /* -yaw overrides the spawn's own angle, wrapped into [0,360)
            already by sys_parse_args -- same reasoning as
            ent_check_teleport's own mousePos trick: aiming the camera
@@ -529,7 +558,7 @@ int main( void )
 
             frame = 0;
             while ( ( clock.bench_ticks == 0 || clock.ticks < clock.bench_ticks )
-                    && !input.keyboard.k[KEY_ESC] ) {
+                    && !input.keyboard.k[KEY_ESC] && fight.state != GS_NEXT ) {
                 frame_dt = sys_frame_time( &sysclk, &raw_dt );
 
                 if ( args.play_name[0] && rf ) {
@@ -658,7 +687,7 @@ int main( void )
                     scr_sbar_draw( &fight, v.h_comp_dc, v.scr_x_res, v.scr_y_res );
                     scr_draw_hud( &world, &rdr, &cam, &player, sc, hud,
                                   v.h_comp_dc, v.scr_x_res, v.scr_y_res );
-                    scr_draw_msg( hud, &fight, &rdr, v.h_comp_dc, v.scr_x_res, v.scr_y_res );
+                    scr_draw_msg( hud, &world, &fight, &rdr, v.h_comp_dc, v.scr_x_res, v.scr_y_res );
                     qglDrBlit( v.h_video_dc, 0, 0, v.h_comp_dc );
                 }
 
@@ -695,6 +724,11 @@ int main( void )
                          (int) mon_hunt, (int) mon_moved, (int) fight.leaps );
                 mark( buf );
             }
+
+            sprintf( buf, "gs_state %d map %s next %s secrets %d/%d",
+                     (int) fight.state, args.map_name, fight.next_map,
+                     (int) fight.secrets, (int) fight.secret_total );
+            mark( buf );
 
             sprintf( buf, "fight=health %d shells %d nails %d rockets %d armor %d items %ld took %d kills %d booms %d deaths %d",
                      fight.health, fight.shells, fight.nails, fight.rockets,
@@ -762,6 +796,17 @@ int main( void )
     }
 
     if ( v.h_back_bdc ) qglSfFree( v.h_back_bdc );
+    /* The ISRs come out FIRST, and this is not tidiness: INT 8 and
+       INT 9 point into this program, and DOS does not restore a vector
+       when a program ends. A second run in the same session -- which
+       is what a changelevel is -- then installed its own timer over a
+       dead handler and chained to it, so the BIOS tick stopped
+       advancing and sys_time_init spun in its tick-edge wait for ever,
+       two marks into the load. It never showed while one run was the
+       whole session. */
+    qglTmrShutdown();
+    qglKbdShutdown();
+    qglMouseShutdown();
     qglVgaShutdown();
     qglMemShutdown();
     mark( "restored" );

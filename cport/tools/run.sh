@@ -27,8 +27,12 @@ fi
 # BENCH.* too, or a run that dies before rendering leaves the previous
 # run's frame and numbers in place and every test downstream reads them
 # as this run's. Three of them reported ok that way once.
+# NEXT.BAT/RUN1.BAT too: a changelevel writes NEXT.BAT and the autoexec
+# below runs it, so one left behind by the previous run would start a
+# map this run never asked for.
 rm -f "$OUT/cport.txt" "$OUT/cstep.txt" "$OUT/error.log" \
-      "$OUT/BENCH.BMP" "$OUT/BENCH.TXT"
+      "$OUT/BENCH.BMP" "$OUT/BENCH.TXT" \
+      "$OUT/NEXT.BAT" "$OUT/RUN1.BAT" "$OUT/CARRY.BIN" "$OUT/run.out"
 
 { printf '[sdl]\nautolock=false\n[dosbox]\nmemsize=32\nstartbanner=false\nquit warning=false\n'
   printf '[cpu]\ncore=dynamic\ncycles=%s\n[dos]\nxms=true\nems=true\n[autoexec]\n' "$CYCLES"
@@ -36,6 +40,17 @@ rm -f "$OUT/cport.txt" "$OUT/cstep.txt" "$OUT/error.log" \
   echo "mount w $OUT"
   echo "w:"
   echo "QCPORT.EXE $QARGS"
+  # QARGS2: a second run in the SAME session. The ISRs a run leaves
+  # installed are invisible until something runs after it, which is
+  # what a changelevel does.
+  [[ -n "${QARGS2:-}" ]] && echo "QCPORT.EXE $QARGS2"
+  # the changelevel: host_next_level wrote the next map's command line
+  # to NEXT.BAT. It is CALLed from a copy because a batch file deleted
+  # while it is running is "Batch file missing", and deleted first so a
+  # map that does not exit again cannot loop.
+  echo "if exist NEXT.BAT copy NEXT.BAT RUN1.BAT > nul"
+  echo "if exist NEXT.BAT del NEXT.BAT"
+  echo "if exist RUN1.BAT call RUN1.BAT"
   echo "exit"
 } > "$OUT/run.conf"
 

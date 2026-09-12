@@ -4,6 +4,7 @@
 #include "renderer.h"
 #include "world.h"
 #include "input.h"
+#include "fight.h"
 
 /*
  * view.h -- where the camera is and where it looks. C port of
@@ -26,6 +27,7 @@
  *       player and camera position.
  */
 void v_update_camera( Camera *cam, Player *player, World *world, Input *input,
+                       Fight *fight,
                        float dt, short x_res, short y_res );
 
 #endif

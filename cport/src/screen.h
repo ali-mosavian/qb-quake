@@ -81,7 +81,8 @@ void scr_draw_hud( World *world, Renderer *rdr, Camera *cam, Player *player,
                     SurfCache far *sc, Hud far *hud, QSurf h_dst_dc, short w, short h );
 
 /* The centerprint, drawn whether or not the stats overlay is on. */
-void scr_draw_msg( Hud far *hud, Fight *fight, Renderer *rdr, QSurf h_dst_dc, short w, short h );
+void scr_draw_msg( Hud far *hud, World *world, Fight *fight, Renderer *rdr,
+                    QSurf h_dst_dc, short w, short h );
 
 /* Rolls fps once a second (off SysClock's own frame_dt rather than a
    dedicated hardware timer channel -- see hud.h's own note) and

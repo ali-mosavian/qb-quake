@@ -195,6 +195,7 @@ void mod_load_world( World *world, Renderer *rdr, Camera *cam, Fight *fight, cha
 
     ent_load_spawn( world, cam, fight );
     ent_load_teleports( world );
+    fight->secret_total = ent_secret_total( world );
 }
 
 unsigned char far *mod_lm_map( World *world, short row )

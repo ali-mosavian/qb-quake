@@ -15,6 +15,7 @@
 #include <string.h>
 
 #include "ent_move.h"
+#include "gstate.h"
 #include "ent.h"
 #include "qgl.h"
 
@@ -335,8 +336,8 @@ void ent_move_doors( World *world, Player *player, Fight *fight,
     }
 }
 
-void ent_move_trigs( World *world, Player *player, Fight *fight,
-                      Renderer *rdr, float dt )
+void ent_move_trigs( World *world, Player *player, Camera *cam, Fight *fight,
+                      Renderer *rdr, float dt, short scr_x_res, short scr_y_res )
 {
     short k;
     TrigEnt far *t;
@@ -389,14 +390,29 @@ void ent_move_trigs( World *world, Player *player, Fight *fight,
             }
             break;
 
+        case ENT_TRIG_EXIT:
+            /* the level's end: the tally, with the map's own title
+               held up until the next map takes over -- an hour, not
+               ENT_MSG_TIME, since nothing else is going to be said */
+            if ( t->state == ENT_TRIG_READY &&
+                 ent_box_touched( player, &t->mins, &t->maxs, 0.0f ) ) {
+                ent_say( fight, rdr, ent_msg( world, t->msg ) );
+                fight->msg_until  = rdr->anim_time + 3600.0f;
+                fight->state      = GS_EXIT;
+                fight->exit_time  = rdr->anim_time;
+                ent_intermission( player, cam, fight, scr_x_res, scr_y_res );
+                t->state = ENT_TRIG_DONE;
+            }
+            break;
+
         case ENT_TRIG_ONCE:
         case ENT_TRIG_MULTI:
         case ENT_TRIG_SHOOT:
         case ENT_TRIG_SECRET:
             switch ( t->state ) {
             case ENT_TRIG_READY:
-                /* A shootable trigger is fired by a pellet, never by a
-                   touch; pl_fire is not ported, so it stays ready. */
+                /* A shootable trigger is fired by a pellet, never by
+                   a touch -- pl_shot_touch does that. */
                 if ( t->kind != ENT_TRIG_SHOOT &&
                      ent_box_touched( player, &t->mins, &t->maxs, 0.0f ) )
                     ent_trig_fire( world, player, fight, rdr, k );

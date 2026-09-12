@@ -58,6 +58,7 @@ typedef struct {
     short no_mdl;             /* -nomdl: and for the monsters */
     short no_ai;              /* -noai: they stand still, so a frame repeats */
     short fire;               /* -fire: the trigger held, for a headless shot */
+    short carry;              /* -carry: CARRY.BIN holds the last level's kit */
     short bad_order;          /* -badorder */
     short comp;                /* -comp */
     short use_lm;              /* -lm */

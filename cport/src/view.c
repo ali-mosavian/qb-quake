@@ -11,6 +11,7 @@
 #define PI 3.14159f
 
 void v_update_camera( Camera *cam, Player *player, World *world, Input *input,
+                       Fight *fight,
                        float dt, short x_res, short y_res )
 {
     int   tmx, tmy;
@@ -51,6 +52,10 @@ void v_update_camera( Camera *cam, Player *player, World *world, Input *input,
     if ( input->mouse.right )    fwd    -= 1.0f;
 
     if ( player->no_clip ) {
+        /* the intermission holds still: the tally's camera is the
+           map's, not one the player can fly out of */
+        if ( fight->state == GS_EXIT ) fwd = 0.0f;
+
         /* Per second, not per frame -- this used to advance a flat 3
            units every frame, flying at whatever speed the framerate
            happened to give it. */

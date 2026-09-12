@@ -34,11 +34,37 @@ void pl_game_reset( World *world, Player *player, Camera *cam, Fight *fight,
                      Renderer *rdr, short scr_x_res );
 
 /*
+ * name: pl_carry_save / pl_carry_load
+ * desc: SetChangeParms and DecodeLevelParms: the kit that travels to
+ *       the next map, through CARRY.BIN. Keys and powerups stay behind.
+ */
+void pl_carry_save( Fight *fight );
+void pl_carry_load( Fight *fight );
+
+/*
+ * name: ent_intermission
+ * desc: execute_changelevel's view: the camera at the map's
+ *       info_intermission, at its mangle, the player held there.
+ */
+void ent_intermission( Player *player, Camera *cam, Fight *fight,
+                        short scr_x_res, short scr_y_res );
+
+/*
+ * name: host_next_level
+ * desc: The kit to CARRY.BIN and the next map's command line to
+ *       NEXT.BAT, then GS_NEXT, which ends the host loop. A map is a
+ *       container file and a run loads one, so the next level is the
+ *       next process.
+ */
+void host_next_level( Fight *fight );
+
+/*
  * name: host_state
- * desc: One tick of the state machine: death when the health runs out,
- *       and the respawn once the pause is up.
+ * desc: One tick of the state machine: dying and respawning, the area
+ *       cleared, and the intermission's held fire -- on to the next
+ *       map, or this one again.
  */
 void host_state( World *world, Player *player, Camera *cam, Fight *fight,
-                  Renderer *rdr, short scr_x_res );
+                  Renderer *rdr, short fire, short scr_x_res );
 
 #endif

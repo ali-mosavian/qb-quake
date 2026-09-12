@@ -113,11 +113,17 @@ void host_tick( World *world, Player *player, Camera *cam, Renderer *rdr,
                  Input *input, Hud far *hud, LightStyles *ls, Fight *fight,
                  float dt, short scr_x_res, short scr_y_res )
 {
+    /* fire is mouse 1 or ctrl, as it has always been; mouse 1 also
+       walks forward, which is the original's binding too. Read once:
+       outside GS_PLAY it is what starts the next thing rather than
+       what shoots. */
+    short fire = (short) ( input->mouse.left || input->keyboard.k[KEY_CTRL] );
+
     /* what the player asked for */
     in_handle_toggles( input, rdr, cam, player, hud );
 
     /* and what the world does about it: camera, and the physics under it */
-    v_update_camera( cam, player, world, input, dt, scr_x_res, scr_y_res );
+    v_update_camera( cam, player, world, input, fight, dt, scr_x_res, scr_y_res );
 
     /* and anything the world does to the player as a result of moving */
     ent_check_teleport( player, world, scr_x_res );
@@ -127,7 +133,7 @@ void host_tick( World *world, Player *player, Camera *cam, Renderer *rdr,
        door fired this tick should start moving on it. */
     ent_move_plats( world, player, dt );
     ent_move_doors( world, player, fight, rdr, dt );
-    ent_move_trigs( world, player, fight, rdr, dt );
+    ent_move_trigs( world, player, cam, fight, rdr, dt, scr_x_res, scr_y_res );
     ent_move_trains( world, player, dt );
 
     /* and what the player picked up on the way. After the movers: a
@@ -145,16 +151,13 @@ void host_tick( World *world, Player *player, Camera *cam, Renderer *rdr,
        what is already in the air keeps flying. */
     if ( fight->state == GS_PLAY ) {
         pl_select_weapon( input, fight );
-        /* fire is mouse 1 or ctrl, as it has always been; mouse 1 also
-           walks forward, which is the original's binding too */
-        if ( input->mouse.left || input->keyboard.k[KEY_CTRL] )
-            pl_fire( world, player, cam, fight, rdr );
+        if ( fire ) pl_fire( world, player, cam, fight, rdr );
     }
     pl_traps_tick( world, fight, rdr );
     pl_spikes_tick( world, player, fight, rdr, dt );
 
-    /* dying, and coming back */
-    host_state( world, player, cam, fight, rdr, scr_x_res );
+    /* dying, coming back, and the level's end */
+    host_state( world, player, cam, fight, rdr, fire, scr_x_res );
 
     /* where each mover ended up, so the draw order can place it */
     ent_place_models( world );
@@ -321,7 +324,7 @@ void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
         /* Quake's own bar first; the stats overlay may cover its edge */
         scr_sbar_draw( fight, h_dst_dc, x_res, y_res );
         scr_draw_hud( world, rdr, cam, player, sc, hud, h_dst_dc, x_res, y_res );
-        scr_draw_msg( hud, fight, rdr, h_dst_dc, x_res, y_res );
+        scr_draw_msg( hud, world, fight, rdr, h_dst_dc, x_res, y_res );
     }
 
     if ( pt->n > 0 ) {

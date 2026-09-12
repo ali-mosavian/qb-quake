@@ -299,6 +299,19 @@ void ent_load_spawn( World *world, Camera *cam, Fight *fight )
        elsewhere. Both ride in the header rather than being guessed. */
     fight->worldtype = h.worldtype;
     fight->gravity   = h.gravity > 0.0f ? h.gravity : 800.0f;
+
+    /* the intermission camera and where this level leads. next_map is
+       space padded in the file and read back as a C string here. */
+    fight->inter       = h.inter;
+    fight->inter_pitch = h.inter_pitch;
+    fight->inter_yaw   = h.inter_yaw;
+    {   short i, last = -1;
+        for ( i = 0; i < 8; i++ ) {
+            fight->next_map[i] = h.next_map[i];
+            if ( h.next_map[i] != ' ' && h.next_map[i] != '\0' ) last = i;
+        }
+        fight->next_map[ last + 1 ] = '\0';
+    }
 }
 
 
@@ -412,6 +425,16 @@ static void ent_load_trigs( World *world, unsigned char far *buf, long *ofs, sho
         }
         world->trig_count++;
     }
+}
+
+/* what the tally counts against: the map's trigger_secrets */
+short ent_secret_total( World *world )
+{
+    short k, n = 0;
+
+    for ( k = 0; k < world->trig_count; k++ )
+        if ( world->trig[k].kind == ENT_TRIG_SECRET ) n++;
+    return n;
 }
 
 static void ent_load_trains( World *world, unsigned char far *buf, long *ofs, short count )
