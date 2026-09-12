@@ -262,14 +262,51 @@ def decompress_vis(b: Bsp, ofs: int) -> bytearray:
     return out
 
 
-def portal_lumps(b: Bsp, portals: list[Portal]) -> tuple[bytes, bytes]:
-    """portals.bld: short visleafs, short nrefs, then a prefix index of
-    visleafs+1 shorts, then nrefs entries of (neighbour, mins[3], maxs[3])."""
-    adj: dict[int, list[tuple[int, tuple[int, ...], tuple[int, ...]]]] = {}
-    for p in portals:
+def open_portals(b: Bsp, portals: list[Portal]) -> list[Portal]:
+    return [p for p in portals if CONTENTS_SOLID not in (b.leaves[~p.nodes[0]][0], b.leaves[~p.nodes[1]][0])]
+
+
+def pvs_subset_check(b: Bsp, portals: list[Portal], verbose: bool = False) -> tuple[int, int]:
+    """Every leaf a leaf's PVS names must be reachable through portals from it.
+    Returns (checked, failing)."""
+    adj: dict[int, set[int]] = {}
+    for p in open_portals(b, portals):
         a, c = ~p.nodes[0], ~p.nodes[1]
-        if b.leaves[a][0] == CONTENTS_SOLID or b.leaves[c][0] == CONTENTS_SOLID:
+        adj.setdefault(a, set()).add(c)
+        adj.setdefault(c, set()).add(a)
+
+    bad = 0
+    checked = 0
+    for li in range(1, b.visleafs + 1):
+        cont, visofs = b.leaves[li]
+        if cont == CONTENTS_SOLID or visofs < 0:
             continue
+        bits = decompress_vis(b, visofs)
+        pvs = {j + 1 for j in range(b.visleafs) if bits[j >> 3] >> (j & 7) & 1}
+
+        seen, stack = {li}, [li]
+        while stack:
+            cur = stack.pop()
+            for nb in adj.get(cur, ()):
+                if nb not in seen:
+                    seen.add(nb)
+                    stack.append(nb)
+
+        checked += 1
+        missing = pvs - seen
+        if missing:
+            bad += 1
+            if verbose and bad <= 5:
+                print(f"  leaf {li}: {len(missing)} PVS leaves unreachable, e.g. {sorted(missing)[:6]}")
+    return checked, bad
+
+
+def portal_lumps(b: Bsp, portals: list[Portal]) -> tuple[bytes, bytes]:
+    """portalidx.bld: a prefix index of nleaves+1 shorts, the last entry the ref
+    count; portalref.bld: that many entries of (neighbour, mins[3], maxs[3])."""
+    adj: dict[int, list[tuple[int, tuple[int, ...], tuple[int, ...]]]] = {}
+    for p in open_portals(b, portals):
+        a, c = ~p.nodes[0], ~p.nodes[1]
         mn = tuple(int(math.floor(min(v[k] for v in p.winding))) for k in range(3))
         mx = tuple(int(math.ceil(max(v[k] for v in p.winding))) for k in range(3))
         adj.setdefault(a, []).append((c, mn, mx))
@@ -318,43 +355,9 @@ def main() -> int:
     portals = build_portals(b, verbose)
     print(f"portals built: {len(portals)}")
 
-    # adjacency over non-solid leaves
-    adj: dict[int, set[int]] = {}
-    solid = 0
-    for p in portals:
-        a, c = ~p.nodes[0], ~p.nodes[1]
-        if b.leaves[a][0] == CONTENTS_SOLID or b.leaves[c][0] == CONTENTS_SOLID:
-            solid += 1
-            continue
-        adj.setdefault(a, set()).add(c)
-        adj.setdefault(c, set()).add(a)
-    print(f"  {solid} touch a solid leaf; {len(adj)} leaves have neighbours")
+    print(f"  {len(portals) - len(open_portals(b, portals))} touch a solid leaf")
 
-    # THE check: PVS must be a subset of what portals reach.
-    bad = 0
-    checked = 0
-    for li in range(1, b.visleafs + 1):
-        cont, visofs = b.leaves[li]
-        if cont == CONTENTS_SOLID or visofs < 0:
-            continue
-        bits = decompress_vis(b, visofs)
-        pvs = {j + 1 for j in range(b.visleafs) if bits[j >> 3] >> (j & 7) & 1}
-
-        seen, stack = {li}, [li]
-        while stack:
-            cur = stack.pop()
-            for nb in adj.get(cur, ()):
-                if nb not in seen:
-                    seen.add(nb)
-                    stack.append(nb)
-
-        checked += 1
-        missing = pvs - seen
-        if missing:
-            bad += 1
-            if verbose and bad <= 5:
-                print(f"  leaf {li}: {len(missing)} PVS leaves unreachable, e.g. {sorted(missing)[:6]}")
-
+    checked, bad = pvs_subset_check(b, portals, verbose)
     print(f"PVS-subset check: {checked - bad}/{checked} leaves pass")
     if bad:
         print("NOT writing the lump: the portals do not cover the PVS")

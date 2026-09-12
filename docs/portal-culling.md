@@ -2,7 +2,7 @@
 
 Narrows the PVS to what the eye can actually see, not merely what its
 leaf could see from somewhere. Two halves: `tools/mkportals.py` rebuilds
-the portals a compiled BSP no longer carries, and `src/r_portal.c` floods
+the portals a compiled BSP no longer carries, and `src/render/r_portal.c` floods
 through them every frame to shrink the PVS down to the current view.
 
 Status: correct, measured, and currently a net loss on this renderer's
@@ -170,7 +170,7 @@ dm3ish: 4,111 portals -> 1,566 references between non-solid leaves ->
 
 ## Part 2 — narrowing the PVS every frame
 
-`src/r_portal.c` floods outward from the camera's leaf, carrying a
+`src/render/r_portal.c` floods outward from the camera's leaf, carrying a
 screen-space rectangle that only ever shrinks as it passes through
 portals:
 

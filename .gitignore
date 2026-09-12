@@ -12,3 +12,10 @@ bc.out
 build/
 data/assets/
 link.out
+dosbox-crash.log
+*.o
+
+# id's maps out of the PAK, and the per-map assets built from them
+data/e1m*.bsp
+data/start.bsp
+data/maps/

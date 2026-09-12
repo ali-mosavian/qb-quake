@@ -13,7 +13,6 @@ OUT="${1:?usage: link-qr.sh <build-dir> <bas-mods> <c-mods>}"
 BAS_MODS="${2:?usage: link-qr.sh <build-dir> <bas-mods> <c-mods>}"
 C_MODS="${3:-}"
 TOOLCHAINS="${TOOLCHAINS:-$HOME/work/other/d32x/toolchains}"
-MGL="${MGL:-$HOME/work/badlogic/mgl}"
 
 DOSBOX_BIN="${DOSBOX_BIN:-}"
 if [[ -z "$DOSBOX_BIN" ]]; then
@@ -38,7 +37,9 @@ for m in $C_MODS; do
     OBJS="$OBJS$up.OBJ+"; n=$((n+1))
     [[ $((n % 4)) -eq 0 ]] && OBJS="$OBJS"$'\r\n'
 done
-OBJS="${OBJS}M:\\LIB\\ADDONS\\U3D.OBJ"
+# The last object carries no '+': LINK reads one as a continuation and
+# takes the next line, the EXE name, for an object.
+OBJS="${OBJS%$'\r\n'}"; OBJS="${OBJS%+}"
 
 # MATHC.LIB/CL.LIB supply bcc's own codegen support (F_FTOL@, F_SCOPY@)
 # for a float-to-long cast or a whole-struct assignment -- not app-level
@@ -47,12 +48,24 @@ OBJS="${OBJS}M:\\LIB\\ADDONS\\U3D.OBJ"
 CLIBS=""
 [[ -n "$C_MODS" ]] && CLIBS="+B:\\LIB\\MATHC.LIB+B:\\LIB\\CL.LIB"
 
+# /CO writes the per-module CodeView records the compilers put in the
+# OBJs into the tail of the EXE, where the emulator reads them at EXEC.
+# Without it those records are discarded and /MAP's publics are all the
+# debugger gets -- a name for a segment, no line and no local.
+LDBG=""
+[[ "${DEBUGINFO:-0}" == "1" ]] && LDBG=" /CO"
+
+# /STACK:8192: BC links 4K, and r_walk_rec recursing 62 deep on e1m1 ran
+# through it into the string space above -- "String space corrupt" on the
+# first frame. dm3ish is 42 deep and never showed it. e1m3 is 85 deep and
+# ran 8K out too, until the recursion's frame shrank to a node pointer and
+# a side (r_walk.c); a bigger stack comes straight out of the far heap.
 {
   printf '%s\r\n' \
-    "/NOE /MAP /SEG:800 $OBJS" \
+    "/NOE /MAP$LDBG /SEG:800 /STACK:8192 $OBJS" \
     'qrender.exe' \
     'qrender.map' \
-    "V:\\LIB\\VBDCL10E.LIB+C:\\UGLV.LIB$CLIBS" \
+    "V:\\LIB\\VBDCL10E.LIB$CLIBS" \
     ';'
 } > "$OUT/link.rsp"
 
@@ -61,7 +74,6 @@ CLIBS=""
   echo "@echo off"
   echo "mount c $OUT"
   echo "mount v $TOOLCHAINS/vbdos"
-  echo "mount m $MGL"
   echo "mount b $TOOLCHAINS/bcpp31"
   echo "c:"
   echo "if exist qrender.exe del qrender.exe"

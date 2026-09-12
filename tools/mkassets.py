@@ -16,17 +16,21 @@ import hashlib
 import struct, sys, os, math
 import re
 import zlib
+from dataclasses import dataclass
+from dataclasses import field
+
+import mksnd
 
 # every output lands here and becomes one assets.zip member
 OUT: dict[str, bytes] = {}
 
 
 def write_zip(path: str) -> None:
-    # STORED, every member. qgl's zip driver has no inflate at all -- it
-    # walks the local headers and rejects anything that is not stored --
-    # and a deflated member comes back from qglFileOpen as a plain zero,
-    # which the caller reports as "missing". Members used to be DEFLATEd
-    # at windowBits=-12 for uGL's decoder ring; uGL is gone.
+    # STORED, every member. The reader is src/qgl/zip.asm, which walks
+    # local headers and refuses any method but 0 -- there is no inflate in
+    # the renderer any more, and a member it could not read would surface
+    # as a missing file rather than as wrong bytes. Costs ~330K on disk;
+    # nothing in the build or the run is measured in disk.
     locs, cens, pos = [], [], 0
     for name, data in OUT.items():
         payload, method, xtra = data, 0, b""
@@ -52,8 +56,10 @@ def write_zip(path: str) -> None:
     raw = sum(len(v) for v in OUT.values())
     print(f"  assets.zip: {len(OUT)} members, {raw:,} -> {os.path.getsize(path):,} bytes")
 
-# The geometry store's row width, and the corner count d_poly.bas's
-# polyb()/uvbuffb() can hold. GEOM_W must match GEOM_W in q_map.bi: it is
+# The geometry store's row width, and the corner count a face record may
+# carry. GEOM_MAXVTX must match q_map.bi's, and d_faces.c sizes its own
+# vertex arrays as GEOM_MAXVTX + 8 -- the clipper's headroom. GEOM_W must
+# match GEOM_W in q_map.bi: it is
 # the unit uglMapEx maps, and a record that straddled it would be read
 # half from the wrong EMS page.
 GEOM_W = 8192
@@ -158,11 +164,28 @@ UA_WIN = 16384          # uglArr's page size (UA_WIN in src/ugl/uglarr.asm)
 
 # Element sizes for the paged lumps, so the padding lands where uGL puts it.
 PAGED_ELEM = {
-    'nodes.pag': 22,    # nodeb: planeid child0 child1 lfaceid lfacenum + 12
+    'nodes.pag': 16,    # Node: planeid child0 child1 lfaceid lfacenum + bound[6]
     'clip.pag':   6,    # ClipNode: planenum front back
-    'leaves.pag':22,    # leaf2: cont vislist bound[12] lfaceid lfacenum
+    'leaves.pag':16,    # Leaf: cont vislist bound[6] lfaceid lfacenum
     'faces.pag': 10,    # Face: planeid side geom_row geom_ofs texinfoid
 }
+
+
+# A node or leaf box in six bytes, (v + 4096) / 32 with the min rounded
+# down and the max up, so a box only ever grows: r_cull_box_c culls less
+# than it might, never more. bspfile.bi's PackedBounds, r_walk.c's unpack.
+BOUND_Q = 32
+BOUND_BASE = -4096
+
+
+def bound_bytes(bound: bytes) -> bytes:
+    mn = struct.unpack_from('<3h', bound, 0)
+    mx = struct.unpack_from('<3h', bound, 6)
+    lo = [(v - BOUND_BASE) // BOUND_Q for v in mn]
+    hi = [-((BOUND_BASE - v) // BOUND_Q) for v in mx]
+    if not all(0 <= q <= 255 for q in lo + hi):
+        raise SystemExit(f'a box past the packed range: {mn} {mx}')
+    return bytes(lo + hi)
 
 
 # Arrays the renderer backs with CONVENTIONAL memory are laid out FLAT --
@@ -384,15 +407,9 @@ def convert_lightmaps(d, lumps, out):
                              styles[0] | (styles[1] << 8),
                              styles[2] | (styles[3] << 8))
 
-    # An 8-bit BMP, loaded by uglNewBMPEx straight into one EMS dc -- the
-    # same path the textures take. BMPOPT.NO332 keeps the bytes verbatim, so
-    # the palette below is never consulted; it is an identity ramp purely so
-    # the file is a valid BMP.
-    # A flat byte stream, not a BMP. qgl has no image decoder and wants
-    # none -- the atlas was never an image, only a container for the run
-    # of cells the fillers walk, and qgl_surf_from_file derives the
-    # height from the length. mgl needed the BMP wrapper because
-    # uglNewBMPEx was the only loader that reached an EMS dc.
+    # Raw rows of LM_ATLAS_W, top down, into a qgl EMS store of one row
+    # per record -- the same shape fgeom.bin has. Padded above to a whole
+    # row, which the loader demands.
     out['lm.bin'] = bytes(atlas)
     blob = atlas
 
@@ -403,62 +420,477 @@ def convert_lightmaps(d, lumps, out):
 
 
 ENT_PAIR = re.compile(r'"([^"]*)"\s*"([^"]*)"')
+TRIG_ONCE, TRIG_MULTI, TRIG_COUNTER, TRIG_BUTTON, TRIG_EXIT, TRIG_SHOOT, TRIG_SECRET = 0, 1, 2, 3, 4, 5, 6   # ENT_TRIG_*
+TRIG_SHOOTER = 7
+TRIG_RELAY, TRIG_BOSS, TRIG_BOLT = 8, 9, 10   # a use passed on; Chthon, unseen; event_lightning
+TRIG_FIREBALL = 11   # misc_fireball: a lava ball up from its origin every 3 to 8 seconds
+KEY_NAMES = ('key', 'runekey', 'keycard')   # items.qc's netname by worldtype
 
 
-def parse_entities(text: str, nmodels: int) -> bytes:
+
+@dataclass(slots=True, frozen=True)
+class CrateSrc:
+    size: tuple[float, float, float]
+    faces: list[tuple[str, list[tuple[int, int, int]]]]   # texture, 4 x (corner bits, u*32, v*32)
+    textures: dict[str, tuple[bytes, int]]                # name -> (buffer, miptex offset)
+
+
+def pack_members(path: str, prefix: str) -> dict[str, bytes]:
+    d = open(path, 'rb').read()
+    magic, dirofs, dirlen = struct.unpack_from('<4sii', d, 0)
+    if magic != b'PACK':
+        raise SystemExit(f"{path} is not a PACK archive")
+    out: dict[str, bytes] = {}
+    for i in range(dirlen // 64):
+        e = dirofs + 64 * i
+        name = d[e:e + 56].split(b'\0')[0].decode('latin-1')
+        off, ln = struct.unpack_from('<ii', d, e + 56)
+        if name.startswith(prefix):
+            out[name[len(prefix):]] = d[off:off + ln]
+    return out
+
+
+def crate_src(b: bytes) -> CrateSrc:
+    # a b_*.bsp is one box from the origin: six faces, the bottom on the
+    # floor and never shipped. u,v are the face's own, shifted up by whole
+    # textures so the least is in [0,1) -- the filler wraps
+    h = struct.unpack_from('<i30i', b, 0)
+    lump = lambda k: (h[1 + 2 * k], h[2 + 2 * k])  # noqa: E731
+    vo, vl = lump(3)
+    verts = [struct.unpack_from('<3f', b, vo + j * 12) for j in range(vl // 12)]
+    eo, el = lump(12)
+    edges = [struct.unpack_from('<2H', b, eo + j * 4) for j in range(el // 4)]
+    so, sl = lump(13)
+    sedges = [struct.unpack_from('<i', b, so + j * 4)[0] for j in range(sl // 4)]
+    to, tl = lump(6)
+    tinf = [struct.unpack_from('<8fii', b, to + j * 40) for j in range(tl // 40)]
+    xo, _ = lump(2)
+    names: list[tuple[str, int, int]] = []
+    textures: dict[str, tuple[bytes, int]] = {}
+    for t in range(struct.unpack_from('<i', b, xo)[0]):
+        o = struct.unpack_from('<i', b, xo + 4 + t * 4)[0]
+        tn, w, hh = struct.unpack_from('<16sii', b, xo + o)
+        name = tn.split(b'\0')[0].decode('latin-1')
+        names.append((name, w, hh))
+        textures[name] = (b, xo + o)
+    size = tuple(max(v[i] for v in verts) for i in range(3))
+    faces: list[tuple[str, list[tuple[int, int, int]]]] = []
+    fo, fl = lump(7)
+    for j in range(fl // 20):
+        _, _, fe, ne, ti = struct.unpack_from('<hhihh', b, fo + j * 20)
+        vs = []
+        for k in range(ne):
+            e = sedges[fe + k]
+            vs.append(verts[edges[abs(e)][0 if e >= 0 else 1]])
+        if all(v[2] == 0.0 for v in vs):
+            continue
+        t = tinf[ti]
+        name, tw, th = names[t[8]]
+        uv = [((t[0] * x + t[1] * y + t[2] * z + t[3]) / tw, (t[4] * x + t[5] * y + t[6] * z + t[7]) / th)
+              for x, y, z in vs]
+        du = -math.floor(min(u for u, _ in uv))
+        dv = -math.floor(min(v for _, v in uv))
+        faces.append((name, [((x > 0) | (y > 0) << 1 | (z > 0) << 2, round((u + du) * 32), round((v + dv) * 32))
+                             for (x, y, z), (u, v) in zip(vs, uv)]))
+        if len(vs) != 4:
+            raise SystemExit(f"crate face {j} has {len(vs)} vertices")
+    if len(faces) != 5:
+        raise SystemExit(f"crate has {len(faces)} faces off the floor, not 5")
+    return CrateSrc(size, faces, textures)
+
+
+def load_crates(pak: str) -> dict[str, CrateSrc]:
+    if not pak or not os.path.exists(pak):
+        return {}
+    return {n[:-4]: crate_src(b) for n, b in pack_members(pak, 'maps/').items() if n.startswith('b_')}
+
+
+def crate_name(classname: str, amount: int) -> str | None:
+    # items.qc's setmodel by spawnflags, which item_amount already read
+    match classname, amount:
+        case 'item_health', 15: return 'b_bh10'
+        case 'item_health', 100: return 'b_bh100'
+        case 'item_health', _: return 'b_bh25'
+        case 'item_shells', 40: return 'b_shell1'
+        case 'item_shells', _: return 'b_shell0'
+        case 'item_spikes', 50: return 'b_nail1'
+        case 'item_spikes', _: return 'b_nail0'
+        case 'item_rockets', 10: return 'b_rock1'
+        case 'item_rockets', _: return 'b_rock0'
+        case 'misc_explobox', _: return 'b_explob'
+        case _: return None
+
+
+@dataclass(slots=True)
+class CrateSet:
+    src: dict[str, CrateSrc]
+    tex_base: int                                            # the map's own texture count
+    used: list[str] = field(default_factory=list)            # models in crate-index order
+    tex: list[tuple[str, bytes, int]] = field(default_factory=list)   # atlas cells after the map's
+
+    def crate(self, name: str | None) -> int:
+        if name is None or name not in self.src:
+            return -1
+        if name not in self.used:
+            self.used.append(name)
+        return self.used.index(name)
+
+    def tex_id(self, model: str, name: str) -> tuple[int, int]:
+        # a +0name face brings every +Nname frame, consecutive: the
+        # renderer steps them at 10 Hz as it does the world's chains
+        textures = self.src[model].textures
+        frames = sorted(n for n in textures if n[0] == '+' and n[2:] == name[2:]) if name[0] == '+' else [name]
+        ids = []
+        for n in frames:
+            if n not in [t[0] for t in self.tex]:
+                self.tex.append((n, *textures[n]))
+            ids.append(self.tex_base + [t[0] for t in self.tex].index(n))
+        if ids != list(range(ids[0], ids[0] + len(ids))):
+            raise SystemExit(f"{name}'s frames are not consecutive in the atlas: {ids}")
+        return ids[0], len(ids)
+
+    def cells(self) -> list[tuple[bytes, int]]:
+        return [(b, o) for _, b, o in self.tex]
+
+
+def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skill: int, gravity: float,
+                   crates: CrateSet) -> bytes:
     # Resolved here, not on the target: BASIC strings cap at 32,767 bytes
     # and e1m3's entities lump is 45,762 -- mod_find_spawn died at error 5
     # before anything else could. The renderer wants four facts out of the
     # text, so those are what ships: spawn, matched teleporter pairs,
-    # func_plats, and which submodels a trigger hides. Layout must match
-    # EntsHead/EntsTele/EntsPlat in q_ent.bi.
+    # func_plats, func_doors, what fires them, the monsters, and which
+    # submodels a trigger hides. Layout must match the Ents* types in q_ent.bi.
     spawn: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    title = ''
+    worldtype = 0
     angle = 0.0
+    inter: tuple[tuple[float, float, float], float, float] | None = None   # origin, pitch, yaw
+    next_map = ''
     dests: dict[str, tuple[tuple[float, float, float], float]] = {}
     trigs: list[tuple[str, int]] = []
+    hides: list[int] = []
+    bolt_doors: list[int] = []   # the electrode doors, target "lightning"
     plats: list[tuple[int, float, float]] = []
+    doors: list[tuple[int, tuple[float, float, float], float, float, int, int, int]] = []
+    items: list[tuple[int, int, tuple[float, float, float]]] = []
+    uses: list[tuple] = []
+    names: dict[str, int] = {}
+    mons: list[tuple[int, tuple[float, float, float], float]] = []
+    ambs: list[tuple[int, int, tuple[float, float, float]]] = []
+    corners: list[tuple[str, tuple[float, float, float], float, str]] = []   # targetname, origin, wait, target
+    trains: list[tuple[int, float, int, str]] = []                           # model, speed, targetname id, first corner
+    # misc.qc's ambientsound calls: the wav and its volume, ATTN_STATIC
+    amb_kind = {'ambient_comp_hum': ('ambience/comp1', 1.0), 'ambient_drone': ('ambience/drone6', 0.5),
+                'ambient_drip': ('ambience/drip1', 0.5), 'ambient_swamp1': ('ambience/swamp1', 0.5),
+                'ambient_swamp2': ('ambience/swamp2', 0.5)}
+    mon_kind = {'monster_army': 0, 'monster_knight': 1, 'monster_dog': 2, 'monster_ogre': 3, 'monster_demon1': 4,
+                'monster_zombie': 5, 'monster_wizard': 6, 'monster_shambler': 7}   # MDL_KIND_*; no model for the rest
+    item_kind = {'item_health': 0, 'item_shells': 1, 'item_armor1': 2, 'item_armor2': 3,
+                 'weapon_supershotgun': 4, 'item_spikes': 5, 'weapon_nailgun': 6,
+                 'item_artifact_super_damage': 7, 'item_artifact_envirosuit': 8, 'misc_explobox': 9,
+                 'item_key1': 10, 'item_key2': 11, 'weapon_grenadelauncher': 12, 'item_rockets': 13,
+                 'weapon_supernailgun': 14, 'weapon_rocketlauncher': 15,
+                 'item_artifact_invulnerability': 16, 'item_sigil': 17}
 
     def vec(v: str) -> tuple[float, float, float]:
         x, y, z = (float(t) for t in v.split())
         return (x, y, z)
 
+    def item_amount(classname: str, flags: int) -> int:
+        # items.qc: H_ROTTEN 15, H_MEGA 100, else 25; WEAPON_BIG2 40 shells,
+        # else 20; armor_touch's 100 green, 150 yellow; weapon_touch's
+        # 5 shells with the super shotgun, 30 nails with either nailgun and
+        # 5 rockets with either launcher; item_rockets 5, WEAPON_BIG2 10;
+        # item_spikes 25, WEAPON_BIG2 50; a powerup's 30 seconds; the
+        # exploding box's 20 health
+        match classname, flags & 1, flags & 2:
+            case 'item_artifact_super_damage' | 'item_artifact_envirosuit' | 'item_artifact_invulnerability', _, _:
+                return 30
+            case 'misc_explobox', _, _: return 20
+            case 'weapon_supershotgun', _, _: return 5
+            case 'weapon_nailgun', _, _: return 30
+            case 'weapon_grenadelauncher' | 'weapon_rocketlauncher', _, _: return 5
+            case 'weapon_supernailgun', _, _: return 30
+            case 'item_rockets', 1, _: return 10
+            case 'item_rockets', _, _: return 5
+            case 'item_spikes', 1, _: return 50
+            case 'item_spikes', _, _: return 25
+            case 'item_armor1', _, _: return 100
+            case 'item_armor2', _, _: return 150
+            case 'item_health', 1, _: return 15
+            case 'item_health', _, 2: return 100
+            case 'item_health', _, _: return 25
+            case _, 1, _: return 40
+            case _: return 20
+
+    def name_id(s: str) -> int:
+        # targetnames become ids; 0 is none
+        return names.setdefault(s, len(names) + 1) if s else 0
+
+    def msg_of(kv: dict[str, str]) -> bytes:
+        # the first line: a map's newline is a literal backslash-n, and the
+        # overlay draws one line of 40; only start's registered notice has more
+        return kv.get('message', '').split('\\n')[0][:40].encode('latin1').ljust(40)
+
+    def movedir(angle: float) -> tuple[float, float, float]:
+        # SetMovedir: angle -1 up, -2 down, anything else a heading
+        match angle:
+            case -1.0: return (0.0, 0.0, 1.0)
+            case -2.0: return (0.0, 0.0, -1.0)
+            case _: return (math.cos(math.radians(angle)), math.sin(math.radians(angle)), 0.0)
+
+    def travel_of(angle: float, box: tuple[float, ...], lip: float) -> tuple[float, float, float]:
+        # the brush moves its size along its movedir, less the lip
+        mdir = movedir(angle)
+        size = [box[k + 3] - box[k] for k in range(3)]
+        dist = max(sum(abs(mdir[k]) * size[k] for k in range(3)) - lip, 0.0)
+        return (mdir[0] * dist, mdir[1] * dist, mdir[2] * dist)
+
+    def door_record(m: int, kv: dict[str, str], box: tuple[float, ...]) -> tuple:
+        # func_door: speed 100, wait 3, lip 8 unless the map says
+        speed = float(kv.get('speed', '0')) or 100.0
+        hold = float(kv.get('wait', '0')) or 3.0
+        lip = float(kv.get('lip', '0')) or 8.0
+        flags = int(kv.get('spawnflags', '0'))
+        travel = travel_of(float(kv.get('angle', '0')), box, lip)
+        # DOOR_SILVER_KEY 16, DOOR_GOLD_KEY 8: door_touch's "You need the
+        # silver key" stands in for a message the map does not give
+        key = 1 if flags & 16 else 2 if flags & 8 else 0
+        msg = msg_of(kv)
+        if key and not kv.get('message'):
+            msg = f"You need the {'silver' if key == 1 else 'gold'} {KEY_NAMES[worldtype]}".encode('latin1').ljust(40)
+        return (m, travel, (0.0, 0.0, 0.0), speed, hold, 1 if flags & 1 else 0, 1 if flags & 4 else 0,
+                name_id(kv.get('targetname', '')), 0, 0, int(kv.get('sounds', '0')), key, msg)
+
+    def secret_record(m: int, kv: dict[str, str], box: tuple[float, ...]) -> tuple:
+        # func_door_secret, fd_secret_use: back t_width along v_right (or
+        # down), then t_length along v_forward; speed 50, wait 5, open_once
+        # stays; shot open unless named, or no_shoot, or always_shoot
+        flags = int(kv.get('spawnflags', '0'))
+        yaw = math.radians(float(kv.get('angle', '0')))
+        fwd = (math.cos(yaw), math.sin(yaw), 0.0)
+        right = (math.sin(yaw), -math.cos(yaw), 0.0)
+        size = [box[k + 3] - box[k] for k in range(3)]
+        width = float(kv.get('t_width', '0')) or (size[2] if flags & 4 else abs(sum(right[k] * size[k] for k in range(3))))
+        length = float(kv.get('t_length', '0')) or abs(sum(fwd[k] * size[k] for k in range(3)))
+        temp = 1.0 - (flags & 2)
+        mid = (0.0, 0.0, -width) if flags & 4 else tuple(right[k] * width * temp for k in range(3))
+        travel = tuple(mid[k] + fwd[k] * length for k in range(3))
+        speed = float(kv.get('speed', '0')) or 50.0
+        hold = -1.0 if flags & 1 else (float(kv.get('wait', '0')) or 5.0)
+        name = name_id(kv.get('targetname', ''))
+        shoot = 0 if flags & 8 else (1 if not name or flags & 16 else 0)
+        return (m, travel, mid, speed, hold, 0, 1, name, 1, shoot, int(kv.get('sounds', '0')) or 3, 0, msg_of(kv))
+
+    def trig_record(m: int, kv: dict[str, str]) -> tuple:
+        # trigger_once is a multiple with wait -1; a multiple re-arms after
+        # wait, 0.2 unless the map says; a counter fires at count, 2
+        match kv['classname']:
+            case 'trigger_secret': kind, wait, count = TRIG_SECRET, -1.0, 0
+            case 'trigger_once': kind, wait, count = TRIG_ONCE, -1.0, 0
+            case 'trigger_multiple': kind, wait, count = TRIG_MULTI, float(kv.get('wait', '0')) or 0.2, 0
+            case _: kind, wait, count = TRIG_COUNTER, -1.0, int(kv.get('count', '0')) or 2
+        if int(kv.get('health', '0')) > 0:
+            kind = TRIG_SHOOT   # multi_killed: shot, not touched; wait as above
+        msg = msg_of(kv)
+        snd = int(kv.get('sounds', '0'))
+        if kind == TRIG_SECRET:
+            snd = snd or 1
+            if not kv.get('message'):
+                msg = b'You found a secret area!'.ljust(40)
+        # delay: SUB_UseTargets' DelayThink, seconds before the target fires
+        return (m, kind, name_id(kv.get('target', '')), name_id(kv.get('targetname', '')),
+                name_id(kv.get('killtarget', '')), count, wait, 0.0, (0.0, 0.0, 0.0), snd, msg,
+                (0.0, 0.0, 0.0), float(kv.get('delay', '0')))
+
+    def button_record(m: int, kv: dict[str, str], box: tuple[float, ...]) -> tuple:
+        # func_button: speed 40, wait 1, lip 4; wait -1 stays pressed
+        speed = float(kv.get('speed', '0')) or 40.0
+        wait = float(kv.get('wait', '0')) or 1.0
+        lip = float(kv.get('lip', '0')) or 4.0
+        travel = travel_of(float(kv.get('angle', '0')), box, lip)
+        return (m, TRIG_BUTTON, name_id(kv.get('target', '')), name_id(kv.get('targetname', '')),
+                name_id(kv.get('killtarget', '')), 0, wait, speed, travel, int(kv.get('sounds', '0')), msg_of(kv))
+
     def model(v: str) -> int:
         m = int(v[1:]) if v.startswith('*') and v[1:].isdigit() else 0
         return m if 0 < m < nmodels else 0
 
+    # NOT_EASY 256, NOT_MEDIUM 512, NOT_HARD 1024, on any entity -- e1m1's
+    # ambush hints exist only below hard; nightmare is hard's set
+    skip = 256 << min(skill, 2)
     for block in text.split('{')[1:]:
         kv = dict(ENT_PAIR.findall(block.split('}')[0]))
+        if int(kv.get('spawnflags', '0')) & skip:
+            continue
         match kv.get('classname'):
+            case 'worldspawn':
+                title = kv.get('message', '')
+                worldtype = int(kv.get('worldtype', '0') or 0)
             case 'info_player_start':
                 spawn = vec(kv.get('origin', '0 0 0'))
                 angle = float(kv.get('angle', '0'))
+            case 'info_intermission' if inter is None:
+                # FindIntermission picks one at random; the first is as good
+                mangle = vec(kv.get('mangle', '0 0 0'))
+                inter = (vec(kv.get('origin', '0 0 0')), mangle[0], mangle[1])
             case 'info_teleport_destination':
                 dests[kv.get('targetname', '')] = (
                     vec(kv.get('origin', '0 0 0')), float(kv.get('angle', '0')))
             case 'trigger_teleport' if model(kv.get('model', '')):
                 trigs.append((kv.get('target', ''), model(kv['model'])))
+                hides.append(model(kv['model']))
+            case 'trigger_once' | 'trigger_multiple' if model(kv.get('model', '')):
+                hides.append(model(kv['model']))
+                uses.append(trig_record(model(kv['model']), kv))
+            case 'trigger_secret' if model(kv.get('model', '')):
+                hides.append(model(kv['model']))
+                uses.append(trig_record(model(kv['model']), kv))
+            case 'trigger_counter':
+                if model(kv.get('model', '')):
+                    hides.append(model(kv['model']))
+                uses.append(trig_record(model(kv.get('model', '')), kv))
+            case 'trap_spikeshooter':
+                # spikeshooter_use: a spike along movedir at 500 when used;
+                # SUPERSPIKE (1) bites 18 for 9. wait carries the damage
+                uses.append((0, TRIG_SHOOTER, 0, name_id(kv.get('targetname', '')), 0,
+                             18 if int(kv.get('spawnflags', '0')) & 1 else 9, 0.0, 500.0,
+                             movedir(float(kv.get('angle', '0'))), 0, b''.ljust(40), vec(kv.get('origin', '0 0 0'))))
+            case 'trigger_changelevel' if model(kv.get('model', '')):
+                # the level ends here; its message is the map's title
+                hides.append(model(kv['model']))
+                uses.append((model(kv['model']), TRIG_EXIT, 0, 0, 0, 0, -1.0, 0.0, (0.0, 0.0, 0.0), 0,
+                             title[:40].encode('latin1').ljust(40)))
+                next_map = kv.get('map', '')
+            case 'func_button' if model(kv.get('model', '')):
+                uses.append(button_record(model(kv['model']), kv, boxes[model(kv['model'])]))
+            case 'misc_fireball':
+                # speed as the map gives it: id's default is `self.speed == 1000`,
+                # a compare, so an unset one leaves 0 and the ball rises 0..200
+                uses.append((0, TRIG_FIREBALL, 0, 0, 0, 0, 0.0, float(kv.get('speed', '0')),
+                             (0.0, 0.0, 0.0), 0, b''.ljust(40), vec(kv.get('origin', '0 0 0'))))
+            case 'trigger_relay':
+                # SUB_UseTargets passed on, at once: delay is not ported
+                uses.append((0, TRIG_RELAY, name_id(kv.get('target', '')), name_id(kv.get('targetname', '')),
+                             name_id(kv.get('killtarget', '')), 0, 0.0, 0.0, (0.0, 0.0, 0.0), 0, msg_of(kv)))
+            case 'monster_boss':
+                # Chthon, unseen (boss.mdl is past MDL_MAXV): the rune wakes him, his
+                # health boss_awake's 1 on easy else 3, a bolt a point, dead his target fires
+                uses.append((0, TRIG_BOSS, name_id(kv.get('target', '')), name_id(kv.get('targetname', '')),
+                             0, 1 if skill == 0 else 3, 0.0, 0.0, (0.0, 0.0, 0.0), 0, b''.ljust(40)))
+            case 'event_lightning':
+                # lightning_use: a point off Chthon with both electrode doors up; travel
+                # carries the doors' indices, patched below once every door is read
+                uses.append((0, TRIG_BOLT, 0, name_id(kv.get('targetname', '')),
+                             0, 0, 0.0, 0.0, (0.0, 0.0, 0.0), 0, b''.ljust(40)))
+            case 'trigger_onlyregistered' if model(kv.get('model', '')) and kv.get('message'):
+                # OnlyRegisteredTouch on the shareware: the message and misc/talk
+                # every two seconds, its target never fired -- a multiple with no target
+                hides.append(model(kv['model']))
+                uses.append(trig_record(model(kv['model']), {
+                    'classname': 'trigger_multiple', 'message': kv['message'], 'wait': '2'}))
+            case str(c) if c.startswith('trigger_') and model(kv.get('model', '')):
+                # any trigger's brush is a volume: e1m1 drew its changelevel
+                # as a column of the "trigger" texture
+                hides.append(model(kv['model']))
+            case 'func_episodegate' if model(kv.get('model', '')):
+                # misc.qc spawns it only for a rune held, and none ever is here;
+                # func_bossgate is the reverse, gone with all four, so it stays
+                hides.append(model(kv['model']))
+            case 'func_door' if model(kv.get('model', '')):
+                if kv.get('target') == 'lightning':
+                    bolt_doors.append(len(doors))
+                doors.append(door_record(model(kv['model']), kv, boxes[model(kv['model'])]))
+            case 'func_door_secret' if model(kv.get('model', '')):
+                doors.append(secret_record(model(kv['model']), kv, boxes[model(kv['model'])]))
+            case 'path_corner':
+                corners.append((kv.get('targetname', ''), vec(kv.get('origin', '0 0 0')), float(kv.get('wait', '0')),
+                                kv.get('target', '')))
+            case 'func_train' if model(kv.get('model', '')):
+                # func_train: speed 100; a targetname waits for its trigger
+                trains.append((model(kv['model']), float(kv.get('speed', '0')) or 100.0,
+                               name_id(kv.get('targetname', '')), kv.get('target', '')))
             case 'func_plat' if model(kv.get('model', '')):
                 plats.append((model(kv['model']),
                               float(kv.get('speed', '0')),
                               float(kv.get('height', '0'))))
+            case str(c) if c in mon_kind:
+                mons.append((mon_kind[c], vec(kv.get('origin', '0 0 0')), float(kv.get('angle', '0')),
+                             kv.get('target', '')))
+            case str(c) if c in item_kind:
+                amount = item_amount(c, int(kv.get('spawnflags', '0')))
+                items.append((item_kind[c], amount, name_id(kv.get('target', '')),
+                              crates.crate(crate_name(c, amount)), vec(kv.get('origin', '0 0 0'))))
+            case str(c) if c in amb_kind:
+                wav, fvol = amb_kind[c]
+                ambs.append((mksnd.SOUNDS.index(wav), int(255 * fvol), vec(kv.get('origin', '0 0 0'))))
 
-    # a trigger with no destination still hides its brush, exactly as the
-    # BASIC pass 1 did before pass 2 paired them
+    # a teleporter with no destination still hides its brush
     teles = [(m, *dests[t]) for t, m in trigs if t in dests]
-    hides = [m for _, m in trigs]
 
-    buf = bytearray(struct.pack('<4f4h', *spawn, angle, nmodels,
-                                len(teles), len(plats), len(hides)))
+    if inter is None:
+        inter = (spawn, 0.0, angle)   # no info_intermission: the start, as Quake does
+    # corners by index, each pointing at the next; a train at one with no target stays
+    corner_at = {name: i for i, (name, _, _, _) in reversed(list(enumerate(corners))) if name}
+    trains = [(m, speed, targeted, corner_at[first]) for m, speed, targeted, first in trains if first in corner_at]
+    if any(u[1] == TRIG_BOLT for u in uses):
+        assert len(bolt_doors) == 2, bolt_doors
+        uses = [(*u[:8], (float(bolt_doors[0]), float(bolt_doors[1]), 0.0), *u[9:]) if u[1] == TRIG_BOLT else u
+                for u in uses]
+    # messages are ids into one table after the crates, 0 none: 40 bytes a
+    # record was 3K on e1m4, whose 78 doors and triggers say two things
+    msgs: dict[bytes, int] = {}
+
+    def msg_id(b: bytes) -> int:
+        return msgs.setdefault(b, len(msgs) + 1) if b.strip() else 0
+
+    for d in doors:
+        msg_id(d[-1])
+    for u in uses:
+        msg_id(u[10])
+    buf = bytearray(struct.pack('<4f3fff13hf8sh', *spawn, angle, *inter[0], inter[1], inter[2], nmodels,
+                                len(teles), len(plats), len(hides), len(items), len(doors), len(uses), len(mons),
+                                len(ambs), len(trains), len(corners), worldtype, len(crates.used), gravity,
+                                next_map[:8].encode('latin1').ljust(8), len(msgs)))
+    for kind, org, yaw, target in mons:
+        buf += struct.pack('<h3ffh', kind, *org, yaw, corner_at.get(target, -1))   # its patrol's first corner
     for m, org, yaw in teles:
         buf += struct.pack('<h3ff', m, *org, yaw)
     for m, speed, height in plats:
         buf += struct.pack('<hff', m, speed, height)
     for m in hides:
         buf += struct.pack('<h', m)
+    for kind, amount, target, crate, org in items:
+        buf += struct.pack('<hhhh3f', kind, amount, target, crate, *org)
+    for m, travel, mid, speed, hold, start_open, nolink, targeted, secret, shoot, snd, key, msg in doors:
+        buf += struct.pack('<h3f3fffhhhhhhhh', m, *travel, *mid, speed, hold, start_open, nolink, targeted,
+                           secret, shoot, snd, key, msg_id(msg))
+    for m, kind, target, name, kill, count, wait, speed, travel, snd, msg, *rest in uses:
+        org = rest[0] if rest else (0.0, 0.0, 0.0)   # a shooter's
+        delay = rest[1] if len(rest) > 1 else 0.0
+        buf += struct.pack('<6hff3f3fhhf', m, kind, target, name, kill, count, wait, speed, *travel, *org, snd,
+                           msg_id(msg), delay)
+    for snd, vol, org in ambs:
+        buf += struct.pack('<hh3f', snd, vol, *org)
+    for m, speed, targeted, first in trains:
+        buf += struct.pack('<hfhh', m, speed, targeted, first)
+    for _, org, wait, target in corners:
+        buf += struct.pack('<3ffh', *org, wait, corner_at.get(target, -1))
+    # q_ent.bi's CrateModel: the size, then five faces of atlas id,
+    # frame count and four (corner bits, u*32, v*32)
+    for name in crates.used:
+        src = crates.src[name]
+        buf += struct.pack('<3f', *src.size)
+        for tn, corners4 in src.faces:
+            tex, frames = crates.tex_id(name, tn)
+            buf += struct.pack('<hh12b', tex, frames, *(v for corner in corners4 for v in corner))
+    for b in msgs:
+        buf += b
     return bytes(buf)
 
 
-def convert_lumps(d, lumps, outdir):
+def convert_lumps(d, lumps, outdir, skill, gravity, crates):
     """Convert each lump from its on-disk layout to the renderer's own.
 
     model.bas did this per element, in BASIC, copying field by field -- and
@@ -533,12 +965,12 @@ def convert_lumps(d, lumps, outdir):
     for k in range(0, len(raw), 20):
         firstedge, = struct.unpack_from('<i', raw, k + 4)
         nvtx, = struct.unpack_from('<h', raw, k + 8)
-        # d_poly.bas indexes polyb(32)/uvbuffb(32), so 33 corners is the
-        # standing contract; a face past it would run off the end of both.
+        # 33 corners is the standing contract, and d_faces.c's MAXV is
+        # derived from it; a face past it runs off every per-face array.
         if not (0 < nvtx <= GEOM_MAXVTX):
             raise SystemExit(
                 f"fgeom.bin: face {k // 20} has {nvtx} corners, and "
-                f"d_poly.bas's polyb() holds {GEOM_MAXVTX}")
+                f"GEOM_MAXVTX is {GEOM_MAXVTX}")
         fi = k // 20
         rec = bytearray(struct.pack('<h', nvtx))
         rec += lmtab[fi * 16:(fi + 1) * 16]
@@ -555,11 +987,16 @@ def convert_lumps(d, lumps, outdir):
 
     ent_text = lump(0).split(b'\0')[0].decode('latin-1')
     nmodels = lumps[14][1] // 64
-    out['ents.bin'] = parse_entities(ent_text, nmodels)
+    boxes = [struct.unpack_from('<6f', lump(14), m * 64) for m in range(nmodels)]
+    out['ents.bin'] = parse_entities(ent_text, nmodels, boxes, skill, gravity, crates)
 
-    # marksurfaces, models: identical either side
+    # marksurfaces: identical either side. models: 64 -> 32, bspfile.bi's
+    # Submodel -- the box, hulls 0 and 1, the face run
     out['lface.bld'] = lump(11)
-    out['models.bld'] = lump(14)
+    out['models.bld'] = b''.join(struct.pack('<6f4h', *struct.unpack_from('<6f', lump(14), m * 64),
+                                             *struct.unpack_from('<2i', lump(14), m * 64 + 36),
+                                             *struct.unpack_from('<2i', lump(14), m * 64 + 56))
+                                 for m in range(nmodels))
     # raw, not BLOAD: read by fileReadH into a memAlloc block, which puts
     # it in upper memory rather than the far heap. It is walked by a PEEK
     # loop over a byte offset and nothing indexes it as an array.
@@ -604,33 +1041,32 @@ def convert_lumps(d, lumps, outdir):
         buf += struct.pack('<hhhhh', planeid, side, grow, gofs, texinfoid)
     out['faces.pag'] = bytes(buf)
 
-    # leaves: leaf(28) -> leaf2(22), dropping the trailing 4 bytes and
+    # leaves: leaf(28) -> Leaf(16), dropping the trailing 4 bytes,
     # narrowing cont to an integer (always one of six small CONTENTS_*
-    # negatives -- see bspfile.bi's leaf2 comment)
+    # negatives -- see bspfile.bi's Leaf comment) and the box to bytes
     raw = lump(10)
     buf = bytearray()
     for k in range(0, len(raw), 28):
         cont, vislist = struct.unpack_from('<ii', raw, k)
-        bound = raw[k+8:k+20]                       # 6 int16, copied whole
+        bound = bound_bytes(raw[k+8:k+20])
         lfaceid, lfacenum = struct.unpack_from('<hh', raw, k+20)
         buf += struct.pack('<h', cont) + struct.pack('<i', vislist) + bound + struct.pack('<hh', lfaceid, lfacenum)
     out['leaves.pag'] = bytes(buf)
 
-    # planes: plane(20) -> plane2(18), ptype narrows to an integer
+    # planes: plane(20) -> Plane(16), the type dropped -- nothing reads it
     raw = lump(1)
     buf = bytearray()
     for k in range(0, len(raw), 20):
-        nx, ny, nz, dist, ptype = struct.unpack_from('<ffffi', raw, k)
-        buf += struct.pack('<ffffh', nx, ny, nz, dist, ptype)
+        buf += raw[k:k + 16]
     out['planes.bld'] = bytes(buf)
 
-    # nodes: node(24) -> nodeb(22). planeid narrows, and the bounding box
+    # nodes: node(24) -> Node(16). planeid narrows, the box packs, and it
     # moves to the end -- the two structures are not in the same order.
     raw = lump(5)
     buf = bytearray()
     for k in range(0, len(raw), 24):
         planeid, child0, child1 = struct.unpack_from('<ihh', raw, k)
-        bound = raw[k+8:k+20]
+        bound = bound_bytes(raw[k+8:k+20])
         lfaceid, lfacenum = struct.unpack_from('<hh', raw, k+20)
         buf += struct.pack('<hhhhh', planeid, child0, child1, lfaceid, lfacenum) + bound
     out['nodes.pag'] = bytes(buf)
@@ -644,11 +1080,10 @@ def convert_lumps(d, lumps, outdir):
             else:
                 # page-padded: read a page at a time into an EMS window
                 total += write_paged(path, payload, PAGED_ELEM[name])
-        elif name.endswith('.bin') or name.endswith('.bmp'):
-            # raw: .bin is read by mgl's fileRead -- into a memAlloc'd
-            # block for lmface, straight into a mapped EMS window for
-            # fgeom -- and .bmp by uglNewBMPEx, so none of them is bound
-            # by BLOAD's 64K cap or by BASIC's far heap
+        elif name.endswith('.bin'):
+            # raw: read through qglFileRead into a block or straight into
+            # a mapped EMS window, so none of them is bound by BLOAD's
+            # 64K cap or by BASIC's far heap
             OUT[name] = bytes(payload)
             total += len(payload)
         else:
@@ -659,8 +1094,10 @@ def convert_lumps(d, lumps, outdir):
 
 def main():
     if len(sys.argv) < 4:
-        raise SystemExit("usage: mkassets.py <map.bsp> <base.dat> <outdir>")
+        raise SystemExit("usage: mkassets.py <map.bsp> <base.dat> <outdir> [skill 0..3, 0] [pak0.pak: the pickups' b_*.bsp]")
     bsp, packpath, outdir = sys.argv[1], sys.argv[2], sys.argv[3]
+    skill = int(sys.argv[4]) if len(sys.argv) > 4 else 0
+    pak = sys.argv[5] if len(sys.argv) > 5 else ''
     os.makedirs(outdir, exist_ok=True)
     d   = open(bsp, 'rb').read()
     pal = load_palette(pack_read(packpath, 'color/palette.lmp'))
@@ -691,12 +1128,20 @@ def main():
     cube, bits = inverse_palette(pal)
 
     lumps   = read_lumps(d)
-    print("converting lumps ...", flush=True)
-    convert_lumps(d, lumps, outdir)
-
     toff, _ = lumps[2]
     ntex    = struct.unpack_from('<i', d, toff)[0]
     offs    = [struct.unpack_from('<i', d, toff + 4 + 4*k)[0] for k in range(ntex)]
+    # the pickups' b_*.bsp boxes: their textures are cells after the map's
+    crates  = CrateSet(load_crates(pak), ntex)
+    print("converting lumps ...", flush=True)
+    # world.qc: sv_gravity 100 on e1m8, 800 everywhere else
+    gravity = 100.0 if os.path.basename(bsp).lower() == 'e1m8.bsp' else 800.0
+    convert_lumps(d, lumps, outdir, skill, gravity, crates)
+    cells = [(d, toff + o) if o >= 0 else None for o in offs] + crates.cells()
+    ntex  = len(cells)
+    if ntex * MIPS > 1024:
+        raise SystemExit(f"{ntex} textures with the pickups': q_map.bi's ofs(1023) holds 256")
+    print(f"  crates: {len(crates.used)} models, {len(crates.tex)} textures after the map's {len(offs)}")
 
     # ------------------------------------------------------------------
     # Two atlases, not 648 DCs.
@@ -745,20 +1190,20 @@ def main():
 
     for lvl in range(MIPS):
         cell = SIZES[lvl]
-        for k, o in enumerate(offs):
+        for k, cl in enumerate(cells):
             # A view must not straddle a 16K page (uglview.asm). Cells are
             # powers of two and packed largest-first, so every offset is a
             # multiple of its own size and none ever does.
             assert len(raw_at) % (cell * cell) == 0, "cell not self-aligned"
             place[k][lvl] = len(raw_at)
-            if o < 0:
+            if cl is None:
                 raw_at += bytes(cell * cell); shd_at += bytes(cell * cell)
                 continue
-            base = toff + o
-            w, h = struct.unpack_from('<ii', d, base + 16)
-            mo   = struct.unpack_from('<i',  d, base + 24 + 4*lvl)[0]
+            buf, base = cl
+            w, h = struct.unpack_from('<ii', buf, base + 16)
+            mo   = struct.unpack_from('<i',  buf, base + 24 + 4*lvl)[0]
             mw, mh = w >> lvl, h >> lvl
-            src  = d[base+mo : base+mo + mw*mh]
+            src  = buf[base+mo : base+mo + mw*mh]
             if len(src) < mw*mh:
                 print(f"  ! texture {k} mip {lvl} truncated, left blank")
                 raw_at += bytes(cell * cell); shd_at += bytes(cell * cell)
@@ -782,12 +1227,25 @@ def main():
             fh.write(bytes(at))
         print(f"  {name}: {LM_ATLAS_W}x{rows} = {len(at):,} bytes")
 
-    # The game palette, flat: 256 entries, r g b, 8 bits each.
-    # qglVgaPalette shifts to the DAC's 6 itself, so these stay 8-bit and
-    # nothing has to read them back off the hardware to know what they were.
-    with open(os.path.join(outdir, "pal.raw"), "wb") as fh:
-        fh.write(bytes(bytearray(c for e in pal[:256] for c in e[:3])))
-    print(f"  pal.raw: 768 bytes (flat, unzipped)")
+    # The same bytes again, flat and beside the exe rather than in the zip,
+    # because qgl reads them: qglSfLoad is a raw blob straight into an EMS
+    # surface's store and file.asm is plain INT 21h, which cannot see inside
+    # assets.zip. Same delivery FONT.FNT and SOLDIER.GEO already use -- the
+    # zip is for what mgl loads.
+    #
+    # Truncated to exactly rows*LM_ATLAS_W: qglSfLoad reads y_res rows of
+    # x_res and fails the load if any row runs short, so the file has to be
+    # the surface's own size and not a byte more.
+    for name, at in (("texr.raw", raw_at), ("texs.raw", shd_at)):
+        payload = bytes(at)[: rows * LM_ATLAS_W]
+        open(os.path.join(outdir, name), "wb").write(payload)
+        print(f"  {name}: {LM_ATLAS_W}x{rows} = {len(payload):,} bytes (flat, unzipped)")
+
+    # The palette too, flat: screen.bas picks the HUD colours out of it and
+    # writes it into screenshots, and reads it with a plain OPEN.
+    pal_raw = pack_read(packpath, 'color/palette.lmp')[:768]
+    open(os.path.join(outdir, "pal.raw"), "wb").write(pal_raw)
+    print(f"  pal.raw: {len(pal_raw)} bytes (flat, unzipped)")
 
     tbl = bytearray()
     for k in range(ntex):
@@ -801,15 +1259,23 @@ def main():
 
     print(f"done: {written} atlases for {ntex} textures across {MIPS} mip levels")
 
-    # Portals, rebuilt from the tree -- see tools/mkportals.py for why they
-    # have to be rebuilt at all and what check they are held to. Emitted here
-    # so they travel in assets.zip with everything else the map needs.
+    # Portals, rebuilt from the tree -- tools/mkportals.py says why -- held to
+    # its PVS-subset check here too, so a map whose portals do not cover the
+    # PVS fails the build rather than culling what it should have drawn.
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import mkportals
     pb = mkportals.read_bsp(bsp)
     portals = mkportals.build_portals(pb)
-    OUT['portalidx.bld'], OUT['portalref.bld'] = mkportals.portal_lumps(pb, portals)
-    print(f"  portals: {len(OUT['portalref.bld'])//14} refs over {len(pb.leaves)} leaves")
+    checked, bad = mkportals.pvs_subset_check(pb, portals)
+    if bad:
+        # e1m4: 152 of 1230. Such a map ships an index of zeros -- a ref count
+        # of 0 -- and r_load_portals leaves pt_ok 0, so the walk reads the PVS
+        # alone. Its table would have passed the runtime's 4,681 anyway.
+        print(f"  portals do not cover the PVS: {bad} of {checked} leaves; shipped without, the PVS alone draws")
+        OUT['portalidx.bld'] = bytes(2 * (len(pb.leaves) + 1))
+    else:
+        OUT['portalidx.bld'], OUT['portalref.bld'] = mkportals.portal_lumps(pb, portals)
+        print(f"  portals: {len(OUT['portalref.bld'])//14} refs over {len(pb.leaves)} leaves")
 
     write_zip(os.path.join(outdir, 'assets.zip'))
 

@@ -17,16 +17,16 @@
 # module's source, so each invocation only needs its own .bas plus every
 # .bi this project owns (all of them, copied in: BC's own $include cannot
 # tell which subset a given module actually needs without parsing it, and
-# copying all of them costs nothing they are small). uGL's own headers
-# (ugl.bi, u3d.bi, etc.) are NOT in src/ -- set INCLUDE=M:\INC is what
-# template.conf's shared flow uses for those, mirrored here.
+# copying all of them costs nothing they are small).
+# DEBUGINFO=1 adds /Zi, BC's full CodeView symbolic info -- procedure
+# and variable names, in the OBJ. link-qr.sh's /CO is the other half; one
+# without the other gives nothing.
 set -euo pipefail
 
 SRC_REL="${1:?usage: bc.sh <src-bas> <out-obj>}"
 OUT="${2:?usage: bc.sh <src-bas> <out-obj>}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TOOLCHAINS="${TOOLCHAINS:-$HOME/work/other/d32x/toolchains}"
-MGL="${MGL:-$HOME/work/badlogic/mgl}"
 
 DOSBOX_BIN="${DOSBOX_BIN:-}"
 if [[ -z "$DOSBOX_BIN" ]]; then
@@ -36,11 +36,18 @@ if [[ -z "$DOSBOX_BIN" ]]; then
 fi
 [[ -n "$DOSBOX_BIN" ]] || { echo "no dosbox-x found; set DOSBOX_BIN" >&2; exit 1; }
 
+BC_DBG=""
+[[ "${DEBUGINFO:-0}" == "1" ]] && BC_DBG=" /Zi"
+
 base=$(basename "$SRC_REL" .bas)
 
 W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
-cp "$ROOT/src/$base.bas" "$W/"
-cp "$ROOT"/src/*.bi "$W/" 2>/dev/null || true
+cp "$ROOT/$SRC_REL" "$W/"
+# Headers live in src/inc; sources in one directory per subsystem. The
+# DOS side never sees either -- everything is copied flat into $W.
+for d in host render game qgl; do
+    cp "$ROOT"/src/$d/*.bi "$W/" 2>/dev/null || true
+done
 
 { printf '[sdl]\nautolock=false\n[dosbox]\nmemsize=32\nstartbanner=false\nquit warning=false\n'
   # core=dynamic/cycles=max: a compile's correctness does not depend on
@@ -50,10 +57,8 @@ cp "$ROOT"/src/*.bi "$W/" 2>/dev/null || true
   echo "@echo off"
   echo "mount w $W"
   echo "mount v $TOOLCHAINS/vbdos"
-  echo "mount m $MGL"
-  echo "set INCLUDE=M:\\INC"
   echo "w:"
-  echo "v:\\bin\\bc.exe /O /FPi /R /G3 /E $base.bas, $base.obj; > w:\\bc.txt"
+  echo "v:\\bin\\bc.exe /O /FPi /R /G3 /E$BC_DBG $base.bas, $base.obj; > w:\\bc.txt"
   echo "exit"
 } > "$W/build.conf"
 

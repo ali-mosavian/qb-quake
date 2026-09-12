@@ -1,0 +1,2032 @@
+option explicit
+''
+'' screen.bas -- everything drawn on top of the world.
+''
+'' The loading bar, the bitmap font, the statistics overlay and the
+'' screenshot writer. Quake keeps the same unit unprefixed: screen.c and
+'' sbar.c draw over the finished frame rather than being part of it.
+''
+'' The font is qgl's: one loaded Font block (g_font) instead of 256
+'' separate 8x8 DCs, which measured at 16,400 bytes of conventional
+'' memory for 2,048 bytes of pixels. The mgl DC these routines are handed
+'' is passed straight through as the destination Surface -- one struct,
+'' one allocator, nothing to bridge.
+''
+'$include: 'in.bi'
+'$include: 'bspfile.bi'
+'$include: 'q_env.bi'
+'$include: 'q_map.bi'
+'$include: 'q_vis.bi'
+'$include: 'q_draw.bi'
+'$include: 'q_scr.bi'
+'$include: 'q_cam.bi'
+'$include: 'q_pl.bi'
+'$include: 'q_ent.bi'
+'$include: 'q_mdl.bi'
+'$include: 'q_game.bi'
+'$include: 'qgl.bi'
+
+
+''
+'' This module's own procedures.
+''
+declare sub hud_shade ( _
+    g as Game, _
+    dc as long, _
+    x0 as integer, _
+    y0 as integer, _
+    x1 as integer, _
+    y1 as integer, _
+    rw as integer _
+)
+declare function draw_load_font ( _
+    flname as string _
+) as integer
+declare sub bevel ( _
+    x0 as integer, _
+    y0 as integer, _
+    x1 as integer, _
+    y1 as integer, _
+    hi as integer, _
+    lo as integer, _
+    raised as integer _
+)
+declare sub bg_band ( _
+    x0 as integer, _
+    x1 as integer, _
+    y0 as integer, _
+    y1 as integer _
+)
+declare sub draw_bar ( _
+    h_dc as long, _
+    x as integer, _
+    y as integer, _
+    wdt as integer, _
+    hgt as integer, _
+    percent as single _
+)
+declare sub draw_logo ( _
+    text as string, _
+    x as integer, _
+    y as integer, _
+    sc as integer _
+)
+declare sub draw_pct ( _
+    dc as long, _
+    xright as integer, _
+    y as integer, _
+    percent as single _
+)
+declare sub draw_string ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    text as string _
+)
+declare sub draw_string_r ( _
+    dc as long, _
+    xright as integer, _
+    y as integer, _
+    text as string _
+)
+declare sub draw_string_scl ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    scale as single, _
+    text as string _
+)
+declare sub hud_bar ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    w as integer, _
+    h as integer, _
+    percent as single _
+)
+declare sub hud_graph ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    h as integer, _
+    buf() as integer, _
+    mx as integer _
+)
+declare sub hud_num ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    sc as integer, _
+    txt as string, _
+    col as integer _
+)
+declare sub hud_panel ( _
+    g as Game, _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    w as integer, _
+    h as integer, _
+    title as string _
+)
+declare sub hud_row ( _
+    dc as long, _
+    x as integer, _
+    w as integer, _
+    y as integer, _
+    label as string, _
+    value as string _
+)
+declare sub rivet ( _
+    x as integer, _
+    y as integer _
+)
+declare sub draw_spinner ( )
+declare sub scr_load_chrome ( _
+    g as Game _
+)
+declare sub scr_load_palette ( )
+declare sub scr_load_tick ( )
+
+''
+'' This module's own procedures.
+''
+declare sub scr_load_part ( _
+    byval frac as single, _
+    byval redraw as integer _
+)
+declare sub scr_draw_hud ( _
+    g as Game, _
+    h_dst_dc as long, _
+    byval w as integer, _
+    byval h as integer _
+)
+declare sub draw_init_font ( )
+declare sub scr_count_frame ( _
+    g as Game _
+)
+declare sub scr_mip_tick ( percent as single )
+declare function qglSfNew ( _
+    byval wid as integer, _
+    byval hgt as integer, _
+    byval whr as integer _
+) as long
+declare function qglSfRdRow ( byval s as long, byval y as integer ) as long
+declare function qglSfWrRow ( byval s as long, byval y as integer ) as long
+declare function qglFileOpenBas ( flname as string ) as integer
+declare function qglFileRead ( _
+    byval h as integer, _
+    byval dst as long, _
+    byval nbytes as long _
+) as long
+declare sub qglFileClose ( byval h as integer )
+declare sub qglMemCopy ( byval dst as long, byval src as long, byval nbytes as long )
+declare sub qglDrBlit ( _
+    byval d as long, _
+    byval x as integer, _
+    byval y as integer, _
+    byval s as long _
+)
+declare sub qglDrBlitScl ( _
+    byval d as long, _
+    byval x as integer, _
+    byval y as integer, _
+    byval w as integer, _
+    byval h as integer, _
+    byval s as long _
+)
+declare function qglSfViewNew& ( _
+    byval parent as long, _
+    byval wide as integer, _
+    byval high as integer, _
+    byval bps as integer _
+)
+declare function qglSfViewAim% ( _
+    byval v as long, _
+    byval ofs as long _
+)
+declare sub scr_sbar_load ( )
+declare sub scr_sbar_paint ( g as Game )
+declare sub scr_sbar_cell ( byval idx as integer, byval x as integer )
+declare function scr_seg_of ( byval p as long ) as integer
+declare sub scr_sbar_num ( byval x as integer, byval v as integer )
+declare sub scr_sbar_draw ( _
+    g as Game, _
+    byval dc as long, _
+    byval w as integer, _
+    byval h as integer _
+)
+declare sub scr_pal_install ( )
+declare sub scr_begin_loading ( _
+    g as Game _
+)
+
+''
+'' Declared here, not in a header: this module is the only caller, and a
+'' header would hand these to modules that never use them -- BC's symbol
+'' table is finite, and it ran out when they all got everything.
+''
+'' The destination is a qgl Surface, and a Surface stopped being an
+'' mgl DC when depth moved onto it: SF_addrTB sits at 38 where mgl's
+'' DC_addrTB is 32. uglPGet read its scanline table out of zsf/zmode and
+'' the screenshot came back full-frame noise -- correct palette, no
+'' geometry, the same bytes whatever the camera was doing.
+declare function qglSfPget ( _
+    byval s as long, _
+    byval x as integer, _
+    byval y as integer _
+) as integer
+declare function sc_frame_end ( ) as integer
+declare function mod_cm_ready ( _
+    g as Game _
+) as integer
+
+''
+'' qgl's font, for draw_string and the two callers that read glyph ink
+'' directly (draw_logo, hud_num). Declared here, not in a header: this
+'' module is the only caller.
+''
+''
+'' Not BYVAL: VBDOS passes a plain "as string" parameter as a near
+'' pointer to the descriptor, which is exactly what qglTxtLoadBas's
+'' s:word wants -- see file.asm's own qglFileOpenBas for the source
+'' of that convention.
+''
+declare function qglTxtLoadBas ( _
+    flname as string _
+) as long
+declare sub qglTxtFree ( _
+    byval f as long _
+)
+''
+'' The font mkfont.py builds is fixed-advance, so qglTxtChar's return
+'' (how far it advanced) is never needed here -- every caller already
+'' steps by the font's own fixed 4 -- and it is declared a SUB rather
+'' than read and discarded.
+''
+declare sub qglTxtChar ( _
+    byval dst as long, _
+    byval x as integer, _
+    byval y as integer, _
+    byval f as long, _
+    byval glyph as integer, _
+    byval col as integer _
+)
+declare function qglTxtRow ( _
+    byval f as long, _
+    byval glyph as integer, _
+    byval row as integer _
+) as integer
+declare sub qglDrFill ( _
+    byval d as long, _
+    byval x0 as integer, _
+    byval y0 as integer, _
+    byval x1 as integer, _
+    byval y1 as integer, _
+    byval col as integer _
+)
+declare sub qglDrRect ( _
+    byval d as long, _
+    byval x0 as integer, _
+    byval y0 as integer, _
+    byval x1 as integer, _
+    byval y1 as integer, _
+    byval col as integer _
+)
+declare sub qglDrHline ( _
+    byval d as long, _
+    byval x0 as integer, _
+    byval y as integer, _
+    byval x1 as integer, _
+    byval col as integer _
+)
+declare sub qglSfPset ( _
+    byval s as long, _
+    byval x as integer, _
+    byval y as integer, _
+    byval col as integer _
+)
+declare sub qglDrVline ( _
+    byval d as long, _
+    byval x as integer, _
+    byval y0 as integer, _
+    byval y1 as integer, _
+    byval col as integer _
+)
+declare sub qglDrLine ( _
+    byval d as long, _
+    byval x0 as integer, _
+    byval y0 as integer, _
+    byval x1 as integer, _
+    byval y1 as integer, _
+    byval col as integer _
+)
+declare sub qglDrShade ( _
+    byval d as long, _
+    byval x0 as integer, _
+    byval y0 as integer, _
+    byval x1 as integer, _
+    byval y1 as integer, _
+    byval lut as long, _
+    byval row as integer _
+)
+'' mode 13h and the screen as a Surface. vid_init calls the init a second
+'' time for the run proper; only the first call records the mode that
+'' qglVgaShutdown goes back to.
+declare function qglVgaInit ( ) as long
+declare sub qglVgaPalette ( seg pal as PalRgb )
+'' scr_pal.c
+declare sub scr_pal_blend ( _
+    seg src as PalRgb, _
+    seg dst as PalRgb, _
+    byval dmg as single, _
+    byval bonus as single _
+)
+declare function qglTmrTicks () as long
+declare function qglTmrHz () as long
+declare sub scr_pal_load ( )
+declare function scr_pal_fit ( _
+    pal() as PalRgb, _
+    byval r as integer, _
+    byval g as integer, _
+    byval b as integer _
+) as integer
+
+''
+'' Loading screen geometry. Private to this module on purpose: the bar is
+'' drawn through drwLoadTick/drwMipTick below, so no caller needs to know
+'' where it sits. Sixteen call sites used to carry the arithmetic inline.
+'' The 320x200 here is the loading DC's own mode, not the render mode --
+'' loadScreenOpen sets it explicitly and videoOpen replaces it later.
+''
+''
+'' The loading screen sets its OWN palette. uGL's default is RGB332, which
+'' gives blue only four levels and bands anything subtle; videoOpen replaces
+'' the whole thing with Quake's later, so nothing downstream cares what we
+'' do here. Note that uglColor8 and friends are meaningless once this is
+'' installed -- mgl says so in uglpal.asm -- which is why every colour below
+'' is an explicit index into a ramp we laid out ourselves.
+''
+'' draw_string always draws in LP_TEXT (254), a mask draw rather than a
+'' colour-keyed one, so ALL text is one colour: 254 is set to the
+'' brightest neutral and the hierarchy comes from size and placement
+'' instead.
+''
+'' 256 entries and only a handful were being spent, so the ramps are as
+'' long as they can usefully be: 100 background steps over 200 rows is two
+'' rows per step, which stops the vignette banding without any dithering,
+'' and 32 amber steps shade a twelve-pixel bar smoothly.
+''
+'' Quake's palette is browns: desaturated stone and warm bronze, lit by
+'' fire. None of it is saturated and none of it is clean, so the ramps here
+'' are a warm dark grey for the walls, a bronze for the plates, and an
+'' ember for anything that glows. Nothing is a pure grey -- every step
+'' carries some red, which is what stops it reading as a generic dark UI.
+''
+const LP_STN0   = 1              '' 48-step stone, near black -> mid brown
+const LP_STNN   = 48
+const LP_BRZ0   = 49             '' 32-step bronze, for the plates
+const LP_BRZN   = 32
+const LP_ACC0   = 81             '' 32-step ember, for the bars
+const LP_ACCN   = 32
+const LP_NEU0   = 113            '' 16-step warm neutral, for rules
+const LP_NEUN   = 16
+const LP_TEXT   = 254            '' the one colour draw_string draws in
+
+'' Bevels are what make a Quake plate look pressed out of metal: a light
+'' edge on the top and left, a dark one on the bottom and right, and the
+'' opposite pair when something is meant to look sunken instead.
+const C_PLATE   = LP_BRZ0 + 9    '' the raised bronze plate
+const C_PLATEHI = LP_BRZ0 + 22
+const C_PLATELO = LP_BRZ0 + 2
+const C_PANEL   = LP_STN0 + 6    '' the sunken well the bar sits in
+const C_EDGE    = LP_STN0 + 2
+const C_EDGEHI  = LP_STN0 + 26
+const C_TROUGH  = LP_STN0 + 1
+const C_ACC     = LP_ACC0 + 16
+const C_ACCHI   = LP_ACC0 + 29
+const C_ACCLO   = LP_ACC0 + 4
+const C_SPIN    = LP_BRZ0 + 12   '' the wireframe, bronze
+const C_SPINHI  = LP_ACC0 + 26   '' its lit edges
+const C_GRIME   = LP_STN0 + 12   '' the speckle over the walls
+const C_GRIMELO = LP_STN0 + 1
+const C_METAL   = LP_NEU0 + 4    '' the title slab: grey so the orange reads
+const C_METALHI = LP_NEU0 + 9
+const C_METALLO = LP_NEU0 + 1
+
+'' Where the wireframe lives, so the tick can repaint just that box
+'' the cube keeps to the left column, where Quake hangs its own sigil --
+'' centred it would sit inside the painted title
+const SPIN_CX   = 36
+const SPIN_CY   = 40
+const SPIN_R    = 20
+
+''
+'' The overlay runs under QUAKE's palette, not the loading ramps above --
+'' videoOpen installs it. Its first sixteen entries are a grey ramp, black
+'' through white, which is all the furniture needs.
+''
+''
+'' The overlay's colours are LOOKED UP, not hardcoded: scr_pal_install
+'' puts Quake's palette in the DAC and best-fits each of these against
+'' it, once. That is what lets the HUD share the game's material
+'' language -- brown slabs, ember accents, fire-ramp warnings -- without
+'' assuming anything about where Quake's ramps sit.
+''
+dim shared hc_bg as integer      '' near-black brown
+dim shared hc_slab as integer    '' the panel slab
+dim shared hc_slabhi as integer  '' its bevel, lit side
+dim shared hc_slablo as integer  '' its bevel, shadow side
+dim shared hc_hist as integer    '' graph columns
+dim shared hc_peak as integer    '' the tallest column, so a spike reads
+dim shared hc_meter as integer   '' bar fills
+dim shared hc_good as integer    '' fps thresholds
+dim shared hc_warn as integer
+dim shared hc_bad as integer
+
+'' peak-hold ticks on the VU meters, and the cache panel's warning flash
+dim shared hud_flash as integer
+dim shared hud_pevict as long
+dim shared hud_pflush as long
+
+'' How many frames of history the overlay graphs keep. One pixel column
+'' each, so this is also their width.
+const GRAPH_N   = 64
+
+'' Panel geometry. The bars live inside it, so moving the panel moves
+'' everything -- the old constants had the arithmetic spread over the file.
+const PAN_X     = 62
+const PAN_Y     = 124
+const PAN_W     = 196
+const PAN_H     = 48
+const LOADBAR_X = PAN_X + 10
+const LOADBAR_W = PAN_W - 20
+const LOADBAR_Y = PAN_Y + 20
+const LOADBAR_H = 12
+const MIPBAR_Y  = LOADBAR_Y + LOADBAR_H + 6
+const MIPBAR_H  = 4
+
+'' Module-level DIMs under '$DYNAMIC are executable statements, and
+'' module-level code only runs in the MAIN module -- in any other module
+'' they never execute and the array is never allocated. '$STATIC arrays
+'' are allocated at load with no code to run, so non-main modules must
+'' declare their arrays here.
+'$static
+dim shared g_font as long        '' qglTxtLoad's block; 0 until loaded
+
+'' The loading stage line, redrawn in place rather than appended down the
+'' screen the way the old bare draw_string did it.
+dim shared ldr as LoadState
+dim shared ldr_stage as string * 28
+'$dynamic
+'' 768 bytes, and DGROUP has nowhere near that spare -- see the note on
+'' sc_lhead in d_surf.bas for what happens when something this size lands
+'' there. REDIM'd, used, and erased inside scr_load_palette.
+dim shared ldr_pal() as PalRgb
+'' Quake's palette, read from pal.raw once the mode is up. The HUD picks
+'' its colours out of it and the screenshot writes it; nothing reads it
+'' back from the DAC.
+dim shared scr_pal() as PalRgb
+dim shared scr_pal_sh() as PalRgb  '' the shifted copy scr_pal_shift installs
+
+'' Quake's status bar, from gfx.wad by tools/mkgfx.py: the bar itself,
+'' a copy with the numbers on it, and the cells they are painted from.
+'' A cell's 255 is transparent, so a paint copies its opaque spans --
+'' found once at load -- over the bar, and only when a number changes.
+const SBARC_W      = 320
+const SBARC_H      = 24
+const SBARC_EMS_W  = 512
+const SBARC_CELL_Y = 24          '' band of the EMS surface holding the cells
+const SBARC_WORK_Y = 48          '' band the blit reads, composed per paint
+const SBARC_EMS_H  = 72
+const SBARC_CELL   = 24
+const SBARC_CELLS  = 21
+const SBARC_MINUS  = 10
+const SBARC_ICON   = 11          '' SB_SHELLS
+const SBARC_FACE   = 12          '' FACE1, the healthy one; FACE5 is +4
+const SBARC_ARMOR  = 17          '' SB_ARMOR1, green; yellow is +1
+const SBARC_NAILS  = 19          '' SB_NAILS, the nailgun's ammo
+const SBARC_ROCKETS = 20         '' SB_ROCKET, the launchers'
+const SBARC_SPANS  = 6           '' opaque runs a cell row can have
+'' One EMS surface, 512 wide because a row must divide 16K: the untouched
+'' bar in rows 0..23, the 21 cells side by side in 24..47, the composed
+'' bar in 48..71. Nothing of it in the far heap -- e1m1 has none spare.
+dim shared sbar_work as long
+dim shared sbar_view as long            '' the 320 of the composed band
+dim shared sbar_health as integer, sbar_shells as integer, sbar_face as integer
+dim shared sbar_armor as integer, sbar_weapon as integer
+dim shared spx() as integer      '' projected wireframe vertices
+dim shared spy() as integer
+'' Ring buffers behind the overlay graphs. Builds-per-frame is the one that
+'' matters -- a hitch is several builds landing in one frame, and a number
+'' that has already scrolled past cannot show you that shape.
+dim shared g_bld() as integer
+dim shared g_fps() as integer
+'$static
+dim shared g_head as integer     '' next slot, shared by both rings
+dim shared g_fsec as integer     '' last fps value pushed
+dim shared ldr_ang as single     '' how far the wireframe has turned
+
+'' Frames within the current second; scr.fps is the last completed
+'' second's total, which is what the overlay shows.
+dim shared fps1 as integer
+
+
+
+'' ==========================================================================
+''  SUPPORT
+'' ==========================================================================
+'' :::::::::::::
+'' name: scr_load_tick
+'' desc: Redraws the main loading bar at the current 'loading' percent.
+''       Takes no arguments -- loadDC and loading are both /qmapS/ --
+''       which is why the fourteen callers reduce to a bare call.
+'' :::::::::::::
+'' One loading step done: advance the bar and redraw it. The loaders used
+'' to do this arithmetic themselves, which is how ldr reached all fourteen.
+'' Part of one step, for a loader that reports progress within it.
+sub scr_load_part ( _
+    byval frac as single, _
+    byval redraw as integer _
+)
+    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)*frac
+    if ( redraw ) then scr_load_tick
+end sub
+
+sub scr_load_step
+    ldr.pct = ldr.pct + (100.0/LOAD_STEPS)
+    scr_load_tick
+end sub
+
+sub scr_load_tick
+    draw_spinner
+    draw_bar ldr.dc, LOADBAR_X, LOADBAR_Y, LOADBAR_W, LOADBAR_H, ldr.pct
+    draw_pct ldr.dc, PAN_X + PAN_W - 10, PAN_Y + 8, ldr.pct
+end sub
+
+
+''::::::::::
+'' name: scr_load_palette
+'' desc: Installs the loading screen's own ramps -- see the note by LP_BG0.
+''       Three of them: a cool slate for the background, a neutral for the
+''       chrome, and an amber for the bars.
+''::::::::::
+sub scr_load_palette
+    dim i as integer
+    dim f as single
+
+    redim ldr_pal(255) as PalRgb
+
+    for i = 0 to 255
+        ldr_pal(i).red = chr$(0)
+        ldr_pal(i).green = chr$(0)
+        ldr_pal(i).blue = chr$(0)
+    next i
+
+    '' Stone, and it has to go MUCH darker than feels right on a monitor:
+    '' Quake's menu is nearly black except where a light falls. Red leads
+    '' green leads blue at every step, which is what keeps it grimy brown
+    '' rather than a cold grey.
+    for i = 0 to LP_STNN-1
+        f = i / (LP_STNN - 1.0)
+        ldr_pal(LP_STN0+i).red   = chr$( cint(  6 + f * 62) )
+        ldr_pal(LP_STN0+i).green = chr$( cint(  5 + f * 46) )
+        ldr_pal(LP_STN0+i).blue  = chr$( cint(  4 + f * 34) )
+    next i
+
+    '' bronze, for the plates
+    for i = 0 to LP_BRZN-1
+        f = i / (LP_BRZN - 1.0)
+        ldr_pal(LP_BRZ0+i).red   = chr$( cint( 34 + f * 148) )
+        ldr_pal(LP_BRZ0+i).green = chr$( cint( 23 + f * 104) )
+        ldr_pal(LP_BRZ0+i).blue  = chr$( cint( 12 + f * 50) )
+    next i
+
+    '' ember, for anything that glows
+    for i = 0 to LP_ACCN-1
+        f = i / (LP_ACCN - 1.0)
+        ldr_pal(LP_ACC0+i).red   = chr$( cint( 62 + f * 193) )
+        ldr_pal(LP_ACC0+i).green = chr$( cint( 20 + f * 188) )
+        ldr_pal(LP_ACC0+i).blue  = chr$( cint(  6 + f * 118) )
+    next i
+
+    '' warm neutral: the title slab and the rules. Kept dim -- the metal
+    '' in the reference is barely lighter than the wall behind it.
+    for i = 0 to LP_NEUN-1
+        f = i / (LP_NEUN - 1.0)
+        ldr_pal(LP_NEU0+i).red   = chr$( cint( 30 + f * 132) )
+        ldr_pal(LP_NEU0+i).green = chr$( cint( 28 + f * 124) )
+        ldr_pal(LP_NEU0+i).blue  = chr$( cint( 25 + f * 112) )
+    next i
+
+    '' Every character on screen is this one index, and in Quake's menu
+    '' every character is burnt orange -- so that is what it becomes. It
+    '' does more for the resemblance than any amount of furniture.
+    ldr_pal(LP_TEXT).red   = chr$(222)
+    ldr_pal(LP_TEXT).green = chr$(138)
+    ldr_pal(LP_TEXT).blue  = chr$( 66)
+
+    qglVgaPalette ldr_pal(0)
+    erase ldr_pal
+
+    redim spx(7) as integer
+    redim spy(7) as integer
+    ldr_ang = 0.0
+
+    '' the overlay's history rings, allocated here because this is the one
+    '' place in the module that runs exactly once at startup
+    redim g_bld(GRAPH_N-1) as integer
+    redim g_fps(GRAPH_N-1) as integer
+    g_head = 0
+    g_fsec = 0
+end sub
+
+
+''::::::::::
+'' name: bg_band
+'' desc: Repaints rows of the vignette. The spinner needs its box cleared
+''       every turn, and the gradient is the only thing behind it, so the
+''       backdrop had to become something that can be drawn in pieces.
+''::::::::::
+sub bg_band ( _
+    x0 as integer, _
+    x1 as integer, _
+    y0 as integer, _
+    y1 as integer _
+)
+    dim y as integer, x as integer, k as integer, d as integer, h as integer
+    dim crs as integer, ofs as integer
+    dim dy as integer, dx as integer, att as integer
+    dim sg as integer, sx0 as integer, sx1 as integer
+
+    for y = y0 to y1
+        if ( y >= 0 and y <= 199 ) then
+            ''
+            '' A pool of light rather than a flat wash: Quake's menu is
+            '' black at the edges and warm only where something is lit.
+            '' Done in sixteen 20px columns instead of per pixel -- a true
+            '' radial needs a distance per pixel and there are 64,000.
+            ''
+            dy = y - 88
+            for sg = 0 to 15
+                sx0 = sg * 20
+                sx1 = sx0 + 19
+                if ( sx1 >= x0 and sx0 <= x1 ) then
+                    dx = (sx0 + 10) - 160
+                    att = (dx * dx) \ 900 + (dy * dy) \ 300
+                    k = LP_STN0 + 40 - att
+                    if ( k < LP_STN0 ) then k = LP_STN0
+                    if ( k > LP_STN0 + LP_STNN - 1 ) then k = LP_STN0 + LP_STNN - 1
+                    if ( sx0 < x0 ) then sx0 = x0
+                    if ( sx1 > x1 ) then sx1 = x1
+                    qglDrHline ldr.dc, sx0, y, sx1, k
+                end if
+            next sg
+
+            ''
+            '' Grain. Flat fills are the one thing Quake never has -- every
+            '' surface is noisy -- so speckle each row from a hash of the
+            '' coordinates rather than a random source, so a repaint of any
+            '' box reproduces exactly what was there before.
+            ''
+            ''
+            '' The hash needs a nonlinear term. A plain (x*a + y*b) lines
+            '' the specks up on diagonals and the wall reads as tiled --
+            '' the x*y folds that away, and the prime modulus keeps it from
+            '' settling into a lattice.
+            ''
+            ''
+            '' Block courses. Grain alone reads as noise; what makes it
+            '' read as MASONRY is the seams -- a dark line every course,
+            '' and vertical joints staggered half a block on alternate
+            '' ones, the way stone is actually laid.
+            ''
+            crs = y \ 22
+            if ( (y mod 22) = 0 ) then
+                qglDrHline ldr.dc, x0, y, x1, C_GRIMELO
+            end if
+            ofs = (crs and 1) * 27
+
+            for x = x0 to x1
+                h = cint( (clng(x) * 1619& + clng(y) * 7919& + _
+                          ((clng(x) * clng(y)) mod 251&)) mod 997& )
+                if ( ((x + ofs) mod 54) = 0 and (y mod 22) <> 0 ) then
+                    qglSfPset ldr.dc, x, y, C_GRIMELO
+                elseif ( h < 26 ) then
+                    '' the speck sits a step above ITS column's light, not
+                    '' the last column's -- k is stale here, so rederive
+                    dx = x - 160
+                    att = (dx * dx) \ 900 + (dy * dy) \ 300
+                    k = LP_STN0 + 44 - att
+                    if ( k < LP_STN0 + 2 ) then k = LP_STN0 + 2
+                    if ( k > LP_STN0 + LP_STNN - 1 ) then k = LP_STN0 + LP_STNN - 1
+                    qglSfPset ldr.dc, x, y, k
+                elseif ( h < 52 ) then
+                    qglSfPset ldr.dc, x, y, C_GRIMELO
+                end if
+            next x
+        end if
+    next y
+end sub
+
+
+''::::::::::
+'' name: bevel
+'' desc: A Quake plate: light along the top and left, dark along the bottom
+''       and right, which reads as pressed out of metal. Pass raised = 0 to
+''       swap them and have it read as sunken instead.
+''::::::::::
+''::::::::::
+'' name: draw_logo
+'' desc: The title, drawn the way Quake paints its menu lettering rather
+''       than the way a system font sets it: each glyph pixel becomes a
+''       chunky block with an ember gradient down the glyph (lit from
+''       above), a hard drop shadow, and edges nibbled by the coordinate
+''       hash so the outline reads as hand-cut rather than geometric.
+''
+''       The glyph bits come straight from qglTxtRow rather than a
+''       drawn-then-read-back DC, one call per row rather than one per
+''       pixel -- which is what frees the lettering from the one-colour
+''       rule everything else on screen lives under.
+''::::::::::
+sub draw_logo ( _
+    text as string, _
+    x as integer, _
+    y as integer, _
+    sc as integer _
+)
+    dim i as integer, ch as integer, gx as integer, gy as integer
+    dim px as integer, bx as integer, by as integer, col as integer
+    dim pass as integer, h as integer
+    dim bits as integer
+
+    '' shadow first, then body, so the body always sits on top
+    for pass = 0 to 1
+        px = x
+        for i = 1 to len( text )
+            ch = asc( mid$( text, i, 1 ) )
+            for gy = 0 to 7
+                bits = qglTxtRow( g_font, ch, gy )
+                if ( bits = 0 ) then goto dl_next_row
+                for gx = 0 to 7
+                    if ( (bits and (128 \ (2^gx))) <> 0 ) then
+                        bx = px + gx*sc
+                        by = y + gy*sc
+                        if ( pass = 0 ) then
+                            qglDrFill ldr.dc, bx+2, by+3, bx+sc+1, by+sc+2, C_GRIMELO
+                        else
+                            '' lit from above: bright ember at the top of
+                            '' the glyph falling to a dark red base
+                            '' compressed: a full-steepness fade lost
+                            '' the bottom third of every letter into the
+                            '' wall. The base stays a readable ember.
+                            col = LP_ACC0 + 29 - gy*3
+                            if ( col < LP_ACC0 + 12 ) then col = LP_ACC0 + 12
+                            qglDrFill ldr.dc, bx, by, bx+sc-1, by+sc-1, col
+                            '' nibble the block's corner from the hash, so
+                            '' the outline stops being ruler-straight
+                            h = cint( (clng(bx) * 1619& + clng(by) * 7919&) mod 11& )
+                            if ( h < 3 ) then
+                                qglSfPset ldr.dc, bx, by, col - 2
+                                qglSfPset ldr.dc, bx+sc-1, by+sc-1, col - 3
+                            end if
+                        end if
+                    end if
+                next gx
+dl_next_row:
+            next gy
+            px = px + 4*sc + sc\2
+        next i
+    next pass
+end sub
+
+
+''::::::::::
+'' name: rivet
+'' desc: Four pixels and a shadow. Corner hardware is half of what makes a
+''       Quake plate read as bolted to the wall.
+''::::::::::
+sub rivet ( _
+    x as integer, _
+    y as integer _
+)
+    qglSfPset ldr.dc, x,   y,   C_METALHI
+    qglSfPset ldr.dc, x+1, y,   C_METAL
+    qglSfPset ldr.dc, x,   y+1, C_METAL
+    qglSfPset ldr.dc, x+1, y+1, C_METALLO
+end sub
+
+
+sub bevel ( _
+    x0 as integer, _
+    y0 as integer, _
+    x1 as integer, _
+    y1 as integer, _
+    hi as integer, _
+    lo as integer, _
+    raised as integer _
+)
+    dim a as integer, b as integer
+
+    if ( raised ) then
+        a = hi : b = lo
+    else
+        a = lo : b = hi
+    end if
+    qglDrHline ldr.dc, x0, y0, x1, a
+    qglDrVline ldr.dc, x0, y0, y1, a
+    qglDrHline ldr.dc, x0, y1, x1, b
+    qglDrVline ldr.dc, x1, y0, y1, b
+end sub
+
+
+''::::::::::
+'' name: draw_spinner
+'' desc: A wireframe cube, turned a little further every tick. This is a
+''       renderer, so the loading screen may as well render something --
+''       and it doubles as proof of life during the long silent stretches
+''       where a bar creeps a pixel every few seconds.
+''
+''       Twelve edges from eight vertices with no edge table: number the
+''       corners so each bit is an axis, and two corners share an edge
+''       exactly when they differ in one bit. Drawing only j > i visits
+''       each edge once.
+''::::::::::
+sub draw_spinner
+    dim i as integer, b as integer, j as integer
+    dim ca as single, sa as single, cb as single, sb as single
+    dim x as single, y as single, z as single
+    dim x2 as single, y2 as single, z2 as single
+    dim sc as single, col as integer
+
+    '' only the spinner's own box -- clearing the full width here wiped the
+    '' top corner brackets on every tick
+    bg_band SPIN_CX - SPIN_R - 3, SPIN_CX + SPIN_R + 3, _
+            SPIN_CY - SPIN_R - 3, SPIN_CY + SPIN_R + 3
+
+    ca = cos( ldr_ang )
+    sa = sin( ldr_ang )
+    cb = cos( ldr_ang * 0.6 )
+    sb = sin( ldr_ang * 0.6 )
+
+    for i = 0 to 7
+        '' bit per axis, so -1 or +1 on each
+        if ( (i and 1) = 0 ) then x = -1.0 else x = 1.0
+        if ( (i and 2) = 0 ) then y = -1.0 else y = 1.0
+        if ( (i and 4) = 0 ) then z = -1.0 else z = 1.0
+
+        x2 = x * ca - z * sa            '' yaw
+        z2 = x * sa + z * ca
+        y2 = y * cb - z2 * sb           '' then pitch
+        z   = y * sb + z2 * cb
+
+        sc = SPIN_R * 2.2 / (z + 4.0)   '' a little perspective
+        spx(i) = SPIN_CX + cint( x2 * sc )
+        spy(i) = SPIN_CY + cint( y2 * sc )
+    next i
+
+    for i = 0 to 7
+        for b = 0 to 2
+            j = i xor (2 ^ b)
+            if ( j > i ) then
+                '' the two corners nearest the front get the amber
+                if ( (i and 4) <> 0 and (j and 4) <> 0 ) then
+                    col = C_SPINHI
+                else
+                    col = C_SPIN
+                end if
+                qglDrLine ldr.dc, spx(i), spy(i), spx(j), spy(j), col
+            end if
+        next b
+    next i
+
+    ldr_ang = ldr_ang + 0.19
+    if ( ldr_ang > 6.2831853 ) then ldr_ang = ldr_ang - 6.2831853
+end sub
+
+
+''::::::::::
+'' name: draw_string_scl / draw_string_r
+'' desc: Scaled and right-aligned text.
+''
+''       Scaled is a masked draw, pixel by pixel: qgl has no scaled
+''       masked blit (qglDrBlitScl is opaque, made for the present
+''       path's whole-frame magnify, where every destination pixel is
+''       meant to be overwritten), so this samples qglTxtRow's bits
+''       directly at the destination's own resolution and only plots
+''       where a bit is set -- which is what uglBlitMskScl's colour key
+''       did, one call per glyph instead of one call per pixel.
+''
+''       The advance is 4 because that is what draw_string uses, the
+''       font being 4x6 inside an 8x8 cell.
+''::::::::::
+sub draw_string_scl ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    scale as single, _
+    text as string _
+)
+    dim i as integer, char as integer, posx as integer
+    dim dw as integer
+    dim sx as integer, sy as integer, gx as integer, gy as integer
+    dim bits as integer
+
+    dw = cint( 8 * scale )
+    if ( dw < 1 ) then exit sub
+
+    posx = x
+    for i = 0 to len( text )-1
+        char = asc( mid$( text, i+1 ) )
+
+        for sy = 0 to dw-1
+            gy = int( sy * 8 / dw )
+            bits = qglTxtRow( g_font, char, gy )
+            if ( bits <> 0 ) then
+                for sx = 0 to dw-1
+                    gx = int( sx * 8 / dw )
+                    if ( (bits and (128 \ (2^gx))) <> 0 ) then
+                        qglSfPset dc, posx+sx, y+sy, LP_TEXT
+                    end if
+                next sx
+            end if
+        next sy
+
+        posx = posx + cint( 4 * scale )
+    next i
+end sub
+
+sub draw_string_r ( _
+    dc as long, _
+    xright as integer, _
+    y as integer, _
+    text as string _
+)
+    draw_string dc, xright - 4*len( text ), y, text
+end sub
+
+
+''::::::::::
+'' name: draw_pct
+'' desc: The percentage, right-aligned and blanked first so a shorter
+''       number cannot leave the tail of a longer one behind.
+''::::::::::
+sub draw_pct ( _
+    dc as long, _
+    xright as integer, _
+    y as integer, _
+    percent as single _
+)
+    dim p as integer
+
+    p = cint( percent )
+    if ( p < 0 ) then p = 0
+    if ( p > 100 ) then p = 100
+
+    qglDrFill dc, xright-20, y, xright, y+6, C_PANEL
+    draw_string_r dc, xright, y, ltrim$(str$( p )) + "%"
+end sub
+
+
+''::::::::::
+'' name: scr_load_stage
+'' desc: What loading is currently doing. Drawn in a fixed slot inside the
+''       panel and blanked first, so the phases replace one another rather
+''       than marching down the screen.
+''::::::::::
+sub scr_load_stage ( msg as string )
+    ldr_stage = msg
+    if ( ldr.dc = 0 ) then exit sub
+    qglDrFill ldr.dc, PAN_X+9, PAN_Y+8, PAN_X+PAN_W-32, PAN_Y+14, C_PANEL
+    draw_string ldr.dc, PAN_X+10, PAN_Y+8, rtrim$( ldr_stage )
+end sub
+
+
+'' :::::::::::::
+'' name: scr_mip_tick
+'' desc: The thinner sub-bar above the main one, showing progress through
+''       the current texture's four mip levels.
+'' :::::::::::::
+sub scr_mip_tick ( percent as single )
+    draw_bar ldr.dc, LOADBAR_X, MIPBAR_Y, LOADBAR_W, MIPBAR_H, percent
+end sub
+
+
+'' :::::::::::::
+'' name: draw_bar
+'' desc: Draws a loading bar
+''
+'' :::::::::::::
+sub draw_bar ( _
+    h_dc as long, _
+    x as integer, _
+    y as integer, _
+    wdt as integer, _
+    hgt as integer, _
+    percent as single _
+)
+    dim w as integer, i as integer, k as integer
+
+    if ( percent < 0   ) then percent = 0
+    if ( percent > 100 ) then percent = 100
+    w = (wdt * percent) / 100.0
+
+    ''
+    '' Sunken trough, then the fill. The trough is drawn every tick rather
+    '' than once because the fill only ever grows here -- but a flush during
+    '' a map change rewinds it, and a stale tail is worse than the redraw.
+    ''
+    qglDrFill h_dc, x, y, x+wdt, y+hgt, C_TROUGH
+    qglDrHline h_dc, x, y, x+wdt, C_EDGE
+    qglDrVline h_dc, x, y, y+hgt, C_EDGE
+    qglDrHline h_dc, x, y+hgt, x+wdt, C_EDGEHI
+    qglDrVline h_dc, x+wdt, y, y+hgt, C_EDGEHI
+
+    if ( w < 1 ) then exit sub
+
+    ''
+    '' The fill is shaded across its height off the amber ramp: brightest
+    '' just under the top edge, falling away below. One HLine per row, so a
+    '' twelve-pixel bar is twelve calls.
+    ''
+    for i = 1 to hgt-1
+        k = LP_ACC0 + LP_ACCN - 1 - ((i * (LP_ACCN-4)) \ hgt)
+        qglDrHline h_dc, x+1, y+i, x+w, k
+    next i
+    qglDrHline h_dc, x+1, y+1, x+w, C_ACCHI
+end sub
+
+
+''::::::::::
+'' name: scr_load_chrome
+'' desc: Everything on the loading screen that does not move, drawn once.
+''       scr_load_tick repaints only the bars and the percentage, which is
+''       what keeps ~200 ticks cheap.
+''::::::::::
+sub scr_load_chrome ( _
+    g as Game _
+)
+    dim ttl as string, sub1 as string
+    dim plate_x as integer, plate_w as integer
+
+    ''
+    '' A soft vertical vignette: brightest across the middle where the panel
+    '' sits, falling to near-black top and bottom. 32 ramp steps over 200
+    '' rows is fine here because the range is narrow -- it reads as a
+    '' backdrop rather than as banding.
+    ''
+    bg_band 0, 319, 0, 199
+
+    ''
+    '' A heavy frame around the whole screen, sunken, so the wall reads as
+    '' a recess rather than as a picture.
+    ''
+    bevel 3, 3, 316, 196, C_EDGEHI, C_EDGE, 0
+    bevel 5, 5, 314, 194, C_EDGEHI, C_EDGE, -1
+
+    ''
+    '' The title floats straight on the wall the way SINGLE PLAYER does in
+    '' Quake's menu -- big painted letters, no box around them. The plate
+    '' treatment goes to the small MAIN-style banner below instead.
+    ''
+    ttl = "QRENDER"
+    draw_logo ttl, (320 - (len(ttl)*18 + 9)) \ 2, 48, 4
+
+    sub1 = "a quake bsp renderer in quickbasic"
+    draw_string ldr.dc, (320 - len(sub1)*4) \ 2, 92, sub1
+
+    ''
+    '' The map on a MAIN-style banner: grey riveted metal, so the orange
+    '' name carries against it.
+    ''
+    sub1 = rtrim$( g.env.map_name )
+    plate_w = len(sub1)*4 + 26
+    plate_x = (320 - plate_w) \ 2
+    qglDrFill ldr.dc, plate_x, PAN_Y-19, plate_x+plate_w, PAN_Y-4, C_METAL
+    bevel plate_x, PAN_Y-19, plate_x+plate_w, PAN_Y-4, C_METALHI, C_METALLO, -1
+    bevel plate_x+2, PAN_Y-17, plate_x+plate_w-2, PAN_Y-6, C_METALHI, C_METALLO, 0
+    rivet plate_x+4, PAN_Y-16
+    rivet plate_x+plate_w-5, PAN_Y-16
+    rivet plate_x+4, PAN_Y-9
+    rivet plate_x+plate_w-5, PAN_Y-9
+    draw_string ldr.dc, (320 - len(sub1)*4) \ 2, PAN_Y-14, sub1
+
+    '' the well the bar sits in, sunken into the wall
+    qglDrFill ldr.dc, PAN_X, PAN_Y, PAN_X+PAN_W, PAN_Y+PAN_H, C_PANEL
+    bevel PAN_X, PAN_Y, PAN_X+PAN_W, PAN_Y+PAN_H, C_EDGEHI, C_EDGE, 0
+end sub
+
+
+
+
+
+
+''::::::::::
+'' name: draw_load_font
+'' desc: flname is a loose DOS file -- mkfont.py's own converted format,
+''       not the UAR archive member the renderer's other assets come
+''       from -- because qglTxtLoadBas reads it straight off disk with
+''       no archive layer between. See txt.asm's header for why.
+''::::::::::
+function draw_load_font ( _
+    flname as string _
+) as integer
+
+    g_font = qglTxtLoadBas( flname )
+    draw_load_font = ( g_font <> 0 )
+
+end function
+
+
+
+'':::::::::
+''::::::::::
+'' name: draw_string
+'' desc: Draws into dc, which is a Surface -- an mgl DC and a qgl Surface
+''       are one struct.
+''::::::::::
+sub draw_string ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    text as string _
+)
+    dim posx as integer
+    dim i as integer, char as integer
+
+    posx = x
+
+    for  i = 0 to len( text )-1
+
+        char = asc( mid$( text, i+1 ) )
+
+        if ( (char >= 0) or (char <= 255) ) then
+            qglTxtChar dc, posx, y, g_font, char, LP_TEXT
+        end if
+
+        posx = posx + 4
+    next i
+
+end sub
+
+
+
+''::::::::::
+'' name: hud_panel / hud_row / hud_bar
+'' desc: The overlay's furniture. Quake's palette is installed by the time
+''       any of this runs, so the indices here are its grey ramp (0 black
+''       through 15 white) and NOT the loading screen's ramps.
+''
+''       Values are right-aligned against the panel's inner edge. That is
+''       the whole difference between a readable column of numbers and the
+''       ragged "label: value  label: value" this replaced -- the eye can
+''       compare digits that line up.
+''::::::::::
+''::::::::::
+'' name: scr_pal_install
+'' desc: The game palette into the DAC, then the overlay's colours out of
+''       it. One routine because the second cannot run before the first:
+''       every HUD colour is a best fit against the palette that is live.
+''       Called once, from vid_init.
+''::::::::::
+''::::::::::
+'' name: scr_pal_load
+'' desc: The game palette, 768 bytes of pal.raw -- mkassets writes it
+''       beside the exe from color/palette.lmp.
+''::::::::::
+sub scr_pal_load
+    dim f as integer
+    dim i as integer
+
+    redim scr_pal(255) as PalRgb
+    '' here, not on first use: a module-level dim never runs outside
+    '' main.bas, and ubound() of the unallocated array is error 9
+    redim scr_pal_sh(255) as PalRgb
+    f = freefile
+    open "pal.raw" for binary as #f
+    if ( lof( f ) < 768 ) then
+        close #f
+        sys_error "0x3002, pal.raw is missing -- run make assets"
+    end if
+    for i = 0 to 255
+        get #f, , scr_pal(i)
+    next i
+    close #f
+end sub
+
+''::::::::::
+'' name: scr_pal_fit
+'' desc: The palette index nearest an RGB, by mgl's uglPalBestFit rule:
+''       6-bit channels, green weighted 59, red 30, blue 11, squared,
+''       entry 0 never chosen, the first minimum kept.
+''::::::::::
+function scr_pal_fit ( _
+    pal() as PalRgb, _
+    byval r as integer, _
+    byval g as integer, _
+    byval b as integer _
+) as integer
+    dim i as integer
+    dim best as integer
+    dim d as long
+    dim lo as long
+    dim dr as long
+    dim dg as long
+    dim dbl as long
+
+    lo = 2147483647
+    for i = 1 to 255
+        dr  = ( asc( pal(i).red )   \ 4 ) - ( r \ 4 )
+        dg  = ( asc( pal(i).green ) \ 4 ) - ( g \ 4 )
+        dbl = ( asc( pal(i).blue )  \ 4 ) - ( b \ 4 )
+        d = dg*dg*3481 + dr*dr*900 + dbl*dbl*121
+        if ( d < lo ) then
+            lo = d
+            best = i
+        end if
+    next i
+    scr_pal_fit = best
+end function
+
+sub scr_pal_install
+    scr_pal_load
+    qglVgaPalette scr_pal(0)
+
+    hc_bg     = scr_pal_fit( scr_pal(),  12,  10,   8 )
+    hc_slab   = scr_pal_fit( scr_pal(),  52,  40,  28 )
+    hc_slabhi = scr_pal_fit( scr_pal(), 104,  84,  60 )
+    hc_slablo = scr_pal_fit( scr_pal(),  18,  14,  10 )
+    hc_hist   = scr_pal_fit( scr_pal(), 150, 104,  56 )
+    hc_peak   = scr_pal_fit( scr_pal(), 252, 216, 128 )
+    hc_meter  = scr_pal_fit( scr_pal(), 200, 128,  56 )
+    '' gold, not green: Quake has no bright green -- a green target
+    '' best-fits onto a BLUE ramp entry -- and its own status bar numbers
+    '' are gold anyway, so this is the more Quake convention regardless
+    hc_good   = scr_pal_fit( scr_pal(), 244, 196,  92 )
+    hc_warn   = scr_pal_fit( scr_pal(), 224, 164,  48 )
+    hc_bad    = scr_pal_fit( scr_pal(), 216,  52,  36 )
+
+    hud_flash = 0
+    hud_pevict = 0
+    hud_pflush = 0
+end sub
+
+''::::::::::
+'' name: scr_sbar_load
+'' desc: sbar.raw into the surface's top band, sbnum.raw's cells into the
+''       middle one.
+''::::::::::
+sub scr_sbar_load
+    dim y as integer, i as integer, f as integer
+    dim row as string * 320, cell as string * 576
+    dim rowp as long, cellp as long, dst as long
+
+    rowp = clng( varseg( row ) ) * 65536& + ( clng( varptr( row ) ) and 65535& )
+    cellp = clng( varseg( cell ) ) * 65536& + ( clng( varptr( cell ) ) and 65535& )
+
+    sbar_work = qglSfNew( SBARC_EMS_W, SBARC_EMS_H, QGL_SURF_EMS )
+    if ( sbar_work = 0 ) then sys_error "0x3003, no memory for the status bar"
+    sbar_view = qglSfViewNew&( sbar_work, SBARC_W, SBARC_H, SBARC_EMS_W )
+    if ( sbar_view = 0 ) then sys_error "0x3007, no view for the status bar"
+    if ( qglSfViewAim%( sbar_view, clng( SBARC_WORK_Y ) * SBARC_EMS_W ) = 0 ) then
+        sys_error "0x3008, the status bar view would not aim"
+    end if
+
+    f = freefile
+    open "sbar.raw" for binary as #f
+    if ( lof( f ) < SBARC_W * SBARC_H ) then
+        close #f
+        sys_error "0x3004, sbar.raw is missing -- run make assets"
+    end if
+    for y = 0 to SBARC_H - 1
+        get #f, , row
+        dst = qglSfWrRow( sbar_work, y )
+        qglMemCopy dst, rowp, clng( SBARC_W )
+    next y
+    close #f
+
+    f = freefile
+    open "sbnum.raw" for binary as #f
+    if ( lof( f ) < SBARC_CELLS * 576 ) then
+        close #f
+        sys_error "0x3006, sbnum.raw is missing -- run make assets"
+    end if
+    for i = 0 to SBARC_CELLS - 1
+        get #f, , cell
+        for y = 0 to SBARC_CELL - 1
+            dst = qglSfWrRow( sbar_work, SBARC_CELL_Y + y ) + i * SBARC_CELL
+            qglMemCopy dst, cellp + y * SBARC_CELL, clng( SBARC_CELL )
+        next y
+    next i
+    close #f
+
+    sbar_health = -1
+end sub
+
+'' the segment half of a far pointer, as the integer def seg takes. The
+'' low half comes off first: \ truncates towards zero, and a window at
+'' E000h is a negative long.
+function scr_seg_of ( byval p as long ) as integer
+    dim sg as long
+    sg = ( p - ( p and 65535& ) ) \ 65536
+    if ( sg > 32767 ) then sg = sg - 65536
+    scr_seg_of = sg
+end function
+
+''::::::::::
+'' name: scr_sbar_cell
+'' desc: A cell's opaque pixels over the working bar at column x. The
+''       read window is slot 0 and the write window slot 1, so both rows
+''       stay mapped across the copy.
+''::::::::::
+sub scr_sbar_cell ( byval idx as integer, byval x as integer )
+    dim y as integer, k as integer, c as integer
+    dim src as long, dst as long
+
+    for y = 0 to SBARC_CELL - 1
+        src = qglSfRdRow( sbar_work, SBARC_CELL_Y + y ) + idx * SBARC_CELL
+        dst = qglSfWrRow( sbar_work, SBARC_WORK_Y + y ) + x
+        for k = 0 to SBARC_CELL - 1
+            def seg = scr_seg_of( src )
+            c = peek( ( src and 65535& ) + k )
+            if ( c <> 255 ) then
+                def seg = scr_seg_of( dst )
+                poke ( dst and 65535& ) + k, c
+            end if
+        next k
+    next y
+    def seg
+end sub
+
+''::::::::::
+'' name: scr_sbar_num
+'' desc: Sbar_DrawNum: three digits, right aligned, from column x.
+''::::::::::
+sub scr_sbar_num ( byval x as integer, byval v as integer )
+    dim t as string, i as integer
+
+    t = ltrim$( str$( v ) )
+    if ( len( t ) > 3 ) then t = right$( t, 3 )
+    x = x + ( 3 - len( t ) ) * SBARC_CELL
+    for i = 1 to len( t )
+        scr_sbar_cell val( mid$( t, i, 1 ) ), x + ( i - 1 ) * SBARC_CELL
+    next i
+end sub
+
+''::::::::::
+'' name: scr_sbar_paint
+'' desc: Sbar_DrawNormal: the armor icon at 0 and its count at 24 while
+''       any is worn -- Quake draws a 0 there too, which would move every
+''       reference -- the face at 112, health at 136, the shells icon at
+''       224 and the count at 248; painted only when one changes.
+''::::::::::
+sub scr_sbar_paint ( g as Game )
+    dim hp as integer, sh as integer, f as integer, ar as integer
+    dim y as integer, src as long, dst as long
+    dim icon as integer
+
+    hp = g.fight.health
+    if ( hp < 0 ) then hp = 0
+    '' currentammo: what the weapon in hand fires
+    sh = g.fight.shells : icon = SBARC_ICON
+    if ( g.fight.weapon = PL_IT_NAILGUN% or g.fight.weapon = PL_IT_SNG% ) then sh = g.fight.nails : icon = SBARC_NAILS
+    if ( g.fight.weapon = PL_IT_GL% or g.fight.weapon = PL_IT_RL% ) then sh = g.fight.rockets : icon = SBARC_ROCKETS
+    ar = g.fight.armor
+    f = hp \ 20
+    if ( f > 4 ) then f = 4
+    if ( hp = sbar_health and sh = sbar_shells and f = sbar_face and ar = sbar_armor and g.fight.weapon = sbar_weapon ) then exit sub
+    sbar_health = hp : sbar_shells = sh : sbar_face = f : sbar_armor = ar : sbar_weapon = g.fight.weapon
+
+    for y = 0 to SBARC_H - 1
+        src = qglSfRdRow( sbar_work, y )
+        dst = qglSfWrRow( sbar_work, SBARC_WORK_Y + y )
+        qglMemCopy dst, src, clng( SBARC_W )
+    next y
+    if ( ar > 0 ) then
+        scr_sbar_cell SBARC_ARMOR - ( g.fight.armor_type >= PL_ARMOR2_TYPE# ), 0
+        scr_sbar_num 24, ar
+    end if
+    scr_sbar_cell SBARC_FACE + ( 4 - f ), 112
+    scr_sbar_num 136, hp
+    scr_sbar_cell icon, 224
+    scr_sbar_num 248, sh
+end sub
+
+''::::::::::
+'' name: scr_sbar_draw
+'' desc: The bar along the bottom, scaled to the destination's width.
+''::::::::::
+sub scr_sbar_draw ( _
+    g as Game, _
+    byval dc as long, _
+    byval w as integer, _
+    byval h as integer _
+)
+    dim bh as integer
+
+    scr_sbar_paint g
+    bh = cint( SBARC_H * w / SBARC_W )
+    qglDrBlitScl dc, 0, h - bh, w, bh, sbar_view
+end sub
+
+''::::::::::
+'' name: scr_pal_shift
+'' desc: V_UpdatePalette: the DAC blended towards red by the damage
+''       shift and towards gold by the bonus one, both fading with the
+''       frame's time; the plain palette back once both are out.
+''::::::::::
+sub scr_pal_shift ( g as Game, byval dt as single )
+    static was as integer
+
+    if ( g.fight.dmg_pct <= 0.0 and g.fight.bonus_pct <= 0.0 ) then
+        if ( was ) then qglVgaPalette scr_pal(0)
+        was = 0
+        exit sub
+    end if
+    scr_pal_blend scr_pal(0), scr_pal_sh(0), g.fight.dmg_pct, g.fight.bonus_pct
+    qglVgaPalette scr_pal_sh(0)
+    was = -1
+
+    g.fight.dmg_pct = g.fight.dmg_pct - dt * PL_DMG_FADE#
+    if ( g.fight.dmg_pct < 0.0 ) then g.fight.dmg_pct = 0.0
+    g.fight.bonus_pct = g.fight.bonus_pct - dt * PL_BONUS_FADE#
+    if ( g.fight.bonus_pct < 0.0 ) then g.fight.bonus_pct = 0.0
+end sub
+
+
+''::::::::::
+'' name: hud_shade
+'' desc: Tinted glass: darkens the scene under a rect by pushing every
+''       pixel through a dark row of Quake's own colormap -- qglDrShade
+''       does the walk. Falls back to the opaque slab when no colormap is
+''       loaded, so the overlay never depends on -lm's data being there.
+''::::::::::
+sub hud_shade ( _
+    g as Game, _
+    dc as long, _
+    x0 as integer, _
+    y0 as integer, _
+    x1 as integer, _
+    y1 as integer, _
+    rw as integer _
+)
+
+    if ( mod_cm_ready( g ) = 0 ) then
+        qglDrFill dc, x0, y0, x1, y1, hc_slab
+        exit sub
+    end if
+    ''
+    '' Normalise the colormap pointer the way sb_build does: fold the
+    '' offset into the segment so row*256 + offset stays inside 16 bits.
+    ''
+    '' Hoisted into a variable because BASIC will not take a Function
+    '' call in a Sub's argument list here.
+    dim cmp as long
+    ''
+    '' The colormap pointer is handed straight into the call, unpinned.
+    '' That is only sound because dc is the MEM backbuffer: a MEM
+    '' destination needs no EMS window, so nothing in there acquires a
+    '' slot and the pool cannot take the colormap's out from under us.
+    '' Point this at an EMS dc and it needs mod_cm_lock around it, the
+    '' way sb_build does.
+    ''
+    cmp = mod_cm_map ( g )
+    qglDrShade dc, x0, y0, x1, y1, cmp, rw
+end sub
+
+
+sub hud_panel ( _
+    g as Game, _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    w as integer, _
+    h as integer, _
+    title as string _
+)
+    ''
+    '' Tinted glass, then the slab's furniture: the scene stays visible
+    '' under the panel, darkened three-quarters of the way down Quake's
+    '' colormap, with the bevel and rivets on top saying where it ends.
+    ''
+    hud_shade g, dc, x, y, x+w, y+h, 46
+    qglDrHline dc, x, y, x+w, hc_slabhi
+    qglDrVline dc, x, y, y+h, hc_slabhi
+    qglDrHline dc, x, y+h, x+w, hc_slablo
+    qglDrVline dc, x+w, y, y+h, hc_slablo
+
+    qglSfPset dc, x+2,   y+2,   hc_slabhi
+    qglSfPset dc, x+3,   y+3,   hc_slablo
+    qglSfPset dc, x+w-3, y+2,   hc_slabhi
+    qglSfPset dc, x+w-2, y+3,   hc_slablo
+    qglSfPset dc, x+2,   y+h-3, hc_slabhi
+    qglSfPset dc, x+3,   y+h-2, hc_slablo
+    qglSfPset dc, x+w-3, y+h-3, hc_slabhi
+    qglSfPset dc, x+w-2, y+h-2, hc_slablo
+
+    '' the title sits in the top rule, so blank the run it occupies
+    qglDrHline dc, x+5, y, x+8 + len( title )*4, hc_slab
+    draw_string dc, x+7, y-3, title
+end sub
+
+
+''::::::::::
+'' name: hud_num
+'' desc: A number painted in a CHOSEN colour, which draw_string's one
+''       fixed colour cannot do: qglTxtRow's bits are re-plotted block
+''       by block, with a one-pixel shadow so it sits on the slab
+''       instead of floating.
+''::::::::::
+sub hud_num ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    sc as integer, _
+    txt as string, _
+    col as integer _
+)
+    dim i as integer, ch as integer, gx as integer, gy as integer
+    dim px as integer, bx as integer, by as integer, pass as integer
+    dim bits as integer
+
+    for pass = 0 to 1
+        px = x
+        for i = 1 to len( txt )
+            ch = asc( mid$( txt, i, 1 ) )
+            for gy = 0 to 7
+                bits = qglTxtRow( g_font, ch, gy )
+                if ( bits = 0 ) then goto hn_next_row
+                for gx = 0 to 7
+                    if ( (bits and (128 \ (2^gx))) <> 0 ) then
+                        bx = px + gx*sc
+                        by = y + gy*sc
+                        if ( pass = 0 ) then
+                            qglDrFill dc, bx+1, by+1, bx+sc, by+sc, hc_slablo
+                        else
+                            qglDrFill dc, bx, by, bx+sc-1, by+sc-1, col
+                        end if
+                    end if
+                next gx
+hn_next_row:
+            next gy
+            px = px + 4*sc + 1
+        next i
+    next pass
+end sub
+
+
+sub hud_row ( _
+    dc as long, _
+    x as integer, _
+    w as integer, _
+    y as integer, _
+    label as string, _
+    value as string _
+)
+    draw_string dc, x+5, y, label
+    draw_string_r dc, x+w-5, y, value
+end sub
+
+''::::::::::
+'' name: hud_graph
+'' desc: One pixel column per remembered frame, oldest at the left. The
+''       scale is passed in rather than derived from the window, so the
+''       bars keep their meaning as the view changes -- and the tallest
+''       column is picked out, because the spike is the whole point.
+''::::::::::
+sub hud_graph ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    h as integer, _
+    buf() as integer, _
+    mx as integer _
+)
+    dim i as integer, k as integer, v as integer, c as integer, top as integer
+
+    if ( mx < 1 ) then mx = 1
+
+    qglDrFill dc, x, y, x+GRAPH_N, y+h, hc_bg
+
+    ''
+    '' Reference lines at half and full scale, dashed. Without them a flat
+    '' trace is an anonymous block and an idle one is an empty box -- both
+    '' read as broken rather than as steady and quiet respectively.
+    ''
+    for i = 0 to GRAPH_N-1 step 3
+        qglSfPset dc, x+i, y+1, hc_slablo
+        qglSfPset dc, x+i, y+h\2, hc_slablo
+    next i
+
+    for i = 0 to GRAPH_N-1
+        k = (g_head + i) mod GRAPH_N        '' oldest first, so it scrolls left
+        v = buf(k)
+        if ( v > 0 ) then
+            top = (v * h) \ mx
+            if ( top > h ) then top = h
+            if ( v >= mx ) then c = hc_peak else c = hc_hist
+            qglDrVline dc, x+i, y+h-top, y+h, c
+        end if
+    next i
+    qglDrRect dc, x, y, x+GRAPH_N, y+h, hc_slablo
+end sub
+
+
+sub hud_bar ( _
+    dc as long, _
+    x as integer, _
+    y as integer, _
+    w as integer, _
+    h as integer, _
+    percent as single _
+)
+    dim f as integer
+
+    if ( percent < 0 ) then percent = 0
+    if ( percent > 100 ) then percent = 100
+    f = (w * percent) / 100.0
+
+    qglDrFill dc, x, y, x+w, y+h, hc_bg
+    qglDrRect  dc, x, y, x+w, y+h, hc_slablo
+    if ( f > 1 ) then qglDrFill dc, x+1, y+1, x+f-1, y+h-1, hc_meter
+end sub
+
+
+''::::::::::
+'' name: scr_draw_hud
+'' desc: Sound VU bars, the statistics overlay and the watermark.
+''
+''       Three panels rather than seventeen loose lines: what the renderer
+''       is doing right now, what the map is, and how the surface cache is
+''       behaving. The key hints moved to one footer line -- repeating
+''       "press f1 to disable" on every row cost more space than the rows.
+''::::::::::
+'' Laid out against w by h, the DESTINATION's size: the render target's
+'' when drawn into it, the mode's under -comp.
+sub scr_draw_hud ( _
+    g as Game, _
+    h_dst_dc as long, _
+    byval w as integer, _
+    byval h as integer _
+)
+    dim scs as CacheStats
+    dim lx as integer, rx as integer, cw as integer
+    dim yy as integer, ftr as string
+    dim fcol as integer
+    dim wide as integer
+    dim dxv as single, dyv as single, ayv as single, yawd as single
+    dim pstr as string, fstr as string, msg as string, secs as long
+
+    '' Quake's own bar first; the stats overlay may cover its edge
+    scr_sbar_draw g, h_dst_dc, w, h
+
+    cw = 146
+    lx = 3
+    rx = w - cw - 3
+
+    ''
+    '' Two columns need 2*cw and the gaps between them. A view too
+    '' narrow for that used to draw the right one straight over the
+    '' left, which is what a 150-wide render did. Drop it instead:
+    '' the right column is the map's static counts, and the left is
+    '' what changes per frame.
+    ''
+    wide = ( rx > lx + cw )
+
+    if ( g.scr.stats ) then
+        ''
+        '' left, top: this frame
+        ''
+        hud_panel g, h_dst_dc, lx, 6, cw, 76, "RENDER"
+
+        ''
+        '' The frame rate is the number a player actually watches, so it
+        '' gets the commercial treatment: twice the size and coloured by
+        '' threshold -- readable from across the room in a way a fourth
+        '' right-aligned row never was.
+        ''
+        if ( g.scr.fps >= 30 ) then
+            fcol = hc_good
+        elseif ( g.scr.fps >= 15 ) then
+            fcol = hc_warn
+        else
+            fcol = hc_bad
+        end if
+        hud_num h_dst_dc, lx+6, 13, 2, ltrim$(str$( g.scr.fps )), fcol
+        draw_string h_dst_dc, lx+34, 18, "fps"
+
+        hud_row h_dst_dc, lx, cw, 30, "Polygons", ltrim$(str$( g.rdr.polys ))
+        hud_row h_dst_dc, lx, cw, 38, "Triangles", ltrim$(str$( g.rdr.tris ))
+        hud_row h_dst_dc, lx, cw, 46, "Leaves drawn/culled", _
+                ltrim$(str$( g.vis.drw_leafs )) + "/" + ltrim$(str$( g.vis.cul_leafs ))
+        hud_row h_dst_dc, lx, cw, 54, "Leaves portal-cut", ltrim$(str$( g.vis.pt_culled ))
+        draw_string h_dst_dc, lx+5, 60, "fps 60"
+        hud_graph h_dst_dc, lx+cw-GRAPH_N-5, 59, 17, g_fps(), 60
+
+        ''
+        '' left, below: the surface cache. Builds-in-one-frame is what a
+        '' hitch is made of, so it leads, and the worst frame is kept
+        '' because an average over a run hides exactly that spike.
+        ''
+        '' one crossing into d_surf for the whole panel
+        sc_stats scs
+
+        hud_panel g, h_dst_dc, lx, 90, cw, 78, "SURFACE CACHE"
+
+        ''
+        '' Warning flash: evictions and flushes are the events being
+        '' hunted, so the panel calls attention to itself when one lands
+        '' rather than waiting to be read. Commercial HUDs surface alerts;
+        '' logs wait to be read.
+        ''
+        if ( scs.evict > hud_pevict or scs.flushes > hud_pflush ) then
+            hud_flash = 12
+        end if
+        hud_pevict = scs.evict
+        hud_pflush = scs.flushes
+        if ( hud_flash > 0 ) then
+            if ( (hud_flash and 2) <> 0 ) then
+                qglDrRect h_dst_dc, lx, 90, lx+cw, 90+78, hc_bad
+            end if
+            hud_flash = hud_flash - 1
+        end if
+
+        hud_row h_dst_dc, lx, cw, 96, "Hit / built", _
+                ltrim$(str$( scs.hits )) + "/" + ltrim$(str$( scs.builds ))
+        hud_row h_dst_dc, lx, cw, 104, "Worst frame", ltrim$(str$( scs.bpeak ))
+        hud_row h_dst_dc, lx, cw, 112, "Resident", ltrim$(str$( scs.live ))
+        hud_row h_dst_dc, lx, cw, 120, "Evicted", ltrim$(str$( scs.evict ))
+        hud_row h_dst_dc, lx, cw, 128, "Flushes", ltrim$(str$( scs.flushes ))
+        '' the store as a proportion of what it can hold, which a bare
+        '' kilobyte count never conveys
+        draw_string h_dst_dc, lx+5, 136, "Store"
+        hud_bar h_dst_dc, lx+cw-GRAPH_N-5, 136, GRAPH_N, 6, _
+                scs.peak * 100.0 / 4194304.0
+        draw_string h_dst_dc, lx+5, 146, "builds " + ltrim$(str$( scs.bpeak ))
+        hud_graph h_dst_dc, lx+cw-GRAPH_N-5, 145, 17, g_bld(), scs.bpeak
+
+        ''
+        '' right: the map, which never changes while it is loaded
+        ''
+        if ( wide ) then
+            hud_panel g, h_dst_dc, rx, 6, cw, 56, "WORLD"
+            hud_row h_dst_dc, rx, cw, 12, "Resolution", _
+                    ltrim$(str$( g.env.x_res )) + "x" + ltrim$(str$( g.env.y_res ))
+            hud_row h_dst_dc, rx, cw, 20, "Vertices", ltrim$(str$( g.wld.count.verts ))
+            hud_row h_dst_dc, rx, cw, 28, "Edges", ltrim$(str$( g.wld.count.edges ))
+            hud_row h_dst_dc, rx, cw, 36, "Faces", ltrim$(str$( g.wld.count.faces ))
+            hud_row h_dst_dc, rx, cw, 44, "Nodes", ltrim$(str$( g.wld.count.nodes ))
+            hud_row h_dst_dc, rx, cw, 52, "Leaves", ltrim$(str$( g.wld.count.leaves ))
+        end if
+
+        ''
+        '' one footer line for every toggle, in the order of the keys
+        ''
+        ftr = "F1 mip "
+        if ( g.rdr.use_mips ) then ftr = ftr + "ON " else ftr = ftr + "off"
+        if ( g.rdr.rend_mode = 0 ) then
+            ftr = ftr + "   F2 perspective"
+        elseif ( g.rdr.rend_mode = 1 ) then
+            ftr = ftr + "   F2 affine     "
+        else
+            ftr = ftr + "   F2 wireframe  "
+        end if
+        ftr = ftr + "   B cull "
+        if ( g.rdr.backface ) then ftr = ftr + "ON " else ftr = ftr + "off"
+        ftr = ftr + "   L lm "
+        if ( g.rdr.lightmap ) then ftr = ftr + "ON " else ftr = ftr + "off"
+        ftr = ftr + "   P portal "
+        if ( g.rdr.portal ) then ftr = ftr + "ON " else ftr = ftr + "off"
+        ftr = ftr + "   O ptl "
+        if ( g.scr.portal_wire ) then ftr = ftr + "ON " else ftr = ftr + "off"
+        ftr = ftr + "   F12 hide"
+
+        yy = h - 9
+        qglDrFill h_dst_dc, 0, yy-2, w, h, hc_bg
+        qglDrHline h_dst_dc, 0, yy-2, w, hc_slabhi
+        draw_string h_dst_dc, 4, yy, ftr
+    end if
+
+    '' what the fight has to say, centred: the font is 4 wide
+    select case g.fight.state
+    case GS_TITLE% : msg = "FIRE TO START"
+    case GS_DEAD%  : msg = "YOU DIED"
+    case GS_WON%   : msg = "AREA CLEARED - FIRE TO GO AGAIN"
+    case GS_EXIT%  : msg = "LEVEL COMPLETE - HOLD FIRE TO GO ON"
+    case else      : msg = ""
+    end select
+    '' the centerprint takes the state line when it is free, else the
+    '' line above it: the map's title over LEVEL COMPLETE
+    if ( g.rdr.anim_time < g.fight.msg_until ) then
+        if ( len( msg ) = 0 ) then
+            msg = rtrim$( g.fight.msg )
+        else
+            draw_string h_dst_dc, w \ 2 - len( rtrim$( g.fight.msg ) ) * 2, h \ 2 - 11, rtrim$( g.fight.msg )
+        end if
+    end if
+    if ( len( msg ) > 0 ) then
+        if ( g.fight.state = GS_DEAD% ) then qglDrFill h_dst_dc, 0, h \ 2 - 8, w, h \ 2 + 8, hc_bad
+        draw_string h_dst_dc, w \ 2 - len( msg ) * 2, h \ 2 - 3, msg
+    end if
+    '' the intermission's tally: kills, secrets and the level's time
+    if ( g.fight.state = GS_EXIT% ) then
+        secs = int( g.fight.exit_time - g.fight.level_start )
+        msg = "KILLS " + ltrim$( str$( g.fight.kills ) ) + "/" + ltrim$( str$( g.mdl_count ) ) _
+            + "  SECRETS " + ltrim$( str$( g.fight.secrets ) ) + "/" + ltrim$( str$( g.fight.secret_total ) ) _
+            + "  TIME " + ltrim$( str$( secs \ 60 ) ) + ":" + right$( "0" + ltrim$( str$( secs mod 60 ) ), 2 )
+        draw_string h_dst_dc, w \ 2 - len( msg ) * 2, h \ 2 + 5, msg
+    end if
+
+    '' the crosshair: four dots, the centre left open to see through
+    qglSfPset h_dst_dc, w \ 2 - 2, h \ 2, hc_slabhi
+    qglSfPset h_dst_dc, w \ 2 + 2, h \ 2, hc_slabhi
+    qglSfPset h_dst_dc, w \ 2, h \ 2 - 2, hc_slabhi
+    qglSfPset h_dst_dc, w \ 2, h \ 2 + 2, hc_slabhi
+
+    ''
+    '' Where the camera is, printed as the flags themselves so a sighting
+    '' can be replayed headlessly, and drawn last so the panel cannot cover
+    '' it. With the stats (F12) only: its string builds and BASIC glyph
+    '' loop cost every frame of play.
+    ''
+    if ( g.scr.stats = 0 ) then exit sub
+
+    ''
+    '' pl.pos, not cam.pos: -at takes the hull origin, and the eye is
+    '' PL_EYE# above it. The yaw is mirrored the way -yaw wants -- the
+    '' eye direction is (cos a, -sin a) in bsp x,y -- and normalised to
+    '' 0..360, because -yaw is fed to mousePos as (x_res-1)*yaw/360 and
+    '' a negative angle is a negative screen x. Printing atan2's own
+    '' -180..180 makes half the viewpoints unreplayable.
+    ''
+    fstr = "KILLS " + ltrim$(str$( g.fight.kills )) + "  DEATHS " + ltrim$(str$( g.fight.deaths ))
+
+    dxv = g.cam.look_at.x - g.cam.pos.x
+    dyv = g.cam.look_at.z - g.cam.pos.z
+    ayv = -dyv
+
+    if ( dxv > 0.0 ) then
+        yawd = atn( ayv / dxv ) * 57.29578
+    elseif ( dxv < 0.0 ) then
+        if ( ayv >= 0.0 ) then
+            yawd = atn( ayv / dxv ) * 57.29578 + 180.0
+        else
+            yawd = atn( ayv / dxv ) * 57.29578 - 180.0
+        end if
+    elseif ( ayv >= 0.0 ) then
+        yawd = 90.0
+    else
+        yawd = -90.0
+    end if
+    if ( yawd < 0.0 ) then yawd = yawd + 360.0
+
+    pstr = "-at " + ltrim$(str$( cint( g.pl.pos.x ) )) + " " + _
+                    ltrim$(str$( cint( g.pl.pos.y ) )) + " " + _
+                    ltrim$(str$( cint( g.pl.pos.z ) )) + _
+           " -yaw " + ltrim$(str$( cint( yawd ) ))
+
+    qglDrFill h_dst_dc, 0, 0, w, 9, hc_bg
+    draw_string h_dst_dc, 4, 1, pstr
+    if ( wide ) then draw_string_r h_dst_dc, w - 40, 1, fstr
+    '' Stats hidden or not: the number a player watches. Not under
+    '' -nostats, whose frame is a byte-for-byte reference.
+    draw_string_r h_dst_dc, w-4, 1, ltrim$(str$( g.scr.fps )) + " fps"
+end sub
+
+
+''::::::::::
+sub scr_screenshot ( _
+    g as Game, _
+    flname as string, _
+    byval dc as long _
+)
+    dim f as integer
+    dim x as integer
+    dim y as integer
+    dim w as integer
+    dim h as integer
+    dim pad as integer
+    dim rowlen as integer
+    dim imgsz as long
+    dim off_bits as long
+    dim row as string
+    dim buf as string
+
+    w   = g.env.x_res
+    h   = g.env.y_res
+    pad = (4 - (w mod 4)) mod 4
+
+    rowlen  = w + pad
+    imgsz   = clng(rowlen) * clng(h)
+    off_bits = 14 + 40 + 1024
+
+    f = freefile
+    open flname for binary as #f
+
+    ''
+    '' BITMAPFILEHEADER
+    ''
+    buf = "BM" + mkl$( off_bits + imgsz ) + mki$(0) + mki$(0) + mkl$( off_bits )
+    put #f, , buf
+
+    ''
+    '' BITMAPINFOHEADER
+    ''
+    buf = mkl$(40) + mkl$(clng(w)) + mkl$(clng(h)) + mki$(1) + mki$(8) + _
+          mkl$(0) + mkl$(imgsz) + mkl$(2835) + mkl$(2835) + _
+          mkl$(256) + mkl$(0)
+    put #f, , buf
+
+    ''
+    '' Palette, written BGRA
+    ''
+    buf = ""
+    for x = 0 to 255
+        buf = buf + scr_pal(x).blue + scr_pal(x).green + scr_pal(x).red + chr$(0)
+    next x
+    put #f, , buf
+
+    ''
+    '' Pixels, bottom row first. Pad bytes stay zero.
+    ''
+    for y = h-1 to 0 step -1
+        row = string$( rowlen, 0 )
+        for x = 0 to w-1
+            mid$( row, x+1, 1 ) = chr$( qglSfPget( dc, x, y ) and 255 )
+        next x
+        put #f, , row
+    next y
+
+    close #f
+
+end sub
+
+''::::::::::
+sub draw_init_font ( )
+    if ( not draw_load_font( "font.fnt" ) ) then
+        sys_error "0x0000, Could not load font..."
+    end if
+
+end sub
+
+''::::::::::
+'' name: scr_begin_loading
+'' desc: Mode 13h for the duration of loading only.
+''::::::::::
+sub scr_begin_loading ( _
+    g as Game _
+)
+    ldr.dc = qglVgaInit()
+    if ( ldr.dc = 0 ) then
+        sys_error "0x3001, Could not set loading video mode"
+    end if
+
+    '' palette before chrome: everything below indexes into its ramps
+    scr_load_palette
+    scr_load_chrome g
+    scr_load_stage "starting up"
+    scr_load_tick
+
+end sub
+
+
+
+
+
+
+''::::::::::
+'' name: scr_count_frame
+'' desc: One frame has been drawn. Rolls fps once a second, and clears the
+''       counters the next frame will accumulate into.
+''::::::::::
+sub scr_count_frame ( _
+    g as Game _
+)
+
+    fps1 = fps1 + 1
+
+    if ( qglTmrTicks() - g.env.sec_mark >= qglTmrHz() ) then
+        g.scr.fps = fps1
+        if ( fps1 > g.scr.fps_peak ) then g.scr.fps_peak = fps1
+        '' low ignores the first completed second: it contains the tail of
+        '' loading and the first surface builds, so it is not a frame rate
+        '' the renderer ever sustains
+        if ( g.scr.bench_secs > 0 ) then
+            if ( g.ft.fps_low = 0 or fps1 < g.ft.fps_low ) then g.ft.fps_low = fps1
+        end if
+        g_fsec = fps1
+        fps1 = 0
+        g.env.sec_mark = qglTmrTicks()
+        g.scr.bench_secs = g.scr.bench_secs + 1
+    end if
+
+    g.rdr.tris = 0
+    g.rdr.polys = 0
+
+    '' The cache closes its own frame now and reports what it built; the
+    '' HUD only keeps the history graph, which is the HUD's business.
+    g_bld(g_head) = sc_frame_end
+    g_fps(g_head) = g_fsec
+    g_head = (g_head + 1) mod GRAPH_N
+
+end sub
