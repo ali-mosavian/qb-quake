@@ -30,6 +30,7 @@
 #include "fight.h"
 #include "assets.h"
 #include "mdl.h"
+#include "mdl_ai.h"
 #include "item.h"
 #include "h_frame.h"
 #include "screen.h"
@@ -409,6 +410,7 @@ int main( void )
         rdr.no_ents   = args.no_ents;
         rdr.no_items  = args.no_items;
         rdr.no_mdl    = args.no_mdl;
+        rdr.no_ai     = args.no_ai;
         rdr.bad_order = args.bad_order;
         hud->portal_wire = args.ptwire;
         /* Off unless asked for. F12 still toggles it; -nostats stays
@@ -677,6 +679,13 @@ int main( void )
 
             /* what the player is carrying when the run ends: the only
                headless view of a pickup actually happening */
+            {   short mon_hunt, mon_moved;
+                mdl_ai_stats( &world, &mon_hunt, &mon_moved );
+                sprintf( buf, "ai hunting=%d moved=%d leaps=%d",
+                         (int) mon_hunt, (int) mon_moved, (int) fight.leaps );
+                mark( buf );
+            }
+
             sprintf( buf, "fight=health %d shells %d nails %d rockets %d armor %d items %ld took %d",
                      fight.health, fight.shells, fight.nails, fight.rockets,
                      fight.armor, fight.items, item_taken( &world ) );

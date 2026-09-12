@@ -17,6 +17,7 @@
  */
 
 #include "h_frame.h"
+#include "mdl_ai.h"
 #include "d_poly.h"
 #include "d_faces.h"
 #include "ent.h"
@@ -129,6 +130,10 @@ void host_tick( World *world, Player *player, Camera *cam, Renderer *rdr,
     /* and what the player picked up on the way. After the movers: a
        plat can carry an item's floor out from under the player. */
     pl_items_touch( world, player, fight, rdr );
+
+    /* the monsters, after the player has moved: FindTarget sees where
+       they are now, not where they were at the top of the tick */
+    mdl_tick( world, player, fight, rdr );
 
     /* where each mover ended up, so the draw order can place it */
     ent_place_models( world );

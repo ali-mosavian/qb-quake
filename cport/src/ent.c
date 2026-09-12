@@ -22,6 +22,7 @@
 #include "r_bsp.h"      /* r_point_leaf -- r_bsp.bas, not yet ported */
 #include "assets.h"
 #include "item.h"
+#include "mdl_ai.h"
 #include "mdl.h"   /* ent_load_items -- the records sit between the hides and the doors */
 
 /* Neither toolchain here defines F_FTOL@, the runtime helper bcc emits
@@ -613,6 +614,10 @@ void ent_load_teleports( World *world )
        and door already at the position it loaded in: the trace walks
        their hulls too. */
     pl_items_drop( world );
+
+    /* and every monster onto it, which needs the same hulls and, for a
+       patrol, the corner table this file reads two calls up. */
+    for ( i = 0; i < world->mon_count; i++ ) mdl_spawn( world, &world->mon[i] );
 
     qglMemFree( (long) buf );
 }

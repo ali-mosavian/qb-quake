@@ -51,6 +51,10 @@ typedef struct {
     float suit_until;         /* radsuit_finished */
     float pent_until;         /* invincible_finished */
     float bonus_pct;          /* the pickup flash, 50, fading 100/s */
+    float show_hostile;       /* W_Attack: time + 1, monsters notice a shot
+                                 from behind until then -- nothing sets it
+                                 until the player has a weapon */
+    short leaps;              /* dogs and demons that left the ground */
 } Fight;
 
 #endif

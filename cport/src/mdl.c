@@ -134,10 +134,10 @@ void mdl_load_monsters( World *world, unsigned char far *buf, long *ofs, short c
 
         _fmemcpy( &mr, buf + *ofs, sizeof(EntsMon) ); *ofs += sizeof(EntsMon);
 
-        e->kind  = mr.kind;
-        e->pos   = mr.org;
-        e->yaw   = mr.angle;    /* a model's yaw is Quake's, CCW from +x: no mirror */
-        e->frame = 0;
+        e->kind   = mr.kind;
+        e->pos    = mr.org;
+        e->yaw    = mr.angle;   /* a model's yaw is Quake's, CCW from +x: no mirror */
+        e->patrol = mr.first;   /* its path_corner, -1 for none */
         if ( mr.kind >= 0 && mr.kind < MDL_KINDS ) kinds[ mr.kind ] = 1;
     }
 

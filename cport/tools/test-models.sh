@@ -27,7 +27,9 @@ mdl() { tr -d '\r' < "$OUT/cstep.txt" 2>/dev/null | sed -n 's/^frames=.* mdl=\([
 
 # The soldier at (8,1520,-200) and the dog at (88,1520,-200), 100 units
 # ahead of the camera: -yaw is the map's angle mirrored, so +y is 270.
-AT="-at 88 1420 -190 -yaw 270 -ticks 4"
+# -noai: the monsters must stand still, or the two arms render
+# different motion and the pixel count stops meaning the models.
+AT="-at 88 1420 -190 -yaw 270 -noai -ticks 4"
 run "e1m1.qmp -nostats $AT"        || true
 cp "$OUT/BENCH.BMP" "$OUT/mdl-on.bmp" 2>/dev/null || { echo "FAIL: no frame written" >&2; exit 1; }
 on=$(mdl)

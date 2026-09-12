@@ -37,6 +37,10 @@
 #define PL_SWIM_LAVA   50.0f
 #define PL_WATERSCALE  0.7f      /* SV_WaterMove's wishspeed *= 0.7 */
 #define PL_FEET        24.0f     /* player box: origin sits this far above the feet */
+#define PL_HALF        16.0f     /* and half its width; what a pellet hits */
+#define PL_ZLO         (-24.0f)
+#define PL_ZHI         32.0f
+#define PL_SHOT_RANGE  2048.0f   /* how far a bullet is traced */
 
 /* q_pl.bi's TraceResult -- the result of sweeping the player hull from
    one point to another. frac is how far it got, 0..1; norm is the

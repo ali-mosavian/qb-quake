@@ -47,12 +47,29 @@ typedef struct {
     short   nstand, nrun, ndeath, npain, natk;
 } MdlState;
 
-/* One spawned monster. BSP space, Z up, like Player.pos. */
+/* One spawned monster: everything mdl_think owns, separate from the
+   MdlState a whole kind shares. BSP space, Z up, like Player.pos, so it
+   can be handed to pl_trace with no copy. */
 typedef struct {
     BspVec3 pos;
     float   yaw;                /* Quake's own, CCW from +x -- not mirrored */
+    float   ideal_yaw;          /* what change_yaw turns towards */
     short   kind;
-    short   frame;              /* into the model's frame list */
+    short   state;              /* MDL_ST_* */
+    short   anim_frame;         /* within the set state selects */
+    float   next_think;         /* anim_time of the next 10 Hz think */
+    BspVec3 goal;               /* the wander or patrol destination */
+    float   stand_until;        /* anim_time to leave STAND on */
+    short   wander_ticks;       /* think-ticks spent on this goal */
+    short   health;
+    short   hunting;            /* has seen the player */
+    float   next_attack;
+    float   flash_until;        /* the volley's muzzle flash, until then */
+    float   pain_finished;      /* no new flinch before this */
+    BspVec3 spawn;
+    BspVec3 vel;                /* a leaper's, MOVETYPE_STEP off the ground */
+    short   leapt;              /* this leap has landed its damage */
+    short   patrol, corner;     /* the map's path_corner, and the one bound for */
 } MdlEnt;
 
 

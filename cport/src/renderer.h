@@ -68,6 +68,7 @@ typedef struct {
     short no_ents;        /* -noents */
     short no_items;       /* -noitems */
     short no_mdl;         /* -nomdl */
+    short no_ai;          /* -noai: the monsters stand where they spawned */
     short mdl_drawn;      /* monster triangles submitted this frame */
     short bad_order;      /* -badorder */
 

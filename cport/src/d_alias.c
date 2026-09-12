@@ -12,6 +12,7 @@
 
 #include "d_alias.h"
 #include "mdl.h"
+#include "mdl_ai.h"
 #include "item.h"
 #include "qgl.h"
 #include "mod_tex.h"
@@ -507,15 +508,30 @@ short d_draw_models( World *world, Renderer *rdr, DiskPlane far *frustum,
            segment silently -- the box would be read out of DS. */
         BspVec3 org;
         float a;
+        short frame;
 
         if ( !ms ) continue;
         org = e->pos;
         if ( !d_mdl_visible( world, rdr, frustum, &org,
                               ms->radius, ms->zlo, ms->zhi ) ) continue;
 
+        /* The sets are contiguous in the vertex page, in the header's
+           order: stand, run, death, pain, attack. A leaper has no leap
+           frames on the page and flies through the run cycle. */
+        switch ( e->state ) {
+        case MDL_ST_STAND: frame = e->anim_frame; break;
+        case MDL_ST_RUN:
+        case MDL_ST_LEAP:  frame = (short) ( ms->nstand + e->anim_frame ); break;
+        case MDL_ST_DEAD:  frame = (short) ( ms->nstand + ms->nrun + e->anim_frame ); break;
+        case MDL_ST_PAIN:  frame = (short) ( ms->nstand + ms->nrun + ms->ndeath + e->anim_frame ); break;
+        default:           frame = (short) ( ms->nstand + ms->nrun + ms->ndeath +
+                                              ms->npain + e->anim_frame ); break;
+        }
+        if ( frame >= ms->nframe ) frame = (short) ( ms->nframe - 1 );
+
         a = e->yaw * 3.14159265f / 180.0f;
         drawn = (short) ( drawn + mdl_draw_tris(
-            ms->ntri, ms->nvert, e->frame, &org,
+            ms->ntri, ms->nvert, frame, &org,
             (float) cos( a ), (float) sin( a ), 1.0f, 0.0f,
             &ms->scale, &ms->origin, ms->vtx_hnd, ms->skin,
             m, xresh, yresh, z_near, dst, QGL_Z_TEST ) );
