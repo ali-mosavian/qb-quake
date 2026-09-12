@@ -233,6 +233,11 @@ const ENT_DOOR_PAUSE_OUT  = 5   '' the second it stands there before the second 
 const ENT_DOOR_PAUSE_BACK = 6   '' and on the way back, CLOSING having reached ofs_mid
 const ENT_DOOR_BACK2   = 7      '' the last leg home
 const ENT_DOOR_PAUSE#  = 1.0
+'' Doors the player can stand in at once, and doors that can reach an
+'' end in one tick. A player box overlaps a handful; the sweeps report
+'' what they FOUND, so going past this is an error and not a silent
+'' truncation.
+const ENT_DOOR_LIST%   = 31
 const ENT_DOOR_FIELD#  = 60.0   '' spawn_field: the touch box grows this much in x and y
 const ENT_DOOR_FIELDZ# = 8.0    '' and this much in z
 

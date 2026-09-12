@@ -124,7 +124,9 @@ declare sub host_advance ( _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt, _
     nail() as Spike, _
-    mon() as MdlState _
+    mon() as MdlState, _
+    door_hit() as integer, _
+    door_ev() as integer _
 )
 declare function qglCheckAll () as integer
 declare function qglDiffAll () as integer
@@ -181,7 +183,9 @@ declare sub host_init ( _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt, _
     nail() as Spike, _
-    mon() as MdlState _
+    mon() as MdlState, _
+    door_hit() as integer, _
+    door_ev() as integer _
 )
 declare sub host_main ( _
     g as Game, _
@@ -207,7 +211,9 @@ declare sub host_main ( _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt, _
     nail() as Spike, _
-    mon() as MdlState _
+    mon() as MdlState, _
+    door_hit() as integer, _
+    door_ev() as integer _
 )
 
 ''
@@ -256,6 +262,10 @@ declare function sb_layout_ok ( byval dlight_off as long ) as integer
 declare function d_faces_layout_ok ( _
     byval sz as long, _
     byval drop_off as long _
+) as integer
+declare function ent_door_layout_ok ( _
+    byval brush_sz as integer, _
+    byval door_sz as integer _
 ) as integer
 declare sub d_init_turb ( )
 declare sub in_init ( _
@@ -435,6 +445,10 @@ dim nail() as Spike
 dim plat() as PlatEnt
 dim door() as DoorEnt
 dim trig() as TrigEnt
+'' ent_door.c writes these two, so they cross as descriptors and have
+'' to be far: a '$static local is handed over with no segment at all.
+dim door_hit() as integer
+dim door_ev() as integer
 dim bit_array() as integer
 dim frustum() as DiskPlane
 dim mip_buff_inf() as MipTex
@@ -543,7 +557,8 @@ dim shared z_dc as long
               mdl_buffer(), order_list(), poly_flag(), gv_buf(), bit_array(), _
               cp_x(), cp_y(), cp_z(), mip_buff_inf(), _
               frustum(), brush(), tele(), plat(), door(), trig(), _
-              mdl_ent(), item(), nail(), mon()
+              mdl_ent(), item(), nail(), mon(), _
+              door_hit(), door_ev()
     if ( g.env.dump_tex ) then
         mod_tex_dump g
     elseif ( g.env.dump_set ) then
@@ -555,7 +570,8 @@ dim shared z_dc as long
                   mdl_buffer(), order_list(), poly_flag(), gv_buf(), brush(), _
                   frustum(), bit_array(), _
                   mip_buff_inf(), plat(), door(), trig(), tele(), _
-                  mdl_ent(), item(), nail(), mon()
+                  mdl_ent(), item(), nail(), mon(), _
+              door_hit(), door_ev()
     end if
     host_shutdown
     
@@ -677,7 +693,9 @@ sub host_init ( _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt, _
     nail() as Spike, _
-    mon() as MdlState _
+    mon() as MdlState, _
+    door_hit() as integer, _
+    door_ev() as integer _
 )
     ''
     '' Load profiling. A 1 kHz AUTOINIT timer counts milliseconds, and the
@@ -686,6 +704,7 @@ sub host_init ( _
     '' the shape of the code and been wrong.
     ''
     dim dp_probe as DrawParams      '' the layout check below, nothing else
+    dim brush_probe as BrushModel, door_probe as DoorEnt
     dim t_start as single, t_sub as single, t_map as single
     dim t_lump as single, t_tex as single, t_vid as single
     dim pf as integer
@@ -715,6 +734,13 @@ sub host_init ( _
     if ( d_faces_layout_ok( len( dp_probe ), _
                             varptr( dp_probe.qgl_drop ) - varptr( dp_probe ) ) = 0 ) then
         sys_error "0x0043, d_faces.c's DrawParams layout is stale, len is" + str$( len( dp_probe ) ) + " drop at" + str$( varptr( dp_probe.qgl_drop ) - varptr( dp_probe ) )
+    end if
+
+    '' ent_door.c reads BrushModel and DoorEnt the same way -- by layout,
+    '' with no descriptor to check it -- and a field added to either in
+    '' q_ent.bi slides every one after it under the C side's feet.
+    if ( ent_door_layout_ok( len( brush_probe ), len( door_probe ) ) = 0 ) then
+        sys_error "0x0063, ent_door.c's record layout is stale, brush" + str$( len( brush_probe ) ) + " door" + str$( len( door_probe ) )
     end if
 
     '' TIMER, not qglTmrTicks: the PIT is not hooked until sys_time_init,
@@ -865,6 +891,8 @@ sub host_init ( _
     '' nails, and ubound of an array never made is error 9 (e1m3)
     redim mdl_ent( mon_count - 1 ) as MdlEnt
     redim nail( PL_NAILS_MAX% - 1 ) as Spike
+    redim door_hit( ENT_DOOR_LIST% ) as integer
+    redim door_ev( 2 * ENT_DOOR_LIST% + 1 ) as integer
     '' the map's own, where it put them; a deathmatch map has none
     g.mdl_count = ent_load_monsters( g, mdl_ent(), mdl_buffer(), brush(), pln_buffer(), mon() )
     if ( g.mdl_count = 0 and mon( MDL_KIND_ARMY% ).loaded ) then
@@ -945,7 +973,9 @@ sub host_main ( _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt, _
     nail() as Spike, _
-    mon() as MdlState _
+    mon() as MdlState, _
+    door_hit() as integer, _
+    door_ev() as integer _
 )
     dim mtx_prj as Mat4
     dim aspect as single
@@ -1121,7 +1151,8 @@ sub host_main ( _
         pt0 = sys_now()
         host_advance g, g.scr.frame_time, brush(), mdl_buffer(), pln_buffer(), _
                       nds_buffer(), cp_x(), cp_y(), cp_z(), tele(), plat(), door(), trig(), _
-                      host_accum, host_ticks, mdl_ent(), item(), nail(), mon()
+                      host_accum, host_ticks, mdl_ent(), item(), nail(), mon(), _
+                      door_hit(), door_ev()
         if ( g.ft.n > 0 ) then
             ptd = sys_now() - pt0
             g.pt.tick_sum = g.pt.tick_sum + ptd

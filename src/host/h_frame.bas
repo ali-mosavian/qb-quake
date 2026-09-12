@@ -70,7 +70,9 @@ declare sub host_tick ( _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt, _
     nail() as Spike, _
-    mon() as MdlState _
+    mon() as MdlState, _
+    door_hit() as integer, _
+    door_ev() as integer _
 )
 
 '' Declared here, not in a header: this module is the only caller of
@@ -96,7 +98,9 @@ declare sub ent_move_doors ( _
     g as Game, _
     byval dt as single, _
     brush() as BrushModel, _
-    door() as DoorEnt _
+    door() as DoorEnt, _
+    door_hit() as integer, _
+    door_ev() as integer _
 )
 declare sub ent_reset ( _
     g as Game, _
@@ -338,7 +342,9 @@ sub host_advance ( _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt, _
     nail() as Spike, _
-    mon() as MdlState _
+    mon() as MdlState, _
+    door_hit() as integer, _
+    door_ev() as integer _
 )
     dim steps as integer
 
@@ -358,7 +364,8 @@ sub host_advance ( _
             exit do
         end if
         host_tick g, HOST_DT#, brush(), models(), planes(), nodes(), cp_x(), cp_y(), _
-                   cp_z(), tele(), plat(), door(), trig(), mdl_ent(), item(), nail(), mon()
+                   cp_z(), tele(), plat(), door(), trig(), mdl_ent(), item(), nail(), mon(), _
+                   door_hit(), door_ev()
         host_accum = host_accum - HOST_DT#
         host_ticks = host_ticks + 1
         steps = steps + 1
@@ -450,7 +457,9 @@ sub host_tick ( _
     mdl_ent() as MdlEnt, _
     item() as ItemEnt, _
     nail() as Spike, _
-    mon() as MdlState _
+    mon() as MdlState, _
+    door_hit() as integer, _
+    door_ev() as integer _
 )
     dim mdl_i as integer
     dim fire as integer, ndead as integer
@@ -535,7 +544,7 @@ sub host_tick ( _
     '' movers, after the player has moved and before anything is drawn
     ent_move_plats g, dt, brush(), plat()
     host_tk g.ft.n > 0, t0, g.pt.tk_plats
-    ent_move_doors g, dt, brush(), door()
+    ent_move_doors g, dt, brush(), door(), door_hit(), door_ev()
     host_tk g.ft.n > 0, t0, g.pt.tk_doors
     ent_move_trigs g, dt, brush(), door(), trig(), plat()
     host_tk g.ft.n > 0, t0, g.pt.tk_trigs

@@ -32,6 +32,25 @@ dim shared ent_msg() as string * 40     '' the maps' messages; 0 is blank
 ''
 '' This module's own procedures.
 ''
+'' ent_door.c: the two per-door sweeps, one call a tick each. The lists
+'' they fill are this module's, and what a hit or an end means stays in
+'' ent_move_doors below.
+declare function ent_doors_touch_c ( _
+    byval count as integer, _
+    org as Vec3, _
+    door() as DoorEnt, _
+    door_hit() as integer, _
+    byval hit_max as integer _
+) as integer
+declare function ent_doors_step_c ( _
+    byval count as integer, _
+    byval dt as single, _
+    brush() as BrushModel, _
+    door() as DoorEnt, _
+    door_ev() as integer, _
+    byval ev_max as integer _
+) as integer
+
 declare sub ent_train_init ( p as PlatEnt, brush() as BrushModel )
 declare sub ent_corner_at ( byval i as integer, c as PathCorner )
 declare sub ent_door_key ( _
@@ -127,7 +146,9 @@ declare sub ent_move_doors ( _
     g as Game, _
     byval dt as single, _
     brush() as BrushModel, _
-    door() as DoorEnt _
+    door() as DoorEnt, _
+    door_hit() as integer, _
+    door_ev() as integer _
 )
 declare sub ent_door_init ( _
     g as Game, _
@@ -145,10 +166,6 @@ declare sub ent_door_fire ( _
     byval grp as integer, _
     door() as DoorEnt _
 )
-declare function ent_door_touched ( _
-    g as Game, _
-    d as DoorEnt _
-) as integer
 declare function ent_door_step ( _
     p as Vec3, _
     goal as Vec3, _
@@ -701,15 +718,6 @@ sub ent_link_doors ( _
 end sub
 
 
-'' door_trigger_touch: the player's box against the field. Quake's box is
-'' 16 either side and runs from 24 below the origin to 32 above it.
-function ent_door_touched ( _
-    g as Game, _
-    d as DoorEnt _
-) as integer
-    ent_door_touched = ent_box_touched( g, d.mins, d.maxs, 0.0 )
-end function
-
 
 '' The player's box against one grown by slack.
 function ent_box_touched ( _
@@ -821,76 +829,49 @@ sub ent_move_doors ( _
     g as Game, _
     byval dt as single, _
     brush() as BrushModel, _
-    door() as DoorEnt _
+    door() as DoorEnt, _
+    door_hit() as integer, _
+    door_ev() as integer _
 )
-    dim k as integer, m as integer
-    dim start as Vec3
+    dim k as integer, i as integer, n as integer
+    '' The two sweeps are ent_door.c's; what a hit or an end MEANS is
+    '' still here, because it reads keys, links, messages and the sound
+    '' device. C hands back the list and this acts on it, in the order
+    '' it always did -- every touch first, then every step.
 
-    for  k = 0 to g.door_count-1
-        if ( ent_door_touched( g, door(k) ) ) then
-            if ( door(k).key ) then
-                ent_door_key g, k, door()
-            elseif ( door(k).targeted = 0 and door(k).secret = 0 ) then
-                ent_door_fire g, door(k).link, door()
-            else
-                ent_talk g, ent_msg( door(k).msg )
-            end if
+    if ( g.door_count < 1 ) then exit sub
+
+    '' ent_door.c writes both lists through their descriptors. One that was
+    '' never sized has no room at all, so the write lands in the far heap
+    '' and the run dies anywhere but here -- or spins in B$FCompactMove,
+    '' which reads as a hang. Sized in main.bas; checked where it is used.
+    if ( ubound( door_hit ) < ENT_DOOR_LIST% or _
+         ubound( door_ev ) < 2 * ENT_DOOR_LIST% + 1 ) then
+        sys_error "0x0064, the door lists were never sized:" + str$( ubound( door_hit ) ) + str$( ubound( door_ev ) )
+    end if
+
+    n = ent_doors_touch_c( g.door_count, g.pl.pos, door(), door_hit(), ENT_DOOR_LIST% + 1 )
+    if ( n > ENT_DOOR_LIST% + 1 ) then
+        sys_error "0x0061, more doors touched at once than ent_move_doors holds:" + str$( n ) + " of" + str$( g.door_count )
+    end if
+    for i = 0 to n - 1
+        k = door_hit(i)
+        if ( door(k).key ) then
+            ent_door_key g, k, door()
+        elseif ( door(k).targeted = 0 and door(k).secret = 0 ) then
+            ent_door_fire g, door(k).link, door()
+        else
+            ent_talk g, ent_msg( door(k).msg )
         end if
-    next k
+    next i
 
-    for  k = 0 to g.door_count-1
-        m = door(k).model
-        start = brush(m).ofs
-        select case door(k).state
-            case ENT_DOOR_OPENING
-                if ( ent_door_step( brush(m).ofs, door(k).ofs_open, door(k).speed * dt ) ) then
-                    door(k).state = ENT_DOOR_OPEN
-                    door(k).hold_left = door(k).hold
-                    ent_door_sound g, door(k), 0
-                end if
-            case ENT_DOOR_OPEN
-                if ( door(k).hold >= 0.0 ) then
-                    door(k).hold_left = door(k).hold_left - dt
-                    if ( door(k).hold_left <= 0.0 ) then
-                        door(k).state = ENT_DOOR_CLOSING
-                        ent_door_sound g, door(k), 1
-                    end if
-                end if
-            case ENT_DOOR_CLOSING
-                if ( door(k).secret ) then
-                    if ( ent_door_step( brush(m).ofs, door(k).ofs_mid, door(k).speed * dt ) ) then
-                        door(k).state = ENT_DOOR_PAUSE_BACK
-                        door(k).pause_left = ENT_DOOR_PAUSE#
-                    end if
-                elseif ( ent_door_step( brush(m).ofs, door(k).ofs_shut, door(k).speed * dt ) ) then
-                    door(k).state = ENT_DOOR_SHUT
-                    ent_door_sound g, door(k), 0
-                end if
-            case ENT_DOOR_OUT1
-                if ( ent_door_step( brush(m).ofs, door(k).ofs_mid, door(k).speed * dt ) ) then
-                    door(k).state = ENT_DOOR_PAUSE_OUT
-                    door(k).pause_left = ENT_DOOR_PAUSE#
-                end if
-            case ENT_DOOR_PAUSE_OUT
-                door(k).pause_left = door(k).pause_left - dt
-                if ( door(k).pause_left <= 0.0 ) then
-                    door(k).state = ENT_DOOR_OPENING
-                    ent_door_sound g, door(k), 1
-                end if
-            case ENT_DOOR_PAUSE_BACK
-                door(k).pause_left = door(k).pause_left - dt
-                if ( door(k).pause_left <= 0.0 ) then
-                    door(k).state = ENT_DOOR_BACK2
-                    ent_door_sound g, door(k), 1
-                end if
-            case ENT_DOOR_BACK2
-                if ( ent_door_step( brush(m).ofs, door(k).ofs_shut, door(k).speed * dt ) ) then
-                    door(k).state = ENT_DOOR_SHUT
-                    ent_door_sound g, door(k), 0
-                end if
-        end select
-        if ( ent_moved( start, brush(m).ofs ) ) then brush(m).node = ENT_NODE_DIRTY
-    next k
+    n = ent_doors_step_c( g.door_count, dt, brush(), door(), door_ev(), 2 * ENT_DOOR_LIST% + 2 )
+    if ( n > ENT_DOOR_LIST% + 1 ) then
+        sys_error "0x0062, more doors reached an end at once than ent_move_doors holds:" + str$( n )
+    end if
+    for i = 0 to n - 1
+        ent_door_sound g, door( door_ev(i*2) ), door_ev(i*2+1)
+    next i
 end sub
 
 
