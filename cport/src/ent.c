@@ -519,12 +519,11 @@ void ent_load_teleports( World *world )
     /* Sized to the map, not a fixed bound: e1m3 has 106 submodels, and
        ent_place_models/pl_trace walk every one of them. */
     world->brush = (BrushModel far *) qglMemAlloc( (long) world->model_count * sizeof(BrushModel) );
-    world->face_mdl = (short far *) qglMemAlloc( (long) world->face_count * sizeof(short) );
     world->tele = (Teleporter far *) qglMemAlloc( (long) (h.ntele ? h.ntele : 1) * sizeof(Teleporter) );
     /* the trains ride this array too, so it is sized for both */
     world->plat_max = (short) ( h.nplat + h.ntrain );
     world->plat = (PlatEnt far *) qglMemAlloc( (long) (world->plat_max ? world->plat_max : 1) * sizeof(PlatEnt) );
-    if ( !world->brush || !world->face_mdl || !world->tele || !world->plat ) {
+    if ( !world->brush || !world->tele || !world->plat ) {
         fprintf( stderr, "ents.bin: out of memory\n" );
         exit( 1 );
     }
@@ -546,14 +545,18 @@ void ent_load_teleports( World *world )
         world->brush[i].node  = ENT_NODE_DIRTY;
     }
 
-    /* Which submodel owns each face. The world's faces come first and
-       the submodels' follow in order, so this is a walk, not a search. */
-    for ( i = 0; i < world->face_count; i++ ) world->face_mdl[i] = 0;
+    /* Which submodel owns each face, in the bits above Face.side's
+       one. The world's faces come first and the submodels' follow in
+       order, so this is a walk, not a search -- and an array of its
+       own was 11,032 bytes on e1m1 to hold a number under 64. */
+    for ( i = 0; i < world->face_count; i++ )
+        world->faces[i].side = (short) ( world->faces[i].side & 1 );
 
     for ( j = 1; j < world->model_count; j++ ) {
         for ( k = (short) world->models[j].first_face;
               k < (short) (world->models[j].first_face + world->models[j].num_faces); k++ ) {
-            if ( k >= 0 && k < world->face_count ) world->face_mdl[k] = j;
+            if ( k >= 0 && k < world->face_count )
+                world->faces[k].side = (short) ( ( world->faces[k].side & 1 ) | ( j << 1 ) );
         }
     }
 

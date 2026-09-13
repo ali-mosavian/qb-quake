@@ -131,13 +131,13 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
 {
     Face       far *tri     = world->faces;
     TexInfo    far *texinf  = world->texinfo;
-    short      far *facemdl = world->face_mdl;
     BrushModel far *brush   = world->brush;
     Plane      far *planes  = world->planes;
     Node       far *nodes   = world->nodes;
     MipTex     far *mipinf  = world->miptex;
     short      far *order   = rdr->ord;
-    short      far *pflag   = rdr->pflag;
+    short      fmdl;
+    unsigned char far *pflag = rdr->pflag;
     long       far *tex_ofs = (long far *) dp->tex_ofs_ptr;
 
     short mi, m_node, ti, i, j, v0, gn, vcnt, cnt;
@@ -185,14 +185,14 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
         for ( ti = leaf_indx; ti <= leaf_end; ti++ ) {
             i = ti;
 
-            if ( pflag[i] != dp->frame_stamp ) continue;
+            if ( !( pflag[i >> 3] & ( 1 << (i & 7) ) ) ) continue;
 
             /* Backface cull: side 0 points along the normal, side 1
                against it, and a face is only ever visible from its
                own front. */
             pl = &planes[ tri[i].plane_id ];
             dp_dist = r_cam_plane_dist( campos, pl );
-            if ( tri[i].side ) dp_dist = -dp_dist;
+            if ( tri[i].side & 1 ) dp_dist = -dp_dist;
             if ( dp->backface != 0 && dp_dist <= 0.01f ) continue;
 
             dp->polys++;
@@ -217,9 +217,10 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
             tex    = tri[i].tex_info_id;
             tex_id = texinf[tex].mip_tex;
             liquid = mipinf[tex_id].liquid;
-            ofs3[0] = brush[ facemdl[i] ].ofs.x;
-            ofs3[1] = brush[ facemdl[i] ].ofs.y;
-            ofs3[2] = brush[ facemdl[i] ].ofs.z;
+            fmdl = (short) ( tri[i].side >> 1 );
+            ofs3[0] = brush[fmdl].ofs.x;
+            ofs3[1] = brush[fmdl].ofs.y;
+            ofs3[2] = brush[fmdl].ofs.z;
 
             /* No early reject on vcnt: a degenerate face still passes
                through the lightmap gate below in the original, and
@@ -233,7 +234,7 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
                entity tests -- nothing guarantees its own order against
                the world's. */
             if ( dp->z_avail ) {
-                z_want = ( facemdl[i] == 0 ) ? QGL_Z_SET : QGL_Z_TEST;
+                z_want = ( fmdl == 0 ) ? QGL_Z_SET : QGL_Z_TEST;
                 if ( z_want != z_have ) {
                     /* qglSfZMode returns the mode it REPLACED, so assigning
                        its result left z_have one call behind and the next

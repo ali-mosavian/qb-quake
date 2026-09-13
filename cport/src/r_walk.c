@@ -45,7 +45,9 @@ void r_recursive_world_node( World *world, Renderer *rdr, DiskPlane far *frustum
             frst = world->leaves[leafnr].lface_id;
             last = frst + world->leaves[leafnr].lface_num;
             for ( i = frst; i < last; i++ )
-                rdr->pflag[ world->lfc[i] ] = rdr->frame_stamp;
+                {   short fi = world->lfc[i];
+                    rdr->pflag[fi >> 3] |= (unsigned char)( 1 << (fi & 7) );
+                }
             rdr->mk_faces += (long) ( last - frst );
 
             if ( rdr->ent_left && ( rdr->ent_lf[leafnr >> 3] & ( 1 << (leafnr & 7) ) ) )

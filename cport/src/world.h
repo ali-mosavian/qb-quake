@@ -109,12 +109,8 @@ typedef struct {
     short       msg_count;
     char        far *msgs;
 
-    short       far *face_mdl;   /* which submodel owns each face -- the
-                                     world's own faces read 0, a brush
-                                     entity's own faces read its index.
-                                     d_faces.c's, not read anywhere in
-                                     cport/ yet (not ported), but written
-                                     by ent_load_teleports regardless */
+    /* Which submodel owns a face is Face.side >> 1, written by
+       ent_load_teleports -- see its own note. There is no array. */
 
     /* The three EMS-resident stores mod.c owns and hands scanlines/rows
        out of through mod_lm_map/mod_cm_map/mod_geom_map (sb_build.c

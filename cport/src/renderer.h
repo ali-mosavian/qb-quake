@@ -85,7 +85,12 @@ typedef struct {
                             nodes x models compares a frame, and on e1m1
                             that was most of the cull. Rebuilt with
                             vis_walk. */
-    short far *pflag;     /* per-face flag, stamped with frame_stamp
+    unsigned char far *pflag; /* one BIT a face, cleared every frame --
+                              a short each was 11,032 bytes on e1m1 for
+                              a yes/no, and the frame stamp it held only
+                              existed to avoid clearing them. 690 bytes
+                              of _fmemset is cheaper than the 11K it
+                              saved us clearing.
                               when the walk marks a face visible */
     short far *ord;       /* draw order: internal node indices, far to
                               near, written by the walk */

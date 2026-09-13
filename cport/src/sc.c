@@ -269,7 +269,7 @@ short sc_init( SurfCache far *sc, short face_count )
     sc->slot = (CacheSlot far *) qglMemAlloc( sc_want );
     if ( sc->slot ) {
         sc_want = (long) SC_NBLK * (long) sizeof(short);
-        for ( i = 0; i < 5; i++ ) {
+        for ( i = 0; i < 7; i++ ) {
             short far *b = (short far *) qglMemAlloc( sc_want );
             sc_why = (short) ( 2 + i );
             if ( !b ) break;
@@ -278,11 +278,14 @@ short sc_init( SurfCache far *sc, short face_count )
                 case 1: sc->bord  = b; break;
                 case 2: sc->bown  = b; break;
                 case 3: sc->bprev = b; break;
-                default: sc->bnext = b; break;
+                case 4: sc->bnext = b; break;
+                case 5: sc->btag  = b; break;
+                default: sc->bstag = b; break;
             }
         }
     }
-    if ( !sc->slot || !sc->bgrn || !sc->bord || !sc->bown || !sc->bprev || !sc->bnext ) {
+    if ( !sc->slot || !sc->bgrn || !sc->bord || !sc->bown || !sc->bprev ||
+         !sc->bnext || !sc->btag || !sc->bstag ) {
         sc->ok = 0;
         return 0;
     }
@@ -334,7 +337,6 @@ void sc_reset( SurfCache far *sc, short face_count )
     short i;
 
     for ( i = 0; i < face_count; i++ ) {
-        sc->slot[i].tag = 0;
         sc->slot[i].blk = -1;
     }
     sc_reset_lists( sc );
@@ -393,11 +395,11 @@ QSurf sc_find( SurfCache far *sc, short face, short mip, short w, short h, short
 
     if ( !sc->ok ) return 0;
     if ( sc->slot[face].blk < 0 ) return 0;
-    if ( sc->slot[face].tag != sc->gen * 4 + mip ) return 0;
+    if ( sc->btag[ sc->slot[face].blk ] != sc->gen * 4 + mip ) return 0;
     /* A tag match says the mip and generation are right; stag is the
        SEPARATE axis -- the face's light style may have moved on since
        this block was built, and that has nothing to do with mip or gen. */
-    if ( sc->slot[face].stag != stag ) return 0;
+    if ( sc->bstag[ sc->slot[face].blk ] != stag ) return 0;
 
     /* The view is the CURRENT mip's shape, which is not the block's: a
        block is sized once at the face's finest mip, and a coarser mip
@@ -508,7 +510,6 @@ QSurf sc_alloc( SurfCache far *sc, short face, short mip, short w, short h, shor
             if ( blk >= 0 ) {
                 vic = sc->bown[blk];
                 if ( vic >= 0 ) {
-                    sc->slot[vic].tag = 0;
                     sc->slot[vic].blk = -1;
                     sc->live--;
                     sc->evict++;
@@ -525,7 +526,6 @@ QSurf sc_alloc( SurfCache far *sc, short face, short mip, short w, short h, shor
                 if ( vic < 0 ) continue;
                 b2 = sc->bown[vic];
                 if ( b2 >= 0 ) {
-                    sc->slot[b2].tag = 0;
                     sc->slot[b2].blk = -1;
                     sc->live--;
                     sc->evict++;
@@ -546,14 +546,13 @@ QSurf sc_alloc( SurfCache far *sc, short face, short mip, short w, short h, shor
         sc->bprev[blk] = -1;
         sc->bnext[blk] = -1;
         sc->slot[face].blk = blk;
-        sc->slot[face].cls = bord;
         sc->live++;
     }
     ofs = (long) sc->bgrn[blk] * SC_GRAN;
     if ( sc->next > sc->peak ) sc->peak = sc->next;
 
-    sc->slot[face].tag  = sc->gen * 4 + mip;
-    sc->slot[face].stag = stag;
+    sc->btag[ sc->slot[face].blk ]  = (short) ( sc->gen * 4 + mip );
+    sc->bstag[ sc->slot[face].blk ] = stag;
     sc_lru_touch( sc, blk );
 
     /* aim it at the bytes just claimed, ready for the builder to write */
@@ -567,8 +566,8 @@ short sc_held( SurfCache far *sc, short face )
 {
     if ( !sc->ok ) return -1;
     if ( sc->slot[face].blk < 0 ) return -1;
-    if ( (sc->slot[face].tag / 4) != sc->gen ) return -1;
-    return sc->slot[face].tag & 3;
+    if ( ( sc->btag[ sc->slot[face].blk ] / 4 ) != sc->gen ) return -1;
+    return (short) ( sc->btag[ sc->slot[face].blk ] & 3 );
 }
 
 void sc_stats( SurfCache far *sc, CacheStats *s )
@@ -714,9 +713,9 @@ static short sc_selftest_run( SurfCache far *sc )
 
     /* face 0 is the oldest, so touching it must make face 1 the victim */
     if ( sc_find( sc, 0, 0, 112, 112, 0, &aim ) == 0 ) return -27;
-    if ( sc->lhead[ sc->slot[0].cls ] < 0 ) return -28;
-    if ( sc->bown[ sc->lhead[ sc->slot[0].cls ] ] != 1 )
-        return (short) -(4000 + sc->bown[ sc->lhead[ sc->slot[0].cls ] ]);
+    if ( sc->lhead[ sc->bord[ sc->slot[0].blk ] ] < 0 ) return -28;
+    if ( sc->bown[ sc->lhead[ sc->bord[ sc->slot[0].blk ] ] ] != 1 )
+        return (short) -(4000 + sc->bown[ sc->lhead[ sc->bord[ sc->slot[0].blk ] ] ]);
 
     /* rebuilding the SAME face at a new mip must reuse its own block,
        not take a second one -- this is the leak the old allocator had */

@@ -328,17 +328,7 @@ void r_draw_world( World *world, Renderer *rdr, DiskPlane far *frustum,
     rdr->cul_leafs  = 0;
     rdr->drw_leafs  = 0;
 
-    /* Advance the frame stamp instead of clearing every face flag every
-       frame -- comparing against the stamp is the same test, run once
-       per 32,767 frames instead of every one. QuickBASIC traps integer
-       overflow at run time rather than wrapping, hence the check
-       before the increment; short wraps silently in C, but the check
-       is kept anyway since it's what makes the reset visible. */
-    if ( rdr->frame_stamp == 32767 ) {
-        for ( i = 0; i < world->face_count; i++ ) rdr->pflag[i] = 0;
-        rdr->frame_stamp = 0;
-    }
-    rdr->frame_stamp++;
+    _fmemset( rdr->pflag, 0, (unsigned) ( ( world->face_count + 7 ) / 8 ) );
 
     r_mark_leaves( world, rdr, (short) world->models[model].head_node0, campos );
 
@@ -496,7 +486,7 @@ void r_alloc_scratch( Renderer *rdr, short face_count, short node_count, short l
     rdr->lf_parent = (short far *) qglMemAlloc( (long) leaf_count * sizeof(short) );
     rdr->ent_nd    = (unsigned char far *) qglMemAlloc( ( (long) node_count + 7 ) / 8 );
     rdr->ent_lf    = (unsigned char far *) qglMemAlloc( ( (long) leaf_count + 7 ) / 8 );
-    rdr->pflag   = (short far *) qglMemAlloc( (long) face_count * sizeof(short) );
+    rdr->pflag   = (unsigned char far *) qglMemAlloc( ( (long) face_count + 7 ) / 8 );
     rdr->ord     = (short far *) qglMemAlloc( (long) node_count * sizeof(short) );
     rdr->pvsb    = (short far *) qglMemAlloc( (long) leaf_count * sizeof(short) );
     rdr->pvs_now = (short far *) qglMemAlloc( (long) leaf_count * sizeof(short) );

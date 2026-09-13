@@ -79,11 +79,27 @@ cache paid.
 use. e1m1 gets its cache and draws lit; dm3ish still floods 5,759
 portals a frame. `tools/test-lit.sh` holds both halves.
 
-Still oversized, and not yet cut: `CacheSlot` is 8 bytes a face here
-where the BASIC build narrowed it to one short, the block's generation
-tag and style epoch having moved onto the block. That is 33 KB on
-e1m1's 5,516 faces, and `SC_NBLK` is still 1024 where the BASIC build
-went to 384.
+## The four cuts the port had not picked up
+
+The BASIC build's per-face cuts were missing here, all four of them:
+
+| | was | now | e1m1 |
+|---|---|---|---|
+| `CacheSlot` | 4 shorts a face | 1 -- tag, epoch and class describe the BLOCK | +33,096 |
+| `face_mdl` | its own short array | the bits above `Face.side`'s one | +11,032 |
+| `pflag` | a short a face, frame-stamped | one bit, `_fmemset` a frame | +10,342 |
+| `SC_NBLK` | 1024 | 384 | +6,400 |
+
+Less 1,536 for the two block arrays `CacheSlot`'s tag and epoch moved
+to: **59,334 bytes on e1m1**, 65,298 on e1m4, 27,506 on dm3ish -- about
+9.9 bytes a face plus a fixed 4,864. Both maps render byte-identically
+either way.
+
+After them e1m1 reports 117,168 and 120,416 bytes free on two runs of
+one binary, where sc_init used to die wanting 44,128 of 15,616. Free
+memory is not a deterministic figure here, which is why
+`tools/test-lit.sh` floors its budget assertion well under the lower
+reading rather than pinning it.
 
 Every figure above except the `sc_init` line is a member size or an
 allocation site, not a read-back: only that one line is DOS's own

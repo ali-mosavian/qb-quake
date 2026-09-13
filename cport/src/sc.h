@@ -26,7 +26,7 @@
                            rdAccess brings in */
 #define SC_NCLS   25   /* (SC_MAXSH-SC_MINSH+1) squared */
 
-#define SC_NBLK   1024   /* max resident surfaces -- a hard bound, unlike
+#define SC_NBLK   384   /* max resident surfaces -- a hard bound, unlike
                              the bump allocator this replaced */
 #define SC_GRAN   256    /* smallest class, 16x16: the offset unit */
 
@@ -41,12 +41,13 @@
 
 /* bspfile.bi's CacheSlot -- one per face, not per surface: which block
    (if any) a face currently owns, and what content it holds. */
+/* Just the block. What the content IS -- its generation and mip, its
+   style epoch, its size class -- describes the BLOCK, so it lives on
+   the block table beside bown/bord: four shorts a face was 44,128
+   bytes on e1m1 against 11,032, for three fields only ever read
+   through a block a face already names. */
 typedef struct {
     short blk;    /* index into the block table, -1 for none */
-    short tag;    /* generation * 4 + mip the CONTENT holds */
-    short cls;    /* size class of the block, fixed per face */
-    short stag;   /* the face's light style epoch the CONTENT holds --
-                      see ls_epoch (ls.h) */
 } CacheSlot;
 
 /* bspfile.bi's CacheStats -- sc_stats' own snapshot, one crossing
@@ -88,6 +89,8 @@ typedef struct {
        per face. Offsets are kept in SC_GRAN granules so they fit a
        short: SC_GRAN is the smallest class, so every block is a whole
        number of them, and SC_STORE/SC_GRAN is 16,384, inside int16. */
+    short far *btag;   /* generation * 4 + the mip this block holds */
+    short far *bstag;  /* and the light style epoch it was built at */
     short far *bgrn;   /* block offset / SC_GRAN -- SC_NBLK entries */
     short far *bord;   /* size order: 2^(o+SC_MINORD) bytes */
     short far *bown;   /* owning face, -1 if none */

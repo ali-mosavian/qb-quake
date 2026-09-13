@@ -364,7 +364,9 @@ int main( void )
                      qglMemAvail( QGL_MEM_TOTAL ) );
             mark( buf );
         } else {
-            mark( "sc_init ok" );
+            sprintf( buf, "sc_init ok largest=%ld total=%ld",
+                     qglMemAvail( QGL_MEM_LARGEST ), qglMemAvail( QGL_MEM_TOTAL ) );
+            mark( buf );
         }
         ld_step( &ldr, v.h_video_dc, hud );
 
