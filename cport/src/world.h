@@ -2,6 +2,10 @@
 #define __WORLD_H__
 
 #include "bsptypes.h"
+
+/* Cell heights are powers of two and a cell is at most one EMS page,
+   so 1..16384 -- nine of them can matter and the rest cannot exist. */
+#define TEX_HEIGHTS 15
 #include "mdltypes.h"
 
 /*
@@ -129,18 +133,22 @@ typedef struct {
     /* q_map.bi's TexStore -- every texture, in two atlas dcs (raw
        indices, and row-0-shaded) instead of one dc per texture per
        mip: a dc costs conventional memory for its scanline table
-       whatever its pixels cost, and e1m1 would make 648 of them. Four
-       VIEWS per atlas instead, one per mip size, re-aimed per face
-       with qglSetView -- no allocation, no copy, the same trick the
+       whatever its pixels cost, and e1m1 would make 648 of them. A
+       handful of VIEWS per atlas instead, re-shaped per face with
+       qglSfViewShape -- no allocation, no copy, the same trick the
        surface cache uses to avoid a dc per surface. */
     QSurf   tex_raw, tex_shaded;
-    QSurf   tex_v_raw[4], tex_v_shaded[4];  /* a view per mip size */
-    short tex_cell[4];      /* texels per side at that mip */
-    short tex_aim_raw[4];    /* cell each view is already aimed at, -1
-                                 none -- re-aiming rewrites a scanline
-                                 table, and consecutive faces usually
-                                 share a texture */
-    short tex_aim_shd[4];
+    /* A view per HEIGHT, not per mip level: a cell keeps its texture's
+       own aspect now, and a view's address table is its height's while
+       qglSfViewShape can still give it any width. Made on first use --
+       a map wants a handful of the nine. */
+    QSurf   tex_v_raw[TEX_HEIGHTS], tex_v_shaded[TEX_HEIGHTS];
+    short tex_aim_raw[TEX_HEIGHTS];  /* cell each view is already aimed
+                                         at, -1 none -- re-aiming
+                                         rewrites a scanline table, and
+                                         consecutive faces usually share
+                                         a texture */
+    short tex_aim_shd[TEX_HEIGHTS];
     long  tex_ofs[1024];    /* [id*4 + level] -> byte offset in the atlas */
 } World;
 

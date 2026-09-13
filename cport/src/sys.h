@@ -51,6 +51,10 @@ typedef struct {
     short no_draw;           /* -nodraw (implies no_stats, the overlay
                                  rasterises too) */
     short no_cull;           /* -nocull */
+    short no_mip;             /* -nomip: every face at mip 0. The A/B that
+                                 said the blur was the atlas cell and not the
+                                 mip choice -- 213 of 16,000 pixels at the
+                                 e1m1 spawn, 1.33% */
     short no_z;               /* -noz */
     short no_portal;          /* -noportal */
     short no_lcache;          /* -nolcache: find an entity's leaves afresh

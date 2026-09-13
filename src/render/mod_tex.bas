@@ -43,8 +43,9 @@ declare function qglSfViewNew& ( _
     byval high as integer, _
     byval bps as integer _
 )
-declare function qglSfViewAim% ( _
+declare function qglSfViewShape% ( _
     byval v as long, _
+    byval wid as integer, _
     byval ofs as long _
 )
 declare function qglSfPget% ( _
@@ -80,6 +81,15 @@ declare sub mod_load_textures ( _
     g as Game, _
     mip_buff_inf() as MipTex _
 )
+declare function mod_tex_ofs ( byval ent as long ) as long
+declare function mod_tex_lg ( byval ent as long, byval axis as integer ) as integer
+declare function mod_tex_dim ( byval ent as long, byval axis as integer ) as integer
+declare function mod_tex_view ( _
+    g as Game, _
+    byval k as integer, _
+    byval mip as integer, _
+    byval shaded as integer _
+) as long
 
 ''
 '' Declared here, not in a header: this module is the only caller, and a
@@ -222,31 +232,26 @@ sub mod_load_textures ( _
     '' The flat atlas is staged beside the exe apart from the zip, so it
     '' can be another map's: dm3ish's 14 rows under e1m1's table drew
     '' every texture as some other one, and nothing said so.
-    dim last as integer
+    dim last as integer, ent as long, cw as integer, ch as integer
+    dim atlas_rows as integer
     last = g.wld.count.textures * 4 - 1
-    if ( g.wld.tex.ofs(last) + 64 > clng( qglSfSize( g.wld.tex.raw, 1 ) ) * TEX_ATLAS_W ) then
+    ent  = g.wld.tex.ofs(last)
+    cw   = mod_tex_dim( ent, 0 )
+    ch   = mod_tex_dim( ent, 1 )
+    atlas_rows = qglSfSize( g.wld.tex.raw, 1 )
+    if ( mod_tex_ofs( ent ) + clng(cw) * ch > clng( atlas_rows ) * TEX_ATLAS_W ) then
         sys_error "0x0018, texture atlas shorter than its offset table"
     end if
 
-    for  j = 0 to 3
-        g.wld.tex.cell(j) = 64 \ (2 ^ j)
-        g.wld.tex.aim_raw(j) = -1
-        g.wld.tex.aim_shd(j) = -1
-
-        '' bps IS the cell width: a cell is a flat run of cell*cell bytes,
-        '' not a window on the 8192-wide image, so the view walks it by its
-        '' own width and not the parent's.
-        g.wld.tex.v_raw(j)    = qglSfViewNew&( g.wld.tex.raw, _
-                                               g.wld.tex.cell(j), g.wld.tex.cell(j), _
-                                               g.wld.tex.cell(j) )
-        g.wld.tex.v_shaded(j) = qglSfViewNew&( g.wld.tex.shaded, _
-                                               g.wld.tex.cell(j), g.wld.tex.cell(j), _
-                                               g.wld.tex.cell(j) )
-        if ( g.wld.tex.v_raw(j) = 0 or g.wld.tex.v_shaded(j) = 0 ) then
-            sys_error "0x0017, no room for a texture view"
-        end if
-        scr_load_part 0.25, true
+    '' Made on first use, one per cell HEIGHT: a map wants a handful of
+    '' the fifteen, and nothing here knows which until a face asks.
+    for  j = 0 to TEX_HEIGHTS - 1
+        g.wld.tex.v_raw(j)    = 0
+        g.wld.tex.v_shaded(j) = 0
+        g.wld.tex.aim_raw(j)  = -1
+        g.wld.tex.aim_shd(j)  = -1
     next j
+    scr_load_part 1.0, true
 
     mod_link_anims g, mip_buff_inf()
 
@@ -338,17 +343,99 @@ end function
 
 
 '' Cell k of mip j, as a dc. Re-aims a view rather than owning 648 of them.
+''
+'' mkassets.py packs the cell into the offset table entry: the byte
+'' offset in bits 0..22, log2 of the cell width in 23..26 and log2 of its
+'' height in 27..30. That is what lets a texture keep its own size and
+'' aspect instead of being squeezed into a square.
+''
+function mod_tex_ofs ( byval ent as long ) as long
+    mod_tex_ofs = ent and 8388607&
+end function
+
+function mod_tex_lg ( byval ent as long, byval axis as integer ) as integer
+    if ( axis = 0 ) then
+        mod_tex_lg = cint( (ent \ 8388608&) and 15& )
+    else
+        mod_tex_lg = cint( (ent \ 134217728&) and 15& )
+    end if
+end function
+
+function mod_tex_dim ( byval ent as long, byval axis as integer ) as integer
+    mod_tex_dim = cint( 2 ^ mod_tex_lg( ent, axis ) )
+end function
+
+''::::::::::
+'' name: mod_tex_view
+'' desc: The view of the right HEIGHT, shaped to cell (k, mip) and aimed
+''       at it. A view's address table is its height's and qglSfViewShape
+''       changes only the width, so the views are one per height and made
+''       on first use -- a map wants a handful of the fifteen.
+''::::::::::
+function mod_tex_view ( _
+    g as Game, _
+    byval k as integer, _
+    byval mip as integer, _
+    byval shaded as integer _
+) as long
+    dim ent as long, ofs as long, v as long
+    dim cw as integer, ch as integer, hi as integer, want as integer
+    dim ok as integer
+
+    '' Every helper's result goes to a local first: BC reads a user
+    '' FUNCTION inside another call's argument list as an array and
+    '' reports Argument-count mismatch. `want` is not `key` for the same
+    '' family of reason -- KEY is a statement.
+    ent  = g.wld.tex.ofs( k*4 + mip )
+    ofs  = mod_tex_ofs( ent )
+    cw   = mod_tex_dim( ent, 0 )
+    ch   = mod_tex_dim( ent, 1 )
+    hi   = mod_tex_lg( ent, 1 )
+    want = k*4 + mip
+
+    if ( hi >= TEX_HEIGHTS ) then exit function
+
+    if ( shaded ) then v = g.wld.tex.v_shaded(hi) else v = g.wld.tex.v_raw(hi)
+
+    if ( v = 0 ) then
+        '' bps IS the cell width: a cell is a flat run of cw*ch bytes, not
+        '' a window on the 8192-wide image, so the view walks it by its own
+        '' width and not the parent's.
+        if ( shaded ) then
+            v = qglSfViewNew&( g.wld.tex.shaded, cw, ch, cw )
+            g.wld.tex.v_shaded(hi) = v
+            g.wld.tex.aim_shd(hi)  = -1
+        else
+            v = qglSfViewNew&( g.wld.tex.raw, cw, ch, cw )
+            g.wld.tex.v_raw(hi)   = v
+            g.wld.tex.aim_raw(hi) = -1
+        end if
+        if ( v = 0 ) then sys_error "0x0017, no room for a texture view"
+    end if
+
+    if ( shaded ) then
+        if ( g.wld.tex.aim_shd(hi) <> want ) then
+            ok = qglSfViewShape%( v, cw, ofs )
+            if ( ok = 0 ) then exit function
+            g.wld.tex.aim_shd(hi) = want
+        end if
+    else
+        if ( g.wld.tex.aim_raw(hi) <> want ) then
+            ok = qglSfViewShape%( v, cw, ofs )
+            if ( ok = 0 ) then exit function
+            g.wld.tex.aim_raw(hi) = want
+        end if
+    end if
+
+    mod_tex_view = v
+end function
+
 function mod_tex_raw ( _
     g as Game, _
     byval k as integer, _
     byval mip as integer _
 ) as long
-    if ( g.wld.tex.aim_raw(mip) <> k ) then
-        if ( qglSfViewAim%( g.wld.tex.v_raw(mip), _
-                            g.wld.tex.ofs( k*4 + mip ) ) = 0 ) then exit function
-        g.wld.tex.aim_raw(mip) = k
-    end if
-    mod_tex_raw = g.wld.tex.v_raw(mip)
+    mod_tex_raw = mod_tex_view( g, k, mip, 0 )
 end function
 
 function mod_tex_shaded ( _
@@ -356,12 +443,7 @@ function mod_tex_shaded ( _
     byval k as integer, _
     byval mip as integer _
 ) as long
-    if ( g.wld.tex.aim_shd(mip) <> k ) then
-        if ( qglSfViewAim%( g.wld.tex.v_shaded(mip), _
-                            g.wld.tex.ofs( k*4 + mip ) ) = 0 ) then exit function
-        g.wld.tex.aim_shd(mip) = k
-    end if
-    mod_tex_shaded = g.wld.tex.v_shaded(mip)
+    mod_tex_shaded = mod_tex_view( g, k, mip, -1 )
 end function
 
 
@@ -374,18 +456,41 @@ end function
 ''::::::::::
 sub mod_tex_dump ( g as Game )
     dim k as integer, mip as integer, y as integer, ty as integer
-    dim x as integer, cx as integer, cell as integer
+    dim x as integer, cx as integer
     dim dc as long
     dim f as integer
     dim sw as integer, sh as integer
+    dim colw as integer
+    dim band(3) as integer, top(3) as integer
     dim rowlen as integer
     dim imgsz as long, off_bits as long
     dim palbuf(255) as PalRgb
     dim row as string, buf as string
 
-    sw       = 20 * 64
-    sh       = 64 + 32 + 16 + 8
-    rowlen   = sw
+    '' Cells are the textures' own sizes now, so the sheet is measured
+    '' rather than assumed: one column per texture as wide as the widest
+    '' mip-0 cell, and a band per mip as tall as its tallest cell.
+    colw = 1
+    for  mip = 0 to 3
+        band(mip) = 1
+        for  k = 0 to g.wld.count.textures-1
+            x = mod_tex_dim( g.wld.tex.ofs( k*4 + mip ), 1 )
+            if ( x > band(mip) ) then band(mip) = x
+            if ( mip = 0 ) then
+                x = mod_tex_dim( g.wld.tex.ofs( k*4 ), 0 )
+                if ( x > colw ) then colw = x
+            end if
+        next k
+    next mip
+
+    top(0) = 0
+    for  mip = 1 to 3
+        top(mip) = top(mip-1) + band(mip-1)
+    next mip
+
+    sw       = g.wld.count.textures * colw
+    sh       = top(3) + band(3)
+    rowlen   = (sw + 3) and -4
     imgsz    = clng(rowlen) * clng(sh)
     off_bits = 14 + 40 + 1024
 
@@ -419,24 +524,21 @@ sub mod_tex_dump ( g as Game )
     '' down the sheet; BMP stores the bottom row first, so it counts down.
     ''
     for  y = sh-1 to 0 step -1
-        if ( y < 64 ) then
-            mip = 0 : ty = y
-        elseif ( y < 96 ) then
-            mip = 1 : ty = y - 64
-        elseif ( y < 112 ) then
-            mip = 2 : ty = y - 96
-        else
-            mip = 3 : ty = y - 112
-        end if
-        cell = g.wld.tex.cell(mip)
+        mip = 0
+        for  x = 1 to 3
+            if ( y >= top(x) ) then mip = x
+        next x
+        ty = y - top(mip)
 
         row = string$( rowlen, 0 )
         for  k = 0 to g.wld.count.textures-1
-            dc = mod_tex_raw( g, k, mip )
-            if ( dc <> 0 ) then
-                for  cx = 0 to cell-1
-                    mid$( row, k*64 + cx + 1, 1 ) = chr$( qglSfPget( dc, cx, ty ) and 255 )
-                next cx
+            if ( ty < mod_tex_dim( g.wld.tex.ofs( k*4 + mip ), 1 ) ) then
+                dc = mod_tex_raw( g, k, mip )
+                if ( dc <> 0 ) then
+                    for  cx = 0 to mod_tex_dim( g.wld.tex.ofs( k*4 + mip ), 0 ) - 1
+                        mid$( row, k*colw + cx + 1, 1 ) = chr$( qglSfPget( dc, cx, ty ) and 255 )
+                    next cx
+                end if
             end if
         next k
         put #f, , row

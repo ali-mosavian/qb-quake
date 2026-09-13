@@ -176,7 +176,8 @@ type SurfBuild
     lmw         as integer      '' luxel grid width
     lmh         as integer      '' luxel grid height
     shft        as integer      '' log2(texels per luxel)
-    msk         as integer      '' texture wrap mask
+    msk         as integer      '' u wrap mask, cell width - 1
+    vmsk        as integer      '' v wrap mask, cell height - 1
 end type
 
 ''

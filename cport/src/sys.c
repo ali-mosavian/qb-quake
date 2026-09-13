@@ -88,6 +88,7 @@ void sys_parse_args( RunArgs *args )
         else if ( stricmp( argv[i], "-badorder" )== 0 ) args->bad_order = -1;
         else if ( stricmp( argv[i], "-noz" )     == 0 ) args->no_z = -1;
         else if ( stricmp( argv[i], "-nocull" )  == 0 ) args->no_cull = -1;
+        else if ( stricmp( argv[i], "-nomip" )   == 0 ) args->no_mip = -1;
         else if ( stricmp( argv[i], "-noportal" )== 0 ) args->no_portal = -1;
         else if ( stricmp( argv[i], "-nosubvis" )== 0 ) args->no_subvis = -1;
         else if ( stricmp( argv[i], "-nolcache" )== 0 ) args->no_lcache = -1;

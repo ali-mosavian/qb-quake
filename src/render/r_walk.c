@@ -52,7 +52,7 @@
  * instead of silently drifting, and the failure prints the offset it
  * measured -- which is the new number to put here.
  */
-#define GAME_VIS_OFFSET 4988
+#define GAME_VIS_OFFSET 5112
 
 /* e1m6 has 107 submodels; a map with more drawn than this asks at every
    node, as the walk always did. On the stack: DGROUP is string space. */

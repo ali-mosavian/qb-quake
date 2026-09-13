@@ -232,7 +232,37 @@ GEOM_W = 8192
 GEOM_MAXVTX = 33
 
 MIPS   = 4
-SIZES  = [64, 32, 16, 8]        # what the renderer wants, per mip level
+EMS_PAGE = 16384                # one window: the most a cell may ever be
+MIN_CELL = 64                   # texels; under this a level shares the one above
+OFS_BITS = 23                   # of the table entry; the top nine carry the dims
+
+
+def _p2_down(v):
+    return v if v and (v & (v - 1)) == 0 else 1 << (v.bit_length() - 1)
+
+
+def tex_cell_levels(w, h):
+    """Atlas cell (width, height) per mip level, at the texture's own aspect.
+
+    Quake sizes are multiples of 16, not powers of two, and the renderer
+    addresses a cell by masking -- so each side is rounded DOWN to a power
+    of two, and the pair down again until it fits one EMS window. 79 of
+    e1m1's 81 textures come through untouched; 256x128 and 128x192 lose one
+    halving each.
+
+    A level whose cell would be under MIN_CELL texels repeats the one above
+    instead: 2x2 is a scanline table for nothing, and the saving is 440
+    bytes of e1m1's 508K, so this is about degenerate views and not memory.
+    """
+    W, H = _p2_down(w), _p2_down(h)
+    while W * H > EMS_PAGE:
+        if W >= H: W //= 2
+        else:      H //= 2
+    out = []
+    for k in range(MIPS):
+        cw, ch = max(W >> k, 1), max(H >> k, 1)
+        out.append(out[-1] if out and cw * ch < MIN_CELL else (cw, ch))
+    return out
 
 def read_lumps(d):
     return [struct.unpack_from('<ii', d, 4 + 8*i) for i in range(15)]
@@ -1338,61 +1368,57 @@ def main():
         lumps[14][1] // 64 )    # models     DISKSUBMODEL_SIZE
 
     # ------------------------------------------------------------------
-    # Two atlases, not 648 DCs.
-    #
-    # Each texture used to become its own EMS dc, four mips times two
-    # variants: 648 dcs on dm3ish, and a dc costs conventional memory for
-    # its struct and scanline table whatever its pixels cost. Measured at
-    # 42,176 bytes, the largest item after the back buffer, and it scales
-    # with texture count -- which is what stops e1m1 loading.
-    #
-    # One store per variant instead, with the renderer making FOUR view
-    # dcs -- one per mip size -- and re-aiming them per face with
-    # uglSetView. That is the same trick the surface cache uses.
-    #
-    # CELL-MAJOR, and no cell may straddle a scanline. A view reads its
-    # rows through the parent's scanline table, so a cell that crossed a
-    # row boundary would not be contiguous. Cells are 4096/1024/256/64
-    # bytes and the scanline is 8192, so each divides it exactly; each mip
-    # block is padded up to a scanline so the next one starts clean.
-    #
-    # The offset of any cell is then arithmetic, not a table:
-    #     ofs(k, lvl) = mip_base(lvl) + k * cell(lvl)^2
-    # ------------------------------------------------------------------
     # Two atlases and a lookup table, not 648 dcs.
     #
     # Each texture used to become its own EMS dc, four mips times two
     # variants: 160 dcs on dm3ish at 264 bytes of CONVENTIONAL memory each
     # for the struct and scanline table, measured at 42,176. e1m1 would
-    # make 648 -- the ~171K that stops it loading.
+    # make 648 -- the ~171K that stops it loading. One store per variant
+    # instead, with the renderer making one VIEW per cell HEIGHT and
+    # re-shaping it per face.
     #
-    # One store per variant instead. The renderer makes four VIEWS per
-    # store, one per mip size, and re-aims them per face with uglSetView --
-    # no allocation, no copy. The same trick the surface cache uses.
-    #
-    # Scanlines are 8192 and cells are crammed in, largest mip first. A
-    # cell must never cross a scanline: a view reads its rows through the
-    # parent's table, so a split cell would not be contiguous. Going
-    # largest-first every cell starts at a multiple of its own size
-    # (4096/1024/256/64), and each divides 8192, so none ever does.
-    #
-    # The placement is EMITTED, not re-derived. Two independent
-    # derivations of the same layout is exactly the bug the luxel atlas
-    # avoids by shipping its own table.
-    place = [[0] * MIPS for _ in range(ntex)]
-    raw_at, shd_at = bytearray(), bytearray()
+    # Cell-major, every cell a self-aligned power-of-two run, packed
+    # largest first -- so an offset is always a multiple of its own size
+    # and no cell can straddle the 16K window a view maps (uglview.asm).
+    # With the sizes descending that alignment is free: each area divides
+    # the one before it.
+    levels = []
+    for cl in cells:
+        if cl is None:
+            levels.append([(8, 8)] * MIPS)
+            continue
+        buf, base = cl
+        w, h = struct.unpack_from('<ii', buf, base + 16)
+        levels.append(tex_cell_levels(w, h))
 
-    for lvl in range(MIPS):
-        cell = SIZES[lvl]
-        for k, cl in enumerate(cells):
-            # A view must not straddle a 16K page (uglview.asm). Cells are
-            # powers of two and packed largest-first, so every offset is a
-            # multiple of its own size and none ever does.
-            assert len(raw_at) % (cell * cell) == 0, "cell not self-aligned"
-            place[k][lvl] = len(raw_at)
-            if cl is None:
-                raw_at += bytes(cell * cell); shd_at += bytes(cell * cell)
+    def shared(k, lvl):
+        return lvl > 0 and levels[k][lvl] == levels[k][lvl - 1]
+
+    blocks = [(cw * ch, k, lvl)
+              for k in range(ntex)
+              for lvl, (cw, ch) in enumerate(levels[k]) if not shared(k, lvl)]
+    blocks.sort(key=lambda b: -b[0])
+
+    place, pos = [[0] * MIPS for _ in range(ntex)], 0
+    for area, k, lvl in blocks:
+        assert pos % area == 0, "cell not self-aligned"
+        place[k][lvl] = pos
+        pos += area
+    for k in range(ntex):
+        for lvl in range(1, MIPS):
+            if shared(k, lvl):
+                place[k][lvl] = place[k][lvl - 1]
+    assert pos < (1 << OFS_BITS), f"atlas {pos} bytes, past what the table can say"
+
+    raw_at, shd_at = bytearray(pos), bytearray(pos)
+    for k, cl in enumerate(cells):
+        for lvl in range(MIPS):
+            if shared(k, lvl):
                 continue
+            cw, ch = levels[k][lvl]
+            o = place[k][lvl]
+            if cl is None:
+                continue                       # already zeros
             buf, base = cl
             w, h = struct.unpack_from('<ii', buf, base + 16)
             mo   = struct.unpack_from('<i',  buf, base + 24 + 4*lvl)[0]
@@ -1400,14 +1426,25 @@ def main():
             src  = buf[base+mo : base+mo + mw*mh]
             if len(src) < mw*mh:
                 print(f"  ! texture {k} mip {lvl} truncated, left blank")
-                raw_at += bytes(cell * cell); shd_at += bytes(cell * cell)
                 continue
             # raw: indices, for the surface builder, which shades through the
             # full colormap itself. shaded: row 0 applied, for the unlit path.
-            raw_at += resample(src, mw, mh, cell, cell, pal, cube, bits)
-            lit     = bytes(shade0[b] for b in src)
-            shd_at += resample(lit, mw, mh, cell, cell, pal, cube, bits)
-        print(f"  mip {lvl}: {ntex} cells @ {cell}x{cell}")
+            lit = bytes(shade0[b] for b in src)
+            # A cell at the texture's own size is a COPY. resample would
+            # sample every texel at its own centre and still round-trip it
+            # RGB -> cube -> index, which moves indices the atlas is meant
+            # to carry exactly.
+            if (mw, mh) == (cw, ch):
+                raw_at[o:o+cw*ch] = src
+                shd_at[o:o+cw*ch] = lit
+            else:
+                raw_at[o:o+cw*ch] = resample(src, mw, mh, cw, ch, pal, cube, bits)
+                shd_at[o:o+cw*ch] = resample(lit, mw, mh, cw, ch, pal, cube, bits)
+
+    exact = sum(1 for k, cl in enumerate(cells)
+                if cl is not None and
+                levels[k][0] == tuple(struct.unpack_from('<ii', cl[0], cl[1] + 16)))
+    print(f"  atlas: {pos:,} bytes a variant, {exact}/{ntex} textures at native size")
 
     for at in (raw_at, shd_at):
         if len(at) % LM_ATLAS_W:
@@ -1445,14 +1482,25 @@ def main():
     qmap_pal = pal_raw
     print(f"  pal.raw: {len(pal_raw)} bytes (flat, unzipped)")
 
+    # [id*4 + lvl] -> the cell's byte offset in bits 0..22, then log2 of
+    # its width in 23..26 and of its height in 27..30. Bit 31 stays clear
+    # so BASIC's signed long arithmetic reads it like any other positive
+    # number -- `p \ 65536` truncating toward zero has cost this project a
+    # day before now.
+    #
+    # In the entry rather than beside it because the dims are wanted at
+    # exactly the sites that already read the offset, and a second table
+    # is 1K of near data on the C side and 2K on BASIC's, which is the
+    # memory neither has. The offset is still EMITTED, not re-derived.
     tbl = bytearray()
     for k in range(ntex):
         for lvl in range(MIPS):
-            tbl += struct.pack('<l', place[k][lvl])
+            cw, ch = levels[k][lvl]
+            tbl += struct.pack('<l', place[k][lvl]
+                               | (cw.bit_length() - 1) << OFS_BITS
+                               | (ch.bit_length() - 1) << (OFS_BITS + 4))
     write_bload(os.path.join(outdir, "texofs.bld"), bytes(tbl))
-    print(f"  texofs.bld: {ntex} x {MIPS} offsets")
-    written = 2
-
+    print(f"  texofs.bld: {ntex} x {MIPS} cells, offset and dims")
     written = MIPS * 2
 
     print(f"done: {written} atlases for {ntex} textures across {MIPS} mip levels")

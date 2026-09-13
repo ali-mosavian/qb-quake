@@ -1,41 +1,23 @@
-;; t19sb -- qglSbBuild composites a surface, and comes back.
+;; t36sbcell -- qglSbBuild wraps u by the cell's WIDTH and v by its
+;; HEIGHT, which are no longer the same number.
 ;;
-;; THIS TEST COULD NOT BE WRITTEN UNTIL sb.asm STOPPED NAMING MGL. The
-;; suite links no UGLV.LIB by design, so a module reaching for ul$dctTB
-;; could not appear here at all -- which is exactly why the builder was
-;; the one qgl module with no native coverage, and why four separate
-;; faults sat in it undetected. Every one of them is reproduced below:
+;; An atlas cell was 64x64 down to 8x8, so one mask served both axes and
+;; SBPARM carried one. Cells are the texture's own power-of-two size now,
+;; so a 32x8 cell masked on its width alone reads row (y and 31): for
+;; y >= 8 that is a row the cell does not have, and the surface comes
+;; back carrying whatever is packed after it. The picture is a texture
+;; smeared down the face with a seam at its own height -- plausible
+;; enough to be read as a mip or a lightmap fault.
 ;;
-;;   1. the DISPATCH. mgl's table holds NEAR pointers into ugl_text and
-;;      sb.asm assembles into qgl_text, so `call ss:ul$dctTB[bx+rdAccess]`
-;;      kept CS and landed at that offset inside qgl_text -- 69 bytes
-;;      into qgl$Fixup. Real mode, so it ran instead of faulting.
-;;   2. the COLORMAP SEGMENT. uglsurf.asm reloads gs from its own cmseg
-;;      before the texel loop ("colormap keeps a segment"); the port
-;;      dropped that line, so sb$cmseg was written and never read and
-;;      every shaded texel came out of the texture's segment.
-;;   3. BP. The texel loop uses bp as its counter, so the frame pointer
-;;      is gone by the copy loop -- where `dstDc` is read bp-relative.
-;;   4. DS. gem.asm reaches qgl$pgframe with no override, so qglGemMap
-;;      wants ds = DGROUP; the copy loop was calling it with ds on the
-;;      scratch block, taking a word of scratch as the page frame.
+;; Rigged for an exact answer, the same way t19sb is: every luxel is 245,
+;; so t = 150, the span is flat and the colormap row is 0; the colormap
+;; is the identity; du = dv = 1.0. The destination is twice the cell on
+;; both axes, so every pixel of it is a wrap, and the only right answer
+;; is
 ;;
-;; THE CASE IS RIGGED TO HAVE AN EXACT ANSWER, because "it returned" is
-;; not evidence and a plausible-looking surface is worth nothing:
+;;      dst(x, y) == tex(x and 31, y and 7)
 ;;
-;;   - every luxel is 245, so SB_LEVEL2T gives t = 16320 - 66*245 = 150,
-;;     which is under 256. tleft == tright, so the span is FLAT and
-;;     `tleft and 0FF00h` is zero -- the colormap row is row 0.
-;;   - the colormap is the IDENTITY, so a texel maps to itself.
-;;   - du = dv = 1.0 in 16.16 and msk = 15, so texel (x,y) of a 16-wide
-;;     texture lands at (x,y) of the surface.
-;;
-;; The surface must therefore come back EQUAL TO THE TEXTURE, byte for
-;; byte. A wrong segment, a wrong row, a skipped write or a stale pointer
-;; all break that equality; none of them can produce it by accident.
-;;
-;; The DESTINATION IS EMS on purpose: a conventional one never calls
-;; qglGemMap, and fault 4 lives there and nowhere else.
+;; which no single mask can produce.
 
                 .model  medium, pascal
                 .386
@@ -45,8 +27,10 @@
 
 qglSbBuild    proto   far :dword, :dword, :dword
 
-TEX_W           equ     16
-TEX_H           equ     16
+TEX_W           equ     32
+TEX_H           equ     8
+DST_W           equ     TEX_W * 2
+DST_H           equ     TEX_H * 2
 LM_W            equ     2
 LM_H            equ     2
 LEVEL           equ     245             ;; -> t 150, so row 0 and a flat span
@@ -70,10 +54,10 @@ sb_vmsk         dw      ?
 SBPARM          ends
 
 .data
-n_tex_new       db      'tex surface made       $'
+n_tex_new       db      'rect tex surface made  $'
 n_dst_new       db      'ems dst surface made   $'
 n_built         db      'qglSbBuild returned ok $'
-n_bytes         db      'surface equals texture $'
+n_bytes         db      'wraps 32 wide, 8 high  $'
 
 tex             dd      0
 dst             dd      0
@@ -88,29 +72,30 @@ lux             db      LM_W*LM_H dup (?)
 .code
 
 ;;::::::::::::::
-;; Every texel of dst against the texture byte that must have produced
-;; it. Counting rows that merely CHANGED would pass a builder that wrote
-;; one byte a row, so this compares every pixel.
+;; Every pixel of the destination against the texture byte that must
+;; have produced it. The answer is computed, not looked up, so a builder
+;; that wrote the right bytes to the wrong rows cannot agree with it.
 ;;::::::::::::::
 sb_verify       proc    near private uses bx cx dx si di es
 
                 mov     mism, 0
                 xor     si, si                  ;; y
-@@row:          cmp     si, TEX_H
+@@row:          cmp     si, DST_H
                 jae     @@out
                 xor     di, di                  ;; x
-@@col:          cmp     di, TEX_W
+@@col:          cmp     di, DST_W
                 jae     @@next
 
                 invoke  qglSfPget, dst, di, si
                 mov     bx, ax
 
-                ;; what the texture holds there: the walking pattern is
-                ;; y*TEX_W + x, so the answer is computable, not looked up
                 mov     ax, si
+                and     ax, TEX_H-1
                 mov     cx, TEX_W
                 mul     cx
-                add     ax, di
+                mov     dx, di
+                and     dx, TEX_W-1
+                add     ax, dx
                 and     ax, 0FFh
 
                 cmp     ax, bx
@@ -132,8 +117,9 @@ tmain           proc    far public uses bx cx dx si di es
                 invoke  qglSfInit
 
                 ;;
-                ;; the texture: a walking byte, so a texel fetched from
-                ;; the wrong row or column is a different value
+                ;; the cell: a walking byte over 32x8, so its 256 texels
+                ;; are all distinct and a texel off by a row is a
+                ;; different value
                 ;;
                 invoke  qglSfNew, TEX_W, TEX_H, SURF_CMEM
                 SAVEP   tex
@@ -159,11 +145,7 @@ tmain           proc    far public uses bx cx dx si di es
 @@tnext:        inc     si
                 jmp     @@trow
 
-                ;;
-                ;; the destination, in EMS -- see the header: the copy
-                ;; loop's qglGemMap is the only thing that reads ds
-                ;;
-@@:             invoke  qglSfNew, TEX_W, TEX_H, SURF_EMS
+@@:             invoke  qglSfNew, DST_W, DST_H, SURF_EMS
                 SAVEP   dst
                 mov     bx, dx
                 or      bx, ax
@@ -185,7 +167,9 @@ tmain           proc    far public uses bx cx dx si di es
                 loop    @@lx
 
                 ;;
-                ;; one texel per surface pixel, no wrap inside the cell
+                ;; one texel per surface pixel, and the surface is twice
+                ;; the cell on both axes, so every pixel past the cell is
+                ;; a wrap
                 ;;
                 mov     word ptr parm.sb_lmptr, offset lux
                 mov     word ptr parm.sb_lmptr+2, ds
@@ -203,11 +187,11 @@ tmain           proc    far public uses bx cx dx si di es
                 mov     word ptr parm.sb_dv, 0
                 mov     word ptr parm.sb_dv+2, 1
 
-                mov     parm.sb_sw, TEX_W
-                mov     parm.sb_sh, TEX_H
+                mov     parm.sb_sw, DST_W
+                mov     parm.sb_sh, DST_H
                 mov     parm.sb_lmw, LM_W
                 mov     parm.sb_lmh, LM_H
-                mov     parm.sb_shift, 4                ;; stp 16, one span
+                mov     parm.sb_shift, 4
                 mov     parm.sb_msk, TEX_W-1
                 mov     parm.sb_vmsk, TEX_H-1
 

@@ -53,17 +53,21 @@ def bload(path):
     return asset_bytes(path)
 
 
-def atlas_cell(mi, mip, cell):
-    """One texture cell out of the raw atlas.
+def atlas_cell(mi, mip):
+    """One texture cell out of the raw atlas, with its own width and height.
 
-    The cells are packed as flat cell*cell runs, not as windows on the
-    8192-wide image: uglBuildSurf maps one page and then walks the cell
-    with the VIEW's bps, which is the cell width. texofs.bld gives the
-    byte offset of each (texture, mip)."""
+    The cells are packed as flat cw*ch runs, not as windows on the
+    8192-wide image: qglSbBuild maps one page and then walks the cell
+    with the VIEW's bps, which is the cell width. A texofs.bld entry
+    carries the byte offset in bits 0..22 and log2 of the cell width and
+    height in 23..26 and 27..30 -- a cell is the texture's own
+    power-of-two size, so the two are not the same number."""
     w, h, px, _ = read_bmp8(os.path.join(ASSETS, 'texr.bmp'))
     tbl = bload(os.path.join(ASSETS, 'texofs.bld'))
-    ofs = struct.unpack_from('<i', tbl, (mi*4 + mip) * 4)[0]
-    return px[ofs:ofs + cell*cell]
+    ent = struct.unpack_from('<i', tbl, (mi*4 + mip) * 4)[0]
+    ofs = ent & 0x7FFFFF
+    cw, ch = 1 << ((ent >> 23) & 15), 1 << ((ent >> 27) & 15)
+    return px[ofs:ofs + cw*ch], cw, ch
 
 
 def face_record(face):
@@ -106,11 +110,8 @@ def build(face, mip):
         raise SystemExit(f"face {face} has no lightmap")
 
     mi, origw, origh = miptex_of_face(face)
-    cell = 64 >> mip
-    aw, msk = cell, cell - 1
-
-    tex = atlas_cell(mi, mip, cell)
-    tw, th = cell, cell
+    tex, cw, ch = atlas_cell(mi, mip)
+    umsk, vmsk = cw - 1, ch - 1
 
     lm = asset_bytes(os.path.join(ASSETS, 'lm.bin'))
     aw_ = LM_ATLAS_W
@@ -133,21 +134,21 @@ def build(face, mip):
     W, H = 1 << shift(sw), 1 << shift(sh)
 
     # atlas texels per surface texel, 16.16 -- wdth is 1/origW already
-    du = int(aw * 65536.0 * (1.0/origw)) * (1 << mip)
-    dv = int(aw * 65536.0 * (1.0/origh)) * (1 << mip)
+    du = int(cw * 65536.0 * (1.0/origw)) * (1 << mip)
+    dv = int(ch * 65536.0 * (1.0/origh)) * (1 << mip)
     stp = 16 >> mip
 
     out = bytearray(W * H)
     av = tmt * (dv >> mip)
     for y in range(H):
-        ay = (av >> 16) & msk
+        ay = (av >> 16) & vmsk
         ly = min(max(y // stp, 0), lmh-2)
         ty = min(((y - ly*stp) << 16) // stp, 65536)
 
         au = tms * (du >> mip)
         for x in range(W):
-            ax = (au >> 16) & msk
-            texel = tex[ay*cell + ax]
+            ax = (au >> 16) & umsk
+            texel = tex[ay*cw + ax]
 
             lx = min(max(x // stp, 0), lmw-2)
             tx = min(((x - lx*stp) << 16) // stp, 65536)

@@ -177,14 +177,15 @@ PalRgb far * mod_load_textures( World *world, MapCounts *counts )
         qglMemFree( (long) ofsbuf );
     }
 
-    for ( j = 0; j < 4; j++ ) {
-        world->tex_cell[j]    = (short) ( 64 >> j );
-        world->tex_aim_raw[j] = -1;
-        world->tex_aim_shd[j] = -1;
-
-        world->tex_v_raw[j]    = qglNewView( world->tex_raw, 0, world->tex_cell[j], world->tex_cell[j] );
-        world->tex_v_shaded[j] = qglNewView( world->tex_shaded, 0, world->tex_cell[j], world->tex_cell[j] );
-        if ( !world->tex_v_raw[j] || !world->tex_v_shaded[j] ) modtex_fatal( "no room for a texture view" );
+    /* A view's address table is its HEIGHT's, and qglSfViewShape can
+       change the width but not that -- so it is one view per height,
+       made when a texture of that height is first drawn, exactly as the
+       surface cache's five are. A map uses a handful. */
+    for ( j = 0; j < TEX_HEIGHTS; j++ ) {
+        world->tex_v_raw[j]    = 0;
+        world->tex_v_shaded[j] = 0;
+        world->tex_aim_raw[j]  = -1;
+        world->tex_aim_shd[j]  = -1;
     }
 
     mod_link_anims( world, t_mip_inf, counts->textures );
@@ -202,22 +203,50 @@ PalRgb far * mod_load_textures( World *world, MapCounts *counts )
     return pal;
 }
 
+/* Aim one view of the right height at cell (k, mip) and give it that
+   cell's width. `aim` is per height slot, so consecutive faces sharing a
+   texture still cost the compare and nothing else. */
+static QSurf tex_view( World *world, short k, short mip, QSurf atlas,
+                       QSurf far *views, short far *aim )
+{
+    /* mkassets.py packs log2 of the cell width into bits 23..26 of the
+       entry and log2 of the height into 27..30, which is what lets a
+       texture keep its own size and aspect instead of being squeezed
+       into a square. The low 23 bits are the offset. */
+    long  ent = world->tex_ofs[ (long) k*4 + mip ];
+    short cw  = (short) ( 1 << ( ( ent >> 23 ) & 15 ) );
+    short ch  = (short) ( 1 << ( ( ent >> 27 ) & 15 ) );
+    short hi  = (short) ( ( ent >> 27 ) & 15 );
+    short key = (short) ( k*4 + mip );
+
+    if ( hi >= TEX_HEIGHTS ) return 0;
+    if ( !views[hi] ) {
+        /* qglSfViewNew, not qglNewView: a cell can be narrower than
+           eight (mip 2 of a 16x128 texture is 4x32) and qglNewView
+           rounds bps up to a multiple of 8, which for a view is rows
+           that are not where the parent's bytes are. This one takes the
+           stride. */
+        views[hi] = qglSfViewNew( atlas, cw, ch, cw );
+        if ( !views[hi] ) return 0;
+        aim[hi] = -1;
+    }
+    if ( aim[hi] != key ) {
+        if ( !qglSfViewShape( views[hi], cw, ent & 0x007FFFFFL ) ) return 0;
+        aim[hi] = key;
+    }
+    return views[hi];
+}
+
 QSurf mod_tex_raw( World *world, short k, short mip )
 {
-    if ( world->tex_aim_raw[mip] != k ) {
-        if ( !qglSetView( world->tex_v_raw[mip], world->tex_ofs[ (long) k*4 + mip ] ) ) return 0;
-        world->tex_aim_raw[mip] = k;
-    }
-    return world->tex_v_raw[mip];
+    return tex_view( world, k, mip, world->tex_raw,
+                     world->tex_v_raw, world->tex_aim_raw );
 }
 
 QSurf mod_tex_shaded( World *world, short k, short mip )
 {
-    if ( world->tex_aim_shd[mip] != k ) {
-        if ( !qglSetView( world->tex_v_shaded[mip], world->tex_ofs[ (long) k*4 + mip ] ) ) return 0;
-        world->tex_aim_shd[mip] = k;
-    }
-    return world->tex_v_shaded[mip];
+    return tex_view( world, k, mip, world->tex_shaded,
+                     world->tex_v_shaded, world->tex_aim_shd );
 }
 
 long world_tex_ofs_ptr( World *world )

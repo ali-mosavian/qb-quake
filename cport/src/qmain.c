@@ -470,7 +470,7 @@ int main( void )
         cam.fps_view = -1;
         cam_up.x = 0.0f; cam_up.y = 1.0f; cam_up.z = 0.0f;
 
-        rdr.use_mips = -1;
+        rdr.use_mips = (short) ( args.no_mip ? 0 : -1 );
         rdr.no_subvis = args.no_subvis;
         rdr.no_lcache = args.no_lcache;
         rdr.lightmap = args.use_lm;   /* the starting state of the 'L'

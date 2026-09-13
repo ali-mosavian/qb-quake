@@ -23,6 +23,7 @@ typedef struct {
     short lmh;
     short shft;
     short msk;
+    short vmsk;
 } SurfBuild;
 
 /*

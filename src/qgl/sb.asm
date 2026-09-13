@@ -146,7 +146,11 @@ sb_sh           dw      ?               ;; surface height (padded)
 sb_lmw          dw      ?               ;; luxel grid width
 sb_lmh          dw      ?               ;; luxel grid height
 sb_shift        dw      ?               ;; log2(texels per luxel)
-sb_msk          dw      ?               ;; texture wrap mask
+sb_msk          dw      ?               ;; u wrap mask, cell width - 1
+sb_vmsk         dw      ?               ;; v wrap mask, cell height - 1 --
+                                        ;; a cell is the texture's own
+                                        ;; aspect now, so one mask cannot
+                                        ;; serve both axes
 SBPARM          ends
 
 
@@ -192,6 +196,7 @@ sb$shift        dw      ?
 sb$ishift       dw      ?
 sb$stp          dw      ?
 sb$msk          dw      ?
+sb$vmsk         dw      ?
 
 sb$yy           dw      ?
 sb$xx           dw      ?
@@ -304,6 +309,8 @@ qglSbBuild      proc    public uses bx cx dx di si es ds fs gs,\
                 mov     ss:sb$sh, ax
                 mov     ax, fs:[bx].SBPARM.sb_msk
                 mov     ss:sb$msk, ax
+                mov     ax, fs:[bx].SBPARM.sb_vmsk
+                mov     ss:sb$vmsk, ax
 
                 mov     ax, fs:[bx].SBPARM.sb_shift
                 mov     ss:sb$shift, ax
@@ -449,7 +456,7 @@ qglSbBuild      proc    public uses bx cx dx di si es ds fs gs,\
 
                 mov     eax, ss:sb$v
                 shr     eax, 16
-                and     ax, ss:sb$msk
+                and     ax, ss:sb$vmsk
                 mov     cx, ss:sb$texbps
                 mul     cx
                 add     ax, ss:sb$texbase

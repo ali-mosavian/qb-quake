@@ -34,7 +34,7 @@
 #include <mem.h>
 
 #include "sb_build.h"
-#include "qgl.h"   /* qglSbBuild */
+#include "qgl.h"   /* qglSbBuild, qglSfSize */
 
 #define GEOM_LMOFS 1
 #define LS_NEUTRAL 120
@@ -68,7 +68,7 @@ void sb_build( SurfCache far *sc, World *world, Renderer *rdr, LightStyles *ls,
     TexInfo far *ti = &world->texinfo[ f->tex_info_id ];
 
     long  au, av, du, dv;
-    short aw, msk;
+    short cw, ch, umsk, vmsk;
     short lmw, lmh;
     long  lmx; short lmy;
     short tms, tmt;
@@ -85,9 +85,17 @@ void sb_build( SurfCache far *sc, World *world, Renderer *rdr, LightStyles *ls,
 
     sc_note_build( sc );
 
-    aw = 64 >> mip;
-    msk = aw - 1;
     mi = ti->mip_tex;
+
+    /* Out of the VIEW, not out of mip: a cell is the texture's own
+       power-of-two size now, a level too small to be worth its own copy
+       shares the level above, and an animated face is aimed at a frame
+       whose id is not ti->mip_tex. mod_tex already shaped the view to
+       the cell, so the view is the one place that knows. */
+    cw = qglSfSize( tex, 0 );
+    ch = qglSfSize( tex, 1 );
+    umsk = cw - 1;
+    vmsk = ch - 1;
 
     /*
      * Out of the record d_draw_faces already fetched, NOT out of the
@@ -161,14 +169,18 @@ void sb_build( SurfCache far *sc, World *world, Renderer *rdr, LightStyles *ls,
         }
     }
 
-    /* atlas texels per surface texel, 16.16. wdth/hght are already 1/origW. */
+    /* atlas texels per MIP-0 texel, 16.16. wdth/hght are already 1/origW. */
     recip = world->miptex[mi].wdth;
-    du = ( (long) (aw * 65536.0 * recip) ) << mip;
+    du = (long) ( cw * 65536.0 * recip );
     recip = world->miptex[mi].hght;
-    dv = ( (long) (aw * 65536.0 * recip) ) << mip;
+    dv = (long) ( ch * 65536.0 * recip );
 
-    au = (long) tms * (du >> mip);
-    av = (long) tmt * (dv >> mip);
+    au = (long) tms * du;
+    av = (long) tmt * dv;
+
+    /* and per SURFACE texel, which is 1<<mip of them */
+    du <<= mip;
+    dv <<= mip;
 
     sbp.lmptr     = (long) (void far *) srow;
     sbp.lm_stride = scaled ? (long) lmw : (long) sb_pot( lmw );
@@ -182,7 +194,8 @@ void sb_build( SurfCache far *sc, World *world, Renderer *rdr, LightStyles *ls,
     sbp.lmw = lmw;
     sbp.lmh = lmh;
     sbp.shft = 4 - mip;
-    sbp.msk  = msk;
+    sbp.msk  = umsk;
+    sbp.vmsk = vmsk;
 
     if ( !qglSbBuild( dc, tex, (long) (void far *) &sbp ) ) {
         /* only a luxel grid too big for the builder's stack buffer

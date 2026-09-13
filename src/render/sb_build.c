@@ -37,7 +37,7 @@
    field with vis immediately following it -- a cheap independent check
    this comment records but does not rely on at run time.
 */
-#define GAME_DLIGHT_OFFSET 4972
+#define GAME_DLIGHT_OFFSET 5096
 
 #define GEOM_LMOFS 1
 #define LS_NEUTRAL 120
@@ -51,6 +51,7 @@ extern short pascal far sb_seg( long p );
 extern short pascal far sb_pot( short v );
 extern void  pascal far qglMemCopy( long dst, long src, long bytes );
 extern short pascal far qglSbBuild( long dstDc, long texDc, long parm );
+extern short pascal far qglSfSize( long s, short sel );
 extern void  pascal far sc_note_build( void );
 extern void  pascal far sc_note_dlit( void );
 
@@ -86,7 +87,7 @@ void pascal far sb_build(
     DynLight far *dlight = (DynLight far *) ( (char far *) g + GAME_DLIGHT_OFFSET );
 
     long  au, av, du, dv;
-    short aw, msk;
+    short cw, ch, umsk, vmsk;
     short lmw, lmh;
     long  lmx; short lmy; long lmp;
     short tms, tmt;
@@ -104,9 +105,17 @@ void pascal far sb_build(
 
     sc_note_build();
 
-    aw = 64 >> mip;
-    msk = aw - 1;
     mi = texinf[ tri[face].tex_info_id ].mip_tex;
+
+    /* Out of the VIEW, not out of mip: a cell is the texture's own
+       power-of-two size now, a level too small to be worth its own copy
+       shares the level above, and an animated face is aimed at a frame
+       whose id is not texinf's mip_tex. mod_tex already shaped the view
+       to the cell, so the view is the one place that knows. */
+    cw = qglSfSize( tex, 0 );
+    ch = qglSfSize( tex, 1 );
+    umsk = cw - 1;
+    vmsk = ch - 1;
 
     /*
      * Out of the record d_draw_faces already fetched, NOT out of the
@@ -179,14 +188,18 @@ void pascal far sb_build(
         }
     }
 
-    /* atlas texels per surface texel, 16.16. wdth/hght are already 1/origW. */
+    /* atlas texels per MIP-0 texel, 16.16. wdth/hght are already 1/origW. */
     recip = miptex[mi].wdth;
-    du = ( (long) (aw * 65536.0 * recip) ) << mip;
+    du = (long) ( cw * 65536.0 * recip );
     recip = miptex[mi].hght;
-    dv = ( (long) (aw * 65536.0 * recip) ) << mip;
+    dv = (long) ( ch * 65536.0 * recip );
 
-    au = (long) tms * (du >> mip);
-    av = (long) tmt * (dv >> mip);
+    au = (long) tms * du;
+    av = (long) tmt * dv;
+
+    /* and per SURFACE texel, which is 1<<mip of them */
+    du <<= mip;
+    dv <<= mip;
 
     sbp.lmptr = (long) lseg * 65536L + lofs16;
     sbp.lm_stride = scaled ? (long) lmw : (long) sb_pot( lmw );
@@ -200,7 +213,8 @@ void pascal far sb_build(
     sbp.lmw = lmw;
     sbp.lmh = lmh;
     sbp.shft = 4 - mip;
-    sbp.msk  = msk;
+    sbp.msk  = umsk;
+    sbp.vmsk = vmsk;
 
     o = (long) (void far *) &sbp;
     if ( qglSbBuild( dc, tex, o ) == 0 ) {

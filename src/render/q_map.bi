@@ -76,28 +76,34 @@ end type
 '' A Surface has no scanline table at all, so the four views below cost a
 '' header each and nothing per row.
 ''
-'' Four VIEWS per atlas, one per mip size, re-aimed per face with
-'' qglSfViewAim -- no allocation, no copy. The same trick the surface
-'' cache uses to avoid a surface per cached face.
+'' One VIEW per cell HEIGHT, re-shaped per face with qglSfViewShape --
+'' no allocation, no copy. The same trick the surface cache uses to avoid
+'' a surface per cached face. Per height and not per mip because a view's
+'' address table is its height's and only the width can be re-shaped.
 ''
 '' The atlas scanline. A cell must sit entirely inside one EMS page --
-'' 4096/1024/256/64 all divide 8192, and 8192 divides 16384, so none ever
-'' crosses. Same width the luxel atlas uses.
+'' it is a power of two no larger than 16384 and mkassets places it at a
+'' multiple of its own size, and 8192 divides 16384. Same width the luxel
+'' atlas uses.
 const TEX_ATLAS_W = 8192
 
+'' Cell heights are powers of two and a cell is at most one EMS page, so
+'' 1..16384: fifteen of them can exist and the rest cannot.
+const TEX_HEIGHTS = 15
+
 type TexStore
-    shaded      as long         '' one atlas surface: row 0 applied
-    raw         as long         '' one atlas surface: raw indices
-    v_shaded(3) as long         '' a view per mip size, re-aimed per face
-    v_raw(3)    as long
-    cell(3)     as integer      '' texels per side at that mip
-    aim_raw(3)  as integer      '' cell each view is already aimed at, -1
-    aim_shd(3)  as integer      '' none. Re-aiming is now just a base_ofs
-                                '' store rather than a scanline table
-                                '' rewrite, so this saves little -- kept
-                                '' because consecutive faces usually share
-                                '' a texture and an integer compare is free
-    ofs(1023)   as long         '' [id*4 + level] -> byte offset in the atlas
+    shaded       as long        '' one atlas surface: row 0 applied
+    raw          as long        '' one atlas surface: raw indices
+    v_shaded(14) as long        '' TEX_HEIGHTS - 1; a TYPE bound must be
+    v_raw(14)    as long        '' a literal
+    aim_raw(14)  as integer     '' cell each view is already aimed at, -1
+    aim_shd(14)  as integer     '' none -- re-shaping rewrites a scanline
+                                '' table, and consecutive faces usually
+                                '' share a texture
+    ofs(1023)    as long        '' [id*4 + level] -> the cell: the byte
+                                '' offset in bits 0..22, log2 of the cell
+                                '' width in 23..26 and of its height in
+                                '' 27..30
 end type
 
 type ColorMap

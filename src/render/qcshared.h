@@ -147,6 +147,7 @@ typedef struct {
     short lmh;
     short shft;
     short msk;
+    short vmsk;
 } SurfBuild;
 
 /* q_pl.bi's TraceResult. */

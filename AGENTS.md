@@ -1320,18 +1320,17 @@ trace stop rather than a coincidence.
 
     make assets          # or: python3 tools/mkassets.py <map.bsp> <base.dat> data/assets
 
-Emits two 8-bit atlases -- `texr.bmp` raw indices, `texs.bmp` with colormap
-row 0 applied -- plus `texofs.bld`, a `[id*4 + level]` table of byte offsets
-into them. Already resampled to the fixed size the renderer wants and already
-in the game palette. The Makefile regenerates them when the map, `base.dat`,
+Emits two 8-bit atlases -- `texr.raw` raw indices, `texs.raw` with colormap
+row 0 applied -- plus `texofs.bld`, a `[id*4 + level]` table of cells: the
+byte offset in bits 0..22, log2 of the cell width in 23..26 and of its height
+in 27..30. Already in the game palette. The Makefile regenerates them when the map, `base.dat`,
 or the tool changes.
 
-**Two atlases and eight views, not 648 dcs.** A dc costs conventional memory
-for its struct and scanline table whatever its pixels cost -- 264 bytes
+**Two atlases and a handful of views, not 648 dcs.** A dc costs conventional
+memory for its struct and scanline table whatever its pixels cost -- 264 bytes
 measured, and dm3ish made 160 of them. e1m1 would make 648, which is the
 ~171K that stops it loading. `mod_tex_raw`/`mod_tex_shaded` re-aim one view
-per mip size with `uglSetView` instead: `mem textures` went 42,176 -> **0**
-and `mem_avail` up 25,296.
+instead: `mem textures` went 42,176 -> **0** and `mem_avail` up 25,296.
 
 **It costs 1.8% of the frame, and that is the trade.** Six runs per arm
 interleaved on the dm3ish campath: 82.774ms before, 84.229ms after, medians,
@@ -1343,19 +1342,51 @@ Pinning `gv_buf` into DGROUP to make the address hoistable again was tried
 and abandoned: a bounded `dim` in `main.bas` puts the DECLAREs after an
 executable statement and BC rejects the file.
 
-**A cell is a flat run of `cell*cell` bytes, not a window on the 8192-wide
+**A cell is a flat run of `cw*ch` bytes, not a window on the 8192-wide
 image.** The fillers map one page and then walk the cell by the VIEW's bps,
-which is the cell width -- `ul$fillView` strides by the view's own `bps` and
-never the parent's. So the packer writes cells linearly and the BMP is just a
-container for that byte stream. Sizes are 4096/1024/256/64 and each cell sits
-at a multiple of its own size, so none straddles a 16K page.
+which is the cell width -- `qgl$fillView` strides by the view's own `bps` and
+never the parent's. So the packer writes cells linearly and the file is just a
+container for that byte stream. Every cell is a self-aligned power-of-two run
+of at most 16,384 bytes, packed largest first, so none straddles a 16K page.
+
+**A cell is the texture's OWN power-of-two size, and that is where the blur
+was.** Cells were 64x64 down to 8x8, square whatever the texture was: on e1m1
+20 of 81 textures had a side over 64 and lost it, and 19 non-square ones had
+their aspect squashed as well -- a 16x128 texture was upsampled 4x across and
+downsampled 3 octaves down. `tex_cell_levels` rounds each side DOWN to a power
+of two (Quake sizes are multiples of 16, not powers of two) and halves the
+larger side until the pair fits one EMS window. Nothing else can be the bound:
+a view addresses its cell by masking, and the filler maps one page.
+
+Measured before assuming the mip choice was at fault: `-nomip` at the e1m1
+spawn moves **213 of 16,000 pixels, 1.33%** -- nearly every visible face is
+already at mip 0, so the blur was the cell and not the level. The new atlas
+moves 23.7% of that frame and is SMALLER, 539,008 bytes a variant against
+565,760, because the 32x32 textures stop being upsampled to fill a 64x64 cell.
+
+**A level under 64 texels shares the level above** rather than getting a cell
+of its own: 2x2 is a scanline table for nothing, and the saving is 440 bytes of
+e1m1's 508K, so this is about degenerate views and not memory. So a level's
+cell is NOT `cell(0) >> mip` and nothing may derive it that way.
+
+**A view is one per cell HEIGHT, not one per mip.** `qglSfViewShape` changes a
+view's width, xRes, bps and xMax but not its height -- the address table is the
+height's -- so `mod_tex` keeps `TEX_HEIGHTS` slots and makes one on first use.
+Same shape the surface cache's five drawing views already have.
+
+**The wrap needs a mask per axis.** `SBPARM.sb_msk` is the u wrap and
+`sb_vmsk` the v wrap; with one mask a 32x8 cell reads row `(y and 31)`, which
+for y >= 8 is a row the cell does not have, and the face comes back carrying
+whichever cell is packed after it. `t36sbcell` is the regression test and it
+fails with the masks merged.
 
 **The placement is emitted, not re-derived.** mkassets owns the layout and is
 free to pack in whatever order is tightest; deriving it twice is the bug the
 luxel atlas already avoids by shipping its own table.
 
-**`-dumptex` reads every cell back THROUGH ITS VIEW** with `uglPGet` and
-writes `texdump.bmp`, a contact sheet of 20 columns by four stacked mips.
+**`-dumptex` reads every cell back THROUGH ITS VIEW** with `qglSfPget` and
+writes `texdump.bmp`, a contact sheet of one column per texture by four
+stacked mips, measured from the cells rather than assumed square.
 Diffing that against the atlas is what proves the views deliver the right
 pixels with the renderer out of the way -- 108,800 texels, 0 mismatches. Do
 this before suspecting the atlas: it was right, and the fault was a stale far
