@@ -481,6 +481,7 @@ int main( void )
         /* Off unless asked for. F12 still toggles it; -nostats stays
            accepted so every A/B recipe that passes it keeps working. */
         hud->stats       = (short) ( args.stats && !args.no_stats ? -1 : 0 );
+        hud->bench       = (short) ( args.bench_ticks > 0 ? -1 : 0 );
 
         /* bspfile.bi's DISPLAY_W/DISPLAY_H (4.0/3.0): VGA mode 13h's
            pixels are not square, so a square render target would

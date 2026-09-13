@@ -37,6 +37,7 @@ typedef struct {
 typedef struct {
     short stats;
     short portal_wire;
+    short bench;         /* a -ticks run: the frame is going to be captured */
 
     /* scr_count_frame's own state: fps rolls over once a second, off
        the same SysClock frame_dt every tick already uses rather than

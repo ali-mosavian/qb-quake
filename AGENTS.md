@@ -3279,9 +3279,18 @@ anyway.** `scr_draw_hud`'s top bar drew `fps: [N]` right-aligned outside
 the stats gate, so BENCH.BMP carried the frame rate and no two arms of
 different speed could ever come out IDENTICAL -- 19 pixels at x 145..151
 swapping between palette 15 and 16, which is four digits of 4x5 font and
-reads exactly like a rasteriser difference. It is inside the gate now.
-The `at:`/`yaw:` half stays out of it: it is deterministic and it is how
-a headless run says where it is.
+reads exactly like a rasteriser difference.
+
+It draws again, because a person watching a window wants it, and the
+gate is `-ticks` rather than `-nostats`: every A/B recipe here is
+tick-bounded and no interactive run is, so the readout is live on screen
+and absent from every frame anything compares. A windowed `-ticks` run
+has no fps either, which is the price. `-stats` overrides -- that frame
+is never a reference. `tools/test-fps.sh` runs two arms of one binary at
+25 and 32 fps and requires one picture, and fails if they ran at the
+same speed, since then it is watching nothing. The `at:`/`yaw:` half was
+never gated: it is deterministic and it is how a headless run says where
+it is.
 
 **DGROUP + `_stklen` must fit 64K, and nothing said so.** Borland's
 medium-model startup puts near data, the stack and the near heap in one
