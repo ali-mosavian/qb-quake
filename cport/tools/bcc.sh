@@ -14,6 +14,7 @@
 # All of qrender's BASIC-hosted C already compiles this way too.
 set -euo pipefail
 
+DBG=$([[ "${DEBUGINFO:-1}" == "0" ]] || echo " -v")
 SRC="${1:?usage: bcc.sh <src-c> <out-obj>}"
 OUT="${2:?usage: bcc.sh <src-c> <out-obj>}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -48,7 +49,11 @@ cp "$CPORT"/src/*.h "$W/" 2>/dev/null || true
   # TASM's fuller instruction set accepts it. Harmless for files with
   # no inline asm, so passed unconditionally rather than special-cased.
   #
-  echo "b:\\bin\\bcc.exe -c -B -3 -f87 -mm -Ox -IW:\\ -IB:\\INCLUDE $base.c > w:\\cc.txt"
+  # -v is CodeView, and it has to survive from the OBJ into the tail of
+  # the EXE or the debugger can only say LMEM+0x943: bcc -v here and
+  # link.sh's "debug codeview" both, or neither is any use. DEBUGINFO=0
+  # for a lean build.
+  echo "b:\\bin\\bcc.exe -c${DBG} -B -3 -f87 -mm -Ox -IW:\\ -IB:\\INCLUDE $base.c > w:\\cc.txt"
   echo "exit"
 } > "$W/build.conf"
 

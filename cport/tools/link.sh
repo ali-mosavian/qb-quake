@@ -47,6 +47,7 @@ done
 {
   echo "format dos"
   echo "option quiet, map=$OUT/QCPORT.MAP"
+  [[ "${DEBUGINFO:-1}" == "0" ]] || echo "debug codeview"
   echo "name $OUT/QCPORT.EXE"
   echo "file '$BCLIB/C0M.OBJ'"
   for o in $OBJS; do echo "file '$OUT/$o.obj'"; done
