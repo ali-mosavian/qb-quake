@@ -9,6 +9,7 @@
  */
 
 #include <math.h>
+#include <mem.h>   /* _fmemset -- the leaf caches, once */
 
 #include "d_alias.h"
 #include "mdl.h"
@@ -289,11 +290,13 @@ static short mdl_draw_tris(
  * clip mask to.
  */
 static short d_mdl_visible( World *world, Renderer *rdr, DiskPlane far *frustum,
-                             BspVec3 *org, float radius, float zlo, float zhi )
+                             BspVec3 *org, float radius, float zlo, float zhi,
+                             LeafCache far *lc )
 {
     float lo[3], hi[3], px, py, pz, dp;
-    short i, nodenr;
+    short i, nodenr, vis = 0;
 
+    rdr->dv_calls++;
     lo[0] = org->x - radius; hi[0] = org->x + radius;
     lo[1] = org->y - radius; hi[1] = org->y + radius;
     lo[2] = org->z + zlo;    hi[2] = org->z + zhi;
@@ -304,7 +307,18 @@ static short d_mdl_visible( World *world, Renderer *rdr, DiskPlane far *frustum,
         py = frustum[i].norm.y > 0.0f ? lo[2] : hi[2];
         pz = frustum[i].norm.z > 0.0f ? lo[1] : hi[1];
         dp = frustum[i].norm.x * px + frustum[i].norm.y * py + frustum[i].norm.z * pz;
-        if ( dp + frustum[i].dist > 0.0f ) return 0;
+        if ( dp + frustum[i].dist > 0.0f ) { rdr->dv_fout++; return 0; }
+    }
+
+    /* Same box as last time: the leaves are the same, whatever the PVS
+       now says about them. The whole of the saving is here. */
+    if ( lc && lc->ok && lc->at.x == org->x && lc->at.y == org->y && lc->at.z == org->z
+         && lc->r == radius && lc->zlo == zlo && lc->zhi == zhi ) {
+        for ( i = 0; i < 9; i++ ) {
+            nodenr = lc->lf[i];
+            if ( nodenr > 0 && rdr->pvs_now[nodenr] ) { rdr->dv_vis++; return -1; }
+        }
+        return 0;
     }
 
     for ( i = 0; i < 9; i++ ) {
@@ -316,6 +330,7 @@ static short d_mdl_visible( World *world, Renderer *rdr, DiskPlane far *frustum,
             pz = ( i & 4 ) ? hi[2] : lo[2];
         }
         /* r_point_leaf: the tree in BSP space, z up, no swap */
+        rdr->dv_desc++;
         nodenr = 0;
         while ( !( nodenr & 0x8000 ) ) {
             Plane far *pl = &world->planes[ world->nodes[nodenr].plane_id ];
@@ -323,9 +338,34 @@ static short d_mdl_visible( World *world, Renderer *rdr, DiskPlane far *frustum,
             nodenr = dp >= 0.0f ? world->nodes[nodenr].child0 : world->nodes[nodenr].child1;
         }
         nodenr = (short) ~nodenr;
-        if ( nodenr > 0 && rdr->pvs_now[nodenr] ) return -1;
+        if ( lc ) lc->lf[i] = nodenr;
+        if ( nodenr > 0 && rdr->pvs_now[nodenr] ) {
+            vis = -1;
+            /* with nowhere to record them, the remaining eight are
+               wasted work -- answer now, as this always did */
+            if ( !lc ) { rdr->dv_vis++; return -1; }
+        }
     }
-    return 0;
+    if ( lc ) {
+        lc->at = *org; lc->r = radius; lc->zlo = zlo; lc->zhi = zhi; lc->ok = 1;
+    }
+    if ( vis ) rdr->dv_vis++;
+    return vis;
+}
+
+/* One slot per entity, made on the first frame that wants it: item_count
+   and mon_count are the map's, not known when r_alloc_scratch runs. A
+   refusal leaves the pointer null and every call recomputes, which is
+   what this did before. */
+static LeafCache far *lc_slot( Renderer *rdr, LeafCache far **arr, short n, short i )
+{
+    if ( n <= 0 || rdr->no_lcache ) return (LeafCache far *) 0;
+    if ( !*arr ) {
+        *arr = (LeafCache far *) qglMemAlloc( (long) n * sizeof(LeafCache) );
+        if ( !*arr ) return (LeafCache far *) 0;
+        _fmemset( *arr, 0, (unsigned) ( n * sizeof(LeafCache) ) );
+    }
+    return &(*arr)[i];
 }
 
 /*
@@ -442,7 +482,8 @@ short d_draw_items( World *world, Renderer *rdr, Player *player,
         if ( it->gone ) continue;
         bob = it->pos;
         if ( !d_mdl_visible( world, rdr, frustum, &bob,
-                              ENT_BOX_HALF * 1.5f, 0.0f, ENT_BOX_TOP + 8.0f ) ) continue;
+                              ENT_BOX_HALF * 1.5f, 0.0f, ENT_BOX_TOP + 8.0f,
+                              lc_slot( rdr, &rdr->item_lc, world->item_count, i ) ) ) continue;
 
         if ( it->crate >= 0 && it->crate < world->crate_count ) {
             /* the map's own b_*.bsp, still, and centred on the origin
@@ -514,7 +555,8 @@ short d_draw_models( World *world, Renderer *rdr, DiskPlane far *frustum,
         if ( !ms ) continue;
         org = e->pos;
         if ( !d_mdl_visible( world, rdr, frustum, &org,
-                              ms->radius, ms->zlo, ms->zhi ) ) continue;
+                              ms->radius, ms->zlo, ms->zhi,
+                              lc_slot( rdr, &rdr->mdl_lc, world->mon_count, i ) ) ) continue;
 
         /* The sets are contiguous in the vertex page, in the header's
            order: stand, run, death, pain, attack. A leaper has no leap

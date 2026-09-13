@@ -53,6 +53,9 @@ typedef struct {
     short no_cull;           /* -nocull */
     short no_z;               /* -noz */
     short no_portal;          /* -noportal */
+    short no_lcache;          /* -nolcache: find an entity's leaves afresh
+                                 every frame, as before the cache -- the
+                                 A/B that proves it answers the same */
     short no_subvis;          /* -nosubvis: walk every node the frustum
                                  keeps, as before the subtree skip -- the
                                  A/B that proves the skip changes no

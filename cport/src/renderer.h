@@ -13,6 +13,21 @@
    u3dVector3f does if it is not watched. */
 typedef struct { float x, y, z; } BspVec3;
 
+/* Which leaves an entity's box samples, and the box it was sampled for.
+   d_mdl_visible descends the tree from the root at nine points to ask
+   whether any lands in a visible leaf, and on e1m1 that is 62 levels
+   nine times per entity -- 13,007 node visits a frame for 36 entities,
+   against 540 for the entire world walk. The leaves depend only on the
+   box, not on the PVS, so they are found once and the per-frame test
+   becomes nine array reads. A pickup never moves at all; a monster
+   moves at its 10 Hz think and re-fills this when it does. */
+typedef struct {
+    BspVec3 at;              /* the origin these were found for */
+    float   r, zlo, zhi;     /* and the extent around it */
+    short   lf[9];
+    short   ok;
+} LeafCache;
+
 typedef struct {
     Vec3 pos;
     float radius;
@@ -46,6 +61,7 @@ typedef struct {
        not reallocated per frame, but not raw map data either, so they
        live here rather than in World. */
     short no_subvis;      /* -nosubvis: the skip below off, for the A/B */
+    short no_lcache;      /* -nolcache: the entity leaf caches off, likewise */
     unsigned char far *vis_sub;   /* a bit a node: is any leaf below it in
                             pvsb? Rebuilt with pvsb -- only when the
                             camera changes leaf -- which is Quake's
@@ -88,6 +104,12 @@ typedef struct {
     short vis_nodes;      /* the two numbers the subtree skip turns on */
     long  mk_faces;       /* pflag writes: faces some visible leaf marked */
     long  ord_sum;        /* nodes the draw order carried */
+    LeafCache far *item_lc;  /* d_mdl_visible's nine leaves per pickup and */
+    LeafCache far *mdl_lc;   /* per monster; see its own note */
+    long  dv_calls;       /* d_mdl_visible: entries, the ones the frustum */
+    long  dv_fout;        /* threw out, the tree descents the rest cost */
+    long  dv_desc;        /* and the ones that came back visible */
+    long  dv_vis;
     long  nd_seen;        /* nodes and leaves the walk reached, summed over */
     long  lf_seen;        /* the run: what a cull cost divides by */
     short ent_left;       /* brush entities the walk has yet to emit,

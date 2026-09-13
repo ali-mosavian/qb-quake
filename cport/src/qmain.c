@@ -462,6 +462,7 @@ int main( void )
 
         rdr.use_mips = -1;
         rdr.no_subvis = args.no_subvis;
+        rdr.no_lcache = args.no_lcache;
         rdr.lightmap = args.use_lm;   /* the starting state of the 'L'
                                           toggle (in_handle_toggles) --
                                           dp->use_lm (h_frame.c) is the
@@ -661,6 +662,7 @@ int main( void )
                     if ( pt.n == 0 ) {
                         rdr.nd_seen = rdr.lf_seen = 0;
                         rdr.mk_faces = rdr.ord_sum = 0;
+                        rdr.dv_calls = rdr.dv_fout = rdr.dv_desc = rdr.dv_vis = 0;
                     }
                     pt.n++;
                     t_frame = sys_now( &sysclk );
@@ -889,6 +891,16 @@ int main( void )
                         fprintf( bf, "pt_leaves %ld\n", rdr.lf_seen / pt.n );
                         fprintf( bf, "pt_marked %ld\n", rdr.mk_faces / pt.n );
                         fprintf( bf, "pt_polys %ld\n", pt_poly_sum / pt.n );
+                        /* d_mdl_visible, a frame: entities asked, ones the
+                           frustum threw out, tree descents the rest cost,
+                           and ones that came back visible. Means over the
+                           profiled frames like every pt_ above -- a raw
+                           total here would differ between two arms purely
+                           because the faster one rendered more frames. */
+                        fprintf( bf, "pt_dv_calls %ld\n", rdr.dv_calls / pt.n );
+                        fprintf( bf, "pt_dv_fout %ld\n", rdr.dv_fout / pt.n );
+                        fprintf( bf, "pt_dv_desc %ld\n", rdr.dv_desc / pt.n );
+                        fprintf( bf, "pt_dv_vis %ld\n", rdr.dv_vis / pt.n );
                         fprintf( bf, "pt_vis_leaves %d\n", rdr.vis_leaves );
                         fprintf( bf, "pt_vis_nodes %d\n", rdr.vis_nodes );
                         fprintf( bf, "pt_ord %ld\n", rdr.ord_sum / pt.n );

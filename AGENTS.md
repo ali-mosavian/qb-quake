@@ -3297,3 +3297,56 @@ the regression test. Moving the state structs off main's stack into
 `static` makes this WORSE, not better -- it moves them into the same
 DGROUP -- which is why that attempt did not revive the build and read as
 evidence against the stack theory.
+
+## The alias pass was not drawing, it was asking
+
+e1m1 at the spawn, cport, `-nostats -bench 4000 -ticks 120`, one binary,
+`-nolcache` the A/B flag:
+
+| | frame | alias | descents | polys |
+|---|---|---|---|---|
+| `-nolcache`, `-noai` | 39.426 | 10.028 | 316 | 327 |
+| leaf cache, `-noai`  | 31.531 | 2.374  | 0   | 327 |
+| `-nolcache`, AI on   | 40.071 | 10.007 | 316 | 327 |
+| leaf cache, AI on    | 32.447 | 2.708  | 15  | 327 |
+
+Same BENCH.BMP in all four.
+
+**Almost none of the 10 ms was drawing.** `d_mdl_visible` sampled nine
+points around each entity's box and descended the tree from the root for
+every one: 62 levels on e1m1, nine per entity, 36 entities -- **13,007
+node visits a frame**, against 540 for the entire world walk after the
+subtree skip. Thirty-five of the thirty-six entities are invisible, so
+that is what the money bought.
+
+The leaves an entity's box lands in depend on the box and nothing else.
+`LeafCache` keeps the nine, keyed on (origin, radius, zlo, zhi), and the
+per-frame test is nine array reads into `pvs_now`. `-nolcache` is the
+A/B.
+
+dm3ish gains almost nothing, and for the reason the subtree skip gained
+little there: 23.875 ms to 23.486, alias 2.779 to 2.428, 37 descents a
+frame to 0. Its tree is 42 deep against e1m1's 62 and the frustum throws
+out most of its 41 entities before any descent happens.
+
+**Cache the LEAVES, never the answer.** `pvs_now` changes when the camera
+changes leaf, so a slot holding visible/not goes wrong the moment the eye
+moves -- and nothing catches it while the eye stands still. That version
+draws the same frame, the same polygons and the same entity count as the
+correct code at the e1m1 spawn over 900 ticks with the AI on;
+`tools/test-lcache.sh` walks the camera for exactly that reason, and
+there it reads 238 polygons for 240 and 2 entities a frame for 4.
+
+**Freezing the key is not caught, and that is stated rather than papered
+over.** Drop the origin from the comparison, so a MOVED entity keeps its
+old leaves, and every arm tried -- the spawn and the monster viewpoint,
+120 to 900 ticks, AI on -- renders an identical frame with identical
+counters. A monster's nine leaves stay on the same side of the PVS over
+the few hundred units it walks in a run this long. The defect is real;
+it has no symptom here to assert on.
+
+**`pt_dv_*` are means over the profiled frames, like every other `pt_`.**
+They were raw totals first and read 48 against 61 on two arms doing the
+same work, because the faster arm rendered 65 frames to the slower one's
+52. That is the same denominator trap `pt_marked` sprang one section up,
+in the same session.
