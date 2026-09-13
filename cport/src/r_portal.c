@@ -42,10 +42,8 @@
  * be tighter but costs that many times more -- 4096 leaves by six rects of
  * four floats is 393K, which is not a thing that fits anywhere here.
  */
-#define PT_MAX_LEAVES 1024
 #define PT_MAX_STACK  1024   /* frontier depth */
 #define PT_MAX_WORK   8192   /* total pushes before giving up on the frame */
-#define PT_MAX_REFS   4096   /* dm3ish has 1566, e1m7 about the same */
 
 /* PT_REF_SHORTS -- r_portal.h now, shared with r_bsp.c's r_load_portals */
 

@@ -124,6 +124,9 @@ typedef struct {
  */
 short sc_init( SurfCache far *sc, short face_count );
 
+/* Why the last sc_init returned 0: which allocation, and its size. */
+void sc_fail( short *step, long *want );
+
 /* Drops every slot without giving up the DCs, for when the map changes
    and the face numbering with it. */
 void  sc_reset( SurfCache far *sc, short face_count );

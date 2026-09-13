@@ -454,15 +454,35 @@ void r_load_lfaces( World *world, long lump_bytes )
     world->lfc = (short far *) asset_load( "lface.bld", lump_bytes );
 }
 
-void r_load_portals( World *world, long leaf_count )
+void r_load_portals( World *world, Renderer *rdr, long leaf_count )
 {
     long nrefs;
+
+    world->pt_idx = 0;
+    world->pt_ref = 0;
+
+    /* Nothing is loaded that the flood cannot use. r_portal_mark
+       refuses a map past its own static tables on its first line, so
+       on e1m1 -- 1,531 leaves against PT_MAX_LEAVES, 6,624 refs
+       against PT_MAX_REFS -- the table was 95,800 bytes of
+       conventional memory backing a pass that returned -2 every frame
+       for the life of the run, and sc_init then died 28 KB short and
+       the map drew unlit. The BASIC build never had this: its
+       r_load_portals bailed because 6,624 x 7 x 2 is past a BASIC
+       array's 64K, and the port's far pointers quietly removed the
+       accident that was protecting it. */
+    if ( !rdr->portal ) return;
+    if ( leaf_count <= 0 || leaf_count - 1 >= PT_MAX_LEAVES ) return;
 
     world->pt_idx = (short far *) asset_load( "portalidx.bld",
                                                (leaf_count + 1) * (long) sizeof(short) );
 
     nrefs = world->pt_idx[leaf_count];
-    if ( nrefs <= 0 ) { world->pt_ref = 0; return; }
+    if ( nrefs <= 0 || nrefs > PT_MAX_REFS ) {
+        qglMemFree( (long) world->pt_idx );
+        world->pt_idx = 0;
+        return;
+    }
 
     world->pt_ref = (short far *) asset_load( "portalref.bld",
                                                nrefs * (long) PT_REF_SHORTS * sizeof(short) );

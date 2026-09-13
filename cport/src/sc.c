@@ -235,6 +235,15 @@ static void sc_reset_lists( SurfCache far *sc )
     sc->rfree = -1;
 }
 
+static short sc_why  = 0;   /* the allocation sc_init stopped on, 1..6 */
+static long  sc_want = 0;   /* and the bytes it asked that one for */
+
+void sc_fail( short *step, long *want )
+{
+    *step = sc_why;
+    *want = sc_want;
+}
+
 short sc_init( SurfCache far *sc, short face_count )
 {
     short i;
@@ -251,16 +260,33 @@ short sc_init( SurfCache far *sc, short face_count )
     sc->tbuilds = 0;
     sc->dlit    = 0;
 
-    sc->slot = (CacheSlot far *) qglMemAlloc( (long) face_count * (long) sizeof(CacheSlot) );
-    sc->bgrn  = (short far *) qglMemAlloc( (long) SC_NBLK * (long) sizeof(short) );
-    sc->bord  = (short far *) qglMemAlloc( (long) SC_NBLK * (long) sizeof(short) );
-    sc->bown  = (short far *) qglMemAlloc( (long) SC_NBLK * (long) sizeof(short) );
-    sc->bprev = (short far *) qglMemAlloc( (long) SC_NBLK * (long) sizeof(short) );
-    sc->bnext = (short far *) qglMemAlloc( (long) SC_NBLK * (long) sizeof(short) );
+    /* Which one failed and what it asked for. A silent 0 return read as
+       "e1m1 has 5,516 faces of CacheSlot and that is too much" for a
+       long time, which is a story: nothing had ever printed the size
+       it wanted or the memory there was. */
+    sc_want = (long) face_count * (long) sizeof(CacheSlot);
+    sc_why  = 1;
+    sc->slot = (CacheSlot far *) qglMemAlloc( sc_want );
+    if ( sc->slot ) {
+        sc_want = (long) SC_NBLK * (long) sizeof(short);
+        for ( i = 0; i < 5; i++ ) {
+            short far *b = (short far *) qglMemAlloc( sc_want );
+            sc_why = (short) ( 2 + i );
+            if ( !b ) break;
+            switch ( i ) {
+                case 0: sc->bgrn  = b; break;
+                case 1: sc->bord  = b; break;
+                case 2: sc->bown  = b; break;
+                case 3: sc->bprev = b; break;
+                default: sc->bnext = b; break;
+            }
+        }
+    }
     if ( !sc->slot || !sc->bgrn || !sc->bord || !sc->bown || !sc->bprev || !sc->bnext ) {
         sc->ok = 0;
         return 0;
     }
+    sc_why = 0;
 
     for ( i = 0; i < SC_NCLS; i++ ) sc->desc[i] = 0;
     sc_reset_lists( sc );

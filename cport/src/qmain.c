@@ -286,6 +286,9 @@ int main( void )
         ld_begin( &ldr, v.h_video_dc, hud, 6, v.scr_x_res, v.scr_y_res );
 
         ld_stage( &ldr, v.h_video_dc, hud, "loading map" );
+        /* Before the load: r_load_portals reads it to decide whether
+           to take the table at all. */
+        rdr.portal = (short) ( args.no_portal ? 0 : -1 );
         mod_load_world( &world, &rdr, &cam, &fight, args.map_name, &counts );
         ld_step( &ldr, v.h_video_dc, hud );
 
@@ -354,7 +357,12 @@ int main( void )
         ld_stage( &ldr, v.h_video_dc, hud, "surface cache" );
         sc = (SurfCache far *) qglMemAlloc( (long) sizeof(SurfCache) );
         if ( !sc || !sc_init( sc, world.face_count ) ) {
-            mark( "sc_init FAILED" );
+            short step; long want;
+            sc_fail( &step, &want );
+            sprintf( buf, "sc_init FAILED step=%d want=%ld largest=%ld total=%ld",
+                     (int) step, want, qglMemAvail( QGL_MEM_LARGEST ),
+                     qglMemAvail( QGL_MEM_TOTAL ) );
+            mark( buf );
         } else {
             mark( "sc_init ok" );
         }
@@ -470,7 +478,6 @@ int main( void )
                                           data to toggle" gate */
         rdr.rend_mode = 0;
         rdr.backface = (short) ( args.no_cull ? 0 : -1 );
-        rdr.portal   = (short) ( args.no_portal ? 0 : -1 );
         rdr.no_ents   = args.no_ents;
         rdr.no_items  = args.no_items;
         rdr.no_mdl    = args.no_mdl;

@@ -49,13 +49,42 @@ A quarter megabyte of geometry on a machine with none to spare, at the
 cost of a window map and a copy per face. `geom_row`/`geom_ofs` are in
 the 10-byte `Face`, so nothing has to be searched for.
 
-**What does not fit is the surface cache.** `sc_init` wants
-`face_count` x 8 bytes of `CacheSlot` plus five 1,024-entry block
-tables -- 54,368 on e1m1 -- on top of that 385 K, and does not get it.
-That is the `sc_init FAILED` in cstep.txt and the whole reason e1m1
-renders unlit while dm3ish is lit.
+## What the surface cache was short of
 
-These totals are the container's member sizes plus the allocation
-sites, NOT a read-back of DOS free memory: cport has no equivalent of
-the BASIC build's memtrace, so nothing here says how far short e1m1
-actually is. A `qglMemAvail` mark per load step would.
+`sc_init` used to fail on e1m1 and nothing said why. Measured, it dies
+on its FIRST allocation:
+
+    sc_init FAILED step=1 want=44128 largest=13456 total=15616
+
+44,128 bytes of `CacheSlot` against 15,616 free -- 28 KB short, not a
+near miss, and `largest` within 2 KB of `total`, so a flat shortage
+rather than fragmentation.
+
+**The 95,800 bytes were the portal table, backing a pass that did
+nothing.** `r_portal_mark` refuses a map past its own static tables on
+its first line, and e1m1 is past both -- 1,531 leaves against
+`PT_MAX_LEAVES` 1024, 6,624 refs against `PT_MAX_REFS` 4096. It
+returned -2 every frame for the life of the run: `pt_pops 0`,
+`pt_projs 0`, with the flood switched ON. `r_load_portals` loaded the
+table regardless, and `-noportal` did not stop it either, since
+`rdr.portal` was set 190 lines after the map was read.
+
+The BASIC build never had this. Its `r_load_portals` bailed because
+6,624 x 7 x 2 is past a BASIC array's 64 K; the port's far pointers
+removed the accident that had been protecting it, and the surface
+cache paid.
+
+`r_load_portals` now applies the flood's own limits -- shared from
+`r_portal.h`, one fact in one place -- and loads nothing it cannot
+use. e1m1 gets its cache and draws lit; dm3ish still floods 5,759
+portals a frame. `tools/test-lit.sh` holds both halves.
+
+Still oversized, and not yet cut: `CacheSlot` is 8 bytes a face here
+where the BASIC build narrowed it to one short, the block's generation
+tag and style epoch having moved onto the block. That is 33 KB on
+e1m1's 5,516 faces, and `SC_NBLK` is still 1024 where the BASIC build
+went to 384.
+
+Every figure above except the `sc_init` line is a member size or an
+allocation site, not a read-back: only that one line is DOS's own
+answer, and only because sc.c prints it now. A `qglMemAvail` mark per load step would.

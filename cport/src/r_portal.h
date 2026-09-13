@@ -1,4 +1,9 @@
 #ifndef __R_PORTAL_H__
+/* The flood's own static tables bound what it can answer for, so
+   r_load_portals refuses a map past either -- one fact, one place. */
+#define PT_MAX_LEAVES 1024
+#define PT_MAX_REFS   4096   /* dm3ish has 1566, e1m7 about the same */
+
 #define __R_PORTAL_H__
 
 #include "renderer.h"

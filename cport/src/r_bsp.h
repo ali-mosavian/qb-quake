@@ -67,7 +67,7 @@ void r_load_lfaces( World *world, long lump_bytes );
    can't be derived from it: the index is one short per leaf (a count
    this project already has) plus one, and its LAST entry IS the ref
    count -- so loading the index is what sizes the refs. */
-void r_load_portals( World *world, long leaf_count );
+void r_load_portals( World *world, Renderer *rdr, long leaf_count );
 
 /*
  * name: r_alloc_scratch

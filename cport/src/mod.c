@@ -186,7 +186,7 @@ void mod_load_world( World *world, Renderer *rdr, Camera *cam, Fight *fight, cha
     mod_load_facevtx( world );
     r_load_leaves( world );
     r_load_lfaces( world, counts->face_lump_bytes );
-    r_load_portals( world, counts->leaves );
+    r_load_portals( world, rdr, counts->leaves );
     mod_load_nodes( world, counts );
     r_build_parents( world, rdr );
     mod_load_planes( world, counts );
