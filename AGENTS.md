@@ -2972,6 +2972,43 @@ mark is `sc_init FAILED` and sc.c prints no reason. dm3ish is lit
 (`pt_build_mean` 0.089). So any cport frame timing quoted for e1m1 is
 the unlit fill, and a lit one will be larger.
 
+**The profiler costs 0.6% of an e1m1 frame, and the logging costs
+nothing.** `cport/src/qrcfg.h` gates both -- `QR_PROF` is PhaseTimes'
+brackets, d_faces' two rdtsc a face, its nine sc_find key sums that
+nothing ever read, and the walk's bench-only counters; `QR_LOG` is
+`mark()` and the cstep.txt trace. Both default ON. `make BUILD=<dir>
+CDEFS="-DQR_PROF=0 -DQR_LOG=0"`, and each arm needs its OWN build
+directory: a define changes what an object means while leaving its
+source untouched and make cannot see that.
+
+Measured, `-lm -nostats -noai -ticks 200`, one binary a arm, the
+picture byte-identical in every case:
+
+| arm | e1m1 ft_mean | dm3ish ft_mean | DGROUP | near heap |
+|---|---|---|---|---|
+| both on (default) | 35.905 | 25.525 | 33,016 | 7,944 |
+| `-DQR_PROF=0`     | 35.667 | --     | 32,824 | 8,136 |
+| `-DQR_LOG=0`      | 35.905 | --     | 32,648 | 8,312 |
+| both off          | 35.678 | 25.456 | 32,456 | 8,504 |
+
+So the frame time is ALL the profiler -- 0.23 ms of e1m1's 35.9 and
+0.07 ms of dm3ish's 25.5, scaling with faces drawn (325 a frame against
+150), which is where the per-face rdtsc pairs are. Logging is 0.000 ms
+to three decimals: every `mark()` is load-time or exit-time, and what
+it buys is 368 bytes of DGROUP -- the string literals -- in a build that
+was once 22 bytes from the 64K ceiling.
+
+**`QR_LOG=0` deletes cstep.txt, and the gates that grep it.** The run
+summary -- `frames=`, `pos=`, `fight=`, `gs_state` -- goes out through
+`mark()`, so test-walk.sh, test-items.sh and their kin need the default
+build. `cport/tools/test-cdefs.sh <with> <without>` is the regression
+test: the same frame from both arms, byte-identical, plus an assertion
+that the gates fired at all. It compares the PICTURE and not frames or
+polys -- `-ticks` bounds the simulation, so the faster arm renders one
+more frame over the same 200 ticks and draws more polygons, which is
+the change working. Mutation-checked by moving `lm_on = 1` inside a
+`#if QR_PROF`.
+
 **bench.txt timers are `name min mean max`, three decimals.** `pt_<phase>`
 is ms a frame; `pt_tk_<call>` is one `host_tick` call in ms, over the
 ticks it ran in. `sys_rdtsc` wraps about once a minute, and

@@ -11,6 +11,7 @@
 #include <math.h>
 #include <mem.h>   /* _fmemset -- the leaf caches, once */
 
+#include "qrcfg.h"
 #include "d_alias.h"
 #include "mdl.h"
 #include "mdl_ai.h"
@@ -296,7 +297,9 @@ static short d_mdl_visible( World *world, Renderer *rdr, DiskPlane far *frustum,
     float lo[3], hi[3], px, py, pz, dp;
     short i, nodenr, vis = 0;
 
+#if QR_PROF
     rdr->dv_calls++;
+#endif
     lo[0] = org->x - radius; hi[0] = org->x + radius;
     lo[1] = org->y - radius; hi[1] = org->y + radius;
     lo[2] = org->z + zlo;    hi[2] = org->z + zhi;
@@ -307,7 +310,12 @@ static short d_mdl_visible( World *world, Renderer *rdr, DiskPlane far *frustum,
         py = frustum[i].norm.y > 0.0f ? lo[2] : hi[2];
         pz = frustum[i].norm.z > 0.0f ? lo[1] : hi[1];
         dp = frustum[i].norm.x * px + frustum[i].norm.y * py + frustum[i].norm.z * pz;
-        if ( dp + frustum[i].dist > 0.0f ) { rdr->dv_fout++; return 0; }
+        if ( dp + frustum[i].dist > 0.0f ) {
+#if QR_PROF
+            rdr->dv_fout++;
+#endif
+            return 0;
+        }
     }
 
     /* Same box as last time: the leaves are the same, whatever the PVS
@@ -316,7 +324,12 @@ static short d_mdl_visible( World *world, Renderer *rdr, DiskPlane far *frustum,
          && lc->r == radius && lc->zlo == zlo && lc->zhi == zhi ) {
         for ( i = 0; i < 9; i++ ) {
             nodenr = lc->lf[i];
-            if ( nodenr > 0 && rdr->pvs_now[nodenr] ) { rdr->dv_vis++; return -1; }
+            if ( nodenr > 0 && rdr->pvs_now[nodenr] ) {
+#if QR_PROF
+                rdr->dv_vis++;
+#endif
+                return -1;
+            }
         }
         return 0;
     }
@@ -330,7 +343,9 @@ static short d_mdl_visible( World *world, Renderer *rdr, DiskPlane far *frustum,
             pz = ( i & 4 ) ? hi[2] : lo[2];
         }
         /* r_point_leaf: the tree in BSP space, z up, no swap */
+#if QR_PROF
         rdr->dv_desc++;
+#endif
         nodenr = 0;
         while ( !( nodenr & 0x8000 ) ) {
             Plane far *pl = &world->planes[ world->nodes[nodenr].plane_id ];
@@ -343,13 +358,20 @@ static short d_mdl_visible( World *world, Renderer *rdr, DiskPlane far *frustum,
             vis = -1;
             /* with nowhere to record them, the remaining eight are
                wasted work -- answer now, as this always did */
-            if ( !lc ) { rdr->dv_vis++; return -1; }
+            if ( !lc ) {
+#if QR_PROF
+                rdr->dv_vis++;
+#endif
+                return -1;
+            }
         }
     }
     if ( lc ) {
         lc->at = *org; lc->r = radius; lc->zlo = zlo; lc->zhi = zhi; lc->ok = 1;
     }
+#if QR_PROF
     if ( vis ) rdr->dv_vis++;
+#endif
     return vis;
 }
 

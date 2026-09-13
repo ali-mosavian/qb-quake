@@ -12,6 +12,7 @@
  * so a drifted declare fails the build instead of miscompiling.
  */
 
+#include "qrcfg.h"
 #include <stdio.h>
 #include <string.h>
 #include <math.h>   /* atan2 -- -record's diagnostic yaw */
@@ -69,11 +70,18 @@ unsigned _stklen = 24576U;
 #define PAINT_BYTE  0xA5
 #define PROBE_BYTES 8192U
 
+#if QR_LOG
 static void mark( char *what )
 {
     FILE *m = fopen( "cstep.txt", "a" );
     if ( m ) { fprintf( m, "%s\n", what ); fclose( m ); }
 }
+#else
+/* Not a no-op function: the point of turning this off is that neither
+   the string literal nor the sprintf that builds it survives, and both
+   are DGROUP -- which this build is 22 bytes from filling. */
+#define mark( what )   ( (void) 0 )
+#endif
 
 int main( void )
 {
@@ -540,9 +548,11 @@ int main( void )
             float ft_min = 0.0f, ft_max = 0.0f, ft_sum = 0.0f;
             long  ft_n = 0;
             long  poly_sum = 0, tri_sum = 0, mdl_sum = 0;
-            long  pt_poly_sum = 0;   /* the same, over the profiled frames alone */
             float raw_dt, frame_dt;
+#if QR_PROF
+            long  pt_poly_sum = 0;   /* the same, over the profiled frames alone */
             float t_frame = 0.0f, t_ph;      /* the frame's own boundary, and one phase's */
+#endif
             FILE *bf;
 
             /* -record/-play: one fixed-size record a frame -- x,y,
@@ -669,6 +679,7 @@ int main( void )
                        on two arms that rendered a different number of
                        frames over the same ticks -- which is every A/B
                        where one arm is faster, i.e. all of them. */
+#if QR_PROF
                     if ( pt.n == 0 ) {
                         rdr.nd_seen = rdr.lf_seen = 0;
                         rdr.mk_faces = rdr.ord_sum = 0;
@@ -676,6 +687,7 @@ int main( void )
                     }
                     pt.n++;
                     t_frame = sys_now( &sysclk );
+#endif
                 }
 
                 host_advance( &world, &player, &cam, &rdr, &input, hud, &ls, &fight,
@@ -685,9 +697,13 @@ int main( void )
                    holds an EMS window -- the mixer takes PAGE_SLOT. It
                    runs every frame whatever is playing: the DMA never
                    stops, so what is not repainted is played again. */
+#if QR_PROF
                 t_ph = sys_now( &sysclk );
+#endif
                 snd_frame( &player, frame_dt );
+#if QR_PROF
                 if ( pt.n > 0 ) pt.sound_sum += sys_now( &sysclk ) - t_ph;
+#endif
 
                 if ( args.play_name[0] && rf && !play_drift ) {
                     /* The camera is NOT pinned: host_advance just
@@ -742,7 +758,9 @@ int main( void )
                               &cam_up, z_dc, v.comp, args.no_draw,
                               v.x_res, v.y_res );
                 in_screenshot_key( &input, h_dst_dc, v.x_res, v.y_res );
+#if QR_PROF
                 t_ph = sys_now( &sysclk );
+#endif
                 v_present( &v, h_dst_dc, 0 );
 
                 /* -comp: v_present has already scaled the 3D view into
@@ -764,7 +782,9 @@ int main( void )
                     scr_draw_msg( hud, &world, &fight, &rdr, v.h_comp_dc, v.scr_x_res, v.scr_y_res );
                     qglDrBlit( v.h_video_dc, 0, 0, v.h_comp_dc );
                 }
+#if QR_PROF
                 if ( pt.n > 0 ) pt.present_sum += sys_now( &sysclk ) - t_ph;
+#endif
 
                 /* Read rdr.polys/tris BEFORE scr_count_frame, which
                    resets them for the next frame (screen.bas's own
@@ -774,15 +794,19 @@ int main( void )
                    session instead, so the real running total lives
                    in these longs here. */
                 poly_sum += rdr.polys;
+#if QR_PROF
                 if ( pt.n > 0 ) pt_poly_sum += rdr.polys;
+#endif
                 tri_sum  += rdr.tris;
                 mdl_sum  += rdr.mdl_drawn;
                 scr_count_frame( hud, &rdr, sc, frame_dt );
+#if QR_PROF
                 if ( pt.n > 0 ) {
                     float dt = sys_now( &sysclk ) - t_frame;
                     pt.frame_sum += dt;
                     if ( dt > pt.frame_max ) pt.frame_max = dt;
                 }
+#endif
                 frame++;
             }
 
@@ -852,12 +876,15 @@ int main( void )
                     fprintf( bf, "ft_max %ld.%03ld\n", (long) (ft_max*1000), (long) (ft_max*1000000) % 1000 );
                     fprintf( bf, "ft_mean %ld.%03ld\n", (long) ((ft_sum/ft_n)*1000), (long) ((ft_sum/ft_n)*1000000) % 1000 );
                     fprintf( bf, "ft_n %ld\n", ft_n );
+#if QR_PROF
                     /* The phase sums below cover EVERY frame; ft_* skip the
                        warm-up ones. Print both counts rather than leave a
                        reader to wonder how a phase mean can exceed the frame
                        mean -- it did, by exactly the ratio of these two. */
                     fprintf( bf, "pt_frames %ld\n", pt.n );
+#endif
                     fprintf( bf, "fps_mean %ld.%02ld\n", (long) (ft_n/ft_sum), (long) ((ft_n/ft_sum)*100) % 100 );
+#if QR_PROF
                     if ( pt.n > 0 ) {
                         /* ms a frame over the frames profiled, which are ft_n's
                            own. pt_other is what the brackets do not reach --
@@ -915,6 +942,7 @@ int main( void )
                         fprintf( bf, "pt_vis_nodes %d\n", rdr.vis_nodes );
                         fprintf( bf, "pt_ord %ld\n", rdr.ord_sum / pt.n );
                     }
+#endif
                     {   /* The portal flood's own work, so a cull cost can be
                            divided by something real instead of guessed at. */
                         long pops, projs, pushes;

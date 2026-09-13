@@ -20,6 +20,7 @@
 
 #include <string.h>
 
+#include "qrcfg.h"
 #include "d_faces.h"
 #include "d_poly.h"
 #include "qgl.h"
@@ -149,8 +150,10 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
     short lm_mip, lm_floor, lm_sw, lm_sh, lm_fw, lm_fh, lm_cm;
     short leaf_indx, leaf_end, p2;
     long  aim_ofs, lm_dc, src_dc, tex_dc, texofs;
+#if QR_PROF
     long  bt0, bface, build_cyc = 0;
     long  rt0, raster_cyc = 0;
+#endif
     float su0, su1, su2, su3, sv0, sv1, sv2, sv3;
     float suv[8];
     float tw, th, dp_dist, turbph, zl, zsum;
@@ -163,10 +166,12 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
 
     dp->polys = 0;
     dp->tris  = 0;
+#if QR_PROF
     dp->lm_want = 0;
     dp->lm_fallback = 0;
     dp->k_mip = 0; dp->k_sw = 0; dp->k_sh = 0; dp->k_stag = 0; dp->k_n = 0;
     dp->k_hdr = 0; dp->k_ext = 0; dp->k_v0 = 0; dp->k_lm = 0;
+#endif
     dp->build_us = 0;
     dp->raster_us = 0;
 
@@ -254,17 +259,26 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
             lm_stag = 0;
             lm_extw = lm_exth = 0;
             lm_tms = lm_tmt = 0;
+#if QR_PROF
             dp->k_v0 += vcnt;
             dp->k_lm += gv[GEOM_LMOFS];
+#endif
 
             if ( lm_use && liquid == 0 && mipinf[tex_id].anim_count <= 1 ) {
                 if ( gv[GEOM_LMOFS] >= 0 ) {
+#if QR_PROF
                     dp->k_hdr++;
+#endif
                     lm_tms  = gv[GEOM_LMOFS + 2];
                     lm_tmt  = gv[GEOM_LMOFS + 3];
                     lm_extw = (short)( ( gv[GEOM_LMOFS + 4] - 1 ) * 16 );
                     lm_exth = (short)( ( gv[GEOM_LMOFS + 5] - 1 ) * 16 );
-                    if ( lm_extw > 0 && lm_exth > 0 ) { lm_on = 1; dp->lm_want++; dp->k_ext++; }
+                    if ( lm_extw > 0 && lm_exth > 0 ) {
+                        lm_on = 1;
+#if QR_PROF
+                        dp->lm_want++; dp->k_ext++;
+#endif
+                    }
 
                     lm_stag = ls_epoch( ls, gv[GEOM_LMOFS + 6] & 255 );
 
@@ -417,15 +431,19 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
                 lm_fw = (short)( lm_extw >> lm_floor ); if ( lm_fw < 1 ) lm_fw = 1;
                 lm_fh = (short)( lm_exth >> lm_floor ); if ( lm_fh < 1 ) lm_fh = 1;
 
+#if QR_PROF
                 dp->k_mip  += lm_mip;
                 dp->k_sw   += lm_sw;
                 dp->k_sh   += lm_sh;
                 dp->k_stag += lm_stag;
                 dp->k_n++;
+#endif
 
                 lm_dc = (long) (void far *) sc_find( sc, i, lm_mip, lm_sw, lm_sh, lm_stag, &aim_ofs );
                 if ( lm_dc == 0 ) {
+#if QR_PROF
                     bt0 = dp->prof ? sys_rdtsc( sysclk ) : 0;
+#endif
                     lm_dc = (long) (void far *) sc_alloc( sc, i, lm_mip, lm_sw, lm_sh, lm_fw, lm_fh,
                                                            lm_stag, world->face_count, &aim_ofs );
                     if ( lm_dc != 0 ) {
@@ -439,10 +457,12 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
                                   (short)( 1 << sc_shift( lm_sw ) ),
                                   (short)( 1 << sc_shift( lm_sh ) ), gv );
                     }
+#if QR_PROF
                     if ( dp->prof ) {
                         bface = sys_rdtsc( sysclk ) - bt0;
                         if ( bface >= 0 && bface <= 1000000L ) build_cyc += bface;
                     }
+#endif
                 }
 
                 if ( lm_dc != 0 ) {
@@ -471,7 +491,9 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
                        put them back on the atlas scale. */
                     for ( j = 0; j < cnt; j++ ) { pu[j] *= tw; pv[j] *= th; }
                     lm_on = 0;
+#if QR_PROF
                     dp->lm_fallback++;
+#endif
                 }
             }
 
@@ -490,7 +512,9 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
                refusal. */
             if ( cnt > MAXV ) continue;
 
+#if QR_PROF
             rt0 = dp->prof ? sys_rdtsc( sysclk ) : 0;
+#endif
 
             for ( j = 0; j < cnt; j++ ) {
                 pvtx[j].x = px[j]; pvtx[j].y = py[j]; pvtx[j].z = pw[j];
@@ -516,13 +540,20 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
             }
             dp->tris = (short)( dp->tris + cnt - 2 );
 
+#if QR_PROF
             if ( dp->prof ) {
                 bface = sys_rdtsc( sysclk ) - rt0;
                 if ( bface >= 0 && bface <= 1000000L ) raster_cyc += bface;
             }
+#endif
         }
     }
 
+#if QR_PROF
     dp->build_us = build_cyc;
     dp->raster_us = raster_cyc;
+#else
+    dp->build_us = 0;
+    dp->raster_us = 0;
+#endif
 }

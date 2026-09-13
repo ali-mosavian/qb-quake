@@ -16,6 +16,7 @@
  * later.
  */
 
+#include "qrcfg.h"
 #include "h_frame.h"
 #include "mdl_ai.h"
 #include "weapons.h"
@@ -67,7 +68,9 @@ void host_advance( World *world, Player *player, Camera *cam, Renderer *rdr,
                     short scr_x_res, short scr_y_res )
 {
     short steps = 0;
+#if QR_PROF
     float t0 = sys_now( sysclk );
+#endif
 
     clock->accum += real_dt;
 
@@ -92,11 +95,13 @@ void host_advance( World *world, Player *player, Camera *cam, Renderer *rdr,
        carry it into the next frame, where it would only grow. */
     if ( clock->accum > HOST_DT ) clock->accum = 0.0f;
 
+#if QR_PROF
     if ( pt->n > 0 ) {
         float dt = sys_now( sysclk ) - t0;
         pt->tick_sum += dt;
         if ( dt > pt->tick_max ) pt->tick_max = dt;
     }
+#endif
 }
 
 /*
@@ -196,9 +201,11 @@ void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
     Vec3 cam_pos_b;
     DrawParams dp;
     DiskPlane frustum[6];
+#if QR_PROF
     float t0, dt;
 
     t0 = sys_now( sysclk );
+#endif
     qglM4LookAt( &mtx_mdl, &cam->pos, &cam->look_at, cam_up );
     qglM4Conc( &mtx_fin, &mtx_mdl, mtx_prj );
     r_set_frustum( frustum, &mtx_fin );
@@ -228,21 +235,28 @@ void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
     qglM4Conc( &mtx_fin, &mtx_mdl, mtx_prj );
 
     /* Walk BSP tree */
-    {   float tw = sys_now( sysclk );
+    {
+#if QR_PROF
+        float tw = sys_now( sysclk );
+#endif
         r_draw_world( world, rdr, frustum, 0, &cam->pos, &mtx_fin,
                        xresh, yresh, z_near );
+#if QR_PROF
         if ( pt->n > 0 ) pt->walk_sum += sys_now( sysclk ) - tw;
         rdr->ord_sum += rdr->ord_count;
+#endif
     }
 
     /* Cull ends here -- both exits from this function after this
        point (-nodraw, and the normal one at the bottom) pass through
        it, so timing it once here covers both. */
+#if QR_PROF
     if ( pt->n > 0 ) {
         dt = sys_now( sysclk ) - t0;
         pt->cull_sum += dt;
         if ( dt > pt->cull_max ) pt->cull_max = dt;
     }
+#endif
 
     /* Clear to the far plane before the frame. Depth is 1/z and
        larger is nearer, so zero is infinitely distant and the first
@@ -288,14 +302,18 @@ void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
     dp.z_avail     = (short) ( z_dc != 0 );
     dp.x_res       = x_res;
     dp.y_res       = y_res;
+#if QR_PROF
     dp.prof        = (short) ( pt->n > 0 );
-
     t0 = sys_now( sysclk );
+#else
+    dp.prof        = 0;
+#endif
     d_draw_faces( world, rdr, sc, ls, &dp, &mtx_fin, &cam->pos, sysclk );
 
     rdr->polys = (short) ( rdr->polys + dp.polys );
     rdr->tris  = (short) ( rdr->tris + dp.tris );
 
+#if QR_PROF
     if ( pt->n > 0 ) {
         pt->build_sum  += dp.build_us  / 1000000.0f;
         pt->raster_sum += dp.raster_us / 1000000.0f;
@@ -304,10 +322,13 @@ void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
         pt->draw_sum += dt;
         if ( dt > pt->draw_max ) pt->draw_max = dt;
     }
+#endif
 
     /* The pickups, depth tested against the world that is already
        there. Before the outlines, which are the same depth state. */
+#if QR_PROF
     t0 = sys_now( sysclk );
+#endif
     d_draw_items( world, rdr, player, frustum, &mtx_fin,
                    xresh, yresh, z_near, h_dst_dc );
     rdr->mdl_drawn = d_draw_models( world, rdr, frustum, &mtx_fin,
@@ -326,17 +347,21 @@ void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
     if ( hud->portal_wire ) r_portal_outline( world, rdr, h_dst_dc, &mtx_fin,
                                                xresh, yresh, z_near );
 
+#if QR_PROF
     if ( pt->n > 0 ) {
         dt = sys_now( sysclk ) - t0;
         pt->alias_sum += dt;
         if ( dt > pt->alias_max ) pt->alias_max = dt;
     }
+#endif
 
     /* leave depth off for the overlay, which is 2D and would
        otherwise test itself against the scene it is drawn on top of */
     if ( z_dc != 0 ) qglSfZMode( h_dst_dc, QGL_Z_OFF );
 
+#if QR_PROF
     t0 = sys_now( sysclk );
+#endif
     /* Under -comp the host loop draws this onto the composite after
        the scale, at the mode's own resolution. */
     if ( !comp ) {
@@ -346,9 +371,11 @@ void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
         scr_draw_msg( hud, world, fight, rdr, h_dst_dc, x_res, y_res );
     }
 
+#if QR_PROF
     if ( pt->n > 0 ) {
         dt = sys_now( sysclk ) - t0;
         pt->hud_sum += dt;
         if ( dt > pt->hud_max ) pt->hud_max = dt;
     }
+#endif
 }

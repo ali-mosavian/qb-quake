@@ -42,7 +42,14 @@ QGL_SRC := $(QGL)/file.asm $(QGL)/vga.asm \
 QGL_MODS := $(basename $(notdir $(QGL_SRC)))
 QGL_INC  := $(wildcard $(QGL)/*.inc)
 
-export TOOLCHAINS DOSBOX_BIN
+# -D list for every C compile -- see cport/src/qrcfg.h. Nothing in make
+# sees a changed define, so an arm built with a different CDEFS needs its
+# own BUILD directory:
+#
+#   make BUILD=$PWD/../build/cport-noprof CDEFS="-DQR_PROF=0 -DQR_LOG=0"
+CDEFS ?=
+
+export TOOLCHAINS DOSBOX_BIN CDEFS
 
 BCC  := $(CURDIR)/tools/bcc.sh
 LINK := $(CURDIR)/tools/link.sh

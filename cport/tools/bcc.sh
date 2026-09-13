@@ -15,6 +15,7 @@
 set -euo pipefail
 
 DBG=$([[ "${DEBUGINFO:-1}" == "0" ]] || echo " -v")
+DEFS=$([[ -z "${CDEFS:-}" ]] || echo " ${CDEFS}")
 SRC="${1:?usage: bcc.sh <src-c> <out-obj>}"
 OUT="${2:?usage: bcc.sh <src-c> <out-obj>}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -53,7 +54,10 @@ cp "$CPORT"/src/*.h "$W/" 2>/dev/null || true
   # the EXE or the debugger can only say LMEM+0x943: bcc -v here and
   # link.sh's "debug codeview" both, or neither is any use. DEBUGINFO=0
   # for a lean build.
-  echo "b:\\bin\\bcc.exe -c${DBG} -B -3 -f87 -mm -Ox -IW:\\ -IB:\\INCLUDE $base.c > w:\\cc.txt"
+  # CDEFS is the build's -D list (see cport/src/qrcfg.h). It rides the
+  # same 127-char DOS command line as everything else here, so keep it
+  # to a handful of short defines.
+  echo "b:\\bin\\bcc.exe -c${DBG}${DEFS} -B -3 -f87 -mm -Ox -IW:\\ -IB:\\INCLUDE $base.c > w:\\cc.txt"
   echo "exit"
 } > "$W/build.conf"
 

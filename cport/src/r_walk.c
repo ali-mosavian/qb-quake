@@ -13,6 +13,7 @@
  * unpack, so the recursion just carries them straight through.
  */
 
+#include "qrcfg.h"
 #include "r_bsp.h"
 #include "r_walk.h"
 
@@ -28,7 +29,9 @@ void r_recursive_world_node( World *world, Renderer *rdr, DiskPlane far *frustum
     short side, i, frst, last, leafnr;
 
     if ( nodenr & 0x8000 ) {
+#if QR_PROF
         rdr->lf_seen++;
+#endif
         leafnr = ~nodenr;
         /* pvs_now, NOT pvsb. pvsb is the raw PVS for the camera's leaf,
            rebuilt only when the leaf changes; pvs_now is that set after
@@ -48,7 +51,9 @@ void r_recursive_world_node( World *world, Renderer *rdr, DiskPlane far *frustum
                 {   short fi = world->lfc[i];
                     rdr->pflag[fi >> 3] |= (unsigned char)( 1 << (fi & 7) );
                 }
+#if QR_PROF
             rdr->mk_faces += (long) ( last - frst );
+#endif
 
             if ( rdr->ent_left && ( rdr->ent_lf[leafnr >> 3] & ( 1 << (leafnr & 7) ) ) )
                 r_emit_entities( world, rdr, frustum, nodenr, campos, ign );
@@ -69,7 +74,9 @@ void r_recursive_world_node( World *world, Renderer *rdr, DiskPlane far *frustum
     if ( !ign && !rdr->no_subvis &&
          !( rdr->vis_walk[nodenr >> 3] & ( 1 << (nodenr & 7) ) ) ) return;
 
+#if QR_PROF
     rdr->nd_seen++;
+#endif
     mask = r_cull_box( &world->nodes[nodenr].bound, frustum, mask );
     if ( mask < 0 ) return;
 
