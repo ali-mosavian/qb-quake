@@ -46,6 +46,16 @@ qgl$emsok       dw      0
 qgl$gem_hnd     dw      EMS_SLOTS dup (0)   ;; handle mapped per slot, 0 = nothing
 qgl$gem_pg      dw      EMS_SLOTS dup (0)   ;; and its logical page
 
+;; The same record packed the way an addrTB entry packs it -- logical
+;; page in the high byte, handle in the low -- because dctems compares a
+;; scanline's entry against the slot on every access and a compare there
+;; must not cost a call. It is published rather than duplicated: dctems
+;; kept its own copy until an EMS read came back holding another store's
+;; page, and a second copy of this is only ever as good as the last
+;; caller that mapped without telling it. See its own note.
+                public  qgl$gem_key
+qgl$gem_key     dw      EMS_SLOTS dup (0FFFFh)
+
 
 .code
 
@@ -183,6 +193,7 @@ qgl$GemForget   proc    near private uses bx cx
                 mov     cx, EMS_SLOTS
                 xor     bx, bx
 @@:             mov     [qgl$gem_hnd+bx], 0
+                mov     [qgl$gem_key+bx], 0FFFFh
                 add     bx, 2
                 loop    @B
                 ret
@@ -226,6 +237,9 @@ qglGemMap     proc    public uses bx cx dx,\
                 mov     [qgl$gem_hnd+bx], ax
                 mov     ax, logpage
                 mov     [qgl$gem_pg+bx], ax
+                mov     ah, al                  ;; ah= logical page
+                mov     al, byte ptr hnd        ;; al= handle
+                mov     [qgl$gem_key+bx], ax
 
 @@seg:          ;; frame + slot*400h -- 16K in paragraphs
                 mov     ax, slot
@@ -239,6 +253,7 @@ qglGemMap     proc    public uses bx cx dx,\
                 mov     bx, slot
                 shl     bx, 1
                 mov     [qgl$gem_hnd+bx], 0
+                mov     [qgl$gem_key+bx], 0FFFFh
 @@fail:         xor     ax, ax
                 ret
 qglGemMap     endp

@@ -13,9 +13,17 @@
 ;;     record the segment gem hands back, which is where mgl's frame+slot
 ;;     arithmetic went.
 ;;
-;;   * qglGemMap keeps the per-slot record now, as mgl's emsMapEx did, so
-;;     qgl$emsCtx's ppgTB is a second copy kept by qgl$AccessEx and the
-;;     macros. Coherent because every map anywhere goes through gem.
+;;   * qglGemMap keeps the per-slot record, and THE SLOT-TAKING PATHS ASK
+;;     IT rather than a copy of it. ppgTB was that copy, and "coherent
+;;     because every map goes through gem" is not the invariant it needed:
+;;     going through gem is not going through here. snd.c, snd_mix.c,
+;;     mdl.c, d_alias.c and ar.asm all map PAGE_SLOT with a plain
+;;     qglGemMap, so a copy kept here is stale from the next mixer paint
+;;     onward -- and a stale copy answers with no map at all, handing the
+;;     caller a window holding somebody else's page. That is silent: the
+;;     bytes read back are a valid-looking record of the wrong thing.
+;;     ppgTB is still written (slots 0 and 1 are this module's own), but
+;;     nothing decides anything on it any more.
 ;;
 ;;   * emsCalloc -> qglGemAlloc, which does not zero and reports failure as
 ;;     handle 0 rather than CF.
@@ -31,6 +39,11 @@ qglGemInit      proto   far pascal
 qglGemAlloc     proto   far pascal :dword
 qglGemFree      proto   far pascal :word
 qglGemMap       proto   far pascal :word, :word, :word
+
+;; gem's own per-slot record, packed as an addrTB entry is: logical page
+;; in the high byte, handle in the low, 0FFFFh for a slot holding
+;; nothing. Read and never written here -- see qgl$AccessEx.
+                extrn   qgl$gem_key:word
 
 ;; mgl's EMSCTX (inc/ems.inc), minus the frame word: gem.asm owns the page
 ;; frame and hands back a segment per map, so segTB is filled as pages are
@@ -503,7 +516,7 @@ qgl$AccessEx    proc    near private uses bx cx
                 movzx   bx, cl
                 shl     bx, 1                   ;; bx= slot * T word
 
-                cmp     ss:qgl$emsCtx.ppgTB[bx], si
+                cmp     qgl$gem_key[bx], si
                 je      @@mapped                ;; that page already there?
 
                 mov     ss:qgl$emsCtx.ppgTB[bx], si
@@ -588,7 +601,7 @@ qgl_ems_FullAccess proc near private uses ax bx ecx dx di bp
                 mov     si, cx                  ;; counter
                 mov     bx, ax                  ;; bx= expected lpage:handle
 
-@@same:         cmp     ss:qgl$emsCtx.ppgTB[di], bx
+@@same:         cmp     qgl$gem_key[di], bx
                 jne     @@build                 ;; slot holds something else?
                 add     bx, 100h                ;; ++logical page
                 add     di, T word

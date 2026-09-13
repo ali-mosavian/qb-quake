@@ -125,7 +125,17 @@ void sb_build( SurfCache far *sc, World *world, Renderer *rdr, LightStyles *ls,
             loct = impx*ti->vect[0] + impy*ti->vect[1] + impz*ti->vect[2] + ti->vect[3];
         }
 
-        if ( (sval != LS_NEUTRAL || dlit) && (long) lmw * lmh <= 1024L ) {
+        /* The product alone does not bound the copy: a NEGATIVE lmw
+           passes `lmw * lmh <= 1024` and then `(size_t) lmw` is nearly
+           64K, so one row of a 1024-byte buffer is a rep movsw through
+           BSS and the stack into _fmemcpy's own return address. That is
+           what the e1m1 freeze was, with lmw -4077 out of a record read
+           through a stale EMS window. The window is fixed in dctems, so
+           nothing should reach here with a negative width again -- bound
+           the components anyway, because the cost is two compares and
+           the failure is the whole process. */
+        if ( (sval != LS_NEUTRAL || dlit) &&
+             lmw > 0 && lmh > 0 && (long) lmw * lmh <= 1024L ) {
             lrow = ls_scratch_c;
             for ( li = 0; li < lmh; li++ ) {
                 _fmemcpy( lrow, srow, (size_t) lmw );

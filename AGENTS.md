@@ -1599,9 +1599,48 @@ and `r_portal_draw` were passed `0.0f, 0.0f, 0.0f` for
 Config exists; they get `x_res/2`, `y_res/2` and `z_near` now, which is
 what their own projection needs to answer for the right screen.
 
-### cport crashes under live mouse input, and only live
+### cport's freeze was an EMS window read through a stale record
 
-**Unresolved.** `cport/` crashes after a minute or two of being driven
+**Fixed.** It is not the mouse and it is not live input: `-walk` on
+e1m1 reproduces it headless in about eight seconds, which is what made
+it scriptable. The chain, each link measured:
+
+`dctems` kept its own per-slot record of which page it had put in a
+window (`qgl$emsCtx.ppgTB`) and answered a matching request with no map
+at all. Its header said that was coherent "because every map anywhere
+goes through gem" -- but going through gem is not going through
+dctems, and `snd.c`, `snd_mix.c` (once a frame), `mdl.c`, `d_alias.c`
+and `ar.asm` all map `PAGE_SLOT` with a plain `qglGemMap`. From the
+first mixer paint onward the copy is stale, and a stale copy answers
+with the segment and no INT 67h: the caller gets a window holding
+somebody else's page. Silently -- the bytes read back are a
+plausible-looking record of the wrong thing.
+
+On e1m1 that made the geometry store's rows 28 and 29 (one page, hence
+one key, hence exactly two rows) read back as sound samples: `vcnt`
+20174 where the file says 4, and a luxel grid `lmw` -4077 where it
+says 7. `sb_build` guarded its scratch copy with `lmw * lmh <= 1024`,
+which a negative width passes, and `(size_t) -4077` is 61459 -- a
+`rep movsw` from the lightmap atlas through a 1024-byte buffer, BSS
+and the stack, landing in `__fmemcpy`'s own return address. The branch
+ring's last two entries were `_sb_build+0x248 -> __fmemcpy` and
+`__fmemcpy's ret -> 0000:0000`, and the "freeze" is the program dying
+without restoring the video mode, so the last frame stays on screen.
+
+The record belongs to gem, which owns the mapping; the slot-taking
+paths now compare against `qgl$gem_key`, gem's own record packed the
+way an addrTB entry packs it, so the compare still costs a compare.
+`t35emsslot` is the regression test, and it fails with the copy put
+back. e1m1 `-lm -walk -ticks 400` completes, and `polys` went 65321 ->
+67670 because faces that were reading another store's page now read
+their own.
+
+`qrender.exe` maps `PAGE_SLOT` the same way from `model.bas` and
+`d_mdl.bas`, so the same defect was under it. Whether it is the whole
+of that build's own crash is not claimed here; it was not re-tested.
+
+**The old investigation, kept for what it ruled out.** `cport/` crashed
+after a minute or two of being driven
 by hand -- `-comp -lm`, dm3ish -- and does not crash any other way. It
 is not a hang: the CPU takes a real invalid-opcode exception (vector 6)
 at `CS:EIP` pointing somewhere it was never meant to jump (`0000:0000`
