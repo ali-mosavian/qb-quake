@@ -80,4 +80,11 @@ void r_load_portals( World *world, long leaf_count );
  */
 void r_alloc_scratch( Renderer *rdr, short face_count, short node_count, short leaf_count );
 
+/*
+ * name: r_build_parents
+ * desc: Fills rdr->nd_parent from the node tree. Call once, after the
+ *       nodes are loaded and before the first frame.
+ */
+void r_build_parents( World *world, Renderer *rdr );
+
 #endif

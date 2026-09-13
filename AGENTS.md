@@ -3227,3 +3227,73 @@ hundred over one walk, and pixel-diffing e1m7's `-bench` frame
 before/after the feature landed shows 69% of pixels uniformly brighter,
 no noise, consistent with an additive light near the camera in a tight
 corridor.
+
+## Culling: the subtree skip, and what it nearly cost
+
+e1m1 at the spawn, cport, `-nostats -noai -ticks 120`, one binary,
+`-nosubvis` the A/B flag:
+
+| | cull | nodes | leaves | frame |
+|---|---|---|---|---|
+| before both changes | 31.45 | 2,493 | 2,502 | 69.99 |
+| entity emit by bitmap | 7.59 | 2,493 | 2,502 | 45.19 |
+| + the subtree skip | 3.12 | 540 | 411 | 39.38 |
+
+**Most of what looked like walk cost was `r_emit_entities` rescanning
+every submodel at every visited node.** 2,493 nodes x 58 models a frame,
+to place about twenty doors -- 24 ms of a 31 ms cull, hidden behind a
+call the profile attributed to the walk. `ent_nd`/`ent_lf` are one bit
+per node and per leaf, rebuilt each frame beside `vis_walk`, and the walk
+emits only where a bit is set. `tools/test-brushents.sh` is the
+regression test it already had: with no bit ever set the e1m1 double door
+draws 0 pixels instead of 2,122.
+
+**Then Quake's `node->visframe`:** a bit a node saying some leaf below it
+is in `pvsb`, computed post-order when `pvsb` is rebuilt -- which is only
+when the camera changes leaf -- and tested before `r_cull_box`, which is
+six byte-to-float unpacks and up to twelve multiplies against one bit.
+dm3ish is smaller and gains less: 289 nodes to 94, cull 4.92 to 3.70.
+
+**A brush entity is drawn with the PVS IGNORED, so the PVS bit alone
+prunes it away.** Its own leaves are not in the PVS -- a lift sits inside
+its solid shaft -- and `ent_find_node` places it at the deepest node (or
+LEAF: the descent ends at one whenever the box straddles no plane all the
+way down) its box does not straddle. That node is routinely one the PVS
+pass leaves unmarked. So `vis_walk` is `vis_sub` plus the root-to-node
+path of every entity about to be emitted, which needs `nd_parent` and
+`lf_parent` -- there is no way up a Quake BSP otherwise. Without it e1m1
+at the spawn draws 254 polygons a frame where it should draw 327, and
+**the picture does not move**: those 73 are entity faces behind world
+geometry from there. Quake never had this problem because it draws
+entities from its own list, not inserted into the node walk.
+
+**A per-frame counter divided by the profiled frame count is not a
+mean.** `pt_marked` read 575 against 486 on the two arms and that gap was
+the instrument: the counters summed from frame 0 while `pt.n` counts from
+frame 4, and two arms that differ in speed render a different number of
+frames over the same ticks. Armed with `pt.n`, both arms read 589. Any
+A/B is between a fast arm and a slow one, so this is every A/B.
+
+**`-nostats` did not make the frame deterministic: the fps printed
+anyway.** `scr_draw_hud`'s top bar drew `fps: [N]` right-aligned outside
+the stats gate, so BENCH.BMP carried the frame rate and no two arms of
+different speed could ever come out IDENTICAL -- 19 pixels at x 145..151
+swapping between palette 15 and 16, which is four digits of 4x5 font and
+reads exactly like a rasteriser difference. It is inside the gate now.
+The `at:`/`yaw:` half stays out of it: it is deterministic and it is how
+a headless run says where it is.
+
+**DGROUP + `_stklen` must fit 64K, and nothing said so.** Borland's
+medium-model startup puts near data, the stack and the near heap in one
+segment and calls `abort()` before `main` when they do not fit:
+"Abnormal program termination" on stderr, which DOS does not redirect.
+So the symptom is an empty `> out.txt`, no `cstep.txt`, a nonzero exit
+and no message anywhere -- indistinguishable from a broken build, and it
+cost a session. cport was **22 bytes** inside the limit at `_stklen`
+32768; the string literals of two new `fprintf`s crossed it. `_stklen`
+is 24576 now (8,170 bytes of near heap), `tools/dgroup-check.sh` runs
+from `link.sh` on the map it just wrote, and `tools/test-dgroup.sh` is
+the regression test. Moving the state structs off main's stack into
+`static` makes this WORSE, not better -- it moves them into the same
+DGROUP -- which is why that attempt did not revive the build and read as
+evidence against the stack theory.

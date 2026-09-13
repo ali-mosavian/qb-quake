@@ -56,9 +56,14 @@
    mouse interrupt lands, the further past the end it writes. That is
    exactly the observed failure: crashes only while the mouse is
    actually moving, never on a replay of the identical camera path
-   (which generates no interrupts), and never at a repeatable frame. */
+   (which generates no interrupts), and never at a repeatable frame.
+
+   And it has a ceiling: near data plus this must fit one 64K DGROUP
+   with room left for the near heap, or the startup aborts before main
+   and prints to a stderr DOS does not redirect. It was 32768, which
+   left -22 bytes. tools/dgroup-check.sh fails the link instead now. */
 extern unsigned _stklen;
-unsigned _stklen = 32768U;
+unsigned _stklen = 24576U;
 
 /* Stack low-water probe -- see the paint loop in main(). */
 #define PAINT_BYTE  0xA5
@@ -456,6 +461,7 @@ int main( void )
         cam_up.x = 0.0f; cam_up.y = 1.0f; cam_up.z = 0.0f;
 
         rdr.use_mips = -1;
+        rdr.no_subvis = args.no_subvis;
         rdr.lightmap = args.use_lm;   /* the starting state of the 'L'
                                           toggle (in_handle_toggles) --
                                           dp->use_lm (h_frame.c) is the
@@ -523,6 +529,7 @@ int main( void )
             float ft_min = 0.0f, ft_max = 0.0f, ft_sum = 0.0f;
             long  ft_n = 0;
             long  poly_sum = 0, tri_sum = 0, mdl_sum = 0;
+            long  pt_poly_sum = 0;   /* the same, over the profiled frames alone */
             float raw_dt, frame_dt;
             float t_frame = 0.0f, t_ph;      /* the frame's own boundary, and one phase's */
             FILE *bf;
@@ -644,7 +651,20 @@ int main( void )
                    frame's own boundary rather than raw_dt, which is the
                    PREVIOUS frame's length -- subtracting phases from that
                    would leave a residual off by a whole frame's shift. */
-                if ( frame > 3 ) { pt.n++; t_frame = sys_now( &sysclk ); }
+                if ( frame > 3 ) {
+                    /* The walk's counters are means over the PROFILED
+                       frames, so they start where pt.n does. Summed from
+                       frame 0 and divided by pt.n they read differently
+                       on two arms that rendered a different number of
+                       frames over the same ticks -- which is every A/B
+                       where one arm is faster, i.e. all of them. */
+                    if ( pt.n == 0 ) {
+                        rdr.nd_seen = rdr.lf_seen = 0;
+                        rdr.mk_faces = rdr.ord_sum = 0;
+                    }
+                    pt.n++;
+                    t_frame = sys_now( &sysclk );
+                }
 
                 host_advance( &world, &player, &cam, &rdr, &input, hud, &ls, &fight,
                                &sysclk, &clock, &pt, frame_dt, v.scr_x_res, v.scr_y_res );
@@ -742,6 +762,7 @@ int main( void )
                    session instead, so the real running total lives
                    in these longs here. */
                 poly_sum += rdr.polys;
+                if ( pt.n > 0 ) pt_poly_sum += rdr.polys;
                 tri_sum  += rdr.tris;
                 mdl_sum  += rdr.mdl_drawn;
                 scr_count_frame( hud, &rdr, sc, frame_dt );
@@ -861,6 +882,16 @@ int main( void )
                                  (long) ((pt.raster_sum/pt.n)*1000), (long) ((pt.raster_sum/pt.n)*1000000) % 1000 );
                         fprintf( bf, "pt_frame_max %ld.%03ld\n",
                                  (long) (pt.frame_max*1000), (long) (pt.frame_max*1000000) % 1000 );
+                        /* the walk alone, inside cull, and what it walked */
+                        fprintf( bf, "pt_walk_mean %ld.%03ld\n",
+                                 (long) ((pt.walk_sum/pt.n)*1000), (long) ((pt.walk_sum/pt.n)*1000000) % 1000 );
+                        fprintf( bf, "pt_nodes %ld\n", rdr.nd_seen / pt.n );
+                        fprintf( bf, "pt_leaves %ld\n", rdr.lf_seen / pt.n );
+                        fprintf( bf, "pt_marked %ld\n", rdr.mk_faces / pt.n );
+                        fprintf( bf, "pt_polys %ld\n", pt_poly_sum / pt.n );
+                        fprintf( bf, "pt_vis_leaves %d\n", rdr.vis_leaves );
+                        fprintf( bf, "pt_vis_nodes %d\n", rdr.vis_nodes );
+                        fprintf( bf, "pt_ord %ld\n", rdr.ord_sum / pt.n );
                     }
                     {   /* The portal flood's own work, so a cull cost can be
                            divided by something real instead of guessed at. */

@@ -18,6 +18,7 @@
 #include "qgl.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <mem.h>    /* _fmemcpy/_fmemset -- the per-frame walk bitmaps */
 
 #include "r_bsp.h"
 #include "r_walk.h"
@@ -170,11 +171,69 @@ void r_set_frustum( DiskPlane far *frustum, Mat4 *mtx )
  *       a packed long) with a plain far pointer -- same address, no
  *       segment arithmetic to get wrong.
  */
+/* Any leaf below nodenr in pvsb? One post-order pass, no parent
+   pointers needed, run only when pvsb is rebuilt. pvs_now is a SUBSET of
+   pvsb (r_portal_mark only ever clears bits), so a node this pass leaves
+   unmarked can hold nothing the flood would have kept either -- and the
+   leaf still gets its own pvs_now test on the way past. */
+static short r_mark_sub( World *world, Renderer *rdr, short nodenr )
+{
+    short any;
+
+    if ( nodenr & 0x8000 ) {
+        if ( !rdr->pvsb[ (short) ~nodenr ] ) return 0;
+        rdr->vis_leaves++;
+        return 1;
+    }
+    any = r_mark_sub( world, rdr, world->nodes[nodenr].child0 );
+    if ( r_mark_sub( world, rdr, world->nodes[nodenr].child1 ) ) any = 1;
+    if ( any ) {
+        rdr->vis_sub[nodenr >> 3] |= (unsigned char) ( 1 << (nodenr & 7) );
+        rdr->vis_nodes++;
+    }
+    return any;
+}
+
+static void r_mark_subtrees( World *world, Renderer *rdr, short head, short all )
+{
+    short nb = (short) ( ( world->node_count + 7 ) / 8 ), i;
+
+    for ( i = 0; i < nb; i++ ) rdr->vis_sub[i] = all ? 0xFF : 0;
+    rdr->vis_leaves = rdr->vis_nodes = 0;
+    if ( all ) {
+        rdr->vis_leaves = world->leaf_count;
+        rdr->vis_nodes  = world->node_count;
+        return;
+    }
+    r_mark_sub( world, rdr, head );
+}
+
+/*
+ * name: r_build_parents
+ * desc: A node's parent, once at load. The walk needs to mark the path
+ *       from the root down to each brush entity's insertion node, and
+ *       there is no way up the tree without this.
+ */
+void r_build_parents( World *world, Renderer *rdr )
+{
+    short i, c;
+
+    for ( i = 0; i < world->node_count; i++ ) rdr->nd_parent[i] = -1;
+    for ( i = 0; i < world->leaf_count; i++ ) rdr->lf_parent[i] = -1;
+    for ( i = 0; i < world->node_count; i++ ) {
+        c = world->nodes[i].child0;
+        if ( c & 0x8000 ) rdr->lf_parent[ (short) ~c ] = i; else rdr->nd_parent[c] = i;
+        c = world->nodes[i].child1;
+        if ( c & 0x8000 ) rdr->lf_parent[ (short) ~c ] = i; else rdr->nd_parent[c] = i;
+    }
+}
+
 void r_mark_leaves( World *world, Renderer *rdr, short nodenr, Vec3 *campos )
 {
     unsigned char far *v;
-    short leafnr, l, j, byte, bit;
+    short leafnr, l, j, byte, bit, head = 0;
 
+    head = nodenr;              /* the root of the walk, before the descent */
     while ( !(nodenr & 0x8000) ) {
         if ( r_node_side( nodenr, campos, world ) )
             nodenr = world->nodes[nodenr].child0;
@@ -195,6 +254,7 @@ void r_mark_leaves( World *world, Renderer *rdr, short nodenr, Vec3 *campos )
     if ( world->leaves[leafnr].vis_list == -1 ) {
         /* no visibility restriction: draw from everywhere */
         for ( l = 0; l < world->leaf_count; l++ ) rdr->pvsb[l] = -1;
+        r_mark_subtrees( world, rdr, head, 1 );
         return;
     }
 
@@ -220,6 +280,8 @@ void r_mark_leaves( World *world, Renderer *rdr, short nodenr, Vec3 *campos )
         }
         v++;
     }
+
+    r_mark_subtrees( world, rdr, head, 0 );
 }
 
 /*
@@ -310,6 +372,45 @@ void r_draw_world( World *world, Renderer *rdr, DiskPlane far *frustum,
     for ( i = 1; i < world->model_count; i++ )
         if ( world->brush[i].draw ) rdr->ent_left++;
 
+    /* Where the entities are, and what the walk may prune.
+     *
+     * ent_nd/ent_lf are one bit per node and leaf: the walk emits only
+     * where a bit is set instead of rescanning every submodel at every
+     * node it visits.
+     *
+     * vis_walk is the PVS's subtrees PLUS the root-to-node path of each
+     * entity. An entity is placed at the deepest node its box does not
+     * straddle and drawn with the PVS ignored -- its own leaves are not
+     * in it, a lift sitting in its solid shaft -- so that node is
+     * routinely one vis_sub leaves unmarked, and pruning it loses the
+     * entity entirely. */
+    {   short nb = (short) ( ( world->node_count + 7 ) / 8 );
+        short lb = (short) ( ( world->leaf_count + 7 ) / 8 );
+        short n;
+
+        _fmemset( rdr->ent_nd, 0, (unsigned) nb );
+        _fmemset( rdr->ent_lf, 0, (unsigned) lb );
+        if ( !rdr->no_subvis ) _fmemcpy( rdr->vis_walk, rdr->vis_sub, (unsigned) nb );
+
+        if ( rdr->ent_left && !rdr->no_ents ) {
+            for ( i = 1; i < world->model_count; i++ ) {
+                if ( !world->brush[i].draw ) continue;
+                n = world->brush[i].node;
+                if ( n == ENT_NODE_DIRTY ) continue;   /* ent_place_models has not run */
+                if ( n & 0x8000 ) {
+                    short lf = (short) ~n;
+                    rdr->ent_lf[lf >> 3] |= (unsigned char) ( 1 << (lf & 7) );
+                    n = rdr->lf_parent[lf];
+                } else {
+                    rdr->ent_nd[n >> 3] |= (unsigned char) ( 1 << (n & 7) );
+                }
+                if ( rdr->no_subvis ) continue;
+                for ( ; n >= 0; n = rdr->nd_parent[n] )
+                    rdr->vis_walk[n >> 3] |= (unsigned char) ( 1 << (n & 7) );
+            }
+        }
+    }
+
     r_recursive_world_node( world, rdr, frustum, (short) world->models[model].head_node0, campos, 0, CLIP_ALL );
 
     /* -badorder reproduces what this used to do: every brush entity
@@ -369,12 +470,18 @@ void r_load_portals( World *world, long leaf_count )
 
 void r_alloc_scratch( Renderer *rdr, short face_count, short node_count, short leaf_count )
 {
+    rdr->vis_sub   = (unsigned char far *) qglMemAlloc( ( (long) node_count + 7 ) / 8 );
+    rdr->vis_walk  = (unsigned char far *) qglMemAlloc( ( (long) node_count + 7 ) / 8 );
+    rdr->nd_parent = (short far *) qglMemAlloc( (long) node_count * sizeof(short) );
+    rdr->lf_parent = (short far *) qglMemAlloc( (long) leaf_count * sizeof(short) );
+    rdr->ent_nd    = (unsigned char far *) qglMemAlloc( ( (long) node_count + 7 ) / 8 );
+    rdr->ent_lf    = (unsigned char far *) qglMemAlloc( ( (long) leaf_count + 7 ) / 8 );
     rdr->pflag   = (short far *) qglMemAlloc( (long) face_count * sizeof(short) );
     rdr->ord     = (short far *) qglMemAlloc( (long) node_count * sizeof(short) );
     rdr->pvsb    = (short far *) qglMemAlloc( (long) leaf_count * sizeof(short) );
     rdr->pvs_now = (short far *) qglMemAlloc( (long) leaf_count * sizeof(short) );
 
-    if ( !rdr->pflag || !rdr->ord || !rdr->pvsb || !rdr->pvs_now ) {
+    if ( !rdr->vis_sub || !rdr->vis_walk || !rdr->nd_parent || !rdr->lf_parent || !rdr->ent_nd || !rdr->ent_lf || !rdr->pflag || !rdr->ord || !rdr->pvsb || !rdr->pvs_now ) {
         fprintf( stderr, "r_alloc_scratch: out of memory\n" );
         exit( 1 );
     }

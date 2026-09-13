@@ -27,6 +27,7 @@
 #   cport/tools/link.sh build/cport "qmain vid d_poly"
 set -euo pipefail
 
+HERE="$(cd "$(dirname "$0")" && pwd)"
 OUT="${1:?usage: link.sh <build-dir> <obj-names>}"
 OBJS="${2:?usage: link.sh <build-dir> <obj-names>}"
 TOOLCHAINS="${TOOLCHAINS:-$HOME/work/other/d32x/toolchains}"
@@ -69,3 +70,9 @@ if grep -qiE 'undefined reference|Error!' "$OUT/lk.txt"; then
     grep -iE 'undefined reference|Error!' "$OUT/lk.txt" | head -20 >&2
     exit 1
 fi
+
+# The one thing that links clean and cannot start: near data plus the
+# stack past 64K. See dgroup-check.sh.
+STKLEN=$(sed -n 's/^unsigned _stklen = \([0-9]*\)U*;.*/\1/p' "$HERE/../src/qmain.c")
+[[ -n "$STKLEN" ]] || { echo "link.sh: no _stklen in src/qmain.c" >&2; exit 1; }
+"$HERE/dgroup-check.sh" "$OUT/QCPORT.MAP" "$STKLEN" || exit 1

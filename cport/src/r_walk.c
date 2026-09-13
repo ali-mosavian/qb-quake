@@ -28,6 +28,7 @@ void r_recursive_world_node( World *world, Renderer *rdr, DiskPlane far *frustum
     short side, i, frst, last, leafnr;
 
     if ( nodenr & 0x8000 ) {
+        rdr->lf_seen++;
         leafnr = ~nodenr;
         /* pvs_now, NOT pvsb. pvsb is the raw PVS for the camera's leaf,
            rebuilt only when the leaf changes; pvs_now is that set after
@@ -45,8 +46,9 @@ void r_recursive_world_node( World *world, Renderer *rdr, DiskPlane far *frustum
             last = frst + world->leaves[leafnr].lface_num;
             for ( i = frst; i < last; i++ )
                 rdr->pflag[ world->lfc[i] ] = rdr->frame_stamp;
+            rdr->mk_faces += (long) ( last - frst );
 
-            if ( rdr->ent_left )
+            if ( rdr->ent_left && ( rdr->ent_lf[leafnr >> 3] & ( 1 << (leafnr & 7) ) ) )
                 r_emit_entities( world, rdr, frustum, nodenr, campos, ign );
 
             rdr->drw_leafs++;
@@ -56,6 +58,16 @@ void r_recursive_world_node( World *world, Renderer *rdr, DiskPlane far *frustum
         return;
     }
 
+    /* Quake's node->visframe test: no leaf below this node is in the PVS
+       and no brush entity is placed under it, so nothing here marks a
+       face or emits anything. Before the box test, which is six
+       int-to-float unpacks and up to twelve multiplies -- this is one
+       bit. ign is a brush submodel's own walk, whose nodes vis_walk
+       never covers. */
+    if ( !ign && !rdr->no_subvis &&
+         !( rdr->vis_walk[nodenr >> 3] & ( 1 << (nodenr & 7) ) ) ) return;
+
+    rdr->nd_seen++;
     mask = r_cull_box( &world->nodes[nodenr].bound, frustum, mask );
     if ( mask < 0 ) return;
 
@@ -63,13 +75,13 @@ void r_recursive_world_node( World *world, Renderer *rdr, DiskPlane far *frustum
 
     if ( side ) {
         r_recursive_world_node( world, rdr, frustum, world->nodes[nodenr].child1, campos, ign, mask );
-        if ( rdr->ent_left )
+        if ( rdr->ent_left && ( rdr->ent_nd[nodenr >> 3] & ( 1 << (nodenr & 7) ) ) )
             r_emit_entities( world, rdr, frustum, nodenr, campos, ign );
         rdr->ord[ rdr->ord_count++ ] = nodenr;
         r_recursive_world_node( world, rdr, frustum, world->nodes[nodenr].child0, campos, ign, mask );
     } else {
         r_recursive_world_node( world, rdr, frustum, world->nodes[nodenr].child0, campos, ign, mask );
-        if ( rdr->ent_left )
+        if ( rdr->ent_left && ( rdr->ent_nd[nodenr >> 3] & ( 1 << (nodenr & 7) ) ) )
             r_emit_entities( world, rdr, frustum, nodenr, campos, ign );
         rdr->ord[ rdr->ord_count++ ] = nodenr;
         r_recursive_world_node( world, rdr, frustum, world->nodes[nodenr].child1, campos, ign, mask );

@@ -65,6 +65,7 @@ void sys_parse_args( RunArgs *args )
         printf( "Usage: qcport mapname.qmp [-ticks N]\n" );
         printf( "  -ticks N      run N simulation ticks, then write bench.bmp/bench.txt, exit\n" );
         printf( "  -lm           composite lightmaps via the surface cache\n" );
+        printf( "  -nosubvis     walk subtrees with no visible leaf, as before the skip\n" );
         exit( 0 );
     }
 
@@ -87,6 +88,7 @@ void sys_parse_args( RunArgs *args )
         else if ( stricmp( argv[i], "-noz" )     == 0 ) args->no_z = -1;
         else if ( stricmp( argv[i], "-nocull" )  == 0 ) args->no_cull = -1;
         else if ( stricmp( argv[i], "-noportal" )== 0 ) args->no_portal = -1;
+        else if ( stricmp( argv[i], "-nosubvis" )== 0 ) args->no_subvis = -1;
         else if ( stricmp( argv[i], "-comp" )    == 0 ) args->comp = -1;
         else if ( stricmp( argv[i], "-ptwire" )  == 0 ) args->ptwire = -1;
         else if ( stricmp( argv[i], "-nostats" ) == 0 ) args->no_stats = -1;

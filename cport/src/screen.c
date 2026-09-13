@@ -324,10 +324,16 @@ void scr_draw_hud( World *world, Renderer *rdr, Camera *cam, Player *player,
     qglDrFill( h_dst_dc, 0, 0, w, 9, hud->hc_bg );
     draw_string( hud, h_dst_dc, 4, 1, buf, hud->hc_text );
 
-    /* Frame rate, top right, in the same always-drawn bar -- worth
-       having whether or not the stats panel is up. */
-    sprintf( buf, "fps: [%d]", hud->fps );
-    draw_string_r( hud, h_dst_dc, (short)(w-4), 1, buf, hud->hc_text );
+    /* Frame rate, top right of the same bar -- but ONLY with the stats
+       up. It is the one thing in a -nostats frame that depends on how
+       fast the build is, and BENCH.BMP carried it: two arms of an A/B
+       could never come out identical, because the faster one printed
+       different digits here. Five pixels of "fps: [31]" against "[40]"
+       read as a rendering difference for a whole session. */
+    if ( hud->stats ) {
+        sprintf( buf, "fps: [%d]", hud->fps );
+        draw_string_r( hud, h_dst_dc, (short)(w-4), 1, buf, hud->hc_text );
+    }
 }
 
 /* Quake's centerprint, and it draws under -nostats too: a door or a

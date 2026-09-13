@@ -45,6 +45,30 @@ typedef struct {
        once at map-load time (to face_count/node_count/leaf_count),
        not reallocated per frame, but not raw map data either, so they
        live here rather than in World. */
+    short no_subvis;      /* -nosubvis: the skip below off, for the A/B */
+    unsigned char far *vis_sub;   /* a bit a node: is any leaf below it in
+                            pvsb? Rebuilt with pvsb -- only when the
+                            camera changes leaf -- which is Quake's
+                            node->visframe test. */
+    unsigned char far *vis_walk;  /* what the walk actually reads: vis_sub
+                            plus the root-to-node path of every brush
+                            entity due to be emitted. An entity's own
+                            leaves are NOT in the world PVS (a lift sits
+                            in its solid shaft), so pruning by vis_sub
+                            alone loses the node it is placed at and the
+                            entity never draws. Rebuilt every frame. */
+    short far *nd_parent;         /* a node's parent, -1 at the root; the
+                            only way to walk up to mark that path */
+    short far *lf_parent;         /* and a leaf's, because ent_find_node
+                            stops at a LEAF whenever the box straddles no
+                            plane all the way down -- r_emit_entities is
+                            called from the leaf branch too */
+    unsigned char far *ent_nd;    /* a bit where some brush entity is placed, */
+    unsigned char far *ent_lf;    /* nodes and leaves. r_emit_entities used to
+                            rescan every submodel at every visited node --
+                            nodes x models compares a frame, and on e1m1
+                            that was most of the cull. Rebuilt with
+                            vis_walk. */
     short far *pflag;     /* per-face flag, stamped with frame_stamp
                               when the walk marks a face visible */
     short far *ord;       /* draw order: internal node indices, far to
@@ -60,6 +84,12 @@ typedef struct {
     long  ord_count;      /* entries written to ord */
     short drw_leafs;      /* leaves the walk kept this frame, and */
     short cul_leafs;      /* threw away; both on the stats panel */
+    short vis_leaves;     /* leaves with pvsb set, and nodes the mark set: */
+    short vis_nodes;      /* the two numbers the subtree skip turns on */
+    long  mk_faces;       /* pflag writes: faces some visible leaf marked */
+    long  ord_sum;        /* nodes the draw order carried */
+    long  nd_seen;        /* nodes and leaves the walk reached, summed over */
+    long  lf_seen;        /* the run: what a cull cost divides by */
     short ent_left;       /* brush entities the walk has yet to emit,
                               counted down so the per-node test costs a
                               compare, not a call, once they're placed */
@@ -124,6 +154,7 @@ typedef struct {
 typedef struct {
     float tick_sum, tick_max;
     float cull_sum, cull_max;
+    float walk_sum;               /* r_draw_world alone, inside cull */
     float draw_sum, draw_max;
     float alias_sum, alias_max;   /* the models, items, spikes and the gun */
     float hud_sum,  hud_max;

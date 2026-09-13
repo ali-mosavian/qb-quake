@@ -228,8 +228,12 @@ void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
     qglM4Conc( &mtx_fin, &mtx_mdl, mtx_prj );
 
     /* Walk BSP tree */
-    r_draw_world( world, rdr, frustum, 0, &cam->pos, &mtx_fin,
-                   xresh, yresh, z_near );
+    {   float tw = sys_now( sysclk );
+        r_draw_world( world, rdr, frustum, 0, &cam->pos, &mtx_fin,
+                       xresh, yresh, z_near );
+        if ( pt->n > 0 ) pt->walk_sum += sys_now( sysclk ) - tw;
+        rdr->ord_sum += rdr->ord_count;
+    }
 
     /* Cull ends here -- both exits from this function after this
        point (-nodraw, and the normal one at the bottom) pass through

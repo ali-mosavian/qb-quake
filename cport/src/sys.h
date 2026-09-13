@@ -53,6 +53,10 @@ typedef struct {
     short no_cull;           /* -nocull */
     short no_z;               /* -noz */
     short no_portal;          /* -noportal */
+    short no_subvis;          /* -nosubvis: walk every node the frustum
+                                 keeps, as before the subtree skip -- the
+                                 A/B that proves the skip changes no
+                                 pixel, from one binary */
     short no_ents;            /* -noents */
     short no_items;           /* -noitems: the reference frame for the pickups */
     short no_mdl;             /* -nomdl: and for the monsters */
