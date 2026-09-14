@@ -9,8 +9,8 @@
 ;; smeared down the face with a seam at its own height -- plausible
 ;; enough to be read as a mip or a lightmap fault.
 ;;
-;; Rigged for an exact answer, the same way t19sb is: every luxel is 245,
-;; so t = 150, the span is flat and the colormap row is 0; the colormap
+;; Rigged for an exact answer: every luxel is 255, so t = 64 and no
+;; dither offset reaches row 1 -- the colormap row is 0; the colormap
 ;; is the identity; du = dv = 1.0. The destination is twice the cell on
 ;; both axes, so every pixel of it is a wrap, and the only right answer
 ;; is
@@ -33,7 +33,7 @@ DST_W           equ     TEX_W * 2
 DST_H           equ     TEX_H * 2
 LM_W            equ     2
 LM_H            equ     2
-LEVEL           equ     245             ;; -> t 150, so row 0 and a flat span
+LEVEL           equ     255             ;; -> t 64, row 0 under any dither
 
 ;; mirrors sb.asm's own SBPARM, which mirrors bspfile.bi's SurfBuild
 SBPARM          struc

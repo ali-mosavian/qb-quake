@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from dataclasses import field
 
 import mksnd
+import texquant
 
 # every output lands here and becomes one assets.zip member
 OUT: dict[str, bytes] = {}
@@ -288,57 +289,50 @@ def load_palette(raw):
         raise SystemExit(f"palette is {len(raw)} bytes, expected >= 768")
     return [tuple(raw[i*3:i*3+3]) for i in range(256)]
 
-def inverse_palette(pal, bits=5):
-    """RGB -> nearest index, as a (2^bits)^3 cube.
 
-    This is the lookup texLoadAll does by linear scan per texel. Built once
-    here, it costs 32768*256 distance tests total instead of 256 per texel."""
-    n    = 1 << bits
-    step = 256 >> bits
-    cube = bytearray(n*n*n)
-    for r in range(n):
-        for g in range(n):
-            for b in range(n):
-                rr, gg, bb = r*step + step//2, g*step + step//2, b*step + step//2
-                best, bd = 0, 1 << 30
-                for i, (pr, pg, pb) in enumerate(pal):
-                    dr, dg, db = rr-pr, gg-pg, bb-pb
-                    dist = dr*dr + dg*dg + db*db
-                    if dist < bd:
-                        best, bd = i, dist
-                        if dist == 0:
-                            break
-                cube[(r << (2*bits)) | (g << bits) | b] = best
-    return cube, bits
+def srgb_linear(s: float) -> float:
+    s = s / 255
+    return s / 12.92 if s <= 0.04045 else ((s + 0.055) / 1.055) ** 2.4
 
-def resample(src, sw, sh, dw, dh, pal, cube, bits):
-    """Bilinear in RGB, then back to an index through the cube.
 
-    Matches texLoadAll's filter: sample at (x*sw/dw, y*sh/dh), blend the four
-    neighbours with wrap, which is what the `mod` in the original does."""
-    out   = bytearray(dw*dh)
-    shift = 8 - bits
-    dx, dy = sw/dw, sh/dh
-    for y in range(dh):
-        cy = y*dy
-        iy = int(cy); t = cy - iy
-        for x in range(dw):
-            cx = x*dx
-            ix = int(cx); s = cx - ix
-            c1 = pal[src[(iy      % sh)*sw + (ix      % sw)]]
-            c2 = pal[src[((iy+1)  % sh)*sw + (ix      % sw)]]
-            c3 = pal[src[(iy      % sh)*sw + ((ix+1)  % sw)]]
-            c4 = pal[src[((iy+1)  % sh)*sw + ((ix+1)  % sw)]]
-            r = c1[0]*(1-s)*(1-t) + c2[0]*(1-s)*t + c3[0]*(1-t)*s + c4[0]*s*t
-            g = c1[1]*(1-s)*(1-t) + c2[1]*(1-s)*t + c3[1]*(1-t)*s + c4[1]*s*t
-            b = c1[2]*(1-s)*(1-t) + c2[2]*(1-s)*t + c3[2]*(1-t)*s + c4[2]*s*t
-            r = 255 if r > 255 else int(r)
-            g = 255 if g > 255 else int(g)
-            b = 255 if b > 255 else int(b)
-            out[y*dw + x] = cube[((r >> shift) << (2*bits)) |
-                                 ((g >> shift) <<    bits ) |
-                                  (b >> shift)]
-    return out
+def oklab(rgb: tuple[float, float, float]) -> tuple[float, float, float]:
+    r, g, b = (srgb_linear(c) for c in rgb)
+    l = math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+    m = math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+    s = math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+    return (0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+            1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+            0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s)
+
+
+def oklch_colormap(palette: bytes) -> bytes:
+    """64 rows of 256: row r shades index i by 2 - 2r/63 in OKLab lightness,
+    unclipped, chroma scaled with it and hue kept, matched to i's own
+    ramp of 16 or black by dL^2 + dC^2 + 4 dH^2. Fullbrights stay. The
+    shade is of the colour the DAC shows, 6 bits a channel."""
+    base = [tuple((palette[i * 3 + c] >> 2) * 255 / 63 for c in range(3)) for i in range(256)]
+    ok = [oklab(c) for c in base]
+    table = bytearray(64 * 256)
+    for r in range(64):
+        scale = 2 - 2 * r / 63
+        for i in range(256):
+            if i >= 224:
+                table[r * 256 + i] = i
+                continue
+            L = oklab(tuple(c * scale for c in base[i]))[0]
+            ratio = L / max(ok[i][0], 1e-9)
+            ta, tb = ok[i][1] * ratio, ok[i][2] * ratio
+            tc = math.hypot(ta, tb)
+            best, low = 0, math.inf
+            for j in [0] + [j for j in range(i // 16 * 16, i // 16 * 16 + 16) if j != 0]:
+                dl = L - ok[j][0]
+                dc = tc - math.hypot(ok[j][1], ok[j][2])
+                dh2 = max((ta - ok[j][1]) ** 2 + (tb - ok[j][2]) ** 2 - dc * dc, 0)
+                if (d := dl * dl + dc * dc + 4 * dh2) < low:
+                    best, low = j, d
+            table[r * 256 + i] = best
+    return bytes(table)
+
 
 def write_bmp8(path, w, h, pixels, pal):
     OUT[os.path.basename(path)] = bmp8_bytes(w, h, pixels, pal)
@@ -1320,21 +1314,14 @@ def main():
     if len(cmap) < 256:
         raise SystemExit(f"colormap is {len(cmap)} bytes, expected >= 256")
     shade0 = cmap[:256]
-    # The whole table, not just its first row, for the surface builder:
-    # uglSetLUT wants [shade][index] with 64 shades, which is exactly what
-    # colormap.lmp already is. Raw rather than BLOAD: it is read by
-    # fileReadH into a paragraph-aligned memAlloc block, both because
-    # uglSetLUT requires an offset of zero and because that block lands in
-    # upper memory rather than in the far heap.
-    if len(cmap) < 64*256:
-        raise SystemExit(f"colormap is {len(cmap)} bytes, need >= {64*256}")
-    OUT['colmap.bin'] = bytes(cmap[:64*256])
+    # The surface builder's table is 64 shades of 256, as colormap.lmp is,
+    # but shaded in OKLCH along each ramp rather than id's. Row 0 above
+    # stays id's: it is the unlit atlas, not a shade.
+    OUT['colmap.bin'] = oklch_colormap(pack_read(packpath, 'color/palette.lmp'))
     # qgl links a zip driver and no PACK driver, so the font travels in
     # assets.zip; the BASIC build reads it straight out of base.dat.
     OUT['font.fnt'] = pack_read(packpath, 'font/4x6.fnt')
     print(f"  colmap.bin    {64*256:7,} bytes  (64 shades x 256)")
-    print("building inverse palette cube ...", flush=True)
-    cube, bits = inverse_palette(pal)
 
     lumps   = read_lumps(d)
     toff, _ = lumps[2]
@@ -1443,16 +1430,15 @@ def main():
             # raw: indices, for the surface builder, which shades through the
             # full colormap itself. shaded: row 0 applied, for the unlit path.
             lit = bytes(shade0[b] for b in src)
-            # A cell at the texture's own size is a COPY. resample would
-            # sample every texel at its own centre and still round-trip it
-            # RGB -> cube -> index, which moves indices the atlas is meant
-            # to carry exactly.
+            # A cell at the texture's own size is a COPY: a round trip through
+            # RGB and the palette would move indices the atlas is meant to
+            # carry exactly. Only a halved or rounded-down cell is resampled.
             if (mw, mh) == (cw, ch):
                 raw_at[o:o+cw*ch] = src
                 shd_at[o:o+cw*ch] = lit
             else:
-                raw_at[o:o+cw*ch] = resample(src, mw, mh, cw, ch, pal, cube, bits)
-                shd_at[o:o+cw*ch] = resample(lit, mw, mh, cw, ch, pal, cube, bits)
+                raw_at[o:o+cw*ch] = texquant.resample_indices(src, mw, mh, cw, ch, pal)
+                shd_at[o:o+cw*ch] = texquant.resample_indices(lit, mw, mh, cw, ch, pal)
 
     exact = sum(1 for k, cl in enumerate(cells)
                 if cl is not None and

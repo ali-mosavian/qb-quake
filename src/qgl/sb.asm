@@ -112,8 +112,19 @@ sb_vmsk         dw      ?               ;; v wrap mask, cell height - 1 --
 SBPARM          ends
 
 
+;; Ordered dither on t, in the surface's own x,y so a cached surface is
+;; the same picture from any camera: raw*16 + 8 - 128, about half a
+;; colormap row either way.
+.data
+sb$bayer        dw        -120,    8,  -88,   40
+                dw          72,  -56,  104,  -24
+                dw         -72,   56, -104,   24
+                dw         120,   -8,   88,  -40
+
 .data?
 sb$lgrid        dw      LM_MAXCELLS dup (?)     ;; t per luxel
+sb$drow         dw      4 dup (?)               ;; this row's four, by
+                                                ;; destination offset and 3
 sb$savebp       dw      ?
 
 sb$v            dd      ?
@@ -383,13 +394,10 @@ qglSbBuild      proc    public uses bx cx dx di si es ds fs gs,\
                 ;;
                 mov     ax, ss:sb$dufrc
                 mov     W cs:sb_pdufr+2, ax
-                mov     W cs:sb_fdufr+2, ax
                 mov     ax, ss:sb$duint
                 mov     W cs:sb_pduin+2, ax
-                mov     W cs:sb_fduin+2, ax
                 mov     ax, ss:sb$msk
                 mov     W cs:sb_pmsk+2, ax
-                mov     W cs:sb_fmsk+2, ax
                 movzx   eax, W ss:sb$cmofs
                 mov     D cs:sb_pcmap+4, eax
 
@@ -413,7 +421,6 @@ qglSbBuild      proc    public uses bx cx dx di si es ds fs gs,\
                 add     ax, ss:sb$texbase
                 mov     ss:sb$texrow, ax
                 mov     W cs:sb_ptrow+2, ax
-                mov     W cs:sb_ftrow, ax
 
                 mov     ax, ss:sb$yy
                 mov     cx, ss:sb$shift
@@ -450,6 +457,25 @@ qglSbBuild      proc    public uses bx cx dx di si es ds fs gs,\
                 add     ax, ss:sb$dstbase
                 mov     ss:sb$rowofs, ax
                 mov     di, ax
+
+                ;; the loop knows a pixel by its destination offset, di+bp,
+                ;; which is rowofs + x: rotate the row's four by rowofs
+                mov     ax, ss:sb$yy
+                and     ax, 3
+                shl     ax, 2
+                xor     si, si
+@@drow:         mov     bx, si
+                sub     bx, ss:sb$rowofs
+                and     bx, 3
+                add     bx, ax
+                shl     bx, 1
+                mov     dx, ss:sb$bayer[bx]
+                mov     bx, si
+                shl     bx, 1
+                mov     ss:sb$drow[bx], dx
+                inc     si
+                cmp     si, 4
+                jb      @@drow
 
                 mov     ax, ss:sb$u0frc
                 mov     cx, ax
@@ -538,28 +564,12 @@ qglSbBuild      proc    public uses bx cx dx di si es ds fs gs,\
                 pop     bx
                 SB_TLERP sb$t00, sb$t01, sb$tleft
 
-@@flatspan:     mov     ax, ss:sb$tleft
-                and     ax, 0FF00h
-                add     ax, ss:sb$cmofs
-                mov     dx, ax
-
-                mov     si, ss:sb$texrow
-                mov     bp, ss:sb$cnt
-                add     di, bp
-                neg     bp
-
-@@flat:         movzx   eax, B ds:[bx+__SIMM16__]
-sb_ftrow        equ     $ - 2
-                add     ax, dx
-                mov     al, gs:[eax]
-                mov     es:[di+bp], al          ;; es: the destination
-sb_fdufr:       add     cx, __SIMM16__
-sb_fduin:       adc     bx, __SIMM16__
-sb_fmsk:        and     bx, __SIMM16__
-                inc     bp
-                jnz     @@flat
-
-                jmp     @@nextspan
+                ;; a flat span dithers per pixel too, so it is a run
+                ;; with no step
+@@flatspan:     mov     ss:sb$tstep, 0
+                movzx   eax, W ss:sb$tleft
+                shl     eax, 16
+                mov     ss:sb$tacc, eax
 
 @@runspan:      mov     si, ss:sb$texrow
                 mov     bp, ss:sb$cnt
@@ -570,7 +580,15 @@ sb_fmsk:        and     bx, __SIMM16__
 
 @@px:           mov     eax, edx
                 shr     eax, 16
-                and     ax, 0FF00h
+                lea     si, [bp+di]
+                and     esi, 3
+                add     ax, ss:sb$drow[esi*2]
+                jns     @F                      ;; under 64 is row 0
+                xor     ax, ax
+@@:             cmp     ax, 16384               ;; over row 63 is row 63
+                jb      @F
+                mov     ax, 16128
+@@:             and     ax, 0FF00h
 sb_ptrow:       or      al, B ds:[bx+__SIMM16__]
 sb_pcmap:       mov     al, gs:[eax+__SIMM32__]
                 mov     es:[di+bp], al          ;; es: the destination

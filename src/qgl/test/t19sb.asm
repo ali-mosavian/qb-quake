@@ -26,16 +26,20 @@
 ;; THE CASE IS RIGGED TO HAVE AN EXACT ANSWER, because "it returned" is
 ;; not evidence and a plausible-looking surface is worth nothing:
 ;;
-;;   - every luxel is 245, so SB_LEVEL2T gives t = 16320 - 66*245 = 150,
-;;     which is under 256. tleft == tright, so the span is FLAT and
-;;     `tleft and 0FF00h` is zero -- the colormap row is row 0.
-;;   - the colormap is the IDENTITY, so a texel maps to itself.
+;;   - every luxel is one level, so t is one number and the span is flat.
+;;   - colormap row r maps texel i to (i + r) and 255, so each byte says
+;;     both the texel and the row it was shaded through.
 ;;   - du = dv = 1.0 in 16.16 and msk = 15, so texel (x,y) of a 16-wide
 ;;     texture lands at (x,y) of the surface.
 ;;
-;; The surface must therefore come back EQUAL TO THE TEXTURE, byte for
-;; byte. A wrong segment, a wrong row, a skipped write or a stale pointer
-;; all break that equality; none of them can produce it by accident.
+;; The row at (x,y) is t ordered-dithered by the surface's own x,y:
+;; min(max(t + raw(y and 3, x and 3)*16 - 120, 64) >> 8, 63), computed
+;; here from this file's own copy of the matrix. Three levels: 4, t
+;; 16056, straddles rows 62 and 63 where no entry and its x,y transpose
+;; fall on one side; 255, t 64, dithers under zero and must
+;; read row 0; 0, t 16320, dithers past 16383 and must read row 63 --
+;; row 64 is past the table. A wrong segment, row, offset, skipped write
+;; or stale pointer breaks the equality; none produces it by accident.
 ;;
 ;; The DESTINATION IS EMS on purpose: a conventional one never calls
 ;; qglGemMap, and fault 4 lives there and nowhere else.
@@ -52,7 +56,6 @@ TEX_W           equ     16
 TEX_H           equ     16
 LM_W            equ     2
 LM_H            equ     2
-LEVEL           equ     245             ;; -> t 150, so row 0 and a flat span
 
 ;; mirrors sb.asm's own SBPARM, which mirrors bspfile.bi's SurfBuild
 SBPARM          struc
@@ -76,7 +79,11 @@ SBPARM          ends
 n_tex_new       db      'tex surface made       $'
 n_dst_new       db      'ems dst surface made   $'
 n_built         db      'qglSbBuild returned ok $'
-n_bytes         db      'surface equals texture $'
+n_mix           db      'level 4 rows 62 and 63 $'
+n_low           db      'level 255 row 0        $'
+n_high          db      'level 0 row 63         $'
+
+raw             db      0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5
 
 tex             dd      0
 dst             dd      0
@@ -85,17 +92,16 @@ mism            dw      0
 
 .data?
 parm            SBPARM  <>
-cmap            db      256 dup (?)     ;; identity, only row 0 is reached
+cmap            db      64*256 dup (?)
 lux             db      LM_W*LM_H dup (?)
 
 .code
 
 ;;::::::::::::::
-;; Every texel of dst against the texture byte that must have produced
-;; it. Counting rows that merely CHANGED would pass a builder that wrote
-;; one byte a row, so this compares every pixel.
+;; Every texel of dst against the byte that must have produced it: the
+;; texture's y*TEX_W + x plus the dithered row of t.
 ;;::::::::::::::
-sb_verify       proc    near private uses bx cx dx si di es
+sb_verify       proc    near private uses bx cx dx si di es, tval:word
 
                 mov     mism, 0
                 xor     si, si                  ;; y
@@ -106,16 +112,32 @@ sb_verify       proc    near private uses bx cx dx si di es
                 jae     @@next
 
                 invoke  qglSfPget, dst, di, si
-                mov     bx, ax
+                and     ax, 0FFh
+                push    ax
 
-                ;; what the texture holds there: the walking pattern is
-                ;; y*TEX_W + x, so the answer is computable, not looked up
-                mov     ax, si
-                mov     cx, TEX_W
-                mul     cx
+                mov     bx, si
+                and     bx, 3
+                shl     bx, 2
+                mov     ax, di
+                and     ax, 3
+                add     bx, ax
+                movzx   ax, byte ptr raw[bx]
+                shl     ax, 4
+                sub     ax, 120
+                add     ax, tval
+                cmp     ax, 64
+                jge     @F
+                mov     ax, 64
+@@:             shr     ax, 8
+                cmp     ax, 63
+                jbe     @F
+                mov     ax, 63
+@@:             imul    cx, si, TEX_W
+                add     ax, cx
                 add     ax, di
                 and     ax, 0FFh
 
+                pop     bx
                 cmp     ax, bx
                 je      @F
                 inc     mism
@@ -128,6 +150,21 @@ sb_verify       proc    near private uses bx cx dx si di es
 @@out:          mov     ax, mism
                 ret
 sb_verify       endp
+
+;;::::::::::::::
+;; every luxel at one level, then one build
+;;::::::::::::::
+sb_case         proc    near private uses bx cx, level:word
+
+                mov     cx, LM_W*LM_H
+                xor     bx, bx
+                mov     ax, level
+@@lx:           mov     byte ptr lux[bx], al
+                inc     bx
+                loop    @@lx
+                invoke  qglSbBuild, dst, tex, parmp
+                ret
+sb_case         endp
 
 
 tmain           proc    far public uses bx cx dx si di es
@@ -173,19 +210,14 @@ tmain           proc    far public uses bx cx dx si di es
                 NZ      bx
                 CHK     n_dst_new, ax, 1
 
-                ;; identity colormap, flat luxels
-                mov     cx, 256
+                ;; row r maps i to i + r
+                mov     cx, 64*256
                 xor     bx, bx
 @@cm:           mov     al, bl
+                add     al, bh
                 mov     cmap[bx], al
                 inc     bx
                 loop    @@cm
-
-                mov     cx, LM_W*LM_H
-                xor     bx, bx
-@@lx:           mov     byte ptr lux[bx], LEVEL
-                inc     bx
-                loop    @@lx
 
                 ;;
                 ;; one texel per surface pixel, no wrap inside the cell
@@ -216,11 +248,21 @@ tmain           proc    far public uses bx cx dx si di es
 
                 mov     word ptr parmp, offset parm
                 mov     word ptr parmp+2, ds
-                invoke  qglSbBuild, dst, tex, parmp
-                CHK     n_built, ax, 1
 
-                invoke  sb_verify
-                CHK     n_bytes, ax, 0
+                invoke  sb_case, 4
+                CHK     n_built, ax, 1
+                invoke  sb_verify, 16056
+                CHK     n_mix, ax, 0
+
+                invoke  sb_case, 255
+                CHK     n_built, ax, 1
+                invoke  sb_verify, 64
+                CHK     n_low, ax, 0
+
+                invoke  sb_case, 0
+                CHK     n_built, ax, 1
+                invoke  sb_verify, 16320
+                CHK     n_high, ax, 0
 
                 invoke  qglSfFree, dst
                 invoke  qglSfFree, tex

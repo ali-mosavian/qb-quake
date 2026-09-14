@@ -22,6 +22,9 @@ import struct, sys, os
 ASSETS = os.path.join(os.path.dirname(__file__), '..', 'data', 'assets')
 BSP    = os.path.join(os.path.dirname(__file__), '..', 'data', 'dm3ish.bsp')
 LM_ATLAS_W = 8192       # mkassets.py's, the luxel atlas row
+# sb.asm's sb$bayer: t's ordered dither by the surface's own x,y
+BAYER = [[r * 16 + 8 - 128 for r in row] for row in
+         ((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5))]
 
 
 def asset_bytes(path):
@@ -187,6 +190,7 @@ def build(face, mip):
             else:
                 tstep = (tright - tleft) * (65536 // stp)
                 t = (tleft*65536 + kk*tstep) >> 16
+            t += BAYER[y & 3][x & 3]
             if t < 64: t = 64
             row = min(t // 256, 63)
 
