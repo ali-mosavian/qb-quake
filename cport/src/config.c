@@ -35,8 +35,8 @@ typedef struct {
 #define F_CMMDE  0x0200L
 #define F_FOV    0x0400L
 /* display.pages, display.usepaging and sound.enabled are gone from
-   stuff.ini: paging was mgl's and needed mgl to own the mode, and there
-   is no sound here. A key this list demands and the file no longer
+   stuff.ini: paging was mgl's and needed mgl to own the mode, and the
+   sound is -nosound's to turn off. A key this list demands and the file no longer
    carries is "Incorrect ini file..." and nothing else -- the message
    names neither the key nor the line. */
 #define ALL_REQUIRED (F_XRES|F_YRES|F_ZN|F_ZF|F_CMSCR|F_CLEAR|F_CMINP|F_CMMDE|F_FOV)

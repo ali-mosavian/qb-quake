@@ -32,6 +32,8 @@
 #define PL_ARMOR2_TYPE  0.6f
 #define PL_BONUS_SHIFT  50.0f /* the pickup flash, fading 100/s */
 #define PL_PAIN_GAP     0.5f  /* PainSound's own spacing */
+#define PL_AIR          12.0f /* WaterMove: air_finished's twelve seconds */
+#define PL_AIR_GASP     3.0f  /* under longer than this gasps on surfacing */
 
 /* The guns, q_pl.bi's own numbers: the shotgun's six pellets of four
    at 0.04, the super shotgun's fourteen at 0.14 by 0.08 for two
@@ -85,6 +87,9 @@ typedef struct {
     short   gib;          /* a zombie's: bites where it lands, no blast */
     short   rocket;       /* straight, the blast where it stops */
     short   toss;         /* a hostile one under gravity: the lava ball */
+    short   wiz;          /* a wizard's: wizard/hit on a wall, not a tink */
+    short   water;        /* SV_CheckWaterTransition's: 1 in a liquid, -1
+                             out, 0 before its first look */
 } Spike;
 
 /* Fight.state: what the tick and the overlay do. */
@@ -130,6 +135,15 @@ typedef struct {
     float bonus_pct;          /* the pickup flash, 50, fading 100/s */
     float pain_at;            /* PainSound: no new grunt before this */
     float pent_at;            /* protect3, while the pentagram holds */
+    float air_used;           /* WaterMove: seconds under since the last
+                                 breath -- zero is a full one */
+    float dmg_at;             /* dmgtime: slime or lava bites again then */
+    float swim_at;            /* swim_flag: the next stroke's splash */
+    float quad_warn, suit_warn, pent_warn;   /* the *_until each "wearing
+                                 off" was said for */
+    float quad_snd_at;        /* super_sound: damage3 a second apart */
+    short drown_dmg;          /* self.dmg, 0 before the first bite */
+    short in_water;           /* FL_INWATER */
     float show_hostile;       /* W_Attack: time + 1, monsters notice a shot
                                  from behind until then -- nothing sets it
                                  until the player has a weapon */

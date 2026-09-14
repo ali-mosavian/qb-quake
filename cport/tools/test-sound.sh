@@ -5,8 +5,8 @@
 #
 #   1. snd_init has to reach the mixer: qglDspInit, snd.bsc into EMS,
 #      sndtab.raw's count agreeing with snd.h's SND_*. Only
-#      snd_mix_setup sets loops, so "loops=5" is the whole chain --
-#      e1m1's four comp_hum and its drone.
+#      snd_mix_setup sets loops, so "loops=13" is the whole chain --
+#      e1m1's four comp_hum, its drone and its eight fluoros.
 #   2. under=0. The mixer paints from where it stopped to a quarter
 #      second past the DMA EVERY frame, playing or not: the ring is a
 #      loop and what is not repainted is played again. A mixer that

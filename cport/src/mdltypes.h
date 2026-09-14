@@ -80,6 +80,9 @@ typedef struct {
     BspVec3 vel;                /* a leaper's, MOVETYPE_STEP off the ground */
     short   leapt;              /* this leap has landed its damage */
     short   patrol, corner;     /* the map's path_corner, and the one bound for */
+    float   idle_at;            /* the next roll for an idle sound */
+    short   water;              /* SV_CheckWaterTransition's: 1 in a liquid,
+                                   -1 out, 0 before its first look */
 } MdlEnt;
 
 

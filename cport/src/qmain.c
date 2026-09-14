@@ -722,7 +722,7 @@ int main( void )
 #if QR_PROF
                 t_ph = sys_now( &sysclk );
 #endif
-                snd_frame( &player, frame_dt );
+                snd_frame( &world, &player, frame_dt );
 #if QR_PROF
                 if ( pt.n > 0 ) pt.sound_sum += sys_now( &sysclk ) - t_ph;
 #endif
@@ -853,9 +853,12 @@ int main( void )
             }
 
             {   short st, lp, un;
+                char  sbuf[160];
                 snd_stats( &st, &lp, &un );
                 sprintf( buf, "snd started=%d loops=%d under=%d", (int) st, (int) lp, (int) un );
                 mark( buf );
+                snd_report( sbuf );
+                mark( sbuf );
             }
 
             sprintf( buf, "gs_state %d map %s next %s secrets %d/%d",

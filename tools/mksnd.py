@@ -16,11 +16,13 @@ Emits, for snd.c:
                 decoder building the ladder from its own exp() agrees
                 with this one to whatever its libm does, and nothing in
                 a DOS box would ever say that it does not.
-    sndtab.raw  a count, then (offset, length) as two longs per sound, in
-                SOUNDS order, which is snd.h's SND_* order. The offset is
-                in SAMPLES and lands on a block; the length is the wav's
-                own, so the silence a block's tail is padded with is
-                never played.
+    sndtab.raw  a count, then (offset, length, loop) per sound as two longs
+                and a short, in SOUNDS order, which is snd.h's SND_*
+                order. The offset is in SAMPLES and lands on a block; the
+                length is the wav's own, or the cue's loop end, so the
+                silence a block's tail is padded with is never played.
+                loop is the cue's sample, where a looping sound rejoins,
+                or -1 for a sound that plays once.
 
 A wav named twice is stored once; the table just points at it again.
 """
@@ -55,20 +57,20 @@ SOUNDS = [
     "dog/dsight", "dog/dattack1", "dog/dpain1", "dog/ddeath",                       # 32..35
     "ogre/ogwake", "ogre/ogsawatk", "ogre/ogpain1", "ogre/ogdth",                    # 36..39
     "demon/sight2", "demon/dhit2", "demon/dpain1", "demon/ddeath",                  # 40..43
-    # doors.qc's sounds 1..4: the stop, then the move
-    "doors/drclos4", "doors/doormv1", "doors/hydro1", "doors/hydro2",               # 44..47
-    "doors/stndr1", "doors/stndr2", "doors/ddoor1", "doors/ddoor2",                 # 48..51
+    # doors.qc's sounds 1..4: noise1 the stop, then noise2 the move -- the move is the one with a cue
+    "doors/drclos4", "doors/doormv1", "doors/hydro2", "doors/hydro1",               # 44..47
+    "doors/stndr2", "doors/stndr1", "doors/ddoor2", "doors/ddoor1",                 # 48..51
     # func_door_secret's sounds 1..3: noise1, noise2, noise3
     "doors/latch2", "doors/winch2", "doors/drclos4",                                # 52..54
-    "doors/airdoor1", "doors/airdoor2", "doors/airdoor2",                           # 55..57
-    "doors/basesec1", "doors/basesec2", "doors/basesec2",                           # 58..60
+    "doors/airdoor2", "doors/airdoor1", "doors/airdoor2",                           # 55..57
+    "doors/basesec2", "doors/basesec1", "doors/basesec2",                           # 58..60
     # func_button's sounds 0..3
     "buttons/airbut1", "buttons/switch21", "buttons/switch02", "buttons/switch04",  # 61..64
     "ambience/comp1", "ambience/drone6",                                            # 65, 66 the ambients
     "misc/medkey", "misc/runekey",                                                  # 67, 68 a key taken, by worldtype (base is registered)
     "doors/medtry", "doors/meduse", "doors/runetry", "doors/runeuse",               # 69..72 a key door refused, opened, by worldtype
     "ambience/drip1", "ambience/swamp1", "ambience/swamp2",                         # 73..75 more ambients
-    "plats/train1", "plats/train2",                                                 # 76, 77 a train's stop and move
+    "plats/train2", "plats/train1",                                                 # 76, 77 a train's stop and move
     "weapons/spike2",                                                               # 78 the spike shooter
     "demon/djump", "weapons/grenade", "weapons/bounce",                             # 79..81 the leap, the grenade thrown and bounced
     "zombie/z_idle", "zombie/z_shot1", "zombie/z_pain", "zombie/z_gib",             # 82..85 kinds 5 and 6, SND_MON2
@@ -77,6 +79,25 @@ SOUNDS = [
     "weapons/sgun1",                                                                # 94 the rocket launcher
     "shambler/melee1", "shambler/smack", "shambler/sboom",                          # 95..97 the smash, its hit, the lightning
     "items/protect", "items/protect3",                                              # 98, 99 the pentagram taken, a hit it turned
+    "ambience/water1", "ambience/wind2",                                            # 100, 101 the leaves' water and sky
+    "plats/plat1", "plats/plat2", "plats/medplat1", "plats/medplat2",               # 102..105 func_plat's 1, 2: move, stop
+    "misc/r_tele1", "misc/r_tele2", "misc/r_tele3", "misc/r_tele4", "misc/r_tele5", # 106..110 play_teleport
+    "misc/trigger1", "misc/h2ohit1",                                                # 111, 112
+    "ambience/fire1", "ambience/fl_hum1", "ambience/buzz1",                         # 113..115 the lights' ambients
+    "player/pain4", "player/pain5", "player/pain6",                                 # 116..118
+    "player/death2", "player/death3", "player/death4", "player/death5",             # 119..122
+    "player/h2odeath", "player/drown1", "player/drown2", "player/gasp1", "player/gasp2",   # 123..127
+    "player/inh2o", "player/inlava", "misc/outwater", "player/h2ojump",             # 128..131
+    "player/udeath", "player/gib",                                                  # 132, 133
+    "items/damage2", "items/suit2", "items/protect2", "items/damage3",              # 134..137 powerups ending, the quad's shot
+    "weapons/ric1", "weapons/ric2", "weapons/ric3", "weapons/tink1",                # 138..141 TE_SPIKE
+    "misc/water1", "misc/water2",                                                   # 142, 143 a swim stroke
+    "soldier/idle", "soldier/pain2", "knight/idle", "knight/sword2", "dog/idle",    # 144..148
+    "ogre/ogidle", "ogre/ogidle2", "ogre/ogdrag", "demon/idle1",                    # 149..152
+    "zombie/z_idle1", "zombie/z_hit", "zombie/z_miss", "zombie/z_fall", "zombie/z_pain1",  # 153..157
+    "wizard/widle1", "wizard/widle2", "wizard/hit",                                 # 158..160
+    "shambler/sidle", "shambler/melee2",                                            # 161, 162
+    "boss1/out1", "boss1/sight1",                                                   # 163, 164 Chthon rising
 ]
 
 
@@ -134,10 +155,10 @@ def pack_pages(sel: np.ndarray, packed: np.ndarray) -> bytes:
     return out.reshape(-1)[: (npage - 1) * EMS_PAGE + tail * BLK_BYTES].tobytes()
 
 
-def wav_samples(name: str, wav: bytes) -> bytes:
+def wav_samples(name: str, wav: bytes) -> tuple[bytes, int]:
     if wav[:4] != b"RIFF" or wav[8:12] != b"WAVE":
         raise SystemExit(f"{name}: not a wav")
-    at, fmt, data, loop = 12, None, None, 0
+    at, fmt, data, loop, mark = 12, None, None, -1, None
     while at + 8 <= len(wav):
         cid, size = struct.unpack_from("<4sI", wav, at)
         body = wav[at + 8 : at + 8 + size]
@@ -147,18 +168,24 @@ def wav_samples(name: str, wav: bytes) -> bytes:
             case b"data":
                 data = body
             case b"cue ":
-                # the first cue point's sample offset, where Quake's loop rejoins
+                # GetWavinfo: the first cue point's sample offset, where the loop rejoins
                 loop = struct.unpack_from("<I", body, 24)[0]
+            case b"LIST" if loop >= 0 and body[20:24] == b"mark":
+                # and cooledit's mark after it, the loop's length
+                mark = struct.unpack_from("<I", body, 16)[0]
         at += 8 + size + (size & 1)
     if fmt is None or data is None:
         raise SystemExit(f"{name}: no fmt or data chunk")
-    if loop and name.startswith("ambience/"):
-        # doors/doormv1 and the like loop too, in Quake; here they play once
-        raise SystemExit(f"{name}: loops from sample {loop}; snd_mix.c loops an ambient from 0")
     tag, channels, rate, _, _, bits = fmt
     if (tag, channels, rate, bits) != (1, 1, RATE, 8):
         raise SystemExit(f"{name}: want PCM mono {RATE} Hz 8-bit, got {fmt}")
-    return data
+    if name.startswith("ambience/") and loop < 0:
+        raise SystemExit(f"{name}: an ambient with no cue does not loop (S_StaticSound)")
+    if loop > 32767:
+        raise SystemExit(f"{name}: loop start {loop} past sndtab.raw's short")
+    if mark is not None:
+        data = data[: loop + mark]
+    return data, loop
 
 
 def report(name: str, x: np.ndarray, dec: np.ndarray, nbytes: int) -> tuple[float, float]:
@@ -184,14 +211,14 @@ def main() -> int:
     for name in SOUNDS:
         if name in placed:
             continue
-        x = np.frombuffer(wav_samples(name, mdl.pak_read(blob, entries, f"sound/{name}.wav")),
-                          np.uint8).astype(np.int32) - 128
+        pcm, loop = wav_samples(name, mdl.pak_read(blob, entries, f"sound/{name}.wav"))
+        x = np.frombuffer(pcm, np.uint8).astype(np.int32) - 128
         padded = np.concatenate([x, np.zeros(-len(x) % BLK, np.int32)])
         sel, packed = bsc_encode(padded, g)
         dec = bsc_decode(sel, packed, tab).reshape(-1)[: len(x)].astype(np.int32)
         s, e = report(name, x, dec, len(sel) * BLK_BYTES)
         sig, err, nsmp = sig + s, err + e, nsmp + len(x)
-        placed[name] = (nblk * BLK, len(x))
+        placed[name] = (nblk * BLK, len(x), loop)
         nblk += len(sel)
         sels.append(sel)
         codes.append(packed)
@@ -202,7 +229,7 @@ def main() -> int:
     open(os.path.join(outdir, "snd.bsc"), "wb").write(stream)
     open(os.path.join(outdir, "snddec.raw"), "wb").write(tab.tobytes())
     open(os.path.join(outdir, "sndtab.raw"), "wb").write(
-        struct.pack("<h", len(table)) + b"".join(struct.pack("<ll", o, n) for o, n in table))
+        struct.pack("<h", len(table)) + b"".join(struct.pack("<llh", o, n, lp) for o, n, lp in table))
     print(f"  snd.bsc {len(stream):,} B for {nsmp:,} samples ({8.0 * len(stream) / nsmp:.2f} bits each, "
           f"{100.0 * len(stream) / nsmp:.0f}% of raw), snr {10.0 * np.log10(sig / err):.1f} dB, "
           f"{len(table)} sounds")

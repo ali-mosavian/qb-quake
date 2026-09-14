@@ -796,7 +796,13 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
     # misc.qc's ambientsound calls: the wav and its volume, ATTN_STATIC
     amb_kind = {'ambient_comp_hum': ('ambience/comp1', 1.0), 'ambient_drone': ('ambience/drone6', 0.5),
                 'ambient_drip': ('ambience/drip1', 0.5), 'ambient_swamp1': ('ambience/swamp1', 0.5),
-                'ambient_swamp2': ('ambience/swamp2', 0.5)}
+                'ambient_swamp2': ('ambience/swamp2', 0.5),
+                # FireAmbient, and light_fluoro's and light_fluorospark's own
+                'light_torch_small_walltorch': ('ambience/fire1', 0.5),
+                'light_flame_large_yellow': ('ambience/fire1', 0.5),
+                'light_flame_small_yellow': ('ambience/fire1', 0.5),
+                'light_flame_small_white': ('ambience/fire1', 0.5),
+                'light_fluoro': ('ambience/fl_hum1', 0.5), 'light_fluorospark': ('ambience/buzz1', 0.5)}
     mon_kind = {'monster_army': 0, 'monster_knight': 1, 'monster_dog': 2, 'monster_ogre': 3, 'monster_demon1': 4,
                 'monster_zombie': 5, 'monster_wizard': 6, 'monster_shambler': 7}   # MDL_KIND_*; no model for the rest
     item_kind = {'item_health': 0, 'item_shells': 1, 'item_armor1': 2, 'item_armor2': 3,
@@ -996,7 +1002,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
                 # Chthon, unseen (boss.mdl is past MDL_MAXV): the rune wakes him, his
                 # health boss_awake's 1 on easy else 3, a bolt a point, dead his target fires
                 uses.append((0, TRIG_BOSS, name_id(kv.get('target', '')), name_id(kv.get('targetname', '')),
-                             0, 1 if skill == 0 else 3, 0.0, 0.0, (0.0, 0.0, 0.0), 0, b''.ljust(40)))
+                             0, 1 if skill == 0 else 3, 0.0, 0.0, (0.0, 0.0, 0.0), 0, b''.ljust(40),
+                             vec(kv.get('origin', '0 0 0'))))
             case 'event_lightning':
                 # lightning_use: a point off Chthon with both electrode doors up; travel
                 # carries the doors' indices, patched below once every door is read
@@ -1029,17 +1036,22 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
                 if kv.get('targetname') or kv['classname'] == 'light_fluoro':
                     lights.append((name_id(kv.get('targetname', '')), int(kv['style']),
                                    0 if int(kv.get('spawnflags', '0')) & 1 else 1))
+                if kv['classname'] == 'light_fluoro':
+                    ambs.append((mksnd.SOUNDS.index('ambience/fl_hum1'), 127, vec(kv.get('origin', '0 0 0'))))
             case 'path_corner':
                 corners.append((kv.get('targetname', ''), vec(kv.get('origin', '0 0 0')), float(kv.get('wait', '0')),
                                 kv.get('target', '')))
             case 'func_train' if model(kv.get('model', '')):
                 # func_train: speed 100; a targetname waits for its trigger
                 trains.append((model(kv['model']), float(kv.get('speed', '0')) or 100.0,
-                               name_id(kv.get('targetname', '')), kv.get('target', '')))
+                               name_id(kv.get('targetname', '')), kv.get('target', ''),
+                               int(kv.get('sounds', '0') or 0)))
             case 'func_plat' if model(kv.get('model', '')):
+                # sounds 0 is 2, medplat
                 plats.append((model(kv['model']),
                               float(kv.get('speed', '0')),
-                              float(kv.get('height', '0'))))
+                              float(kv.get('height', '0')),
+                              int(kv.get('sounds', '0') or 0) or 2))
             case str(c) if c in mon_kind:
                 mons.append((mon_kind[c], vec(kv.get('origin', '0 0 0')), float(kv.get('angle', '0')),
                              kv.get('target', '')))
@@ -1058,7 +1070,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
         inter = (spawn, 0.0, angle)   # no info_intermission: the start, as Quake does
     # corners by index, each pointing at the next; a train at one with no target stays
     corner_at = {name: i for i, (name, _, _, _) in reversed(list(enumerate(corners))) if name}
-    trains = [(m, speed, targeted, corner_at[first]) for m, speed, targeted, first in trains if first in corner_at]
+    trains = [(m, speed, targeted, corner_at[first], snd) for m, speed, targeted, first, snd in trains
+              if first in corner_at]
     if any(u[1] == TRIG_BOLT for u in uses):
         assert len(bolt_doors) == 2, bolt_doors
         uses = [(*u[:8], (float(bolt_doors[0]), float(bolt_doors[1]), 0.0), *u[9:]) if u[1] == TRIG_BOLT else u
@@ -1082,8 +1095,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
         buf += struct.pack('<h3ffh', kind, *org, yaw, corner_at.get(target, -1))   # its patrol's first corner
     for m, org, yaw in teles:
         buf += struct.pack('<h3ff', m, *org, yaw)
-    for m, speed, height in plats:
-        buf += struct.pack('<hff', m, speed, height)
+    for m, speed, height, snd in plats:
+        buf += struct.pack('<hffh', m, speed, height, snd)
     for m in hides:
         buf += struct.pack('<h', m)
     for kind, amount, target, crate, org in items:
@@ -1098,8 +1111,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
                            msg_id(msg), delay)
     for snd, vol, org in ambs:
         buf += struct.pack('<hh3f', snd, vol, *org)
-    for m, speed, targeted, first in trains:
-        buf += struct.pack('<hfhh', m, speed, targeted, first)
+    for m, speed, targeted, first, snd in trains:
+        buf += struct.pack('<hfhhh', m, speed, targeted, first, snd)
     for _, org, wait, target in corners:
         buf += struct.pack('<3ffh', *org, wait, corner_at.get(target, -1))
     # q_ent.bi's CrateModel: the size, then five faces of atlas id,
@@ -1277,7 +1290,9 @@ def convert_lumps(d, lumps, outdir, skill, gravity, crates):
         cont, vislist = struct.unpack_from('<ii', raw, k)
         bound = bound_bytes(raw[k+8:k+20])
         lfaceid, lfacenum = struct.unpack_from('<hh', raw, k+20)
-        buf += struct.pack('<h', cont) + struct.pack('<i', vislist) + bound + struct.pack('<hh', lfaceid, lfacenum)
+        # S_UpdateAmbientSounds' water and sky levels, a nibble each
+        amb = (min(15, (raw[k + 24] + 8) // 17) << 4) | min(15, (raw[k + 25] + 8) // 17)
+        buf += struct.pack('<bB', cont, amb) + struct.pack('<i', vislist) + bound + struct.pack('<hh', lfaceid, lfacenum)
     out['leaves.pag'] = bytes(buf)
 
     # planes: plane(20) -> Plane(16), the type dropped -- nothing reads it

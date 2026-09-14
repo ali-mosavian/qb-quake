@@ -45,7 +45,7 @@ stream = qmapread.read(qmp, 'snd.bsc')
 tab = np.frombuffer(qmapread.read(qmp, 'snddec.raw'), np.int8).reshape(mksnd.NSCALE, 1 << mksnd.BITS)
 raw = qmapread.read(qmp, 'sndtab.raw')
 count = struct.unpack_from('<h', raw, 0)[0]
-rec = [struct.unpack_from('<ll', raw, 2 + 8 * i) for i in range(count)]
+rec = [struct.unpack_from('<ll', raw, 2 + 10 * i) for i in range(count)]   # (offset, length), then the loop's short
 
 bad = []
 # the blocks, read back the way snd_fetch reaches them: page b/963,

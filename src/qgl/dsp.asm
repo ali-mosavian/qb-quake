@@ -50,10 +50,9 @@ PIC_CMD         equ     20h
 PIC_EOI         equ     20h
 
 DSP_RING        equ     4096
-DSP_SCRATCH     equ     2864                    ;; the mixer's, after the ring: snd_mix.c's
-                                                ;; paint buffer, 128 (offset, length) records,
-                                                ;; 40 channels of 14 bytes, and the codec's
-                                                ;; 512-byte table and decoded run. snd_mix_setup
+DSP_SCRATCH     equ     3440                    ;; the mixer's, after the ring: cport's snd_mix.c
+                                                ;; paint buffer, 176 (offset, length, loop)
+                                                ;; records and 18 channels of 36 bytes. snd_mix_setup
                                                 ;; refuses a layout longer than this rather than
                                                 ;; running off the block, which it once did by
                                                 ;; 304 bytes and hung in the heap compactor.

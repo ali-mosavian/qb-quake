@@ -124,16 +124,29 @@ void ent_link_doors( World *world )
     }
 }
 
+void ent_brush_sound( Player *player, World *world, short m, short id )
+{
+    BspVec3 c;
+    Submodel far *sm = &world->models[m];
+    BrushModel far *b = &world->brush[m];
+
+    c.x = ( sm->mins.x + sm->maxs.x ) * 0.5f + b->ofs.x;
+    c.y = ( sm->mins.y + sm->maxs.y ) * 0.5f + b->ofs.y;
+    c.z = ( sm->mins.z + sm->maxs.z ) * 0.5f + b->ofs.z;
+    snd_start( player, (short) ( SND_ENT_BRUSH + m ), CHAN_VOICE, id, &c, ATTN_NORM );
+}
+
 /* leg 0: the stop (a secret door's noise3), 1: a move (noise2), 2: a
-   secret door leaving home (noise1). snd 0 is a silent door. */
-static void ent_door_sound( Player *player, DoorEnt far *d, short leg )
+   secret door leaving home (noise1). snd 0 is a silent door. The move
+   loops until the stop takes its channel. */
+static void ent_door_sound( Player *player, World *world, DoorEnt far *d, short leg )
 {
     short id;
 
     if ( d->snd <= 0 ) return;
     id = d->secret ? (short) ( SND_SECRET1 + ( d->snd - 1 ) * 3 + ( 2 - leg ) )
                    : (short) ( SND_DOOR + ( d->snd - 1 ) * 2 + leg );
-    snd_play( player, id, &d->mins );
+    ent_brush_sound( player, world, d->model, id );
 }
 
 /* SUB_UseTargets and door_touch: the message, and misc/talk with it */
@@ -141,7 +154,7 @@ static void ent_talk( Player *player, Fight *fight, Renderer *rdr, char far *msg
 {
     if ( !msg || !msg[0] ) return;
     ent_say( fight, rdr, msg );
-    snd_play( player, SND_TALK, &player->pos );
+    snd_self( player, CHAN_VOICE, SND_TALK );
 }
 
 /* door_go_up for a whole linked group: a shut or closing door sets out,
@@ -155,10 +168,12 @@ void ent_door_fire( World *world, Player *player, short grp )
         if ( d[k].link != grp ) continue;
 
         if ( d[k].secret ) {
-            /* fd_secret_use: nothing while it is anywhere but home */
+            /* fd_secret_use: nothing while it is anywhere but home. Its
+               noise1 and then noise2 go out on one channel in one frame,
+               so noise2 is what plays. */
             if ( d[k].state == ENT_DOOR_SHUT ) {
                 d[k].state = ENT_DOOR_OUT1;
-                ent_door_sound( player, &d[k], 2 );
+                ent_door_sound( player, world, &d[k], 1 );
             }
             continue;
         }
@@ -166,7 +181,7 @@ void ent_door_fire( World *world, Player *player, short grp )
         case ENT_DOOR_SHUT:
         case ENT_DOOR_CLOSING:
             d[k].state = ENT_DOOR_OPENING;
-            ent_door_sound( player, &d[k], 1 );
+            ent_door_sound( player, world, &d[k], 1 );
             break;
         case ENT_DOOR_OPEN:
             d[k].hold_left = d[k].hold;
@@ -250,6 +265,7 @@ void ent_use_targets( World *world, Player *player, Fight *fight,
                        Renderer *rdr, short id )
 {
     short k;
+    BspVec3 org;
 
     if ( !id ) return;
 
@@ -282,11 +298,15 @@ void ent_use_targets( World *world, Player *player, Fight *fight,
         case ENT_TRIG_RELAY:
             ent_trig_fire( world, player, fight, rdr, k );
             break;
-        case ENT_TRIG_SHOOTER:
         case ENT_TRIG_BOSS:
-            /* Armed, and nothing reads it yet: the spikes and Chthon
-               are pl_move's, not ported. Set anyway so the state is the
-               one the rest of the game will find when they are. */
+            /* boss_awake's rise: out1 and sight1 from where he stands */
+            if ( world->trig[k].state == ENT_TRIG_READY ) {
+                org = world->trig[k].mins;
+                snd_start( player, SND_ENT_BRUSH, CHAN_WEAPON, SND_BOSS_OUT, &org, ATTN_NORM );
+                snd_start( player, SND_ENT_BRUSH, CHAN_VOICE, SND_BOSS_SIGHT, &org, ATTN_NORM );
+            }
+            /* fall through */
+        case ENT_TRIG_SHOOTER:
             if ( world->trig[k].state == ENT_TRIG_READY ) world->trig[k].state = ENT_TRIG_ARMED;
             break;
         }
@@ -299,11 +319,19 @@ void ent_trig_fire( World *world, Player *player, Fight *fight,
                      Renderer *rdr, short k )
 {
     TrigEnt far *t = &world->trig[k];
+    BspVec3 c;
+    static short noise[3] = { SND_SECRET, SND_TALK, SND_TRIGGER };
 
     if ( t->kind == ENT_TRIG_SECRET ) fight->secrets++;
-    if ( t->snd == 1 ) {
+    /* multi_trigger's noise from the volume's middle; the message's
+       talk only when there is none */
+    if ( t->snd >= 1 && t->snd <= 3 ) {
+        c.x = ( t->mins.x + t->maxs.x ) * 0.5f;
+        c.y = ( t->mins.y + t->maxs.y ) * 0.5f;
+        c.z = ( t->mins.z + t->maxs.z ) * 0.5f;
+        snd_start( player, (short) ( SND_ENT_BRUSH + t->model ), CHAN_VOICE,
+                   noise[t->snd - 1], &c, ATTN_NORM );
         ent_say( fight, rdr, ent_msg( world, t->msg ) );
-        snd_play( player, SND_SECRET, &player->pos );
     } else {
         ent_talk( player, fight, rdr, ent_msg( world, t->msg ) );
     }
@@ -383,7 +411,7 @@ void ent_move_doors( World *world, Player *player, Fight *fight,
             if ( ent_step_to( &b->ofs, &d->ofs_open, d->speed * dt ) ) {
                 d->state = ENT_DOOR_OPEN;
                 d->hold_left = d->hold;
-                ent_door_sound( player, d, 0 );
+                ent_door_sound( player, world, d, 0 );
             }
             break;
 
@@ -392,7 +420,7 @@ void ent_move_doors( World *world, Player *player, Fight *fight,
                 d->hold_left -= dt;
                 if ( d->hold_left <= 0.0f ) {
                     d->state = ENT_DOOR_CLOSING;
-                    ent_door_sound( player, d, 1 );
+                    ent_door_sound( player, world, d, 1 );
                 }
             }
             break;
@@ -402,10 +430,11 @@ void ent_move_doors( World *world, Player *player, Fight *fight,
                 if ( ent_step_to( &b->ofs, &d->ofs_mid, d->speed * dt ) ) {
                     d->state = ENT_DOOR_PAUSE_BACK;
                     d->pause_left = ENT_DOOR_PAUSE;
+                    ent_door_sound( player, world, d, 0 );   /* fd_secret_move5 */
                 }
             } else if ( ent_step_to( &b->ofs, &d->ofs_shut, d->speed * dt ) ) {
                 d->state = ENT_DOOR_SHUT;
-                ent_door_sound( player, d, 0 );
+                ent_door_sound( player, world, d, 0 );
             }
             break;
 
@@ -413,6 +442,7 @@ void ent_move_doors( World *world, Player *player, Fight *fight,
             if ( ent_step_to( &b->ofs, &d->ofs_mid, d->speed * dt ) ) {
                 d->state = ENT_DOOR_PAUSE_OUT;
                 d->pause_left = ENT_DOOR_PAUSE;
+                ent_door_sound( player, world, d, 0 );       /* fd_secret_move1 */
             }
             break;
 
@@ -420,7 +450,7 @@ void ent_move_doors( World *world, Player *player, Fight *fight,
             d->pause_left -= dt;
             if ( d->pause_left <= 0.0f ) {
                 d->state = ENT_DOOR_OPENING;
-                ent_door_sound( player, d, 1 );
+                ent_door_sound( player, world, d, 1 );
             }
             break;
 
@@ -428,14 +458,14 @@ void ent_move_doors( World *world, Player *player, Fight *fight,
             d->pause_left -= dt;
             if ( d->pause_left <= 0.0f ) {
                 d->state = ENT_DOOR_BACK2;
-                ent_door_sound( player, d, 1 );
+                ent_door_sound( player, world, d, 1 );
             }
             break;
 
         case ENT_DOOR_BACK2:
             if ( ent_step_to( &b->ofs, &d->ofs_shut, d->speed * dt ) ) {
                 d->state = ENT_DOOR_SHUT;
-                ent_door_sound( player, d, 0 );
+                ent_door_sound( player, world, d, 0 );
             }
             break;
         }
@@ -451,7 +481,7 @@ void ent_move_trigs( World *world, Player *player, Camera *cam, Fight *fight,
     short k;
     TrigEnt far *t;
     BrushModel far *b;
-    BspVec3 was, home;
+    BspVec3 was, home, at;
 
     home.x = home.y = home.z = 0.0f;
 
@@ -479,7 +509,8 @@ void ent_move_trigs( World *world, Player *player, Camera *cam, Fight *fight,
                 if ( ent_step_to( &b->ofs, &t->ofs_out, t->speed * dt ) ) {
                     t->state = ENT_TRIG_HELD;
                     t->wait_left = t->wait;
-                    snd_play( player, (short) ( SND_BUTTON + t->snd ), &t->mins );
+                    at = t->mins;
+                    snd_play( player, (short) ( SND_BUTTON + t->snd ), &at );
                     ent_say( fight, rdr, ent_msg( world, t->msg ) );
                     ent_use_targets( world, player, fight, rdr, t->target );
                 }
@@ -590,6 +621,8 @@ void ent_move_trains( World *world, Player *player, float dt )
             if ( world->corner[ p->corner ].nxt < 0 ) continue;
             p->corner = world->corner[ p->corner ].nxt;
             p->state = ENT_TRAIN_MOVE;
+            /* train_next: noise1, the move, from every corner */
+            if ( p->snd ) ent_brush_sound( player, world, p->model, SND_TRAIN + 1 );
         }
 
         b = &world->brush[ p->model ];
@@ -603,6 +636,8 @@ void ent_move_trains( World *world, Player *player, float dt )
         if ( ent_step_to( &b->ofs, &goal, p->speed * dt ) ) {
             p->state = ENT_TRAIN_WAIT;
             p->wait_left = world->corner[ p->corner ].wait;
+            /* train_wait: noise, the stop, only at a corner that waits */
+            if ( p->snd && p->wait_left != 0.0f ) ent_brush_sound( player, world, p->model, SND_TRAIN );
             /* id's -1 is a wait of nothing, not a wait for ever */
             if ( p->wait_left <= 0.0f ) p->wait_left = 0.1f;
         }

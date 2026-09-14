@@ -67,6 +67,7 @@ typedef struct {
     short model;
     float speed;
     float travel;
+    short snd;          /* 1 plat1/plat2, 2 medplat */
 } EntsPlat;
 
 /* The records between the ones cport reads. ents.bin's order is
@@ -103,6 +104,7 @@ typedef struct {
     short model;
     float speed;
     short targeted, first;
+    short snd;          /* 1 train1/train2, 0 misc/null */
 } EntsTrain;
 
 typedef struct {
@@ -116,13 +118,13 @@ typedef struct {
 #define REC_ENTSHEAD 78
 #define REC_ENTSMON  20
 #define REC_ENTSTELE 18
-#define REC_ENTSPLAT 10
+#define REC_ENTSPLAT 12
 #define REC_ENTSITEM 20
 #define REC_CRATE    92
 #define REC_ENTSDOOR 50
 #define REC_ENTSTRIG 52
 #define REC_ENTSAMB  16
-#define REC_ENTSTRAIN 10
+#define REC_ENTSTRAIN 12
 #define REC_PATHCORNER 18
 #define REC_ENTSLIGHT 6
 typedef char rec_entslight_ok[ sizeof(EntsLight) == REC_ENTSLIGHT ? 1 : -1 ];

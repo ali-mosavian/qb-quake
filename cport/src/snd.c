@@ -4,15 +4,15 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
+#include <string.h>
 
 #include "snd.h"
 #include "snd_mix.h"
+#include "r_bsp.h"
 #include "assets.h"
 #include "qgl.h"
 
 #define SND_RATE       11025
-#define SND_CLIP_DIST  1000.0f   /* sound_nominal_clip_dist, ATTN_NORM */
 #define SND_PAGE       16384L
 #define PAGE_SLOT      2
 #define SND_DTAB       512L      /* snddec.raw: 32 scales x 16 codes */
@@ -21,6 +21,7 @@ static short snd_on      = 0;
 static short snd_hnd     = 0;
 static short snd_started = 0;
 static short snd_under   = 0;
+static unsigned char snd_seen[(SND_COUNT + 7) / 8];
 
 void snd_init( short off )
 {
@@ -43,7 +44,7 @@ void snd_init( short off )
        would play the wrong sound for every id and say nothing. */
     raw = asset_load_whole( "sndtab.raw", &n );
     count = *(short far *) raw;
-    if ( count != SND_COUNT ) {
+    if ( count != SND_COUNT || n < 2 + (long) count * sizeof(SndRec) ) {
         fprintf( stderr, "sndtab.raw has %d sounds, snd.h says %d\n", (int) count, SND_COUNT );
         qglMemFree( (long) raw );
         qglDspShutdown();
@@ -52,7 +53,7 @@ void snd_init( short off )
     tab = (SndRec far *) ( raw + 2 );
     dec = asset_load( "snddec.raw", SND_DTAB );
 
-    /* and the samples, straight into EMS a page at a time: 683K of
+    /* and the samples, straight into EMS a page at a time: 1.2M of
        bsc4/32n, which is why they are not in the far heap */
     fh = asset_seek( "snd.bsc", &remain );
     snd_hnd = qglGemAlloc( remain );
@@ -75,7 +76,8 @@ void snd_init( short off )
 
     if ( snd_mix_setup( snd_hnd, (unsigned char far *) qglDspBuf(),
                         (void far *) qglDspScratch(), tab, count,
-                        qglDspScratchBytes(), (signed char far *) dec ) < 0 ) {
+                        qglDspScratchBytes(), (signed char far *) dec,
+                        SND_WATER, SND_WIND ) < 0 ) {
         fprintf( stderr, "dsp.asm's scratch is short of the mixer's table and channels\n" );
         qglMemFree( (long) dec );
         qglMemFree( (long) raw );
@@ -98,29 +100,33 @@ unsigned long snd_sum( void )
 /* Recorded whatever the card does, and unguarded on purpose: this runs
    while the map loads, before snd_init has been anywhere near a Sound
    Blaster, and an ambient nobody ever starts costs its record. */
+void snd_statics( short n )
+{
+    snd_mix_statics( n );
+}
+
 void snd_ambient( short id, short vol, BspVec3 *org )
 {
     snd_mix_ambient( id, vol, org );
 }
 
-void snd_play( Player *player, short id, BspVec3 *org )
+void snd_start( Player *player, short ent, short chan, short id, BspVec3 *org, short attn )
 {
-    float dx, dy, dz;
-    short vol;
-
     if ( !snd_on ) return;
-    dx = org->x - player->pos.x;
-    dy = org->y - player->pos.y;
-    dz = org->z - player->pos.z;
-    vol = (short) ( 255.0f * ( 1.0f - (float) sqrt( dx*dx + dy*dy + dz*dz ) / SND_CLIP_DIST ) );
-    if ( vol <= 0 ) return;
-    if ( snd_mix_start( id, vol ) >= 0 ) snd_started++;
+    if ( snd_mix_start( id, 255, ent, chan, attn, org, &player->pos ) < 0 ) return;
+    snd_started++;
+    snd_seen[id >> 3] |= (unsigned char) ( 1 << ( id & 7 ) );
 }
 
-void snd_frame( Player *player, float dt )
+void snd_frame( World *world, Player *player, float dt )
 {
+    BspVec3 eye;
+
     if ( !snd_on ) return;
-    snd_under = snd_mix_frame( qglDspPos(), (long) ( dt * SND_RATE ), &player->pos );
+    eye = player->pos;
+    eye.z += PL_EYE;
+    snd_under = snd_mix_frame( qglDspPos(), (long) ( dt * SND_RATE ), &player->pos,
+                               world->leaves[ r_point_leaf( &eye, world ) ].amb );
 }
 
 void snd_shutdown( void )
@@ -136,4 +142,19 @@ void snd_stats( short *started, short *loops, short *under )
     *started = snd_started;
     *loops   = snd_mix_loops();
     *under   = snd_under;
+}
+
+void snd_report( char *buf )
+{
+    short ids[8], i, n = snd_mix_live( ids );
+
+    strcpy( buf, "snd seen=" );
+    for ( i = 0; i < (short) sizeof(snd_seen); i++ )
+        sprintf( buf + strlen( buf ), "%02X", (int) snd_seen[i] );
+    strcat( buf, " live=" );
+    for ( i = 0; i < n; i++ )
+        sprintf( buf + strlen( buf ), i ? ",%d" : "%d", (int) ids[i] );
+    sprintf( buf + strlen( buf ), " wraps=%d water=%d sky=%d voices=%d",
+             (int) snd_mix_wraps(), (int) snd_mix_leaf_vol( 0 ),
+             (int) snd_mix_leaf_vol( 1 ), (int) snd_mix_voices() );
 }

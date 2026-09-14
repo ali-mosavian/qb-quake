@@ -189,4 +189,7 @@ void pl_damage( Player *player, Fight *fight, Renderer *rdr, short dmg );
 /* A monster's own sound: 0 sight, 1 attack, 2 pain, 3 death. */
 void mdl_say( Player *player, MdlEnt far *ent, short which );
 
+/* sound() from a monster: its own entity channel, at where it stands */
+void mdl_voice( Player *player, MdlEnt far *ent, short chan, short id, short attn );
+
 #endif

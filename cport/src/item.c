@@ -6,8 +6,7 @@
  * item's, exactly as Quake's own touch is, and the only trace is the
  * one that drops each item onto the floor once at load.
  *
- * Not ported with the rest: the pickup SOUND (no mixer here yet), and
- * pl_boxes_sync -- an exploding box is solid in the BASIC branch
+ * Not ported with the rest: pl_boxes_sync -- an exploding box is solid in the BASIC branch
  * because pl_trace keeps a table of solid boxes, which cport's
  * pl_trace does not have. So an explobox here is drawn and walked
  * through rather than walked around, and nothing can shoot it.
@@ -132,6 +131,14 @@ static short pl_item_sound( Fight *fight, ItemEnt far *it )
     return (short) ( it->amount < 15 ? SND_HEALTH_ROT : SND_HEALTH );
 }
 
+/* CheckPowerups: once, three seconds before a powerup runs out */
+static void pl_powerup_warn( Player *player, Renderer *rdr, float until, float *warned, short id )
+{
+    if ( until <= rdr->anim_time || rdr->anim_time < until - 3.0f || *warned == until ) return;
+    *warned = until;
+    snd_self( player, CHAN_AUTO, id );
+}
+
 void pl_items_touch( World *world, Player *player, Fight *fight, Renderer *rdr )
 {
     short i, bit, cap;
@@ -142,6 +149,10 @@ void pl_items_touch( World *world, Player *player, Fight *fight, Renderer *rdr )
         fight->health--;
         fight->rot_at = rdr->anim_time + 1.0f;
     }
+
+    pl_powerup_warn( player, rdr, fight->quad_until, &fight->quad_warn, SND_QUAD_END );
+    pl_powerup_warn( player, rdr, fight->suit_until, &fight->suit_warn, SND_SUIT_END );
+    pl_powerup_warn( player, rdr, fight->pent_until, &fight->pent_warn, SND_PENT_END );
 
     for ( i = 0; i < world->item_count; i++ ) {
         ItemEnt far *it = &world->item[i];
@@ -269,7 +280,7 @@ void pl_items_touch( World *world, Player *player, Fight *fight, Renderer *rdr )
 
         if ( it->gone ) {
             fight->bonus_pct = PL_BONUS_SHIFT;
-            snd_play( player, pl_item_sound( fight, it ), &player->pos );
+            snd_self( player, CHAN_ITEM, pl_item_sound( fight, it ) );
             /* SUB_UseTargets: every touch fires the item's target */
             ent_use_targets( world, player, fight, rdr, it->target );
         }

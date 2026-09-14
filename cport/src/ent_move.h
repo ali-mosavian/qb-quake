@@ -93,4 +93,8 @@ void ent_say( Fight *fight, Renderer *rdr, char far *msg );
  */
 void ent_reset( World *world, Fight *fight );
 
+/* sound() on a mover: submodel m's own voice channel, from the middle
+   of its brush where it is now -- SV_StartSound's origin for a brush */
+void ent_brush_sound( Player *player, World *world, short m, short id );
+
 #endif

@@ -54,9 +54,12 @@ typedef struct {
 /* bspfile.bi's Leaf. vis_list is an offset into World's pvs_data blob,
    -1 for "no visibility restriction" (draw from everywhere) and -2 for
    "no pvs data at all" (r_mark_leaves treats that as a load-time
-   error). cont is one of the CONTENTS_ codes above. */
+   error). cont is one of the CONTENTS_ codes above; amb is the leaf's
+   water ambient level in the high nibble and its sky in the low, 17 a
+   step. */
 typedef struct {
-    short  cont;
+    signed char   cont;
+    unsigned char amb;
     long   vis_list;
     PackedBounds bound;
     short  lface_id;
@@ -178,6 +181,8 @@ typedef struct {
     short first;         /* its first path_corner */
     short corner;        /* the one it is at, or bound for */
     float wait_left;
+    short snd;           /* the map's sounds; a train's 0 is silent */
+    short moving;        /* a plat under way, whose stop is still to play */
 } PlatEnt;
 
 /* q_ent.bi's ItemEnt: a pickup where the map put it, dropped to the

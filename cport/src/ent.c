@@ -181,7 +181,7 @@ short ent_plat_touched( Player *player, World *world, short p )
  */
 void ent_move_plats( World *world, Player *player, float dt )
 {
-    short p;
+    short p, snd;
 
     for ( p = 0; p < world->plat_count; p++ ) {
         PlatEnt far *plt = &world->plat[p];
@@ -204,6 +204,15 @@ void ent_move_plats( World *world, Player *player, float dt )
         }
         moved = br->ofs.z - was;
         if ( moved != 0.0f ) br->node = ENT_NODE_DIRTY;
+        /* trains share the array and their snd is train_next's */
+        if ( moved != 0.0f && plt->kind == ENT_PLAT_KIND_PLAT ) {
+            /* plat_go_up and _down: the move, looping; plat_hit_top and
+               _bottom: the stop, on the same channel */
+            snd = (short) ( SND_PLAT + ( plt->snd - 1 ) * 2 );
+            if ( !plt->moving ) ent_brush_sound( player, world, plt->model, snd );
+            plt->moving = (short) ( br->ofs.z != goal );
+            if ( !plt->moving ) ent_brush_sound( player, world, plt->model, (short) ( snd + 1 ) );
+        }
 
         /* Carry the rider. Only upward: a descending plat drops out
            from under the player and gravity does the rest, which is
@@ -246,7 +255,11 @@ void ent_check_teleport( Player *player, World *world, short scr_x_res )
              pmax.y >= t->mins.y && pmin.y <= t->maxs.y &&
              pmax.z >= t->mins.z && pmin.z <= t->maxs.z ) {
 
+            /* spawn_tfog's play_teleport, where they were and where
+               they arrive -- the first is out of earshot by then */
+            snd_play( player, (short) ( SND_TELE + rand() % 5 ), &player->pos );
             player->pos   = t->dest;
+            snd_play( player, (short) ( SND_TELE + rand() % 5 ), &player->pos );
             player->vel.x = 0.0f;
             player->vel.y = 0.0f;
             player->vel.z = 0.0f;
@@ -420,7 +433,7 @@ static void ent_load_trigs( World *world, unsigned char far *buf, long *ofs, sho
         t->maxs  = world->models[m].maxs;
         /* A shooter and a fireball have no brush: their origin IS the
            volume, so mins and maxs are the same point. */
-        if ( xr.kind == ENT_TRIG_SHOOTER || xr.kind == ENT_TRIG_FIREBALL ) {
+        if ( xr.kind == ENT_TRIG_SHOOTER || xr.kind == ENT_TRIG_FIREBALL || xr.kind == ENT_TRIG_BOSS ) {
             t->mins = xr.org;
             t->maxs = xr.org;
         }
@@ -460,6 +473,8 @@ static void ent_load_trains( World *world, unsigned char far *buf, long *ofs, sh
         p->first = tr.first;
         p->corner = tr.first;
         p->wait_left = 0.0f;
+        p->snd   = tr.snd;
+        p->moving = 0;
         p->state = ENT_TRAIN_IDLE;
         p->mins  = world->models[m].mins;
         p->maxs  = world->models[m].maxs;
@@ -620,6 +635,8 @@ void ent_load_teleports( World *world )
             p->targeted = 0;
             p->first = p->corner = -1;
             p->wait_left = 0.0f;
+            p->snd = pr.snd >= 1 && pr.snd <= 2 ? pr.snd : 2;
+            p->moving = 0;
             world->brush[mdlnum].ofs.z = -p->travel;
 
             world->plat_count++;
@@ -644,6 +661,7 @@ void ent_load_teleports( World *world )
     /* the map's ambient_* points, recorded now and started by
        snd_init with the card: their volume is the map's, their place
        the mixer's to re-derive every frame. */
+    snd_statics( h.namb );
     for ( i = 0; i < h.namb; i++ ) {
         EntsAmb ar;
         _fmemcpy( &ar, buf + ofs, sizeof(EntsAmb) ); ofs += sizeof(EntsAmb);

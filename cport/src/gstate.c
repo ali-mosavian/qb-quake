@@ -9,6 +9,7 @@
 #include "snd.h"
 #include "qgl.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 void pl_reset_player( Player *player, Fight *fight, Renderer *rdr )
 {
@@ -158,7 +159,18 @@ void host_state( World *world, Player *player, Camera *cam, Fight *fight,
     case GS_PLAY:
         if ( fight->health <= 0 ) {
             fight->state = GS_DEAD;
-            snd_play( player, SND_DEATH, &player->pos );
+            /* PlayerDie: GibPlayer's gib or udeath under -40, else
+               DeathSound's h2odeath under water or one of five,
+               rint(random() * 4 + 1) */
+            if ( fight->health < -40 )
+                i = (short) ( rand() & 1 ? SND_GIB : SND_UDEATH );
+            else if ( player->water_level == 3 )
+                i = SND_H2ODEATH;
+            else if ( ( ndead = (short) ( (float) rand() / RAND_MAX * 4.0f + 0.5f ) ) == 0 )
+                i = SND_DEATH;
+            else
+                i = (short) ( SND_DEATH2 + ndead - 1 );
+            snd_start( player, SND_ENT_PLAYER, CHAN_VOICE, i, &player->pos, ATTN_NONE );
             fight->state_until = rdr->anim_time + PL_DEATH_PAUSE;
             break;
         }

@@ -10,6 +10,7 @@
 
 #include <math.h>
 #include <stdlib.h>
+#include <dos.h>
 
 #include "mdl_ai.h"
 #include "snd.h"
@@ -78,14 +79,72 @@ static void mdl_change_yaw( MdlEnt far *ent )
 /* A monster's own four, by kind: sight, attack, pain, death. The first
    five kinds' sit at SND_MON, the rest at SND_MON2 -- the table after
    the first five was already taken. */
-void mdl_say( Player *player, MdlEnt far *ent, short which )
+void mdl_voice( Player *player, MdlEnt far *ent, short chan, short id, short attn )
 {
     BspVec3 org = ent->pos;
 
-    if ( ent->kind < MDL_KIND_ZOMBIE )
-        snd_play( player, (short) ( SND_MON + ent->kind * 4 + which ), &org );
-    else
-        snd_play( player, (short) ( SND_MON2 + ( ent->kind - MDL_KIND_ZOMBIE ) * 4 + which ), &org );
+    /* the record's place in its array is its entity number */
+    snd_start( player, (short) ( SND_ENT_MON + FP_OFF( ent ) / sizeof(MdlEnt) ), chan, id, &org, attn );
+}
+
+void mdl_say( Player *player, MdlEnt far *ent, short which )
+{
+    short id = ent->kind < MDL_KIND_ZOMBIE
+             ? (short) ( SND_MON + ent->kind * 4 + which )
+             : (short) ( SND_MON2 + ( ent->kind - MDL_KIND_ZOMBIE ) * 4 + which );
+
+    mdl_voice( player, ent, which == 1 ? CHAN_WEAPON : CHAN_VOICE, id, ATTN_NORM );
+}
+
+/* The idle noises each .qc makes on its walk, run or stand frames, as a
+   roll once a cycle: the cycle's frames at 10 Hz and id's chance. */
+static short mdl_idle_roll( Player *player, Renderer *rdr, MdlEnt far *ent,
+                             float period, float chance, short id )
+{
+    ent->idle_at = rdr->anim_time + period;
+    if ( mdl_rnd() >= chance ) return 0;
+    mdl_voice( player, ent, CHAN_VOICE, id, ATTN_IDLE );
+    return -1;
+}
+
+static void mdl_idle( Player *player, Renderer *rdr, MdlEnt far *ent )
+{
+    short walk = (short) ( ent->state == MDL_ST_RUN && !ent->hunting );
+    short run  = (short) ( ent->state == MDL_ST_RUN && ent->hunting );
+    float wr;
+
+    if ( rdr->anim_time < ent->idle_at ) return;
+    switch ( ent->kind ) {
+    case MDL_KIND_ARMY:   if ( walk ) mdl_idle_roll( player, rdr, ent, 2.4f, 0.2f, SND_ARMY_IDLE ); break;
+    case MDL_KIND_KNIGHT: if ( walk ) mdl_idle_roll( player, rdr, ent, 1.4f, 0.2f, SND_KNIGHT_IDLE ); break;
+    case MDL_KIND_DOG:    if ( walk ) mdl_idle_roll( player, rdr, ent, 0.8f, 0.2f, SND_DOG_IDLE ); break;
+    case MDL_KIND_DEMON:  if ( walk ) mdl_idle_roll( player, rdr, ent, 0.8f, 0.2f, SND_DEMON_IDLE ); break;
+    case MDL_KIND_OGRE:
+        /* ogre_walk3's ogidle and walk6's ogdrag, stand5's ogidle, run1's ogidle2 */
+        if ( walk && !mdl_idle_roll( player, rdr, ent, 1.6f, 0.2f, SND_OGRE_IDLE ) )
+            mdl_idle_roll( player, rdr, ent, 1.6f, 0.1f, SND_OGRE_DRAG );
+        if ( ent->state == MDL_ST_STAND ) mdl_idle_roll( player, rdr, ent, 0.9f, 0.2f, SND_OGRE_IDLE );
+        if ( run ) mdl_idle_roll( player, rdr, ent, 0.8f, 0.2f, SND_OGRE_IDLE2 );
+        break;
+    case MDL_KIND_ZOMBIE:
+        /* walk12 and walk19's z_idle; run18's z_idle, then z_idle1 */
+        if ( walk ) mdl_idle_roll( player, rdr, ent, 0.95f, 0.2f, SND_MON2 );
+        if ( run && !mdl_idle_roll( player, rdr, ent, 1.8f, 0.2f, SND_MON2 ) )
+            mdl_idle_roll( player, rdr, ent, 1.8f, 0.2f, SND_Z_IDLE1 );
+        break;
+    case MDL_KIND_WIZARD:
+        /* wiz_idlesound: waitmin two seconds apart, widle1 or widle2 a tenth each */
+        ent->idle_at = rdr->anim_time + 2.0f;
+        wr = mdl_rnd() * 5.0f;
+        if ( wr > 4.5f ) mdl_voice( player, ent, CHAN_VOICE, SND_WIZ_IDLE1, ATTN_IDLE );
+        if ( wr < 0.5f ) mdl_voice( player, ent, CHAN_VOICE, SND_WIZ_IDLE1 + 1, ATTN_IDLE );
+        break;
+    case MDL_KIND_SHAMBLER:
+        /* sham_walk12 and sham_run6 */
+        if ( walk ) mdl_idle_roll( player, rdr, ent, 1.2f, 0.2f, SND_SHAM_IDLE );
+        if ( run )  mdl_idle_roll( player, rdr, ent, 0.6f, 0.2f, SND_SHAM_IDLE );
+        break;
+    }
 }
 
 void pl_damage( Player *player, Fight *fight, Renderer *rdr, short dmg )
@@ -109,15 +168,22 @@ void pl_damage( Player *player, Fight *fight, Renderer *rdr, short dmg )
     fight->armor  = (short) ( fight->armor - save );
     fight->health = (short) ( fight->health - ( dmg - save ) );
 
-    /* PainSound: a burn while standing in something that is not water,
-       else a grunt, a half second apart at most */
-    if ( fight->health > 0 && rdr->anim_time >= fight->pain_at ) {
-        fight->pain_at = rdr->anim_time + PL_PAIN_GAP;
-        if ( player->water_level > 0 && player->water_type != CONTENTS_WATER )
-            snd_play( player, (short) ( SND_BURN1 + ( rand() % 2 ) ), &player->pos );
-        else
-            snd_play( player, (short) ( SND_PAIN1 + ( rand() % 3 ) ), &player->pos );
+    /* PainSound: drowning under water, a burn in slime or lava -- both
+       every hit -- else one of six grunts a half second apart at most,
+       rint(random() * 5 + 1) so the first and last half as often */
+    if ( fight->health <= 0 ) return;
+    if ( player->water_level == 3 && player->water_type == CONTENTS_WATER ) {
+        snd_self( player, CHAN_VOICE, (short) ( SND_DROWN1 + ( rand() & 1 ) ) );
+        return;
     }
+    if ( player->water_level > 0 && player->water_type != CONTENTS_WATER ) {
+        snd_self( player, CHAN_VOICE, (short) ( SND_BURN1 + ( rand() & 1 ) ) );
+        return;
+    }
+    if ( rdr->anim_time < fight->pain_at ) return;
+    fight->pain_at = rdr->anim_time + PL_PAIN_GAP;
+    save = (short) ( mdl_rnd() * 5.0f + 0.5f );
+    snd_self( player, CHAN_VOICE, (short) ( save < 3 ? SND_PAIN1 + save : SND_PAIN4 + save - 3 ) );
 }
 
 /* SV_movestep's FL_FLY case: a straight trace, held 30..40 above the
@@ -398,7 +464,7 @@ static void mdl_bolt( World *world, Player *player, Fight *fight,
     TraceResult tr;
     float l;
 
-    if ( ent->anim_frame == SHAMBLER_BOLT_A ) snd_play( player, SND_SHAM_BOOM, &ent->pos );
+    if ( ent->anim_frame == SHAMBLER_BOLT_A ) mdl_voice( player, ent, CHAN_WEAPON, SND_SHAM_BOOM, ATTN_NORM );
     org = ent->pos;
     org.z += SHAMBLER_BOLT_UP;
     d.x = player->pos.x - org.x;
@@ -457,6 +523,8 @@ void mdl_spawn( World *world, MdlEnt far *ent )
     ent->pain_finished = 0.0f;
     ent->leapt = 0;
     ent->vel.x = ent->vel.y = ent->vel.z = 0.0f;
+    ent->idle_at = 0.0f;
+    ent->water = 0;
 
     /* walkmonster_start_go: a target is a path_corner, and th_walk at once */
     ent->corner = ent->patrol;
@@ -519,11 +587,21 @@ void mdl_think( World *world, Player *player, Fight *fight, Renderer *rdr,
         return;
     }
 
+    /* SV_CheckWaterTransition: a splash crossing a liquid's surface, sky
+       counting as one as id's test has it */
+    dmg = (short) ( pl_point_contents( &ent->pos, world ) <= CONTENTS_WATER ? 1 : -1 );
+    if ( ent->water && ent->water != dmg ) mdl_voice( player, ent, CHAN_AUTO, SND_H2OHIT, ATTN_NORM );
+    ent->water = dmg;
+
     /* Hit: the flinch, then the hunt. */
     if ( ent->state == MDL_ST_PAIN ) {
-        /* a dropped zombie lies on its last pain frame until it may rise */
+        /* a dropped zombie lies on its last pain frame until it may rise,
+           and hits the floor as it gets there (zombie_paine11) */
         if ( zombie && ent->anim_frame >= m->npain - 1 &&
              rdr->anim_time < ent->pain_finished ) return;
+        if ( zombie && ent->anim_frame == m->npain - 2 &&
+             ent->pain_finished - rdr->anim_time > ZOMBIE_FLINCH )
+            mdl_voice( player, ent, CHAN_BODY, SND_Z_FALL, ATTN_NORM );
         ent->anim_frame++;
         if ( ent->anim_frame >= m->npain ) {
             ent->state = MDL_ST_RUN;
@@ -616,6 +694,8 @@ void mdl_think( World *world, Player *player, Fight *fight, Renderer *rdr,
         return;
     }
 
+    mdl_idle( player, rdr, ent );
+
     if ( ent->state == MDL_ST_STAND ) {
         if ( can_chase && mdl_find_target( world, player, fight, rdr, ent ) ) {
             ent->hunting = -1;
@@ -662,7 +742,12 @@ void mdl_think( World *world, Player *player, Fight *fight, Renderer *rdr,
             if ( dx*dx + dy*dy + dz*dz < MDL_RANGE_MELEE * MDL_RANGE_MELEE ) {
                 ent->state = MDL_ST_ATTACK;
                 ent->anim_frame = 0;
-                mdl_say( player, ent, 1 );
+                /* knight_attack: under 80 knight_atk1's sword1, else
+                   knight_runatk1's either */
+                if ( dx*dx + dy*dy + dz*dz >= 80.0f * 80.0f && mdl_rnd() > 0.5f )
+                    mdl_voice( player, ent, CHAN_WEAPON, SND_SWORD2, ATTN_NORM );
+                else
+                    mdl_say( player, ent, 1 );
                 return;
             }
         }
@@ -712,10 +797,10 @@ void mdl_think( World *world, Player *player, Fight *fight, Renderer *rdr,
                 if ( d2 < MDL_RANGE_NEAR * MDL_RANGE_NEAR ) chance = MDL_ATK_NEAR_MELEE;
                 if ( d2 >= MDL_RANGE_MID * MDL_RANGE_MID )  chance = 0.0f;
                 if ( mdl_rnd() < chance ) {
+                    /* ogre_nail1 says nothing; OgreFireGrenade's throw does */
                     ent->next_attack = rdr->anim_time + 2.0f * mdl_rnd();
                     ent->state = MDL_ST_ATTACK;
                     ent->anim_frame = 0;
-                    mdl_say( player, ent, 1 );
                     return;
                 }
             }
@@ -738,7 +823,7 @@ void mdl_think( World *world, Player *player, Fight *fight, Renderer *rdr,
                      mdl_leap_height( dz ) ) {
                     mdl_leap( fight, ent, dx, dy, DEMON_LEAP_SPEED, DEMON_LEAP_UP );
                     ent->next_attack = rdr->anim_time + 2.0f * mdl_rnd();
-                    snd_play( player, SND_DJUMP, &ent->pos );
+                    mdl_voice( player, ent, CHAN_VOICE, SND_DJUMP, ATTN_NORM );
                     return;
                 }
             }
@@ -753,11 +838,16 @@ void mdl_think( World *world, Player *player, Fight *fight, Renderer *rdr,
             if ( d2 < MDL_RANGE_MELEE * MDL_RANGE_MELEE ) {
                 if ( rdr->anim_time >= ent->next_attack ) {
                     ent->next_attack = rdr->anim_time + SHAMBLER_SMASH;
-                    snd_play( player, SND_SHAM_MELEE, &ent->pos );
+                    /* sham_melee: the smash's melee1 past 0.6 or unhurt,
+                       swingr's melee2 past 0.3, swingl's melee1 */
+                    chance = mdl_rnd();
+                    mdl_voice( player, ent, CHAN_VOICE,
+                               (short) ( chance > 0.3f && chance <= 0.6f && ent->health < SHAMBLER_HEALTH
+                                         ? SND_SHAM_MELEE2 : SND_SHAM_MELEE ), ATTN_NORM );
                     dmg = (short) ( ( mdl_rnd() + mdl_rnd() + mdl_rnd() ) * SHAMBLER_SMASH_DMG );
                     if ( dmg > 0 ) {
                         pl_damage( player, fight, rdr, dmg );
-                        snd_play( player, SND_SHAM_SMACK, &ent->pos );
+                        mdl_voice( player, ent, CHAN_VOICE, SND_SHAM_SMACK, ATTN_NORM );
                     }
                 }
             } else if ( rdr->anim_time >= ent->next_attack &&
@@ -791,7 +881,8 @@ void mdl_think( World *world, Player *player, Fight *fight, Renderer *rdr,
                     ( wizard ? WIZARD_ATK_WAIT : 2.0f * mdl_rnd() );
                 ent->state = MDL_ST_ATTACK;
                 ent->anim_frame = 0;
-                mdl_say( player, ent, 1 );
+                /* Wiz_StartFast's wattack; the zombie's z_shot1 is the throw's */
+                if ( wizard ) mdl_say( player, ent, 1 );
                 return;
             }
         }
