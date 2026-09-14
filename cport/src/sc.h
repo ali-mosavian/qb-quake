@@ -110,11 +110,13 @@ typedef struct {
     short far *bown;   /* owning face, -1 if none */
     short far *bprev;  /* the class's LRU chain */
     short far *bnext;
+    long  far *bstamp; /* clock at the block's last use */
+    long      clock;    /* one more a use, so no two stamps are equal */
     short     bcnt;     /* blocks made so far */
     short     rfree;    /* recycled block records, via bnext */
 
-    short lhead[SC_NORD];  /* per-order LRU of owned blocks, -1 empty.
-                               Head is least recently used. */
+    short lhead[SC_NORD];  /* per-order list of owned blocks, -1 empty.
+                               Order is not age: see sc_lru_oldest. */
     short ltail[SC_NORD];
     short fhead[SC_NORD];  /* per-order free blocks, via bnext */
 
@@ -165,6 +167,9 @@ short sc_mipfloor( short extw, short exth );
    the filler can address -- d_faces.c rounds a surface's own sw/sh up
    to its class size the same way, to size the DC it builds into. */
 short sc_shift( short v );
+/* sc_shift without the call, for the per-face path. v a plain
+   variable; sc_selftest holds it to sc_shift over -1..4096. */
+#define SC_SHIFT( v ) ( (v) <= 16 ? 4 : (v) <= 32 ? 5 : (v) <= 64 ? 6 : (v) <= 128 ? 7 : 8 )
 
 /* The DC holding this face's surface, or 0 if it has to be built. A
    mip other than the cached one, or a light-style change, counts as a

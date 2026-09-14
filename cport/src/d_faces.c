@@ -128,6 +128,13 @@ static short near clip_w(
     return dst;
 }
 
+/* 1 / 2^n for n = mip + SC_SHIFT, at most 3 + 8: the lightmap scale
+   without two long shifts, a long multiply and two divides a face. */
+static const float lm_recip[12] = {
+    1.0f, 0.5f, 0.25f, 0.125f, 0.0625f, 0.03125f, 0.015625f, 0.0078125f,
+    0.00390625f, 0.001953125f, 0.0009765625f, 0.00048828125f
+};
+
 void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *ls,
                     DrawParams *dp, Mat4 *m, Vec3 *campos, SysClock *sysclk )
 {
@@ -277,14 +284,12 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
                     lm_tmt  = gv[GEOM_LMOFS + 3];
                     lm_extw = (short)( ( gv[GEOM_LMOFS + 4] - 1 ) * 16 );
                     lm_exth = (short)( ( gv[GEOM_LMOFS + 5] - 1 ) * 16 );
-                    if ( lm_extw > 0 && lm_exth > 0 ) {
-                        lm_on = 1;
-#if QR_PROF
-                        dp->lm_want++; dp->k_ext++;
-#endif
-                    }
+                    if ( lm_extw > 0 && lm_exth > 0 ) lm_on = 1;
 
-                    lm_stag = ls_face_key( ls, gv[GEOM_LMOFS + 6], gv[GEOM_LMOFS + 7] );
+                    {
+                        short s01 = gv[GEOM_LMOFS + 6], s23 = gv[GEOM_LMOFS + 7];
+                        lm_stag = LS_FACE_KEY( ls, s01, s23 );
+                    }
 
                     /* D_CacheSurface's cache->dlight: a lit face
                        rebuilds while lit and once after. A constant
@@ -409,7 +414,8 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
 
             if ( lm_on ) {
                 lm_mip   = dp->use_mips ? mip_level : 0;
-                lm_floor = sc_mipfloor( lm_extw, lm_exth );
+                lm_floor = SC_SHIFT( lm_extw ) + SC_SHIFT( lm_exth ) <= SC_MAXSUM
+                         ? 0 : sc_mipfloor( lm_extw, lm_exth );
                 if ( lm_mip < lm_floor ) lm_mip = lm_floor;
 
                 /* Sticky mip: zl moves when the camera merely rotates,
@@ -431,14 +437,6 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
                 lm_fw = (short)( lm_extw >> lm_floor ); if ( lm_fw < 1 ) lm_fw = 1;
                 lm_fh = (short)( lm_exth >> lm_floor ); if ( lm_fh < 1 ) lm_fh = 1;
 
-#if QR_PROF
-                dp->k_mip  += lm_mip;
-                dp->k_sw   += lm_sw;
-                dp->k_sh   += lm_sh;
-                dp->k_stag += lm_stag;
-                dp->k_n++;
-#endif
-
                 lm_dc = (long) (void far *) sc_find( sc, i, lm_mip, lm_sw, lm_sh, lm_stag, &aim_ofs );
                 if ( lm_dc == 0 ) {
 #if QR_PROF
@@ -454,8 +452,8 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
                            black seam of recycled DC along two sides. */
                         tex_dc = (long) (void far *) mod_tex_raw( world, tex_id, lm_mip );
                         sb_build( sc, world, rdr, ls, (QSurf) lm_dc, (QSurf) tex_dc, i, lm_mip,
-                                  (short)( 1 << sc_shift( lm_sw ) ),
-                                  (short)( 1 << sc_shift( lm_sh ) ), gv, dl_bits );
+                                  (short)( 1 << SC_SHIFT( lm_sw ) ),
+                                  (short)( 1 << SC_SHIFT( lm_sh ) ), gv, dl_bits );
                     }
 #if QR_PROF
                     if ( dp->prof ) {
@@ -470,8 +468,8 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
                        the DC's padded size. In perspective mode the
                        coordinates are already over w, so the origin
                        has to be scaled by w to match. */
-                    lm_su = 1.0f / (float)( (1L << lm_mip) * (1L << sc_shift( lm_sw )) );
-                    lm_sv = 1.0f / (float)( (1L << lm_mip) * (1L << sc_shift( lm_sh )) );
+                    lm_su = lm_recip[ lm_mip + SC_SHIFT( lm_sw ) ];
+                    lm_sv = lm_recip[ lm_mip + SC_SHIFT( lm_sh ) ];
                     if ( dp->rend_mode == 0 ) {
                         for ( j = 0; j < cnt; j++ ) {
                             pu[j] = ( pu[j] - lm_tms*pw[j] ) * lm_su;

@@ -96,7 +96,7 @@ long ls_face_key( LightStyles *ls, short s01, short s23 )
 
     for ( k = 0; k < n; k++ ) {
         v = ls_value( ls, ls_face_style( s01, s23, k ) );
-        key += place * ( v == LS_UNSET ? 26 : v / 10 );
+        key += place * LS_KEY_DIGIT( v );
         place *= 27;
     }
     return key;
@@ -191,6 +191,21 @@ short ls_selftest( void )
     if ( ls_face_key( &ls, 0 | ( 10 << 8 ), 20 | ( 21 << 8 ) ) == k0 ) return -17;
     ls.tab[10].value = ls_lchar( 'n' );
     if ( ls_face_key( &ls, 0 | ( 10 << 8 ), 255 | ( 255 << 8 ) ) != 12L + 27L * 13L ) return -18;
+
+    /* the inline key agrees with the call on every one-style face,
+       the no-style one, and style 10 at 'a', 'm' and unset */
+    {
+        short st, s01, s23 = -1, pass;
+        for ( pass = 0; pass < 3; pass++ ) {
+            ls.tab[10].value = pass == 0 ? ls_lchar( 'a' ) : pass == 1 ? ls_lchar( 'm' ) : LS_UNSET;
+            for ( st = 0; st <= 255; st++ ) {
+                s01 = (short) ( st | 0xFF00 );
+                if ( LS_FACE_KEY( &ls, s01, s23 ) != ls_face_key( &ls, s01, s23 ) ) return -19;
+            }
+        }
+        s01 = 0 | ( 10 << 8 );
+        if ( LS_FACE_KEY( &ls, s01, s23 ) != ls_face_key( &ls, s01, s23 ) ) return -20;
+    }
 
     /* ls_scale_byte: the one thing neither map on hand ever exercises
        for real, so it has to prove itself here instead. */

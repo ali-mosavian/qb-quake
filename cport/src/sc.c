@@ -49,7 +49,7 @@ short sc_mipfloor( short extw, short exth )
         h = exth >> m;
         if ( w < 1 ) w = 1;
         if ( h < 1 ) h = 1;
-        if ( sc_shift( w ) + sc_shift( h ) <= SC_MAXSUM ) return m;
+        if ( SC_SHIFT( w ) + SC_SHIFT( h ) <= SC_MAXSUM ) return m;
     }
     return 3;
 }
@@ -231,21 +231,35 @@ static void sc_lru_unlink( SurfCache far *sc, short b )
     sc->bnext[b] = -1;
 }
 
-/* Move to the most-recent end. A cache HIT calls this too -- that is
-   the whole difference between LRU and the bump-and-flush it replaced. */
-static void sc_lru_touch( SurfCache far *sc, short b )
+/* A use: the stamp, and the class list if the block is not on it yet.
+   Moving a block to the list's end on every hit was ~115 instructions a
+   drawn face; a hit in sc_find writes the stamp alone. */
+static void sc_lru_use( SurfCache far *sc, short b )
 {
     short c, t;
 
     if ( b < 0 ) return;
+    sc->bstamp[b] = ++sc->clock;
     c = sc->bord[b];
-    if ( sc->ltail[c] == b ) return;   /* already the most recent */
-    sc_lru_unlink( sc, b );
+    if ( sc->bprev[b] >= 0 || sc->bnext[b] >= 0 || sc->lhead[c] == b ) return;
     t = sc->ltail[c];
     sc->bprev[b] = t;
     sc->bnext[b] = -1;
     if ( t >= 0 ) sc->bnext[t] = b; else sc->lhead[c] = b;
     sc->ltail[c] = b;
+}
+
+/* The least recently used owned block of an order. Stamps rise by one a
+   use, so the smallest is the block a list reordered on every use would
+   hold at its head. Only eviction walks it. */
+static short sc_lru_oldest( SurfCache far *sc, short ord )
+{
+    short b, best = -1;
+    long  low = 0;
+
+    for ( b = sc->lhead[ord]; b >= 0; b = sc->bnext[b] )
+        if ( best < 0 || sc->bstamp[b] < low ) { best = b; low = sc->bstamp[b]; }
+    return best;
 }
 
 /* A face's own blocks, most recently used first, linked through bsib
@@ -296,9 +310,10 @@ short sc_init( SurfCache far *sc, short face_count )
     /* Both callers hand in qglMemAlloc's uncleared bytes, and a pointer
        a refused allocation below never reached passed the null test. */
     sc->slot = 0; sc->bgrn = 0; sc->bord = 0; sc->bown = 0; sc->bprev = 0;
-    sc->bnext = 0; sc->btag = 0; sc->bstag = 0; sc->bsib = 0;
+    sc->bnext = 0; sc->btag = 0; sc->bstag = 0; sc->bsib = 0; sc->bstamp = 0;
     for ( i = 0; i < SC_NCLS; i++ ) sc->desc[i] = 0;
     sc->hnd = 0;
+    sc->clock = 0;
 
     sc->gen = 1;
     sc->flushes = 0;
@@ -321,9 +336,9 @@ short sc_init( SurfCache far *sc, short face_count )
     sc_why  = 1;
     sc->slot = (CacheSlot far *) qglMemAlloc( sc_want );
     if ( sc->slot ) {
-        for ( i = 0; i < 8; i++ ) {
+        for ( i = 0; i < 9; i++ ) {
             short far *b;
-            sc_want = (long) SC_NBLK * (long) ( i == 6 ? sizeof(long) : sizeof(short) );
+            sc_want = (long) SC_NBLK * (long) ( i == 6 || i == 8 ? sizeof(long) : sizeof(short) );
             b = (short far *) qglMemAlloc( sc_want );
             sc_why = (short) ( 2 + i );
             if ( !b ) break;
@@ -335,12 +350,13 @@ short sc_init( SurfCache far *sc, short face_count )
                 case 4: sc->bnext = b; break;
                 case 5: sc->btag  = b; break;
                 case 6: sc->bstag = (long far *) b; break;
-                default: sc->bsib = b; break;
+                case 7: sc->bsib = b; break;
+                default: sc->bstamp = (long far *) b; break;
             }
         }
     }
     if ( !sc->slot || !sc->bgrn || !sc->bord || !sc->bown || !sc->bprev ||
-         !sc->bnext || !sc->btag || !sc->bstag || !sc->bsib ) {
+         !sc->bnext || !sc->btag || !sc->bstag || !sc->bsib || !sc->bstamp ) {
         sc_shutdown( sc );   /* what did allocate goes back */
         return 0;
     }
@@ -425,9 +441,10 @@ void sc_shutdown( SurfCache far *sc )
     if ( sc->btag )  qglMemFree( (long) (void far *) sc->btag );
     if ( sc->bstag ) qglMemFree( (long) (void far *) sc->bstag );
     if ( sc->bsib )  qglMemFree( (long) (void far *) sc->bsib );
+    if ( sc->bstamp ) qglMemFree( (long) (void far *) sc->bstamp );
     sc->slot = 0; sc->bgrn = 0; sc->bord = 0;
     sc->bown = 0; sc->bprev = 0; sc->bnext = 0;
-    sc->btag = 0; sc->bstag = 0; sc->bsib = 0;
+    sc->btag = 0; sc->bstag = 0; sc->bsib = 0; sc->bstamp = 0;
 }
 
 void sc_flush( SurfCache far *sc, short face_count )
@@ -449,6 +466,8 @@ void sc_flush( SurfCache far *sc, short face_count )
 
 QSurf sc_find( SurfCache far *sc, short face, short mip, short w, short h, long stag, long *aim_ofs )
 {
+    short far *btag = sc->btag, far *bsib = sc->bsib;
+    long  far *bstag = sc->bstag;
     QSurf dc;
     short a, b, vcls, blk, tag;
 
@@ -456,31 +475,31 @@ QSurf sc_find( SurfCache far *sc, short face, short mip, short w, short h, long 
     /* A tag match says the mip and generation are right; stag is the
        separate axis, the light the block was built under. */
     tag = (short) ( sc->gen * 4 + mip );
-    for ( blk = sc->slot[face].blk; blk >= 0; blk = sc->bsib[blk] )
-        if ( sc->btag[blk] == tag && sc->bstag[blk] == stag ) break;
+    for ( blk = sc->slot[face].blk; blk >= 0; blk = bsib[blk] )
+        if ( btag[blk] == tag && bstag[blk] == stag ) break;
     if ( blk < 0 ) return 0;
 
     /* The view is the CURRENT mip's shape, which is not the block's: a
        block is sized once at the face's finest mip, and a coarser mip
        just uses less of it. Aiming a smaller view at a larger block's
        offset is safe -- the bigger alignment implies the smaller one. */
-    a = sc_shift( w );
-    b = sc_shift( h );
+    a = SC_SHIFT( w );
+    b = SC_SHIFT( h );
     if ( a + b > SC_MAXSUM ) return 0;
 
     vcls = (a - SC_MINSH) * 5 + (b - SC_MINSH);
     dc = sc->desc[vcls];
-    if ( dc != 0 ) {
-        *aim_ofs = (long) sc->bgrn[blk] * SC_GRAN;
-        /* Row 0 only: a hit is drawn, never built into, and the texture
-           fetch reads nothing past row 0. sc_alloc aims every row. */
-        if ( !qglAimView( dc, *aim_ofs ) ) dc = 0;
-    }
-    if ( dc != 0 ) {
-        sc->hits++;
-        sc_lru_touch( sc, blk );   /* a hit is a use -- the whole point */
-        sc_chain_front( sc, face, blk );
-    }
+    if ( dc == 0 ) return 0;
+    /* bgrn * SC_GRAN without the long-multiply helper: bgrn is under
+       16384, so the long is two 16-bit halves of it. */
+    ((unsigned short *) aim_ofs)[0] = (unsigned short) sc->bgrn[blk] << SC_MINORD;
+    ((unsigned short *) aim_ofs)[1] = (unsigned short) ( sc->bgrn[blk] >> ( 16 - SC_MINORD ) );
+    /* Row 0 only: a hit is drawn, never built into, and the texture
+       fetch reads nothing past row 0. sc_alloc aims every row. */
+    if ( !qglAimView( dc, *aim_ofs ) ) return 0;
+    sc->hits++;
+    sc->bstamp[blk] = ++sc->clock;   /* a use, already on its list */
+    if ( sc->slot[face].blk != blk ) sc_chain_front( sc, face, blk );
     return dc;
 }
 
@@ -503,8 +522,8 @@ QSurf sc_alloc( SurfCache far *sc, short face, short mip, short w, short h, shor
         }
     }
 
-    a = sc_shift( w );
-    b = sc_shift( h );
+    a = SC_SHIFT( w );
+    b = SC_SHIFT( h );
     if ( a + b > SC_MAXSUM ) return 0;   /* past one EMS page, and
                                              rdAccess maps only one */
     cidx = (a - SC_MINSH) * 5 + (b - SC_MINSH);
@@ -569,7 +588,7 @@ QSurf sc_alloc( SurfCache far *sc, short face, short mip, short w, short h, shor
         /* Then an eviction, and only as the very last thing, giving up. */
         blk = fresh >= 0 ? fresh : sc_bget( sc, bord, sz );
         if ( blk < 0 ) {                               /* evict LRU of this size */
-            blk = sc->lhead[bord];
+            blk = sc_lru_oldest( sc, bord );
             if ( blk >= 0 ) {
                 vic = sc->bown[blk];
                 if ( vic >= 0 ) {
@@ -585,7 +604,7 @@ QSurf sc_alloc( SurfCache far *sc, short face, short mip, short w, short h, shor
                recently used LARGER block and split it down -- what
                stops one size starving while another holds the store. */
             for ( j = bord + 1; j < SC_NORD; j++ ) {
-                vic = sc->lhead[j];
+                vic = sc_lru_oldest( sc, j );
                 if ( vic < 0 ) continue;
                 b2 = sc->bown[vic];
                 if ( b2 >= 0 ) {
@@ -617,7 +636,7 @@ QSurf sc_alloc( SurfCache far *sc, short face, short mip, short w, short h, shor
 
     sc->btag[blk]  = tag;
     sc->bstag[blk] = stag;
-    sc_lru_touch( sc, blk );
+    sc_lru_use( sc, blk );
 
     /* aim it at the bytes just claimed, ready for the builder to write;
        unaimed, nothing is built, so the block must not read as built */
@@ -726,6 +745,7 @@ static short sc_selftest_run( SurfCache far *sc )
     if ( sc_shift( 112 ) != 7 ) return -3;
     if ( sc_shift( 20 )  != 5 ) return -4;
     if ( sc_shift( 16 )  != 4 ) return -5;
+    for ( i = -1; i <= 4096; i++ ) if ( SC_SHIFT( i ) != sc_shift( i ) ) return -90;
 
     /* 224x224 pads to 256x256 = 64K, four pages: it must be refused */
     if ( sc_alloc( sc, 9, 0, 224, 224, 224, 224, 0, 10, &aim ) != 0 ) return -6;
@@ -745,6 +765,13 @@ static short sc_selftest_run( SurfCache far *sc )
     if ( sc_mipfloor( 112, 112 ) != 0 ) return -20;
 
     if ( sc_find( sc, 0, 0, 112, 112, 0, &aim ) != d0 ) return -9;
+    if ( aim != (long) sc->bgrn[sc->slot[0].blk] * SC_GRAN ) return -91;
+    {   /* a granule past 255 reaches the offset's high word */
+        short keep = sc->bgrn[sc->slot[0].blk];
+        sc->bgrn[sc->slot[0].blk] = 300;
+        if ( sc_find( sc, 0, 0, 112, 112, 0, &aim ) != d0 || aim != 300L * SC_GRAN ) return -92;
+        sc->bgrn[sc->slot[0].blk] = keep;
+    }
     if ( sc_find( sc, 1, 0, 112, 96,  0, &aim ) != d1 ) return -10;
     if ( sc_find( sc, 1, 1, 112, 96,  0, &aim ) != 0 )  return -11;
 
@@ -793,9 +820,16 @@ static short sc_selftest_run( SurfCache far *sc )
 
     /* face 0 is the oldest, so touching it must make face 1 the victim */
     if ( sc_find( sc, 0, 0, 112, 112, 0, &aim ) == 0 ) return -27;
-    if ( sc->lhead[ sc->bord[ sc->slot[0].blk ] ] < 0 ) return -28;
-    if ( sc->bown[ sc->lhead[ sc->bord[ sc->slot[0].blk ] ] ] != 1 )
-        return (short) -(4000 + sc->bown[ sc->lhead[ sc->bord[ sc->slot[0].blk ] ] ]);
+    {
+        short ord = sc->bord[ sc->slot[0].blk ];
+        if ( sc_lru_oldest( sc, ord ) < 0 ) return -28;
+        if ( sc->bown[ sc_lru_oldest( sc, ord ) ] != 1 )
+            return (short) -(4000 + sc->bown[ sc_lru_oldest( sc, ord ) ]);
+        /* each hit hands the victim on; the last puts face 1 back first */
+        if ( !sc_find( sc, 1, 0, 112, 112, 0, &aim ) || sc->bown[ sc_lru_oldest( sc, ord ) ] != 2 ) return -93;
+        if ( !sc_find( sc, 2, 0, 112, 112, 0, &aim ) || sc->bown[ sc_lru_oldest( sc, ord ) ] != 0 ) return -94;
+        if ( !sc_find( sc, 0, 0, 112, 112, 0, &aim ) || sc->bown[ sc_lru_oldest( sc, ord ) ] != 1 ) return -95;
+    }
 
     /* rebuilding the SAME face at a new mip must reuse its own block,
        not take a second one -- this is the leak the old allocator had */
@@ -916,6 +950,19 @@ static short sc_selftest_run( SurfCache far *sc )
     /* a surface the builder refused is not one */
     sc_forget( sc, 0 );
     if ( sc_find( sc, 0, 0, 112, 112, 7, &aim ) != 0 ) return -84;
+
+    /* a split takes the least recently used larger block, not the head of
+       its list: with face 0 hit, face 1 goes. Read FIFO, face 0 went. The
+       same-order path is -59's. */
+    sc_reset( sc, 10 );
+    if ( !sc_alloc( sc, 0, 0, 112, 112, 112, 112, 0, 10, &aim ) ||
+         !sc_alloc( sc, 1, 0, 112, 112, 112, 112, 0, 10, &aim ) ||
+         !sc_find( sc, 0, 0, 112, 112, 0, &aim ) ) return -98;
+    next0 = sc->cap;
+    sc->cap = sc->next;
+    built = sc_alloc( sc, 3, 0, 16, 16, 16, 16, 0, 10, &aim ) != 0;
+    sc->cap = next0;
+    if ( !built || sc->slot[1].blk >= 0 || sc->slot[0].blk < 0 ) return -96;
 
     sc_reset( sc, 10 );
     return 1;

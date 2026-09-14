@@ -73,6 +73,15 @@ short ls_face_styles( short s01, short s23 );
    each digit base 27 is a value over 10, LS_UNSET the 27th. Never
    negative, so a dynamic light's dl_stag cannot collide with it. */
 long  ls_face_key( LightStyles *ls, short s01, short s23 );
+/* ls_face_key without the call for a one-style face, most lit faces:
+   the call was 0.46 ms of e1m1's 26.45 ms of draw at (480,-19,29).
+   s23 is not read there, as ls_face_styles stops at the first 255.
+   Arguments are plain variables; each is read more than once. */
+#define LS_FACE_KEY( ls, s01, s23 ) \
+    ( ( ( (s01) & 0xFF00 ) == 0xFF00 && ( (s01) & 255 ) != 255 ) \
+      ? LS_KEY_DIGIT( (ls)->tab[ ( (s01) & 255 ) > LS_MAXSTYLE ? 0 : ( (s01) & 255 ) ].value ) \
+      : ls_face_key( (ls), (s01), (s23) ) )
+#define LS_KEY_DIGIT( v ) ( (long) ( (v) == LS_UNSET ? 26 : (v) / 10 ) )
 
 /* Proves the animation loop, not any real map's data -- see ls.c's own
    header on ls_selftest for what each check establishes. Returns 1 on
