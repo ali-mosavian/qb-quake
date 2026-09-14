@@ -19,10 +19,11 @@
 #define LS_NEUTRAL  120     /* ls_lchar('m')'s value -- the intensity the
                                 compiler assumed while baking, so a style
                                 sitting exactly here needs no scaling */
+#define LS_UNSET    116     /* a style nothing set: id's 256 where 'm' is
+                                264 */
 
 typedef struct {
-    char  pattern[33];  /* q_surf.bi's `string * 32`, null-terminated here
-                            instead of space-padded */
+    const char *pattern;  /* world.qc's, up to 51 characters */
     short length;
     short frame;
     short value;         /* current intensity: (pattern[c]-'a') * 10 */
@@ -62,10 +63,18 @@ short ls_value( LightStyles *ls, short style );
    style's current value. */
 short ls_scale_byte( short raw, short sval );
 
-/* One luxel, brightened by a dynamic light. pdist/ts/tt are all
-   texel-unit distances -- perpendicular to the face's plane, and the
-   two lateral ones, from the light's projection to this luxel. */
-short ls_add_dlight( short raw, float pdist, float ts, float tt, float radius );
+/* A face's styles, packed as its geometry record carries them: bytes 0
+   and 1 in s01, 2 and 3 in s23, 255 past the last. The k-th, how many,
+   and one epoch that moves when any of theirs does. */
+/* light_use's lightstyle(style, "m") or "a". */
+void ls_switch( LightStyles *ls, short style, short on );
+
+/* Every style at "m", for good: -nostyles, the A/B. */
+void ls_hold( LightStyles *ls );
+
+short ls_face_style( short s01, short s23, short k );
+short ls_face_styles( short s01, short s23 );
+short ls_face_epoch( LightStyles *ls, short s01, short s23 );
 
 /* Proves the animation loop, not any real map's data -- see ls.c's own
    header on ls_selftest for what each check establishes. Returns 1 on

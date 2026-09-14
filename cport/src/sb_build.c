@@ -34,6 +34,7 @@
 #include <mem.h>
 
 #include "sb_build.h"
+#include "dl.h"
 #include "qgl.h"   /* qglSbBuild, qglSfSize */
 
 #define GEOM_LMOFS 1
@@ -60,9 +61,29 @@ static short sb_pot( short v )
 static unsigned char ls_scratch_c[1024];
 static unsigned char lm_flat_c = 0;
 
+/* R_BuildLightMap's sum into the scratch: each style's plane scaled by
+   its value, the planes stacked lmh rows apart in the face's slot. */
+static void sb_sum_styles( LightStyles *ls, unsigned char far *srow,
+                           short lmw, short lmh, short s01, short s23, short nst )
+{
+    short sval[4], k, x, y;
+    long  stride = sb_pot( lmw ), v;
+    unsigned char *dst = ls_scratch_c;
+
+    for ( k = 0; k < nst; k++ ) sval[k] = ls_value( ls, ls_face_style( s01, s23, k ) );
+    for ( y = 0; y < lmh; y++ )
+        for ( x = 0; x < lmw; x++ ) {
+            v = 0;
+            for ( k = 0; k < nst; k++ )
+                v += (long) srow[ ( (long) k * lmh + y ) * stride + x ] * sval[k];
+            v /= LS_NEUTRAL;
+            *dst++ = (unsigned char) ( v > 255 ? 255 : v );
+        }
+}
+
 void sb_build( SurfCache far *sc, World *world, Renderer *rdr, LightStyles *ls,
                QSurf dc, QSurf tex, short face, short mip, short sw, short sh,
-               short far *gv )
+               short far *gv, unsigned long dlbits )
 {
     Face    far *f  = &world->faces[face];
     TexInfo far *ti = &world->texinfo[ f->tex_info_id ];
@@ -77,11 +98,7 @@ void sb_build( SurfCache far *sc, World *world, Renderer *rdr, LightStyles *ls,
     unsigned char far *srow;
     unsigned char far *lrow;
     short style, sval; short scaled = 0;
-    short li; long lv;
-    Plane pl; float pdist; short dlit = 0;
-    float impx, impy, impz;
-    float locs, loct;
-    short lx, ly;
+    short li, nst; long lv;
 
     sc_note_build( sc );
 
@@ -119,19 +136,9 @@ void sb_build( SurfCache far *sc, World *world, Renderer *rdr, LightStyles *ls,
 
         style = gv[GEOM_LMOFS + 6] & 255;
         sval  = ls_value( ls, style );
+        nst   = ls_face_styles( gv[GEOM_LMOFS + 6], gv[GEOM_LMOFS + 7] );
 
-        pl = world->planes[ f->plane_id ];
-        pdist = rdr->dlight.pos.x * pl.norm.x + rdr->dlight.pos.y * pl.norm.y +
-                rdr->dlight.pos.z * pl.norm.z - pl.dist;
-        dlit = ( (pdist < 0.0f ? -pdist : pdist) < rdr->dlight.radius );
-        if ( dlit ) {
-            sc_note_dlit( sc );
-            impx = rdr->dlight.pos.x - pdist * pl.norm.x;
-            impy = rdr->dlight.pos.y - pdist * pl.norm.y;
-            impz = rdr->dlight.pos.z - pdist * pl.norm.z;
-            locs = impx*ti->vecs[0] + impy*ti->vecs[1] + impz*ti->vecs[2] + ti->vecs[3];
-            loct = impx*ti->vect[0] + impy*ti->vect[1] + impz*ti->vect[2] + ti->vect[3];
-        }
+        if ( dlbits ) sc_note_dlit( sc );
 
         /* The product alone does not bound the copy: a NEGATIVE lmw
            passes `lmw * lmh <= 1024` and then `(size_t) lmw` is nearly
@@ -142,28 +149,28 @@ void sb_build( SurfCache far *sc, World *world, Renderer *rdr, LightStyles *ls,
            nothing should reach here with a negative width again -- bound
            the components anyway, because the cost is two compares and
            the failure is the whole process. */
-        if ( (sval != LS_NEUTRAL || dlit) &&
+        if ( (sval != LS_NEUTRAL || nst > 1 || dlbits) &&
              lmw > 0 && lmh > 0 && (long) lmw * lmh <= 1024L ) {
-            lrow = ls_scratch_c;
-            for ( li = 0; li < lmh; li++ ) {
-                _fmemcpy( lrow, srow, (size_t) lmw );
-                srow += sb_pot( lmw );   /* see this file's own header:
-                                             the known, not-yet-fixed bug */
-                lrow += lmw;
-            }
-            for ( li = 0; li < lmw * lmh; li++ ) {
-                lv = ls_scratch_c[li];
-                if ( sval != LS_NEUTRAL ) lv = ls_scale_byte( (short) lv, sval );
-                if ( dlit ) {
-                    lx = li % lmw;
-                    ly = li / lmw;
-                    lv = ls_add_dlight( (short) lv, pdist,
-                                        locs - (tms + lx*16 + 8),
-                                        loct - (tmt + ly*16 + 8),
-                                        rdr->dlight.radius );
+            if ( nst > 1 ) {
+                sb_sum_styles( ls, srow, lmw, lmh, gv[GEOM_LMOFS + 6],
+                               gv[GEOM_LMOFS + 7], nst );
+            } else {
+                lrow = ls_scratch_c;
+                for ( li = 0; li < lmh; li++ ) {
+                    _fmemcpy( lrow, srow, (size_t) lmw );
+                    srow += sb_pot( lmw );   /* see this file's own header:
+                                                 the known, not-yet-fixed bug */
+                    lrow += lmw;
                 }
-                ls_scratch_c[li] = (unsigned char) lv;
+                if ( sval != LS_NEUTRAL )
+                    for ( li = 0; li < lmw * lmh; li++ ) {
+                        lv = ls_scale_byte( ls_scratch_c[li], sval );
+                        ls_scratch_c[li] = (unsigned char) lv;
+                    }
             }
+            if ( dlbits )
+                dl_add_luxels( rdr, dlbits, &world->planes[ f->plane_id ], ti,
+                               tms, tmt, ls_scratch_c, lmw, lmh );
             srow = ls_scratch_c;
             scaled = 1;
         }

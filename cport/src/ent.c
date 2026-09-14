@@ -476,6 +476,26 @@ static void ent_load_corners( World *world, unsigned char far *buf, long *ofs, s
     *ofs += (long) count * sizeof(PathCorner);
 }
 
+static void ent_load_lights( World *world, unsigned char far *buf, long *ofs, short count )
+{
+    EntsLight lr;
+    short i;
+
+    world->light_count = count;
+    world->light = (LightEnt far *) qglMemAlloc( (long) ( count ? count : 1 ) * sizeof(LightEnt) );
+    if ( !world->light ) { fprintf( stderr, "ents.bin: no room for the lights\n" ); exit( 1 ); }
+    for ( i = 0; i < count; i++ ) {
+        _fmemcpy( &lr, buf + *ofs, sizeof(EntsLight) );
+        *ofs += sizeof(EntsLight);
+        world->light[i].name     = lr.name;
+        world->light[i].style    = lr.style;
+        world->light[i].on       = lr.on;
+        world->light[i].start_on = lr.on;
+        world->light[i].stamp    = i;
+    }
+    world->light_clock = count;
+}
+
 /* The message table is last, so what is left of the file is what it
    holds -- and a header that disagrees with that is the tell that some
    record above was skipped by the wrong size. */
@@ -634,6 +654,7 @@ void ent_load_teleports( World *world )
     ent_load_corners( world, buf, &ofs, h.ncorner );
 
     ent_load_crates( world, buf, &ofs, h.ncrate );
+    ent_load_lights( world, buf, &ofs, h.nlight );
 
     ent_load_msgs( world, buf, &ofs, h.nmsg, n );
 

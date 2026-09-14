@@ -22,24 +22,84 @@ static short ls_lchar( char c )
     return v * 10;
 }
 
+/* world.qc's worldspawn; 32..62 are the switchable lights', "m" until
+   a light turns one off. */
+#define LS_WORLD 12
+static const char *ls_world[LS_WORLD] = {
+    "m",
+    "mmnmmommommnonmmonqnmmo",
+    "abcdefghijklmnopqrstuvwxyzyxwvutsrqponmlkjihgfedcba",
+    "mmmmmaaaaammmmmaaaaaabcdefgabcdefg",
+    "mamamamamama",
+    "jklmnopqrstuvwxyzyxwvutsrqponmlkj",
+    "nmonqnmomnmomomno",
+    "mmmaaaabcdefgmmmmaaaammmaamm",
+    "mmmaaammmaaammmabcdefaaaammmmabcdefmmmaaaa",
+    "aaaaaaaazzzzzzzz",
+    "mmamammmmammamamaaamammma",
+    "abcdefghijklmnopqrrqponmlkjihgfedcba"
+};
+
 void ls_init( LightStyles *ls )
 {
     short i;
 
     for ( i = 0; i <= LS_MAXSTYLE; i++ ) {
-        strcpy( ls->tab[i].pattern, "m" );
-        ls->tab[i].length = 1;
+        ls->tab[i].pattern = i < LS_WORLD ? ls_world[i] : "m";
+        ls->tab[i].length = (short) strlen( ls->tab[i].pattern );
         ls->tab[i].frame  = 0;
-        ls->tab[i].value  = ls_lchar( 'm' );
+        ls->tab[i].value  = i < LS_WORLD ? ls_lchar( ls->tab[i].pattern[0] ) : LS_UNSET;
         ls->tab[i].epoch  = 0;
     }
-
-    strcpy( ls->tab[1].pattern, "mmnmmommommnonmmonqnmmo" );
-    ls->tab[1].length = 23;
-    strcpy( ls->tab[10].pattern, "mmamammmmammamamaaamammma" );
-    ls->tab[10].length = 25;
+    ls->tab[63].pattern = "a";
+    ls->tab[63].value   = ls_lchar( 'a' );
 
     ls->last = 0.0f;
+}
+
+void ls_switch( LightStyles *ls, short style, short on )
+{
+    LightStyleEntry *e;
+    short v = ls_lchar( (char) ( on ? 'm' : 'a' ) );
+
+    if ( style < 0 || style > LS_MAXSTYLE ) return;
+    e = &ls->tab[style];
+    e->pattern = on ? "m" : "a";
+    e->length  = 1;
+    e->frame   = 0;
+    if ( e->value == v ) return;
+    e->value = v;
+    e->epoch++;
+    if ( e->epoch > 32000 ) e->epoch = 1;
+}
+
+void ls_hold( LightStyles *ls )
+{
+    short i;
+
+    for ( i = 0; i <= LS_MAXSTYLE; i++ ) ls_switch( ls, i, 1 );
+}
+
+short ls_face_style( short s01, short s23, short k )
+{
+    unsigned short w = (unsigned short) ( k < 2 ? s01 : s23 );
+    return (short) ( ( ( k & 1 ) ? w >> 8 : w ) & 255 );
+}
+
+short ls_face_styles( short s01, short s23 )
+{
+    short n = 0;
+    while ( n < 4 && ls_face_style( s01, s23, n ) != 255 ) n++;
+    return n;
+}
+
+short ls_face_epoch( LightStyles *ls, short s01, short s23 )
+{
+    long e = 0;
+    short k, n = ls_face_styles( s01, s23 );
+
+    for ( k = 0; k < n; k++ ) e += ls_epoch( ls, ls_face_style( s01, s23, k ) );
+    return (short) ( e % 32000L );
 }
 
 void ls_animate( LightStyles *ls, float anim_time )
@@ -84,18 +144,6 @@ short ls_scale_byte( short raw, short sval )
     return (short) v;
 }
 
-short ls_add_dlight( short raw, float pdist, float ts, float tt, float radius )
-{
-    float d = (float) sqrt( pdist*pdist + ts*ts + tt*tt );
-    float contrib = radius - d;
-    long v;
-    if ( contrib < 0.0f ) contrib = 0.0f;
-    v = raw + (long) ( contrib + 0.5f );   /* clng() rounds; contrib is
-                                               never negative here */
-    if ( v > 255 ) v = 255;
-    return (short) v;
-}
-
 /*
  * name: ls_selftest
  * desc: Proves the animation loop, not any real map: a synthetic
@@ -104,7 +152,7 @@ short ls_add_dlight( short raw, float pdist, float ts, float tt, float radius )
  *       accumulate correctly across an uneven call pattern (two short
  *       ticks the same as one that covers both) -- neither map on
  *       hand has a non-neutral style, so this is what actually
- *       exercises ls_scale_byte/ls_add_dlight too.
+ *       exercises ls_scale_byte too.
  */
 short ls_selftest( void )
 {
@@ -122,7 +170,7 @@ short ls_selftest( void )
 
     /* a synthetic 2-char pattern, 'a' then 'z': one step must flip the
        value and bump the epoch exactly once */
-    strcpy( ls.tab[30].pattern, "az" );
+    ls.tab[30].pattern = "az";
     ls.tab[30].length = 2;
     ls.tab[30].frame  = 0;
     ls.tab[30].value  = ls_lchar( 'a' );
@@ -143,7 +191,7 @@ short ls_selftest( void )
     /* two ticks that together cross a step boundary must land the same
        as one tick that crosses it directly -- steps come from elapsed
        TIME, not call count */
-    strcpy( ls.tab[31].pattern, "az" );
+    ls.tab[31].pattern = "az";
     ls.tab[31].length = 2;
     ls.tab[31].frame  = 0;
     ls.tab[31].value  = ls_lchar( 'a' );
@@ -161,14 +209,15 @@ short ls_selftest( void )
     if ( ls_scale_byte( 200, LS_NEUTRAL * 2 ) != 255 ) return -10;  /* clamps, doesn't wrap */
     if ( ls_scale_byte( 200, 0 ) != 0 ) return -11;                 /* off goes fully dark */
 
-    /* ls_add_dlight: the other thing neither map exercises for real. */
-    if ( ls_add_dlight( 0, 0.0f, 0.0f, 0.0f, 200.0f ) != 200 ) return -12;   /* dead centre: full radius */
-    if ( ls_add_dlight( 50, 200.0f, 0.0f, 0.0f, 200.0f ) != 50 ) return -13; /* exactly at edge: nothing added */
-    if ( ls_add_dlight( 50, 300.0f, 0.0f, 0.0f, 200.0f ) != 50 ) return -14; /* past edge: still nothing, never negative */
-    /* the three components combine by distance, not summed separately --
-       a 3-4-5 triangle, so this is exact, not an approximation */
-    if ( ls_add_dlight( 0, 0.0f, 3.0f, 4.0f, 10.0f ) != 5 ) return -15;
-    if ( ls_add_dlight( 200, 0.0f, 0.0f, 0.0f, 200.0f ) != 255 ) return -16; /* clamps, doesn't wrap */
+    /* a style nothing sets is id's 256, not 'm'; world.qc's start where
+       their patterns do; and the hold puts every one at 'm' */
+    ls_init( &ls );
+    if ( ls.tab[20].value != LS_UNSET ) return -12;
+    if ( ls.tab[2].value != ls_lchar( 'a' ) ) return -13;
+    ls_hold( &ls );
+    if ( ls.tab[2].value != LS_NEUTRAL || ls.tab[20].value != LS_NEUTRAL ) return -14;
+    ls_animate( &ls, 5.0f );
+    if ( ls.tab[2].value != LS_NEUTRAL ) return -15;
 
     return 1;
 }

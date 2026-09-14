@@ -92,6 +92,8 @@ void sys_parse_args( RunArgs *args )
         else if ( stricmp( argv[i], "-noportal" )== 0 ) args->no_portal = -1;
         else if ( stricmp( argv[i], "-nosubvis" )== 0 ) args->no_subvis = -1;
         else if ( stricmp( argv[i], "-nolcache" )== 0 ) args->no_lcache = -1;
+        else if ( stricmp( argv[i], "-nodlight" )== 0 ) args->no_dlight = -1;
+        else if ( stricmp( argv[i], "-nostyles" )== 0 ) args->no_styles = -1;
         else if ( stricmp( argv[i], "-comp" )    == 0 ) args->comp = -1;
         else if ( stricmp( argv[i], "-ptwire" )  == 0 ) args->ptwire = -1;
         else if ( stricmp( argv[i], "-nostats" ) == 0 ) args->no_stats = -1;

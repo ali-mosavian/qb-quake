@@ -21,6 +21,7 @@
 #include "pl_trace.h"
 #include "item.h"
 #include "ent_move.h"
+#include "dl.h"
 
 #define DEG2RAD 0.017453293f
 
@@ -199,6 +200,7 @@ static void pl_box_hit( World *world, Player *player, Fight *fight,
     c = it->pos;
     c.z += ENT_BOX_TOP * 0.5f;
     snd_play( player, SND_BOOM, &c );
+    dl_explosion( rdr, &c );
     dx = player->pos.x - c.x;
     dy = player->pos.y - c.y;
     dz = player->pos.z + ( PL_ZLO + PL_ZHI ) * 0.5f - c.z;
@@ -228,6 +230,7 @@ static void pl_grenade_explode( World *world, Player *player, Fight *fight,
 
     s->alive = 0;
     snd_play( player, SND_BOOM, &s->pos );
+    dl_explosion( rdr, &s->pos );
     dx = player->pos.x - s->pos.x;
     dy = player->pos.y - s->pos.y;
     dz = player->pos.z + ( PL_ZLO + PL_ZHI ) * 0.5f - s->pos.z;
@@ -283,6 +286,25 @@ static void pl_shot_touch( World *world, Player *player, Fight *fight,
         }
 }
 
+/* EF_MUZZLEFLASH on the player. The relink turns the player entity's
+   angles, whose pitch is the view's over -3, through AngleVectors, which
+   reads pitch the view's way: so looking down lifts the light. */
+static void pl_muzzle_light( Player *player, Camera *cam, Renderer *rdr )
+{
+    BspVec3 fwd;
+    float ax = cam->look_at.x - cam->pos.x;
+    float ay = cam->look_at.z - cam->pos.z;   /* renderer z is bsp y */
+    float az = cam->look_at.y - cam->pos.y;
+    float h  = (float) sqrt( ax*ax + ay*ay );
+    float p  = (float) atan2( az, h ) / 3.0f;
+
+    if ( h < 0.001f ) { ax = 1.0f; ay = 0.0f; h = 1.0f; }
+    fwd.x = ax / h * (float) cos( p );
+    fwd.y = ay / h * (float) cos( p );
+    fwd.z = (float) -sin( p );
+    dl_muzzle( rdr, DL_KEY_PLAYER, &player->pos, &fwd );
+}
+
 static void pl_fire_nail( Player *player, Camera *cam, Fight *fight, Renderer *rdr )
 {
     BspVec3 aim;
@@ -300,7 +322,8 @@ static void pl_fire_nail( Player *player, Camera *cam, Fight *fight, Renderer *r
     fight->fire_at = rdr->anim_time;
     fight->show_hostile = rdr->anim_time + 1.0f;
     fight->flash_until = rdr->anim_time + 0.1f;
-    fight->nails = (short) ( fight->nails - ( super ? 2 : 1 ) );
+    pl_muzzle_light( player, cam, rdr );
+    fight->nails =(short) ( fight->nails - ( super ? 2 : 1 ) );
     fight->nail_side = (short) ( -fight->nail_side - 1 );
     snd_play( player, (short) ( super ? SND_SPIKE2 : SND_NAIL ), &player->pos );
 
@@ -340,6 +363,7 @@ static void pl_fire_grenade( Player *player, Camera *cam, Fight *fight, Renderer
     fight->show_hostile = rdr->anim_time + 1.0f;
     fight->rockets--;
     snd_play( player, SND_GRENADE, &player->pos );
+    pl_muzzle_light( player, cam, rdr );   /* player_rocket1, as the launcher's */
 
     fight->nail[i].pos = player->pos;
     fight->nail[i].vel.x = ( cam->look_at.x - cam->pos.x ) * PL_GL_SPEED;
@@ -368,6 +392,7 @@ static void pl_fire_rocket( Player *player, Camera *cam, Fight *fight, Renderer 
     fight->fire_at = rdr->anim_time;
     fight->show_hostile = rdr->anim_time + 1.0f;
     fight->flash_until = rdr->anim_time + 0.1f;
+    pl_muzzle_light( player, cam, rdr );
     fight->rockets--;
     snd_play( player, SND_ROCKET, &player->pos );
 
@@ -417,6 +442,7 @@ void pl_fire( World *world, Player *player, Camera *cam, Fight *fight,
     fight->fire_at = rdr->anim_time;
     fight->show_hostile = rdr->anim_time + 1.0f;
     fight->flash_until = rdr->anim_time + 0.1f;
+    pl_muzzle_light( player, cam, rdr );
     fight->shells--;
     snd_play( player, (short) ( npellet == PL_SSG_PELLETS ? SND_SSG : SND_SHOTGUN ),
               &player->pos );

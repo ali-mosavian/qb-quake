@@ -45,6 +45,7 @@ typedef struct {
     float   gravity;
     char    next_map[8];    /* space padded, blank for none */
     short   nmsg;
+    short   nlight;
 } EntsHead;
 
 /* A monster record. Not read -- the file puts the monsters FIRST, ahead
@@ -70,7 +71,7 @@ typedef struct {
 
 /* The records between the ones cport reads. ents.bin's order is
    monsters, teleporters, plats, hides, items, doors, triggers,
-   ambients, trains, corners, crates, messages. */
+   ambients, trains, corners, crates, lights, messages. */
 typedef struct {
     short   kind, amount, target, crate;
     BspVec3 org;
@@ -104,11 +105,15 @@ typedef struct {
     short targeted, first;
 } EntsTrain;
 
+typedef struct {
+    short name, style, on;
+} EntsLight;
+
 /* q_ent.bi's PathCorner is the file record too. */
 
 /* ents.bin's own records, checked the same way bsptypes.h checks the
    map's -- see the note there. */
-#define REC_ENTSHEAD 76
+#define REC_ENTSHEAD 78
 #define REC_ENTSMON  20
 #define REC_ENTSTELE 18
 #define REC_ENTSPLAT 10
@@ -119,6 +124,8 @@ typedef struct {
 #define REC_ENTSAMB  16
 #define REC_ENTSTRAIN 10
 #define REC_PATHCORNER 18
+#define REC_ENTSLIGHT 6
+typedef char rec_entslight_ok[ sizeof(EntsLight) == REC_ENTSLIGHT ? 1 : -1 ];
 
 typedef char rec_entshead_ok[ sizeof(EntsHead) == REC_ENTSHEAD ? 1 : -1 ];
 typedef char rec_entsmon_ok [ sizeof(EntsMon)  == REC_ENTSMON  ? 1 : -1 ];

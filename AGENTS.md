@@ -2963,7 +2963,11 @@ a percent, the interrupts landing an instruction apart, which is what
 arm is the one that catches a bracket around the wrong lines: with
 `-nomdl -noitems -noview` the alias phase has to fall to nothing.
 
-**e1m1 in cport draws UNLIT, and one mark is the only trace.** `sc_init`
+**Stale: e1m1 in cport is lit now** (`sc_init ok largest=121472`). What
+follows is why it was not, and timings quoted from then are the unlit
+fill.
+
+**e1m1 in cport drew UNLIT, and one mark was the only trace.** `sc_init`
 fails there -- 5,516 faces of `CacheSlot` plus five `SC_NBLK` arrays --
 so `sc_ready` is 0, `d_faces` takes the unlit path for every face, and
 `-lm` changes nothing: two runs with and without it gave the same
@@ -3334,6 +3338,57 @@ hundred over one walk, and pixel-diffing e1m7's `-bench` frame
 before/after the feature landed shows 69% of pixels uniformly brighter,
 no noise, consistent with an additive light near the camera in a tight
 corridor.
+
+### cport: id's lights, not the test light
+
+`cport/src/dl.c` is WinQuake's: 32 slots allocated as `CL_AllocDlight`
+does, `CL_DecayLights`, and the emitters -- a muzzle flash for every
+player weapon and the soldier's volley, the quad's and pentagram's
+EF_DIMLIGHT, EF_ROCKET on rockets and lava balls, TE_EXPLOSION on every
+blast. They change in `host_tick` and never in a frame, and the flicker
+has its own LCG so `rand()`'s sequence is the game's. `-nodlight` is the
+A/B. Not ported: the shambler's flash (NetQuake's monster QuakeC is not
+on disk to say it has one) and model lighting (the models draw unshaded).
+
+**A lit face's stag must change every tick.** The test light's constant
+-1 was a hit on the second lit frame, so a glow froze at its first
+build; that light never changed, and nothing showed it. `dl_stag` is
+`-1 - dl_tick` now. `cport/tools/test-dlight.sh` wants the quad's frame
+to move from tick 32 to 33 and a dead muzzle flash to leave the
+`-nodlight` frame.
+
+**A luxel byte is id's blocklights over 264, not 256** -- 'm' is 264 and
+`SB_LEVEL2T`'s 66 is 264/4 -- so a light adds `(rad - dist) * 256 / 264`.
+
+**The mark is per face, not per node**: the plane within the radius and
+the light's foot within the radius of the face's luxel rect. The plane
+alone marks every coplanar face on the map and rebuilds them each tick
+for the same picture.
+
+**A light style lives in a face's second to fourth lightmap.** mkassets
+shipped only style 0, so e1m1's 137 faces lit (0, 10) -- the fluorescent
+flicker -- drew steady. Every plane ships now, stacked `lm_h` rows apart
+in the face's slot, and `sb_build` sums them scaled by their styles as
+R_BuildLightMap does; `ls.c` has all of world.qc's styles.
+`cport/tools/test-styles.sh`; `-nostyles` holds every style at "m"
+(`ls_hold`), where it used to freeze each at its pattern's first letter.
+
+**A style nothing sets is 256, not 'm'.** id's `d_lightstylevalue`
+starts at 256 and only world.qc and the lights set any; 'm' is 264. So
+styles 12..62 start at `LS_UNSET`, 116 of 'm''s 120 -- 256/264 rounds
+to 116.4, 0.3% under.
+
+**Switchable lights are `ents.bin` records.** A light of style 32 or more
+with a targetname is `light_use`'s: START_OFF starts its style "a", its
+trigger toggles it. Each light carries a stamp, its map index at load and
+the next of `light_clock` at each use, and a style shows the light on it
+stamped last: of two lights on one style the later USED wins, as each
+use's `lightstyle` overwrites the other's. `ent_lights_selftest`. Nothing of this reached cport before, so e1m1's four
+START_OFF lights were on from the start. The header grew to 78 bytes,
+and mkassets read its monster records back at a hard-coded 76: e1m1
+shipped the knight and the ogre and died at `soldier.geo: no such
+member`. `ENTS_HEAD` is the one format now, and every staged `.qmp`
+needs rebuilding. `cport/tools/test-lightsw.sh`.
 
 ## Culling: the subtree skip, and what it nearly cost
 

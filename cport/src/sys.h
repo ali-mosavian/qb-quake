@@ -57,7 +57,9 @@ typedef struct {
                                  e1m1 spawn, 1.33% */
     short no_z;               /* -noz */
     short no_portal;          /* -noportal */
-    short no_lcache;          /* -nolcache: find an entity's leaves afresh
+    short no_dlight;          /* -nodlight: no dynamic light draws */
+    short no_styles;          /* -nostyles: the light styles hold still */
+    short no_lcache;         /* -nolcache: find an entity's leaves afresh
                                  every frame, as before the cache -- the
                                  A/B that proves it answers the same */
     short no_subvis;          /* -nosubvis: walk every node the frustum

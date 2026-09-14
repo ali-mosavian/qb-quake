@@ -27,6 +27,7 @@
 #include "mod.h"
 #include "mod_tex.h"
 #include "r_bsp.h"
+#include "dl.h"
 
 /* q_map.bi's -- must not drift from it (mod.c has its own copy, in a
    separate translation unit; not shared on purpose, see World's own
@@ -159,7 +160,8 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
     float tw, th, dp_dist, turbph, zl, zsum;
     float ofs3[3];          /* the owning submodel's offset, BSP-space */
     float vx, vy, vz, tu, tv, rw, lm_su, lm_sv;
-    float dl_pdist;
+    unsigned long dl_bits;
+    unsigned long dl_on = dl_live( rdr );
     Plane far *pl;
     short far *gv;
     float far *turb_sin = (float far *) dp->turb_ptr;
@@ -257,6 +259,7 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
                (would rebuild every time the frame index moved). */
             lm_on = 0;
             lm_stag = 0;
+            dl_bits = 0;
             lm_extw = lm_exth = 0;
             lm_tms = lm_tmt = 0;
 #if QR_PROF
@@ -280,19 +283,15 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
 #endif
                     }
 
-                    lm_stag = ls_epoch( ls, gv[GEOM_LMOFS + 6] & 255 );
+                    lm_stag = ls_face_epoch( ls, gv[GEOM_LMOFS + 6], gv[GEOM_LMOFS + 7] );
 
-                    /* A face the dynamic light reaches must rebuild
-                       every frame it stays in range, and once more
-                       the frame after it leaves to wash the glow out.
-                       Forcing -1 (a value ls_epoch never returns)
-                       makes the miss happen before sc_find runs, so a
-                       plain epoch match cannot paper over it. */
-                    dl_pdist = dp->dl_x * pl->norm.x
-                             + dp->dl_y * pl->norm.y
-                             + dp->dl_z * pl->norm.z - pl->dist;
-                    if ( dl_pdist < 0 ) dl_pdist = -dl_pdist;
-                    if ( dl_pdist < dp->dl_radius ) lm_stag = -1;
+                    /* D_CacheSurface's cache->dlight: a lit face
+                       rebuilds while lit and once after. A constant
+                       stag here hit on the second lit frame, and the
+                       glow froze at its first build. */
+                    dl_bits = dl_mark( rdr, dl_on, pl, &texinf[tex], lm_tms, lm_tmt,
+                                       lm_extw, lm_exth );
+                    if ( dl_bits ) lm_stag = dl_stag( rdr );
                 }
             }
 
@@ -455,7 +454,7 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
                         tex_dc = (long) (void far *) mod_tex_raw( world, tex_id, lm_mip );
                         sb_build( sc, world, rdr, ls, (QSurf) lm_dc, (QSurf) tex_dc, i, lm_mip,
                                   (short)( 1 << sc_shift( lm_sw ) ),
-                                  (short)( 1 << sc_shift( lm_sh ) ), gv );
+                                  (short)( 1 << sc_shift( lm_sh ) ), gv, dl_bits );
                     }
 #if QR_PROF
                     if ( dp->prof ) {

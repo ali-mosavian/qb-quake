@@ -23,6 +23,8 @@
 #include "d_poly.h"
 #include "ls.h"
 #include "sc.h"
+#include "dl.h"
+#include "ent_move.h"
 #include "sys_time.h"
 #include "mod.h"
 #include "mod_tex.h"
@@ -189,6 +191,18 @@ int main( void )
         short scr = sc_selftest();
         char buf[32];
         sprintf( buf, "sc_selftest %d", scr );
+        mark( buf );
+    }
+    {
+        short dlr = dl_selftest();
+        char buf[32];
+        sprintf( buf, "dl_selftest %d", dlr );
+        mark( buf );
+    }
+    {
+        short elr = ent_lights_selftest();
+        char buf[32];
+        sprintf( buf, "ent_lights_selftest %d", elr );
         mark( buf );
     }
     {
@@ -481,6 +495,8 @@ int main( void )
         rdr.use_mips = (short) ( args.no_mip ? 0 : -1 );
         rdr.no_subvis = args.no_subvis;
         rdr.no_lcache = args.no_lcache;
+        rdr.no_dlight = args.no_dlight;
+        rdr.no_styles = args.no_styles;
         rdr.lightmap = args.use_lm;   /* the starting state of the 'L'
                                           toggle (in_handle_toggles) --
                                           dp->use_lm (h_frame.c) is the

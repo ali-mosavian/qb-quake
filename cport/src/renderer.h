@@ -28,9 +28,13 @@ typedef struct {
     short   ok;
 } LeafCache;
 
+/* cl_dlights' dlight_t, in BSP space. Live while die >= anim_time and
+   radius > 0. */
+#define DL_MAX 32
 typedef struct {
-    Vec3 pos;
-    float radius;
+    BspVec3 origin;
+    float   radius, die, decay, minlight;
+    short   key;
 } DynLight;
 
 /* Renderer -- per-frame toggles and counters. Quake's own name for
@@ -49,7 +53,11 @@ typedef struct {
     short polys;
     short tris;
     float anim_time;
-    DynLight dlight;
+    DynLight dlights[DL_MAX];
+    short dl_tick;            /* dl_stag's clock */
+    unsigned short dl_seed;   /* the flicker's LCG */
+    short no_dlight;          /* -nodlight */
+    short no_styles;          /* -nostyles: the light styles hold still */
 
     /* q_vis.bi's VisState -- folded in here per the port plan's own
        architecture table (Renderer replaces RenderState *and*
@@ -213,7 +221,6 @@ typedef struct {
     float xresh, yresh;
     float z_near, z_far;
     float anim_time;
-    float dl_x, dl_y, dl_z, dl_radius;
     short frame_stamp;
     short ord_count;
     short use_lm;

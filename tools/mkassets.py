@@ -174,6 +174,8 @@ def build_models(pak: str, kinds: set[int], tmp: str) -> dict[str, bytes]:
     return out
 
 
+ENTS_HEAD  = '<4f3fff13hf8shh'   # ent.h's EntsHead; the monsters follow it
+
 QMAP_VER   = 1
 QMAP_HEAD  = 64
 QMAP_NAME  = 16
@@ -527,8 +529,9 @@ def convert_lightmaps(d, lumps, out):
     faces = d[lumps[7][0]:lumps[7][0]+lumps[7][1]]
     geo = face_lightmap_geometry(d, lumps)
 
-    # Every lit face's style-0 plane, in face order. Only style 0 is kept:
-    # the builder has never read the others, and they were pure weight.
+    # Every lit face's planes, one a style, in face order and stacked lm_h
+    # rows apart in its slot: R_BuildLightMap sums them, each scaled by its
+    # style, and a flickering light lives only in a face's second plane.
     runs = []
     for k in range(0, len(faces), 20):
         styles = faces[k+12:k+16]
@@ -540,13 +543,13 @@ def convert_lightmaps(d, lumps, out):
         if lightofs < 0 or nstyles == 0:
             continue
         size = lm_w * lm_h
-        if lightofs + size > len(lighting):
-            raise SystemExit(f"face {k//20}: lightofs {lightofs}+{size} "
+        if lightofs + size * nstyles > len(lighting):
+            raise SystemExit(f"face {k//20}: lightofs {lightofs}+{size}x{nstyles} "
                              f"runs past the {len(lighting)}-byte LIGHTING lump")
-        if pot2(lm_w) * pot2(lm_h) > LM_ATLAS_W:
-            raise SystemExit(f"face {k//20}: {lm_w}x{lm_h} luxels round up to "
+        if pot2(lm_w) * pot2(lm_h * nstyles) > LM_ATLAS_W:
+            raise SystemExit(f"face {k//20}: {lm_w}x{lm_h}x{nstyles} luxels round up to "
                              f"a slot past one {LM_ATLAS_W}-byte scanline")
-        runs.append((k // 20, size, lightofs, lm_w, lm_h))
+        runs.append((k // 20, size, lightofs, lm_w, lm_h * nstyles))
 
     # Each face gets a slot of pot(lm_w) x pot(lm_h) bytes. Two reasons.
     #
@@ -916,6 +919,7 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
     # NOT_EASY 256, NOT_MEDIUM 512, NOT_HARD 1024, on any entity -- e1m1's
     # ambush hints exist only below hard; nightmare is hard's set
     skip = 256 << min(skill, 2)
+    lights: list[tuple[int, int, int]] = []   # targetname id, style, starts on
     for block in text.split('{')[1:]:
         kv = dict(ENT_PAIR.findall(block.split('}')[0]))
         if int(kv.get('spawnflags', '0')) & skip:
@@ -1000,6 +1004,13 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
                 doors.append(door_record(model(kv['model']), kv, boxes[model(kv['model'])]))
             case 'func_door_secret' if model(kv.get('model', '')):
                 doors.append(secret_record(model(kv['model']), kv, boxes[model(kv['model'])]))
+            case 'light' | 'light_fluoro' if int(kv.get('style', '0') or 0) >= 32:
+                # light_use toggles its style between "m" and "a", START_OFF (1)
+                # starting it "a"; a plain light with no targetname is removed
+                # before it sets anything
+                if kv.get('targetname') or kv['classname'] == 'light_fluoro':
+                    lights.append((name_id(kv.get('targetname', '')), int(kv['style']),
+                                   0 if int(kv.get('spawnflags', '0')) & 1 else 1))
             case 'path_corner':
                 corners.append((kv.get('targetname', ''), vec(kv.get('origin', '0 0 0')), float(kv.get('wait', '0')),
                                 kv.get('target', '')))
@@ -1045,10 +1056,10 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
         msg_id(d[-1])
     for u in uses:
         msg_id(u[10])
-    buf = bytearray(struct.pack('<4f3fff13hf8sh', *spawn, angle, *inter[0], inter[1], inter[2], nmodels,
+    buf = bytearray(struct.pack(ENTS_HEAD, *spawn, angle, *inter[0], inter[1], inter[2], nmodels,
                                 len(teles), len(plats), len(hides), len(items), len(doors), len(uses), len(mons),
                                 len(ambs), len(trains), len(corners), worldtype, len(crates.used), gravity,
-                                next_map[:8].encode('latin1').ljust(8), len(msgs)))
+                                next_map[:8].encode('latin1').ljust(8), len(msgs), len(lights)))
     for kind, org, yaw, target in mons:
         buf += struct.pack('<h3ffh', kind, *org, yaw, corner_at.get(target, -1))   # its patrol's first corner
     for m, org, yaw in teles:
@@ -1081,6 +1092,8 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
         for tn, corners4 in src.faces:
             tex, frames = crates.tex_id(name, tn)
             buf += struct.pack('<hh12b', tex, frames, *(v for corner in corners4 for v in corner))
+    for name, style, on in lights:
+        buf += struct.pack('<3h', name, style, on)
     for b in msgs:
         buf += b
     return bytes(buf)
@@ -1534,7 +1547,8 @@ def main():
     # what the runtime loads, so it is what decides which models ship.
     head = struct.calcsize('<3ff3fff')
     nmon = struct.unpack_from('<13h', OUT['ents.bin'], head)[7]
-    kinds = {struct.unpack_from('<h', OUT['ents.bin'], 76 + i * 20)[0] for i in range(nmon)}
+    kinds = {struct.unpack_from('<h', OUT['ents.bin'], struct.calcsize(ENTS_HEAD) + i * 20)[0]
+             for i in range(nmon)}
     models = build_models(pak, kinds, os.path.join(outdir, '.mdl'))
     sbar = build_sbar(pak, os.path.join(outdir, '.gfx'))
     sounds = build_sounds(pak, os.path.join(outdir, '.snd'))

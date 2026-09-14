@@ -35,9 +35,10 @@ typedef struct {
  *       the light table, the resampling steps, and normalising the
  *       luxel pointer. gv is the face's already-fetched geometry
  *       record (d_poly's own scratch -- the caller's, not World's).
+ *       dlbits are the dynamic lights reaching the face (dl_mark).
  */
 void sb_build( SurfCache far *sc, World *world, Renderer *rdr, LightStyles *ls,
                QSurf dc, QSurf tex, short face, short mip, short sw, short sh,
-               short far *gv );
+               short far *gv, unsigned long dlbits );
 
 #endif

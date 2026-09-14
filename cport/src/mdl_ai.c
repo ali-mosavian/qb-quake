@@ -17,6 +17,7 @@
 #include "pl_trace.h"
 #include "ent.h"
 #include "weapons.h"   /* the ray-box test, the pellet spread, the projectiles */
+#include "dl.h"
 
 #define DEG2RAD 0.017453293f
 
@@ -357,6 +358,12 @@ static void mdl_fire( World *world, Player *player, Fight *fight,
     TraceResult tr;
     float l;
     short p, dmg = 0;
+
+    /* army_fire's EF_MUZZLEFLASH; a monster's angles carry no pitch */
+    aim.x = (float) cos( ent->yaw * 0.01745329f );
+    aim.y = (float) sin( ent->yaw * 0.01745329f );
+    aim.z = 0.0f;
+    dl_muzzle( rdr, (short) ( DL_KEY_MON + ( ent - world->mon ) ), &ent->pos, &aim );
 
     aim.x = player->pos.x - player->vel.x * MDL_AIM_LAG - ent->pos.x;
     aim.y = player->pos.y - player->vel.y * MDL_AIM_LAG - ent->pos.y;

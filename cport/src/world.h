@@ -8,6 +8,14 @@
 #define TEX_HEIGHTS 15
 #include "mdltypes.h"
 
+/* A light of style 32 or more: light_use toggles the style between "m"
+   and "a", and START_OFF starts it "a". stamp orders the uses: of two
+   lights on one style the later used draws, and unused, the later in
+   the map. */
+typedef struct {
+    short name, style, on, start_on, stamp;
+} LightEnt;
+
 /*
  * World -- the loaded map. Grows a field at a time as the module that
  * owns it gets ported; this is ent.bas's, pl_move.bas's and r_bsp.bas's
@@ -89,6 +97,10 @@ typedef struct {
 
     short       corner_count;
     PathCorner  far *corner;
+
+    short       light_count;
+    short       light_clock;     /* the last stamp handed out */
+    LightEnt    far *light;
 
     short       item_count;
     short       item_max;        /* the map's own plus a backpack a monster */

@@ -36,13 +36,11 @@
 #include "gstate.h"
 #include "mdl.h"
 #include "snd.h"
+#include "dl.h"
 
 /* q_scr.bi's HOST_DT#/HOST_MAXSTEPS. */
 #define HOST_DT       0.0166666f
 #define HOST_MAXSTEPS 5
-
-/* q_draw.bi's DL_RADIUS#: Quake's own rocket dlight radius. */
-#define DL_RADIUS 200.0f
 
 #define QGL_Z_OFF 0
 
@@ -126,6 +124,9 @@ void host_tick( World *world, Player *player, Camera *cam, Renderer *rdr,
        what shoots. */
     short fire = (short) ( input->mouse.left || input->keyboard.k[KEY_CTRL] );
 
+    /* id decays after drawing; this is the same place, before the next */
+    dl_decay( rdr, dt );
+
     /* what the player asked for */
     in_handle_toggles( input, rdr, cam, player, hud );
 
@@ -174,13 +175,15 @@ void host_tick( World *world, Player *player, Camera *cam, Renderer *rdr,
     rdr->anim_time += dt;
 
     /* light styles: fixed 10 Hz off the same clock, not framerate */
-    ls_animate( ls, rdr->anim_time );
+    if ( rdr->no_styles ) {
+        ls_hold( ls );
+    } else {
+        ent_lights_sync( world, ls );
+        ls_animate( ls, rdr->anim_time );
+    }
 
-    /* the test dynamic light, following the player */
-    rdr->dlight.pos.x = player->pos.x;
-    rdr->dlight.pos.y = player->pos.y;
-    rdr->dlight.pos.z = player->pos.z;
-    rdr->dlight.radius = DL_RADIUS;
+    /* the lights the entities carry, at the time this frame draws */
+    dl_relink( rdr, player, fight );
 }
 
 /*
@@ -284,10 +287,6 @@ void host_render( World *world, Renderer *rdr, Camera *cam, Player *player,
     dp.z_near      = z_near;
     dp.z_far       = z_far;
     dp.anim_time   = rdr->anim_time;
-    dp.dl_x        = rdr->dlight.pos.x;
-    dp.dl_y        = rdr->dlight.pos.y;
-    dp.dl_z        = rdr->dlight.pos.z;
-    dp.dl_radius   = rdr->dlight.radius;
     dp.frame_stamp = rdr->frame_stamp;
     dp.ord_count   = (short) rdr->ord_count;
     /* Config's own use_lm toggle (common.bas, not yet ported) isn't
