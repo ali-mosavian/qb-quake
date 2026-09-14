@@ -45,11 +45,11 @@
 ;;     because it has already clobbered ds with the buffer, which assumes
 ;;     SS == DGROUP. z.asm records that measured false here: the qgl test
 ;;     harness links with SS 094Bh against a DGROUP of 006Ch. So
-;;     `lds si, buff` moves to AFTER the dispatch instead -- ds is still
-;;     DGROUP at the call and the override is not needed at all. That
-;;     reordering is safe because both back-ends' wrAccess preserve ax
-;;     and cx, which mgl's own `add di, ax` after the call already relies
-;;     on.
+;;     `lds si, buff` moves to AFTER the dispatch, and the dispatch goes
+;;     through bx with ds still DGROUP. Through bp, as it first did, the
+;;     table was read via ss and bp was no longer the frame: buff and opt
+;;     came from wherever typ pointed (t37rowwr). Both back-ends' access
+;;     routines preserve ax and cx, which the `add di, ax` relies on.
 ;;
 
                 .model  medium, pascal
@@ -87,8 +87,8 @@ qglRowRead      proc    public uses es ds,\
                 mov     si, y
                 shl     si, 2
 
-                mov     bp, gs:[Surface.typ]
-                call    qgl$dctTB[bp].rdAccess  ;; ds:si-> sf[y]
+                mov     bx, gs:[Surface.typ]
+                call    qgl$dctTB[bx].rdAccess  ;; ds:si-> sf[y]
                 add     si, ax
 
                 cld                             ;; 8bpp: the whole of what
@@ -137,22 +137,24 @@ qglRowWriteEx   proc    public uses es ds,\
                 mov     di, y
                 shl     di, 2
 
-                mov     bp, fs:[Surface.typ]
-                call    qgl$dctTB[bp].wrAccess  ;; es:di-> sf[y]
+                ;; through bx, not bp: buff and opt are read after the call,
+                ;; and with bp holding typ they came from wherever it pointed
+                mov     bx, fs:[Surface.typ]
+                call    qgl$dctTB[bx].wrAccess  ;; es:di-> sf[y]
                 add     di, ax
 
+                mov     bx, opt                 ;; bh: FFh masks, bl: the mask
                 lds     si, buff                ;; ds:si-> buffer
 
                 cld
-                cmp     B opt+1, 0FFh
+                cmp     bh, 0FFh
                 je      @@masked
 
                 rep     movsb                   ;; 8bpp: the whole of what
                 jmp     short @@exit            ;; ul$cfmtTB would have run
 
                 ;; masking: opt's low byte is the colour that does not draw
-@@masked:       mov     bl, B opt
-                jcxz    @@exit
+@@masked:       jcxz    @@exit
 @@mloop:        lodsb
                 cmp     al, bl
                 je      @F
