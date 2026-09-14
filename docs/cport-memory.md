@@ -91,9 +91,16 @@ The BASIC build's per-face cuts were missing here, all four of them:
 | `SC_NBLK` | 1024 | 384 | +6,400 |
 
 Less 1,536 for the two block arrays `CacheSlot`'s tag and epoch moved
-to: **59,334 bytes on e1m1**, 65,298 on e1m4, 27,506 on dm3ish -- about
+to (the epoch is a 4-byte light key now, and a face's blocks chain
+through a third array: 1,536 more at `SC_NBLK` 384, not in the
+figures below): **59,334 bytes on e1m1**, 65,298 on e1m4, 27,506 on dm3ish -- about
 9.9 bytes a face plus a fixed 4,864. Both maps render byte-identically
 either way.
+
+`SC_NBLK` is 1024 again: the light-style variants need more than 384
+records at some e1m1 viewpoints. `sc_selftest` also stopped leaking its
+throwaway cache. Largest free block after `sc_init`, without sound, went
+from 122,080 to 119,200 on e1m1 and from 78,384 to 74,272 on e1m4.
 
 After them e1m1 reports 117,168 and 120,416 bytes free on two runs of
 one binary, where sc_init used to die wanting 44,128 of 15,616. Free

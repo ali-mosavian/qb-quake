@@ -36,7 +36,7 @@ unsigned long dl_mark( Renderer *rdr, unsigned long live, Plane far *pl,
                        TexInfo far *ti, short tms, short tmt,
                        short extw, short exth );
 
-/* The surface cache stag of a lit face: negative, which ls_epoch never
+/* The surface cache stag of a lit face: negative, which ls_face_key never
    is, and new every tick, so a lit face rebuilds each tick it stays lit
    and once after. */
 short dl_stag( Renderer *rdr );

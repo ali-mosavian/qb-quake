@@ -299,6 +299,60 @@ qglSetView      proc    public uses bx,\
 qglSetView      endp
 
 ;;::::::::::::::
+;; qglAimView (sf:dword, ofs:dword) :word
+;;
+;; qglSetView for row 0 alone, which is all qgl$SetTex reads: a surface
+;; cache hit re-aimed every row of its view once a face for nothing.
+;; Rows past 0 are left pointing wherever they did.
+qglAimView      proc    public,\
+                        sf:dword, ofs:dword
+
+                mov     ax, W sf+2
+                test    ax, ax
+                jz      @@error
+                push    es
+                push    bx
+                push    dx
+                mov     es, ax                  ;; es-> sf
+
+                ;; fillView's first entry, both halves
+                mov     ax, W ofs+0
+                mov     dx, W ofs+2
+                cmp     es:[Surface.typ], SF_EMS
+                je      @@ems
+                cmp     es:[Surface.typ], SF_MEM
+                jne     @@refuse
+
+                mov     bx, ax
+                and     bx, 15                  ;; bx= remainder
+                shrd    ax, dx, 4               ;; ax= paragraphs
+                mov     dx, W es:[Surface.fptr+2]
+                add     dx, ax
+                add     bx, W es:[Surface.fptr+0]
+                jmp     short @@put
+
+@@ems:          mov     bx, ax
+                and     bx, EMS_PGSIZE-1        ;; bx= offset in page
+                shrd    ax, dx, 14              ;; al= logical page
+                mov     dx, es:[Surface.hnd]
+                add     dh, al                  ;; add, as fillView says why
+
+@@put:          mov     W es:[SF_addrTB+0], dx
+                mov     W es:[SF_addrTB+2], bx
+                mov     ax, TRUE
+                jmp     short @@out
+
+@@refuse:       xor     ax, ax
+@@out:          pop     dx
+                pop     bx
+                pop     es
+                ret
+
+@@error:        xor     ax, ax                  ;; FALSE
+                ret
+qglAimView      endp
+
+;;::::::::::::::
 ;; qglDelView (sf:dword)
 qglDelView      proc    public,\
                         sf:dword

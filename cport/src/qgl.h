@@ -41,6 +41,7 @@
 /* far pascal, which is qgl.inc's own rule for every qgl_ entry. */
 
 short pascal far qglAbi( short what );
+short pascal far qglAimView( long sf, long ofs );
 void pascal far qglArFree( long h );
 short pascal far qglArHandle( long h );
 long pascal far qglArLoad( long path, short typ, short elsz, long cnt, short slot );
@@ -113,7 +114,6 @@ void pascal far qglRsCoverClear( void );
 short pascal far qglRsPoly( long d, void far * v, short n, short mode, long src );
 void pascal far qglRsRef( short on );
 short pascal far qglSbBuild( long dstDc, long texDc, long parm );
-short pascal far qglSbReserve( void );
 void pascal far qglSetClipRect( long sf, void far * cr );
 short pascal far qglSetView( long sf, long ofs );
 long pascal far qglSfAccessRd( long sf, short y );

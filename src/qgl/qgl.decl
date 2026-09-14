@@ -65,7 +65,6 @@ declare sub qglMousePos ( byval x as integer, byval y as integer )
 declare sub qglMouseShutdown ()
 declare function qglPrfTake ( byval k as integer ) as long
 declare function qglRsPoly ( byval d as long, seg v as any, byval cnt as integer, byval mode as integer, byval src as long ) as integer
-declare function qglSbReserve ( ) as integer
 declare sub qglSfFree ( byval s as long )
 declare function qglSfFromFileBas& ( path as string, byval wide as integer, byval kind as integer )
 declare function qglSfInit ( ) as integer

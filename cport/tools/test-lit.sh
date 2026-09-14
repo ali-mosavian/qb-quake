@@ -55,16 +55,34 @@ fi
 # undone, and any new array of that size, but not SC_NBLK alone
 # (6.4 KB), which is inside the noise. Move it deliberately, with a
 # reason, never because it went red.
+#
+# Moved to 100,000: SC_NBLK back to 1024 for the light-style variants,
+# and sc_selftest no longer leaking its cache, read 108,128 here. This
+# run has sound on, which reads 11 K under a -nosound run.
 largest=$(tr -d '\r' < "$OUT/CSTEP.TXT" 2>/dev/null |
           sed -n 's/.*sc_init ok largest=\([0-9]*\).*/\1/p' | tail -1)
 if [[ -z "$largest" ]]; then
     echo "FAIL: no 'sc_init ok largest=' in cstep.txt -- the cache died, or the mark did" >&2
     fail=1
-elif (( largest < 110000 )); then
-    echo "FAIL: $largest bytes free after sc_init, was 117-120 K -- something took the cuts back" >&2
+elif (( largest < 100000 )); then
+    echo "FAIL: $largest bytes free after sc_init, was 108 K -- something took the cuts back" >&2
     fail=1
 else
     echo "ok: $largest bytes still free after the cache is built"
+fi
+
+# sc.c freed qglMemAlloc's DOS blocks with farfree, which only knows
+# Borland's heap: sc_selftest's throwaway cache stayed allocated on every
+# launch, 18 K of conventional memory at SC_NBLK 1024.
+leak=$(tr -d '\r' < "$OUT/CSTEP.TXT" 2>/dev/null | sed -n 's/^sc_selftest_leak \(-*[0-9]*\).*/\1/p' | tail -1)
+if [[ -z "$leak" ]]; then
+    echo "FAIL: no sc_selftest_leak in cstep.txt" >&2
+    fail=1
+elif (( leak != 0 )); then
+    echo "FAIL: sc_selftest kept $leak bytes" >&2
+    fail=1
+else
+    echo "ok: sc_selftest gives back what it took"
 fi
 
 run "dm3ish.qmp $BASE -lm" >/dev/null

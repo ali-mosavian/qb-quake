@@ -8,8 +8,8 @@
  * already combined, wait to be drawn. C port of d_surf.bas's sc_*
  * slice (see sc.c's own header for the pool's shape and why).
  *
- * SurfCache is heap-sized, not stack/DGROUP-sized -- its five block
- * tables alone are 10 KB (SC_NBLK entries x 5 arrays x 2 bytes), and
+ * SurfCache is heap-sized, not stack/DGROUP-sized -- its block tables
+ * alone are 18 KB (SC_NBLK entries x 18 bytes), and
  * medium model's DGROUP is 64 KB shared with the stack and every other
  * near global. Its owner allocates it with qglMemAlloc (mgl's dos.h, the
  * standard far heap, not a MEM/EMS uGL store -- this is bookkeeping,
@@ -26,9 +26,16 @@
                            rdAccess brings in */
 #define SC_NCLS   25   /* (SC_MAXSH-SC_MINSH+1) squared */
 
-#define SC_NBLK   384   /* max resident surfaces -- a hard bound, unlike
-                             the bump allocator this replaced */
+#define SC_NBLK   1024  /* block records, free buddy halves included. At
+                           384 e1m1's (480,-19,29) ran out, every flicker
+                           rebuilt its (0,10) faces: 800 builds in 300
+                           ticks, 4 ms a frame. 1024 costs e1m4 24 KB of
+                           its 78 */
 #define SC_GRAN   256    /* smallest class, 16x16: the offset unit */
+
+#define SC_VARIANTS 4   /* surfaces one face may hold, one per light key:
+                           a flickering style's values each keep theirs,
+                           and world.qc's styles 1 and 6 have four */
 
 #define SC_MINORD 8    /* log2(SC_GRAN) */
 #define SC_NORD   7    /* SC_MAXSUM - SC_MINORD + 1 */
@@ -42,12 +49,13 @@
 /* bspfile.bi's CacheSlot -- one per face, not per surface: which block
    (if any) a face currently owns, and what content it holds. */
 /* Just the block. What the content IS -- its generation and mip, its
-   style epoch, its size class -- describes the BLOCK, so it lives on
+   light key, its size class -- describes the BLOCK, so it lives on
    the block table beside bown/bord: four shorts a face was 44,128
    bytes on e1m1 against 11,032, for three fields only ever read
    through a block a face already names. */
 typedef struct {
-    short blk;    /* index into the block table, -1 for none */
+    short blk;    /* the face's most recently used block, -1 for none;
+                     the rest follow through bsib */
 } CacheSlot;
 
 /* bspfile.bi's CacheStats -- sc_stats' own snapshot, one crossing
@@ -64,6 +72,10 @@ typedef struct {
     long  peak;           /* high-water bytes in the cache DC */
     long  total_builds;   /* builds over the whole run */
     long  dlit;           /* of those, how many a dynamic light reached */
+    long  nofresh;        /* new light keys refused a block of their own */
+    short blocks;         /* most block records ever made, of SC_NBLK:
+                             a record freed by a merge is recycled, not
+                             subtracted */
 } CacheStats;
 
 typedef struct {
@@ -90,7 +102,9 @@ typedef struct {
        short: SC_GRAN is the smallest class, so every block is a whole
        number of them, and SC_STORE/SC_GRAN is 16,384, inside int16. */
     short far *btag;   /* generation * 4 + the mip this block holds */
-    short far *bstag;  /* and the light style epoch it was built at */
+    long  far *bstag;  /* and the light it was built under: ls_face_key,
+                          or a dynamic light's negative dl_stag */
+    short far *bsib;   /* the owning face's next block, -1 last */
     short far *bgrn;   /* block offset / SC_GRAN -- SC_NBLK entries */
     short far *bord;   /* size order: 2^(o+SC_MINORD) bytes */
     short far *bown;   /* owning face, -1 if none */
@@ -112,7 +126,7 @@ typedef struct {
        AGENTS.md's "no hidden side effects" rule rules out. */
 
     short made, hits, builds, bpeak;
-    long  live, evict, flushes, peak, tbuilds, dlit;
+    long  live, evict, flushes, peak, tbuilds, dlit, nofresh;
 } SurfCache;
 
 /*
@@ -157,7 +171,7 @@ short sc_shift( short v );
    miss. On a hit, *aim_ofs is where the class view now points -- the
    caller needs this to draw the right surface, since one view serves
    every surface of a size class. */
-QSurf   sc_find( SurfCache far *sc, short face, short mip, short w, short h, short stag, long *aim_ofs );
+QSurf   sc_find( SurfCache far *sc, short face, short mip, short w, short h, long stag, long *aim_ofs );
 
 /* A DC big enough for w by h, remembered against face. Returns 0 if
    the surface is larger than the filler can address or EMS is out.
@@ -169,7 +183,10 @@ QSurf   sc_find( SurfCache far *sc, short face, short mip, short w, short h, sho
    size class exhausted -- should be unreachable): it has to flush the
    WHOLE cache then, and a flush needs to know how many slots exist. */
 QSurf   sc_alloc( SurfCache far *sc, short face, short mip, short w, short h, short fw, short fh,
-                short stag, short face_count, long *aim_ofs );
+                long stag, short face_count, long *aim_ofs );
+
+/* The face's most recent surface is no surface: the builder refused it. */
+void  sc_forget( SurfCache far *sc, short face );
 
 /* Which mip this face already has resident, or -1 for none. */
 short sc_held( SurfCache far *sc, short face );

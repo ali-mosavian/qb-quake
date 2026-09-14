@@ -20,6 +20,9 @@
 ;;      wants ds = DGROUP; the copy loop was calling it with ds on the
 ;;      scratch block, taking a word of scratch as the page frame.
 ;;
+;; 3 and 4 lived in the copy loop, which is gone: the builder writes the
+;; destination in place, mapped once while bp and ds are still intact.
+;;
 ;; THE CASE IS RIGGED TO HAVE AN EXACT ANSWER, because "it returned" is
 ;; not evidence and a plausible-looking surface is worth nothing:
 ;;

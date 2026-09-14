@@ -147,7 +147,8 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
     float zn, zf;
     short tex, tex_id, draw_mip, mip_level, liquid;
     short z_want, z_have = -1, lm_use, lm_on;
-    short lm_tms, lm_tmt, lm_extw, lm_exth, lm_stag;
+    short lm_tms, lm_tmt, lm_extw, lm_exth;
+    long  lm_stag;
     short lm_mip, lm_floor, lm_sw, lm_sh, lm_fw, lm_fh, lm_cm;
     short leaf_indx, leaf_end, p2;
     long  aim_ofs, lm_dc, src_dc, tex_dc, texofs;
@@ -283,7 +284,7 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
 #endif
                     }
 
-                    lm_stag = ls_face_epoch( ls, gv[GEOM_LMOFS + 6], gv[GEOM_LMOFS + 7] );
+                    lm_stag = ls_face_key( ls, gv[GEOM_LMOFS + 6], gv[GEOM_LMOFS + 7] );
 
                     /* D_CacheSurface's cache->dlight: a lit face
                        rebuilds while lit and once after. A constant

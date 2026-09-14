@@ -188,9 +188,15 @@ int main( void )
         mark( buf );
     }
     {
+        /* LARGEST first: a failing 48h merges the free blocks, and TOTAL
+           counts each unmerged one 16 bytes short. */
+        long  before = ( qglMemAvail( QGL_MEM_LARGEST ), qglMemAvail( QGL_MEM_TOTAL ) );
         short scr = sc_selftest();
-        char buf[32];
+        char buf[40];
         sprintf( buf, "sc_selftest %d", scr );
+        mark( buf );
+        qglMemAvail( QGL_MEM_LARGEST );
+        sprintf( buf, "sc_selftest_leak %ld", before - qglMemAvail( QGL_MEM_TOTAL ) );
         mark( buf );
     }
     {
@@ -887,6 +893,15 @@ int main( void )
                 fprintf( bf, "frames %d\n", frame );
                 fprintf( bf, "polys %ld\n", poly_sum );
                 fprintf( bf, "tris %ld\n", tri_sum );
+                {
+                    CacheStats scs;
+                    sc_stats( sc, &scs );
+                    fprintf( bf, "sc_builds %ld\n", scs.total_builds );
+                    fprintf( bf, "sc_evict %ld\n", scs.evict );
+                    fprintf( bf, "sc_live %ld\n", scs.live );
+                    fprintf( bf, "sc_blocks_peak %d\n", scs.blocks );
+                    fprintf( bf, "sc_nofresh %ld\n", scs.nofresh );
+                }
                 if ( ft_n > 0 ) {
                     fprintf( bf, "ft_min %ld.%03ld\n", (long) (ft_min*1000), (long) (ft_min*1000000) % 1000 );
                     fprintf( bf, "ft_max %ld.%03ld\n", (long) (ft_max*1000), (long) (ft_max*1000000) % 1000 );

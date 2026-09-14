@@ -49,7 +49,6 @@ void ls_init( LightStyles *ls )
         ls->tab[i].length = (short) strlen( ls->tab[i].pattern );
         ls->tab[i].frame  = 0;
         ls->tab[i].value  = i < LS_WORLD ? ls_lchar( ls->tab[i].pattern[0] ) : LS_UNSET;
-        ls->tab[i].epoch  = 0;
     }
     ls->tab[63].pattern = "a";
     ls->tab[63].value   = ls_lchar( 'a' );
@@ -67,10 +66,7 @@ void ls_switch( LightStyles *ls, short style, short on )
     e->pattern = on ? "m" : "a";
     e->length  = 1;
     e->frame   = 0;
-    if ( e->value == v ) return;
-    e->value = v;
-    e->epoch++;
-    if ( e->epoch > 32000 ) e->epoch = 1;
+    e->value   = v;
 }
 
 void ls_hold( LightStyles *ls )
@@ -93,18 +89,22 @@ short ls_face_styles( short s01, short s23 )
     return n;
 }
 
-short ls_face_epoch( LightStyles *ls, short s01, short s23 )
+long ls_face_key( LightStyles *ls, short s01, short s23 )
 {
-    long e = 0;
-    short k, n = ls_face_styles( s01, s23 );
+    long key = 0, place = 1;
+    short k, v, n = ls_face_styles( s01, s23 );
 
-    for ( k = 0; k < n; k++ ) e += ls_epoch( ls, ls_face_style( s01, s23, k ) );
-    return (short) ( e % 32000L );
+    for ( k = 0; k < n; k++ ) {
+        v = ls_value( ls, ls_face_style( s01, s23, k ) );
+        key += place * ( v == LS_UNSET ? 26 : v / 10 );
+        place *= 27;
+    }
+    return key;
 }
 
 void ls_animate( LightStyles *ls, float anim_time )
 {
-    short i, steps, nf, nv;
+    short i, steps, nf;
 
     steps = (short) ( (long) (anim_time * LS_RATE) - (long) (ls->last * LS_RATE) );
     if ( steps <= 0 ) return;
@@ -114,20 +114,9 @@ void ls_animate( LightStyles *ls, float anim_time )
         if ( ls->tab[i].length > 1 ) {
             nf = (short) ( (ls->tab[i].frame + steps) % ls->tab[i].length );
             ls->tab[i].frame = nf;
-            nv = ls_lchar( ls->tab[i].pattern[nf] );
-            if ( nv != ls->tab[i].value ) {
-                ls->tab[i].value = nv;
-                ls->tab[i].epoch++;
-                if ( ls->tab[i].epoch > 32000 ) ls->tab[i].epoch = 1;
-            }
+            ls->tab[i].value = ls_lchar( ls->tab[i].pattern[nf] );
         }
     }
-}
-
-short ls_epoch( LightStyles *ls, short style )
-{
-    if ( style < 0 || style > LS_MAXSTYLE ) style = 0;
-    return ls->tab[style].epoch;
 }
 
 short ls_value( LightStyles *ls, short style )
@@ -147,60 +136,61 @@ short ls_scale_byte( short raw, short sval )
 /*
  * name: ls_selftest
  * desc: Proves the animation loop, not any real map: a synthetic
- *       2-char pattern must toggle value and bump epoch exactly once
- *       per change, a steady style must never bump, and steps must
- *       accumulate correctly across an uneven call pattern (two short
- *       ticks the same as one that covers both) -- neither map on
- *       hand has a non-neutral style, so this is what actually
- *       exercises ls_scale_byte too.
+ *       2-char pattern must step once per 10 Hz tick, a steady style
+ *       must never move, steps must accumulate across an uneven call
+ *       pattern, and the face key must tell every value of every style
+ *       apart.
  */
 short ls_selftest( void )
 {
     LightStyles ls;
-    short e0;
+    long k0;
 
     ls_init( &ls );
 
-    /* style 0 is steady: many ticks, no bump */
-    e0 = ls.tab[0].epoch;
+    /* style 0 is steady: many ticks, no change */
     ls_animate( &ls, 0.05f );
     ls_animate( &ls, 1.05f );
     ls_animate( &ls, 2.05f );
-    if ( ls.tab[0].epoch != e0 ) return -1;
+    if ( ls.tab[0].value != LS_NEUTRAL ) return -1;
 
-    /* a synthetic 2-char pattern, 'a' then 'z': one step must flip the
-       value and bump the epoch exactly once */
+    /* a synthetic 2-char pattern, 'a' then 'z': one step flips it */
     ls.tab[30].pattern = "az";
     ls.tab[30].length = 2;
     ls.tab[30].frame  = 0;
     ls.tab[30].value  = ls_lchar( 'a' );
-    ls.tab[30].epoch  = 0;
     ls.last = 0.0f;
 
     ls_animate( &ls, 0.1f );   /* one 10 Hz step: frame 0 -> 1, 'a' -> 'z' */
     if ( ls.tab[30].value != ls_lchar( 'z' ) ) return -2;
-    if ( ls.tab[30].epoch != 1 ) return -3;
+    if ( ls.tab[30].frame != 1 ) return -3;
 
-    ls_animate( &ls, 0.15f );  /* under 0.1s more: no new step, no bump */
-    if ( ls.tab[30].epoch != 1 ) return -4;
+    ls_animate( &ls, 0.15f );  /* under 0.1s more: no new step */
+    if ( ls.tab[30].frame != 1 ) return -4;
 
     ls_animate( &ls, 0.2f );   /* the step lands: frame 1 -> 0, 'z' -> 'a' */
     if ( ls.tab[30].value != ls_lchar( 'a' ) ) return -5;
-    if ( ls.tab[30].epoch != 2 ) return -6;
+    if ( ls.tab[30].frame != 0 ) return -6;
 
     /* two ticks that together cross a step boundary must land the same
        as one tick that crosses it directly -- steps come from elapsed
        TIME, not call count */
-    ls.tab[31].pattern = "az";
-    ls.tab[31].length = 2;
-    ls.tab[31].frame  = 0;
-    ls.tab[31].value  = ls_lchar( 'a' );
-    ls.tab[31].epoch  = 0;
     ls.last = 0.0f;
-    ls.tab[30].frame = 0; ls.tab[30].value = ls_lchar( 'a' ); ls.tab[30].epoch = 0;
+    ls.tab[30].frame = 0; ls.tab[30].value = ls_lchar( 'a' );
     ls_animate( &ls, 0.04f );
     ls_animate( &ls, 0.11f );  /* crosses 0.1 here, one step total */
-    if ( ls.tab[30].epoch != 1 ) return -7;
+    if ( ls.tab[30].frame != 1 ) return -7;
+
+    /* the key: four styles, 0 10 20 21, where 20 and 21 are unset. Only
+       the fourth moving must still move it -- that digit is 26 * 27^3,
+       past a short -- and 'm' against 'n' must differ in any place */
+    ls_init( &ls );
+    k0 = ls_face_key( &ls, 0 | ( 10 << 8 ), 20 | ( 21 << 8 ) );
+    if ( k0 != 12L + 27L * 12L + 729L * 26L + 19683L * 26L ) return -16;
+    ls_switch( &ls, 21, 0 );
+    if ( ls_face_key( &ls, 0 | ( 10 << 8 ), 20 | ( 21 << 8 ) ) == k0 ) return -17;
+    ls.tab[10].value = ls_lchar( 'n' );
+    if ( ls_face_key( &ls, 0 | ( 10 << 8 ), 255 | ( 255 << 8 ) ) != 12L + 27L * 13L ) return -18;
 
     /* ls_scale_byte: the one thing neither map on hand ever exercises
        for real, so it has to prove itself here instead. */

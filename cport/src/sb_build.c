@@ -204,9 +204,7 @@ void sb_build( SurfCache far *sc, World *world, Renderer *rdr, LightStyles *ls,
     sbp.msk  = umsk;
     sbp.vmsk = vmsk;
 
-    if ( !qglSbBuild( dc, tex, (long) (void far *) &sbp ) ) {
-        /* only a luxel grid too big for the builder's stack buffer
-           gets here; leave the surface as it is rather than
-           half-composite it */
-    }
+    /* refused -- a luxel grid past sb$lgrid, or a destination not in one
+       window: forget the block, or a variant would keep it */
+    if ( !qglSbBuild( dc, tex, (long) (void far *) &sbp ) ) sc_forget( sc, face );
 }

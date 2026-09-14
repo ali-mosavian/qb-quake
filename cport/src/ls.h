@@ -27,7 +27,6 @@ typedef struct {
     short length;
     short frame;
     short value;         /* current intensity: (pattern[c]-'a') * 10 */
-    short epoch;          /* bumped whenever value actually changes */
 } LightStyleEntry;
 
 typedef struct {
@@ -51,30 +50,29 @@ void ls_init( LightStyles *ls );
  */
 void ls_animate( LightStyles *ls, float anim_time );
 
-/* The value sc_find/sc_alloc key a cached surface's lighting on.
-   Out-of-range clamps to style 0 (steady) rather than faulting. */
-short ls_epoch( LightStyles *ls, short style );
-
-/* The intensity sb_build scales a face's luxels against. Same
-   out-of-range clamp as ls_epoch, and for the same reason. */
+/* The intensity sb_build scales a face's luxels against. Out-of-range
+   clamps to style 0 (steady) rather than faulting. */
 short ls_value( LightStyles *ls, short style );
 
 /* One luxel, scaled from the compiler's assumed LS_NEUTRAL to the
    style's current value. */
 short ls_scale_byte( short raw, short sval );
 
-/* A face's styles, packed as its geometry record carries them: bytes 0
-   and 1 in s01, 2 and 3 in s23, 255 past the last. The k-th, how many,
-   and one epoch that moves when any of theirs does. */
 /* light_use's lightstyle(style, "m") or "a". */
 void ls_switch( LightStyles *ls, short style, short on );
 
 /* Every style at "m", for good: -nostyles, the A/B. */
 void ls_hold( LightStyles *ls );
 
+/* A face's styles, packed as its geometry record carries them: bytes 0
+   and 1 in s01, 2 and 3 in s23, 255 past the last. The k-th, and how
+   many. */
 short ls_face_style( short s01, short s23, short k );
 short ls_face_styles( short s01, short s23 );
-short ls_face_epoch( LightStyles *ls, short s01, short s23 );
+/* The values of a face's styles as one number, the surface cache's key:
+   each digit base 27 is a value over 10, LS_UNSET the 27th. Never
+   negative, so a dynamic light's dl_stag cannot collide with it. */
+long  ls_face_key( LightStyles *ls, short s01, short s23 );
 
 /* Proves the animation loop, not any real map's data -- see ls.c's own
    header on ls_selftest for what each check establishes. Returns 1 on

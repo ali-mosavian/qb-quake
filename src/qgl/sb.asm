@@ -16,55 +16,18 @@
 ;;       proven against the BASIC on the target (face 1544 mip 1: 0 of
 ;;       8192 bytes differ); this must reproduce it byte for byte.
 ;;
-;;       WHERE THIS DIFFERS FROM mgl's VERSION, and why:
+;;       The destination is written in place, mapped once and held
+;;       across the texel loop, which calls nothing. That is sound
+;;       because sc_alloc's blocks are self-aligned to their own size
+;;       (<= one EMS page), so a surface never straddles a page -- and
+;;       qglSbBuild checks it rather than trusts it: the last row must
+;;       come back (sh-1)*bps past row 0 in the same window, or the
+;;       build is refused. The texture cell is mkassets' guarantee of
+;;       the same kind, read once through qglSfRdRow.
 ;;
-;;       AGENTS.md's account of the churn bug: "the builder streams the
-;;       atlas across many pages while holding a pointer to its
-;;       destination, and the pool may take the destination's slot to
-;;       map the next atlas page." mgl's fix was to re-derive the
-;;       destination's EMS window every row instead of holding it. That
-;;       works, but it still spends one of the four physical EMS page
-;;       slots on the destination for the whole call.
-;;
-;;       CORRECTION, checked against the actual allocator rather than
-;;       assumed: sc_alloc's blocks ARE self-aligned to their own size.
-;;       sc_grab (fresh store) rounds its offset up to a multiple of the
-;;       block's own byte size before granting; sc_bsplit halves an
-;;       aligned parent, which stays aligned; every reuse path inherits
-;;       an offset that was aligned when the block was made. Since every
-;;       size sc_alloc can hand out (SC_MAXSUM bounds it to <= 16384,
-;;       one EMS page) divides SC_PGBYTES evenly, a live block never
-;;       straddles a page in practice -- an earlier version of this
-;;       comment claimed otherwise and was wrong; do not trust that
-;;       claim if it resurfaces elsewhere.
-;;
-;;       That said, nothing in sc_alloc or qglRsTex CHECKS this -- it is
-;;       an invariant of today's allocator, not a refusal anywhere in
-;;       the chain, so a future change to sc_alloc could break it
-;;       silently. This file writes one row at a time regardless: it
-;;       costs nothing extra (mgl's own fix does the same, once per row,
-;;       for the destination), and it means qglSbBuild's own correctness
-;;       never depends on an invariant it cannot see.
-;;
-;;       So this still touches the destination's EMS page once per row,
-;;       the same count as mgl's fix. What changes is what happens
-;;       BETWEEN those touches: the texel maths that used to run inside
-;;       the mapped window now runs entirely in the scratch buffer, and
-;;       each row is composited long before its own EMS copy happens, so
-;;       nothing but that one row's own wrAccess-then-movsb pair ever
-;;       touches the destination's slot for that row. That is the same
-;;       immunity property mgl's fix has -- map immediately before use,
-;;       nothing held across anything that could remap it -- just with
-;;       the expensive per-texel work moved out of the window entirely.
-;;
-;;       That is also qgl.inc's own note on sb_build: "Put the
-;;       destination and the depth buffer in conventional memory and the
-;;       builder needs three [EMS windows] with one in hand." This is
-;;       that move, for the destination half of it.
-;;
-;;       The texture cell is mkassets' guarantee, not sc_alloc's, but it
-;;       is the same guarantee (never straddles a page), so it is read
-;;       once through qglSfRdRow and never touched again.
+;;       The destination used to be built in a 16K conventional scratch
+;;       block and copied row by row; writing in place saves the copy
+;;       and the block.
 ;;
 ;; obs.: - NOTHING HERE IS MGL'S ANY MORE, and that is the fix, not a
 ;;         tidy-up. Both the destination write and the texture read used
@@ -104,10 +67,6 @@
 ;;       - every map anywhere goes through qglGemMap now; mgl's emsMapEx
 ;;         maps nothing. The per-slot record is gem's, and qgl$emsCtx's
 ;;         ppgTB in dct/dctems.asm is a copy of it for slots 0 and 1.
-;;       - the scratch block is sized SC_PGBYTES (16384): the same bound
-;;         SC_MAXSUM enforces on every surface sc_alloc will ever hand
-;;         back. A surface that could not fit could not have been
-;;         allocated.
 ;;       - state lives in .data?, not stack locals, for the same reason
 ;;         mgl's version does: it frees bp for the inner loop's counter.
 
@@ -116,7 +75,6 @@
 
                 include qgl.inc
 
-qglMemAlloc     proto   far pascal :dword
 qglSfRdRow      proto   far pascal :dword, :word
 qglSfWrRow      proto   far pascal :dword, :word
 
@@ -179,6 +137,13 @@ sb$tright       dw      ?
 sb$texbase      dw      ?
 sb$texbps       dw      ?
 sb$texrow       dw      ?
+sb$texseg       dw      ?
+
+sb$dstbps       dw      ?
+sb$dstbase      dw      ?               ;; row 0, in window 1
+sb$dstseg       dw      ?
+sb$dstlast      dw      ?               ;; the last row, to prove the block
+sb$dstlseg      dw      ?               ;; sits in that one window
 
 sb$cmofs        dw      ?
 sb$cmseg        dw      ?
@@ -206,25 +171,6 @@ sb$lynext       dw      ?
 sb$lx           dw      ?
 sb$nfull        dw      ?
 sb$cnt          dw      ?
-
-
-;; .data, not .data?: this needs a real zero baked into the EXE image, not
-;; BSS's runtime zero-fill -- "never assume implicit init" is this
-;; codebase's own rule, and JWasm already flagged the alternative
-;; (A4184: initialized data not supported in BSS segments).
-.data
-sb$mseg         dw      0               ;; conventional scratch block's
-                                        ;; segment, 0 until qglSbReserve.
-                                        ;; SC_PGBYTES does not fit in
-                                        ;; DGROUP (L2041: stack plus data
-                                        ;; exceed 64K) so it lives in its
-                                        ;; own far block instead, sized
-                                        ;; once and kept for the life of
-                                        ;; the program, the same choice
-                                        ;; qglMemAlloc's own header
-                                        ;; documents for every caller of
-                                        ;; it: "one big block for the
-                                        ;; life of the program"
 
 
 ;; the vertical half of the bilinear, once per span per row -- see
@@ -256,29 +202,6 @@ ok:
 endm
 
 QGL_CODE
-
-;;::::::::::::::
-;; qglSbReserve () -> ax nonzero once the scratch block exists
-;;
-;; The builder used to take its block at the first lit face, and short
-;; of it every lit surface stayed zeros: a black world, polys and
-;; sc_built reading normal, the unlit frame right. sc_store_open calls
-;; this at load so a shortfall is an error with a name.
-;;::::::::::::::
-qglSbReserve    proc    public uses bx cx dx
-
-                cmp     ss:sb$mseg, 0
-                jne     @@have
-                invoke  qglMemAlloc, SC_PGBYTES ;; dx:ax, offset always 0;
-                                                ;; dx=0 means failure
-                test    dx, dx
-                jz      @@none
-                mov     ss:sb$mseg, dx
-@@have:         mov     ax, 1
-                ret
-@@none:         xor     ax, ax
-                ret
-qglSbReserve    endp
 
 ;;::::::::::::::
 ;; qglSbBuild (dstDc:dword, texDc:dword, parm:dword) :word
@@ -348,19 +271,12 @@ qglSbBuild      proc    public uses bx cx dx di si es ds fs gs,\
                 cmp     ax, LM_MAXCELLS
                 ja      @@error
 
-                ;; a surface we cannot hold overruns the scratch block. sc_alloc
-                ;; already refuses this (SC_MAXSUM), so this is a second
-                ;; opinion, not the first line of defence.
+                ;; a surface past one EMS page cannot be addressed flat.
+                ;; sc_alloc already refuses this (SC_MAXSUM).
                 mov     ax, ss:sb$sw
                 imul    ax, ss:sb$sh
                 cmp     ax, SC_PGBYTES
                 ja      @@error
-
-                ;; the scratch block -- reserved at load by sc_store_open,
-                ;; taken here only for a caller that skipped that
-                invoke  qglSbReserve
-                test    ax, ax
-                jz      @@error
 
                 mov     ss:sb$savebp, bp
 
@@ -408,7 +324,46 @@ qglSbBuild      proc    public uses bx cx dx di si es ds fs gs,\
                 mov     ss:sb$texbps, ax
                 invoke  qglSfRdRow, texDc, 0    ;; dx:ax-> the cell
                 mov     ss:sb$texbase, ax
-                mov     ds, dx                  ;; ds: texture, for the loop
+                mov     ss:sb$texseg, dx
+
+                ;;
+                ;; ---- map the destination, once -----------------------
+                ;;
+                ;; Written in place through window 1, held across the
+                ;; loop: nothing below calls out. Row y is base + y*bps
+                ;; only if the whole block sits in one window, which
+                ;; sc_alloc's self-aligned blocks do -- checked here by
+                ;; asking for the last row and then row 0, both while ds
+                ;; is still DGROUP (gem.asm reads its frame through ds).
+                les     bx, dstDc
+                mov     ax, es:[bx].Surface.bps
+                mov     ss:sb$dstbps, ax
+                mov     ax, ss:sb$sh
+                dec     ax
+                invoke  qglSfWrRow, dstDc, ax
+                mov     ss:sb$dstlast, ax
+                mov     ss:sb$dstlseg, dx
+                invoke  qglSfWrRow, dstDc, 0
+                mov     ss:sb$dstbase, ax
+                mov     ss:sb$dstseg, dx
+                test    dx, dx
+                jz      @@error
+                cmp     dx, ss:sb$dstlseg
+                jne     @@error
+                mov     ax, ss:sb$sh
+                dec     ax
+                mul     W ss:sb$dstbps
+                jc      @@error
+                add     ax, ss:sb$dstbase
+                jc      @@error
+                cmp     ax, ss:sb$dstlast
+                jne     @@error
+                add     ax, ss:sb$sw
+                jc      @@error
+                cmp     ax, SC_PGBYTES          ;; and in that one window
+                ja      @@error
+
+                mov     ds, ss:sb$texseg        ;; ds: texture, for the loop
 
                 ;; gs is the COLORMAP's, not the texture's -- uglsurf.asm
                 ;; line 368, "colormap keeps a segment". The port dropped
@@ -444,11 +399,7 @@ qglSbBuild      proc    public uses bx cx dx di si es ds fs gs,\
                 ;;
                 ;; ---- rows ---------------------------------------------
                 ;;
-                ;; es addresses the scratch block for the whole loop:
-                ;; unlike the destination's EMS window, a flat
-                ;; conventional buffer never needs remapping between rows.
-                mov     ax, ss:sb$mseg
-                mov     es, ax
+                mov     es, ss:sb$dstseg        ;; es: the destination
 
 @@row:          mov     ax, ss:sb$yy
                 cmp     ax, ss:sb$sh
@@ -494,12 +445,9 @@ qglSbBuild      proc    public uses bx cx dx di si es ds fs gs,\
                 mov     edx, 65536
 @@:             mov     ss:sb$ty, edx
 
-                ;; row start in the scratch block: yy * sw, plain
-                ;; arithmetic, 0-based within its own far segment -- no
-                ;; window, so nothing here can be evicted.
                 mov     ax, ss:sb$yy
-                mov     cx, ss:sb$sw
-                mul     cx
+                mul     W ss:sb$dstbps
+                add     ax, ss:sb$dstbase
                 mov     ss:sb$rowofs, ax
                 mov     di, ax
 
@@ -604,7 +552,7 @@ qglSbBuild      proc    public uses bx cx dx di si es ds fs gs,\
 sb_ftrow        equ     $ - 2
                 add     ax, dx
                 mov     al, gs:[eax]
-                mov     es:[di+bp], al          ;; es:scratch block, flat
+                mov     es:[di+bp], al          ;; es: the destination
 sb_fdufr:       add     cx, __SIMM16__
 sb_fduin:       adc     bx, __SIMM16__
 sb_fmsk:        and     bx, __SIMM16__
@@ -625,7 +573,7 @@ sb_fmsk:        and     bx, __SIMM16__
                 and     ax, 0FF00h
 sb_ptrow:       or      al, B ds:[bx+__SIMM16__]
 sb_pcmap:       mov     al, gs:[eax+__SIMM32__]
-                mov     es:[di+bp], al          ;; es:scratch block, flat
+                mov     es:[di+bp], al          ;; es: the destination
 
                 add     edx, ss:sb$tstep
 sb_pdufr:       add     cx, __SIMM16__
@@ -647,80 +595,12 @@ sb_pmsk:        and     bx, __SIMM16__
                 jmp     @@row
 
                 ;;
-                ;; ---- copy the scratch block to its EMS page, row by row
+                ;; ---- done ---------------------------------------------
                 ;;
-                ;; sc_alloc's blocks are self-aligned to their own size
-                ;; (checked, not assumed -- see this file's header), so in
-                ;; practice a live block never straddles a page. Nothing
-                ;; downstream of sc_alloc CHECKS that, though, so this
-                ;; still writes one row at a time through qglSfWrRow's
-                ;; own per-row contract rather than trust it -- exactly
-                ;; as mgl's own fixed uglBuildSurf does, and at the same
-                ;; cost (one EMS touch per row either way). The only
-                ;; difference from mgl's version is WHERE the row comes
-                ;; from: a flat scratch buffer instead of live per-texel
-                ;; computation, so this is nothing more than mgl's own
-                ;; per-row copy with the maths already done.
-                ;;
-                ;; dstDc is qgl's own Surface now, not an mgl DC -- see
-                ;; this file's header -- so the row pointer comes from
-                ;; qglSfWrRow, a qgl_ entry, rather than ul$dctTB. That
-                ;; is the whole point of this file no longer naming any
-                ;; mgl symbol at all.
-                ;;
-                ;; BP FIRST, and it is load-bearing: the texel loop above
-                ;; uses bp as its own counter, so the frame pointer is
-                ;; gone by here -- and `dstDc` below is a stack parameter,
-                ;; read bp-relative. The version this replaced never hit
-                ;; it because it reached the destination through a saved
-                ;; segment (sb$dstfs) and named no parameter at all.
+                ;; bp was the texel loop's counter, and the epilogue
+                ;; unwinds through it.
 @@done:         mov     bp, ss:sb$savebp
-
-                xor     ax, ax
-                mov     ss:sb$yy, ax            ;; reused as the copy's
-                                                ;; own row counter
-
-                ;; DS MUST BE DGROUP ACROSS qglSfWrRow, and the texel loop
-                ;; above left it pointing at the texture. gem.asm reaches
-                ;; its own qgl$pgframe with no segment override -- plain
-                ;; DS, the medium-model default -- so a qglGemMap made
-                ;; with ds elsewhere adds a word of the WRONG segment as
-                ;; the page frame and every row lands somewhere arbitrary.
-                ;; So ds is restored at the top of each iteration and only
-                ;; borrowed for the movsb, rather than held on the scratch
-                ;; block for the whole loop.
-@@copyrow:      push    ss                      ;; ss IS DGROUP here, and is
-                pop     ds                      ;; what every ss: override
-                                                ;; in this file already
-                                                ;; relies on -- no fixup to
-                                                ;; disagree with BASIC's
-                                                ;; own idea of the segment
-
-                mov     ax, ss:sb$yy
-                cmp     ax, ss:sb$sh
-                jae     @@copied
-
-                mov     cx, ss:sb$sw
-                mul     cx                      ;; ax = yy * sw
-                mov     si, ax                  ;; scratch-relative row,
-                                                ;; and qglSfWrRow preserves
-                                                ;; si -- checked against
-                                                ;; sf.asm's `uses`, not
-                                                ;; assumed
-                invoke  qglSfWrRow, dstDc, ss:sb$yy
-                mov     di, ax                  ;; es:di-> this row, and
-                mov     es, dx                  ;; only this row
-
-                mov     ds, ss:sb$mseg          ;; ds:si-> the scratch row,
-                                                ;; for the copy alone
-                mov     cx, ss:sb$sw
-                cld
-                rep     movsb
-
-                inc     ss:sb$yy
-                jmp     @@copyrow
-
-@@copied:       mov     ax, 1                   ;; bp restored at @@done
+                mov     ax, 1
                 ret
 
 @@error:        xor     ax, ax

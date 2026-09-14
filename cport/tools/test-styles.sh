@@ -41,6 +41,8 @@ run t48  "-ticks 48"
 run t48n "-ticks 48 -nostyles"
 run t57  "-ticks 57"
 run t57n "-ticks 57 -nostyles"
+run t63  "-ticks 63"
+run t63n "-ticks 63 -nostyles"
 
 fail=0
 check() {  # <what> <pixels> <op> <bound>
@@ -48,4 +50,5 @@ check() {  # <what> <pixels> <op> <bound>
 }
 check "style 10 at its start value draws as held" "$(diff_px t48 t48n)" -eq 0
 check "style 10 dark draws dark"                  "$(diff_px t57 t57n)" -ge "$MIN"
+check "style 10 back at 'm' draws as held"        "$(diff_px t63 t63n)" -eq 0
 exit $fail

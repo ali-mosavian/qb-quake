@@ -2866,9 +2866,10 @@ The surface builder's 16K conventional scratch was taken at the first
 lit face by shrinking BASIC's heap, and short of it every lit surface
 stayed zeros: `polys` and `sc_built` as always, the unlit frame right,
 no error anywhere. A session went on EMS slot theories before the unlit
-frame pointed at the builder. `sc_store_open` runs from `host_init` now
-and `qglSbReserve` takes the block there, `0x0046` if it cannot. The
-e1m1 spawn and exit arms are the regression test; both failed on it.
+frame pointed at the builder. The e1m1 spawn and exit arms were the
+regression test; both failed on it. The scratch is gone now: the
+builder writes the surface in place, one EMS window held across the
+texel loop, and refuses a surface whose last row is not in that window.
 
 **Four files make a map's assets, not one.** mkassets writes assets.zip
 and, beside it, texr.raw, texs.raw and pal.raw -- the atlases qgl reads
@@ -3377,6 +3378,43 @@ R_BuildLightMap does; `ls.c` has all of world.qc's styles.
 starts at 256 and only world.qc and the lights set any; 'm' is 264. So
 styles 12..62 start at `LS_UNSET`, 116 of 'm''s 120 -- 256/264 rounds
 to 116.4, 0.3% under.
+
+**A flickering style keeps a surface per value.** The cache key was the
+sum of a face's style epochs and a face held one surface, so each change
+of style 10's m/a flicker rebuilt every (0, 10) face in view: 8.4 ms of
+e1m1's 46 at the spawn, 1,184 builds between tick 300 and 600 of a still
+camera. The key is the styles' values now (`ls_face_key`), and a face
+chains up to `SC_VARIANTS` blocks through `bsib`, most recent first. A
+new variant only comes out of free store -- with the block records
+spent, taking one would evict a surface in view -- and a dynamic light's
+key never comes back, so it writes over what the face has.
+`cport/tools/test-scvariants.sh`.
+
+**Running out of block records looks like no variants at all.** At
+`SC_NBLK` 384, e1m1's (480,-19,29) yaw 295 wanted 409. Each new key was
+refused a block and took the face's other one, so the flicker rebuilt as
+before: 800 builds in 300 ticks, 41.3 ms against 37.4. `sc_nofresh` counts
+the refusals, and `sc_blocks_peak` is a high-water mark. The records add
+11.5 KB. test-scvariants' spot arm is the test.
+
+**`sc.c` freed `qglMemAlloc` blocks with `farfree`.** `farfree` only knows
+Borland's heap, so the DOS blocks stayed allocated. `sc_selftest` runs on
+every launch and kept its whole throwaway cache: 18,960 bytes at
+`SC_NBLK` 1024. That is why going from 384 to 1024 cost 23 KB of largest
+free block instead of 11.5. `sc_selftest_leak` in cstep.txt is the free
+total before the selftest less after, and test-lit wants 0.
+
+**`QGL_MEM_TOTAL` reads 16 bytes low for every freed block DOS has not
+merged yet.** It adds up free MCB sizes, and each unmerged neighbour still
+has its own header. With the leak fixed the selftest read 256, sixteen
+blocks. A `QGL_MEM_LARGEST` query first is a failing 48h, which walks the
+chain and merges it.
+
+**A cache hit aims row 0 alone.** `qglSetView` writes the view's whole
+address table, and `sc_find` called it once per lit face drawn. The
+texture fetch reads nothing past row 0, so a hit calls `qglAimView`.
+`sc_alloc` still aims every row, because the builder writes all of them.
+`t38aimview`.
 
 **Switchable lights are `ents.bin` records.** A light of style 32 or more
 with a targetname is `light_use`'s: START_OFF starts its style "a", its
