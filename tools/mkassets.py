@@ -334,6 +334,26 @@ def oklch_colormap(palette: bytes) -> bytes:
     return bytes(table)
 
 
+def sky_layers(cells: list, shade0: bytes, pal: list[tuple[int, int, int]]) -> dict[str, bytes]:
+    """R_InitSky, offline: a 256x128 sky texture's right half is the back
+    layer and its left half the front, index 0 clear. 128 rows of each,
+    shaded by row 0 -- which takes index 48 to 0 as well, so an opaque one
+    becomes the nearest other colour."""
+    dark = min(range(1, 256), key=lambda i: sum((a - b) ** 2 for a, b in zip(pal[i], pal[0])))
+    for cl in cells:
+        if cl is None:
+            continue
+        buf, base = cl
+        w, h, mo = struct.unpack_from('<iii', buf, base + 16)
+        if not buf[base:base + 3].lower() == b'sky' or (w, h) != (256, 128):
+            continue
+        src = buf[base + mo:base + mo + w * h]
+        back = bytes(shade0[src[y * 256 + 128 + x]] for y in range(128) for x in range(128))
+        front = bytes((shade0[p] or dark) if p else 0 for p in (src[y * 256 + x] for y in range(128) for x in range(128)))
+        return {'sky.raw': back + front}
+    return {}
+
+
 def write_bmp8(path, w, h, pixels, pal):
     OUT[os.path.basename(path)] = bmp8_bytes(w, h, pixels, pal)
 
@@ -1439,6 +1459,8 @@ def main():
             else:
                 raw_at[o:o+cw*ch] = texquant.resample_indices(src, mw, mh, cw, ch, pal)
                 shd_at[o:o+cw*ch] = texquant.resample_indices(lit, mw, mh, cw, ch, pal)
+
+    OUT.update(sky_layers(cells[:len(offs)], shade0, pal))
 
     exact = sum(1 for k, cl in enumerate(cells)
                 if cl is not None and

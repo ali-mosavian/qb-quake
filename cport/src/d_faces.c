@@ -20,6 +20,8 @@
 
 #include <string.h>
 
+#include <math.h>
+#include "d_sky.h"
 #include "qrcfg.h"
 #include "d_faces.h"
 #include "d_poly.h"
@@ -152,7 +154,7 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
     short mi, m_node, ti, i, j, v0, gn, vcnt, cnt;
     short all_in;
     float zn, zf;
-    short tex, tex_id, draw_mip, mip_level, liquid;
+    short tex, tex_id, draw_mip, mip_level, liquid, sky, sky_made = 0;
     short z_want, z_have = -1, lm_use, lm_on;
     short lm_tms, lm_tmt, lm_extw, lm_exth;
     long  lm_stag;
@@ -165,7 +167,7 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
 #endif
     float su0, su1, su2, su3, sv0, sv1, sv2, sv3;
     float suv[8];
-    float tw, th, dp_dist, turbph, zl, zsum;
+    float tw, th, dp_dist, turbph, zl, zsum, sky_pan, sky_d, kx, ky, kz;
     float ofs3[3];          /* the owning submodel's offset, BSP-space */
     float vx, vy, vz, tu, tv, rw, lm_su, lm_sv;
     unsigned long dl_bits;
@@ -186,6 +188,7 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
     dp->raster_us = 0;
 
     turbph = dp->anim_time * TURB_RATE;
+    sky_pan = d_sky_pan( dp->anim_time );
 
     /* The flag says the data was loaded; the toggle says whether to
        use it now. Clearing this makes every face below a plain
@@ -232,6 +235,7 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
             tex    = tri[i].tex_info_id;
             tex_id = texinf[tex].mip_tex;
             liquid = mipinf[tex_id].liquid;
+            sky    = mipinf[tex_id].sky && world->sky_dc;
             fmdl = (short) ( tri[i].side >> 1 );
             ofs3[0] = brush[fmdl].ofs.x;
             ofs3[1] = brush[fmdl].ofs.y;
@@ -275,7 +279,7 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
             dp->k_lm += gv[GEOM_LMOFS];
 #endif
 
-            if ( lm_use && liquid == 0 && mipinf[tex_id].anim_count <= 1 ) {
+            if ( lm_use && liquid == 0 && !sky && mipinf[tex_id].anim_count <= 1 ) {
                 if ( gv[GEOM_LMOFS] >= 0 ) {
 #if QR_PROF
                     dp->k_hdr++;
@@ -323,7 +327,7 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
                 tex_id = world->anim_tab[ mipinf[tex_id].anim_base
                        + ( ifloor( dp->anim_time * 5.0f ) % mipinf[tex_id].anim_count ) ];
 
-            if ( liquid ) {
+            if ( liquid || sky ) {
                 for ( j = 0; j < vcnt; j++ ) {
                     v0 = (short)( j*3 + GEOM_VTX0 );
                     vx = gv[v0    ] * VTX_UNSCALE;
@@ -336,6 +340,19 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
                     vt_x[j] = vx + ofs3[0];
                     vt_y[j] = vz + ofs3[2];
                     vt_z[j] = vy + ofs3[1];
+
+                    if ( sky ) {
+                        /* D_Sky_uv_To_st at the corners: the direction
+                           from the eye, bsp z tripled, SKY_SPAN texels
+                           a unit. id evaluates it every 16 pixels. */
+                        kx = vt_x[j] - campos->x;
+                        ky = vt_z[j] - campos->z;
+                        kz = ( vt_y[j] - campos->y ) * 3.0f;
+                        sky_d = SKY_SPAN / (float) sqrt( kx*kx + ky*ky + kz*kz );
+                        vt_u[j] = ( sky_pan + kx*sky_d ) * SKY_RECIP;
+                        vt_v[j] = ( sky_pan + ky*sky_d ) * SKY_RECIP;
+                        continue;
+                    }
 
                     tu = su0*vx + su1*vy + su2*vz + su3;
                     tv = sv0*vx + sv1*vy + sv2*vz + sv3;
@@ -495,7 +512,10 @@ void d_draw_faces( World *world, Renderer *rdr, SurfCache far *sc, LightStyles *
                 }
             }
 
-            if ( lm_on == 0 ) {
+            if ( sky ) {
+                if ( !sky_made ) { d_sky_make( world, dp->anim_time ); sky_made = 1; }
+                src_dc = (long) (void far *) world->sky_dc;
+            } else if ( lm_on == 0 ) {
                 src_dc = (long) (void far *) mod_tex_shaded( world, tex_id, draw_mip );
                 /* ofs is [id*4 + level]. Getting this pair backwards
                    aims the view at another cell entirely -- coherent

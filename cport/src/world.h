@@ -162,6 +162,8 @@ typedef struct {
                                          a texture */
     short tex_aim_shd[TEX_HEIGHTS];
     long  tex_ofs[1024];    /* [id*4 + level] -> byte offset in the atlas */
+    QSurf sky_layers, sky_dc;   /* d_sky.c's: back and front, composed */
+    short sky_shift;            /* the front shift sky_dc holds, -1 none */
 } World;
 
 #endif

@@ -101,6 +101,7 @@ typedef struct {
     short liquid;
     short anim_base;
     short anim_count;
+    short sky;          /* a sky* texture: d_sky.c draws it */
 } MipTex;
 
 /* q_map.bi's BrushModel -- per-submodel draw/solid/offset state, one

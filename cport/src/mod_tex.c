@@ -18,6 +18,7 @@
 #include "assets.h"
 #include "sys.h"     /* sys_error */
 #include "qglsurf.h"  /* qgl_surf_from_file, TEX_ATLAS_W/LM_ATLAS_W */
+#include "d_sky.h"
 
 static void modtex_fatal( char *what )
 {
@@ -150,6 +151,8 @@ PalRgb far * mod_load_textures( World *world, MapCounts *counts )
         world->miptex[i].anim_base  = (short) i;
         world->miptex[i].anim_count = 1;
         if ( hdr.name[0] == '*' ) world->miptex[i].liquid = -1;
+        world->miptex[i].sky = ( ( hdr.name[0] | 32 ) == 's' && ( hdr.name[1] | 32 ) == 'k' &&
+                                 ( hdr.name[2] | 32 ) == 'y' );
     }
 
     /*
@@ -189,6 +192,7 @@ PalRgb far * mod_load_textures( World *world, MapCounts *counts )
     }
 
     mod_link_anims( world, t_mip_inf, counts->textures );
+    d_sky_init( world );
     qglMemFree( (long) t_mip_inf );
 
     /* pal.raw, not base.dat: base.dat is a Quake PACK and qgl links a
