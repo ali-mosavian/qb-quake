@@ -937,6 +937,10 @@ def parse_entities(text: str, nmodels: int, boxes: list[tuple[float, ...]], skil
     for block in text.split('{')[1:]:
         kv = dict(ENT_PAIR.findall(block.split('}')[0]))
         if int(kv.get('spawnflags', '0')) & skip:
+            # an entity the skill removes never links its brush: e1m3's NOT_EASY
+            # trigger_once *67 drew as a solid wall of the "trigger" texture
+            if model(kv.get('model', '')):
+                hides.append(model(kv['model']))
             continue
         match kv.get('classname'):
             case 'worldspawn':
