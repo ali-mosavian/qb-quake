@@ -38,8 +38,12 @@ shot() {
     cp "$OUT/BENCH.BMP" "$OUT/be-$2.bmp"
 }
 
-shot ""         ents
 shot "-noents"  noents
+
+# Both draw orders: after the world (the default) and inserted into the
+# walk, which alone reads the emit bits.
+for order in "" "-entinsert"; do
+shot "$order" ents
 
 python3 - "$OUT/be-ents.bmp" "$OUT/be-noents.bmp" "$MIN" <<'PY'
 import struct, sys
@@ -63,5 +67,6 @@ if diff < want:
     sys.exit(1)
 PY
 rc=$?
-[[ $rc -eq 0 ]] && echo "ok: brush entities draw with the depth buffer on"
-exit $rc
+[[ $rc -eq 0 ]] || exit $rc
+echo "ok: brush entities draw with the depth buffer on ${order:-(after the world)}"
+done

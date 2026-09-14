@@ -3429,6 +3429,15 @@ at the spawn draws 254 polygons a frame where it should draw 327, and
 geometry from there. Quake never had this problem because it draws
 entities from its own list, not inserted into the node walk.
 
+**With a depth buffer, brush entities draw after the world.** World
+faces write depth without testing it, so a world face later in the walk
+than an inserted entity covered it: across e1m1's plunger pit the
+button column drew over the platform, the column's foot matching
+`-noents` on all 784 pixels. The world now writes, then the brush
+entities test and write, then the models and items; `QGL_Z_TEST` writes
+on a pass. Insertion stays for `-noz` and for `-entinsert`, the A/B.
+`cport/tools/test-brushdepth.sh`.
+
 **A per-frame counter divided by the profiled frame count is not a
 mean.** `pt_marked` read 575 against 486 on the two arms and that gap was
 the instrument: the counters summed from frame 0 while `pt.n` counts from

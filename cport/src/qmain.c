@@ -509,7 +509,6 @@ int main( void )
         rdr.no_mdl    = args.no_mdl;
         rdr.no_view   = args.no_view;
         rdr.no_ai     = args.no_ai;
-        rdr.bad_order = args.bad_order;
         hud->portal_wire = args.ptwire;
         /* Off unless asked for. F12 still toggles it; -nostats stays
            accepted so every A/B recipe that passes it keeps working. */
@@ -539,6 +538,7 @@ int main( void )
                 qglZScale( 65535.0f * cfg.z_near );
             }
         }
+        rdr.ents_last = (short) ( args.bad_order || ( z_dc != 0 && !args.ent_insert ) );
 
         sys_time_init( &sysclk );
         /* 0 (no -ticks given) is host_advance's own "unbounded" --

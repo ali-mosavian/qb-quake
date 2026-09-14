@@ -301,7 +301,7 @@ void r_emit_entities( World *world, Renderer *rdr, DiskPlane far *frustum,
 {
     short m;
 
-    if ( ign || rdr->bad_order || rdr->no_ents ) return;
+    if ( ign || rdr->ents_last || rdr->no_ents ) return;
 
     for ( m = 1; m < world->model_count; m++ ) {
         if ( world->brush[m].draw && world->brush[m].node == nodenr ) {
@@ -359,7 +359,7 @@ void r_draw_world( World *world, Renderer *rdr, DiskPlane far *frustum,
     /* How many brush entities the walk still has to place. Once it's
        zero the per-node test in r_walk.c costs a compare, not a call. */
     rdr->ent_left = 0;
-    for ( i = 1; i < world->model_count; i++ )
+    for ( i = 1; i < world->model_count && !rdr->ents_last; i++ )
         if ( world->brush[i].draw ) rdr->ent_left++;
 
     /* Where the entities are, and what the walk may prune.
@@ -403,11 +403,12 @@ void r_draw_world( World *world, Renderer *rdr, DiskPlane far *frustum,
 
     r_recursive_world_node( world, rdr, frustum, (short) world->models[model].head_node0, campos, 0, CLIP_ALL );
 
-    /* -badorder reproduces what this used to do: every brush entity
-       appended once the world is finished, so all of them draw in
-       front of it. Kept so the fix (insertion at ent_find_node's own
-       place) can be shown against, not just asserted. */
-    if ( rdr->bad_order && !rdr->no_ents ) {
+    /* With a depth buffer every brush entity comes after the world and
+       tests the depth the world wrote. Inserted into the walk, a world
+       face later in the order wrote over it without testing: the column
+       beside e1m1's plunger drew over the platform. -entinsert keeps the
+       insertion for the A/B; -noz has no depth, so insertion is all. */
+    if ( rdr->ents_last && !rdr->no_ents ) {
         for ( i = 1; i < world->model_count; i++ ) {
             if ( world->brush[i].draw ) {
                 r_recursive_world_node( world, rdr, frustum, (short) world->models[i].head_node0, campos, 1, CLIP_ALL );

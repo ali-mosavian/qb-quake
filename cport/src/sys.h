@@ -75,7 +75,8 @@ typedef struct {
     short no_ai;              /* -noai: they stand still, so a frame repeats */
     short fire;               /* -fire: the trigger held, for a headless shot */
     short carry;              /* -carry: CARRY.BIN holds the last level's kit */
-    short bad_order;          /* -badorder */
+    short bad_order;          /* -badorder: brush entities after the world, depth or not */
+    short ent_insert;         /* -entinsert: inserted into the walk, depth or not */
     short comp;                /* -comp */
     short use_lm;              /* -lm */
     short ptwire;              /* -ptwire */

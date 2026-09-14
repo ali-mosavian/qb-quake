@@ -86,6 +86,7 @@ void sys_parse_args( RunArgs *args )
         else if ( stricmp( argv[i], "-nosound" ) == 0 ) args->no_sound = -1;
         else if ( stricmp( argv[i], "-sndsum" )  == 0 ) args->sndsum = -1;
         else if ( stricmp( argv[i], "-badorder" )== 0 ) args->bad_order = -1;
+        else if ( stricmp( argv[i], "-entinsert" ) == 0 ) args->ent_insert = -1;
         else if ( stricmp( argv[i], "-noz" )     == 0 ) args->no_z = -1;
         else if ( stricmp( argv[i], "-nocull" )  == 0 ) args->no_cull = -1;
         else if ( stricmp( argv[i], "-nomip" )   == 0 ) args->no_mip = -1;

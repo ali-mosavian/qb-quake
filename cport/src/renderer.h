@@ -62,7 +62,7 @@ typedef struct {
     /* q_vis.bi's VisState -- folded in here per the port plan's own
        architecture table (Renderer replaces RenderState *and*
        VisState). frame_stamp/ord_count/drw_leafs/cul_leafs/ent_left/
-       pt_culled/no_ents/bad_order are the counters r_draw_world resets
+       pt_culled/no_ents/ents_last are the counters r_draw_world resets
        and the walk (r_walk.c) updates every frame. pflag/ord/pvsb/
        pvs_now are the working scratch the walk writes into -- sized
        once at map-load time (to face_count/node_count/leaf_count),
@@ -136,7 +136,8 @@ typedef struct {
     short no_view;        /* -noview: no weapon in hand, for a reference frame */
     short no_ai;          /* -noai: the monsters stand where they spawned */
     short mdl_drawn;      /* monster triangles submitted this frame */
-    short bad_order;      /* -badorder */
+    short ents_last;      /* brush entities after the world walk: with depth
+                              unless -entinsert, or -badorder */
 
     /* r_mark_leaves's own memory, not reset by r_draw_world: the
        visible set only changes when the camera changes leaf, so these
