@@ -929,7 +929,7 @@ static short sc_selftest_run( SurfCache far *sc )
    fit, bstag's long one does not, and six arrays have to go back. */
 static short sc_selftest_short( SurfCache far *sc )
 {
-    static long hog[256];
+    long hog[256];   /* on the stack: static is 1K of DGROUP */
     long before, want;
     short n = 0, k, r, ok, step;
 

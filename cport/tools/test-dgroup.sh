@@ -36,6 +36,17 @@ else
     echo "ok: $("$CHECK" "$MAP" "$STKLEN")"
 fi
 
+# And the budget. sc_selftest_short's 256 hog pointers went in as a
+# static, 1,024 bytes of DGROUP for a table used once at startup: near
+# heap 7,404 to 6,380. Move this floor with a reason, never to go green.
+NEAR_MIN=7000
+if [[ -n "$STKLEN" ]] && ! "$CHECK" "$MAP" "$STKLEN" "$NEAR_MIN" >/dev/null 2>&1; then
+    echo "FAIL: near heap under $NEAR_MIN: $("$CHECK" "$MAP" "$STKLEN" 2>&1 | head -1)" >&2
+    fail=1
+elif [[ -n "$STKLEN" ]]; then
+    echo "ok: near heap at least $NEAR_MIN"
+fi
+
 # The map the broken build had: DGROUP 0xa534 with the same stack. Fed
 # through the guard it must fail, or the guard cannot have caught it.
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
