@@ -180,6 +180,7 @@ qglGemFree    proc    public uses bx cx dx,\
 @@slot:         cmp     [qgl$gem_hnd+bx], dx
                 jne     @@next
                 mov     [qgl$gem_hnd+bx], 0
+                mov     [qgl$gem_key+bx], 0FFFFh  ;; dctems compares the key, not gem_hnd
 @@next:         add     bx, 2
                 loop    @@slot
 @@done:         ret

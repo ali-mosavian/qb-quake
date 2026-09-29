@@ -17,6 +17,8 @@
                 include qgl.inc
                 include tfw.inc
 
+                extrn   qgl$gem_key:word
+
 SLOT            equ     2
 OTHER           equ     3
 
@@ -29,6 +31,7 @@ n_page1         db      'new page issues one    $'
 n_other         db      'other slot issues one  $'
 n_back          db      'page 0 back reads p0   $'
 n_p1            db      'page 1 back reads p1   $'
+n_keyfree       db      'free forgets the key   $'
 n_reuse         db      'EMM reused the handle  $'
 n_freed         db      'map after free issues  $'
 n_bad0          db      'slot 4 returns 0       $'
@@ -125,6 +128,10 @@ tmain           proc    far public uses bx cx dx si di es
                 ;; already there
                 invoke  qglGemMap, hA, 0, SLOT
                 invoke  qglGemFree, hA
+                ;; dctems and the QuakeC VM compare this key inline and map
+                ;; nothing on a match: it has to forget the handle too
+                mov     ax, qgl$gem_key[SLOT*2]
+                CHK     n_keyfree, ax, 0FFFFh
                 invoke  qglGemAlloc, 16384
                 mov     hB, ax
                 CHK     n_reuse, hB, hA
