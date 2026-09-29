@@ -116,6 +116,21 @@ declare sub r_emit_entities ( _
     ord() as integer, _
     fru() as DiskPlane _
 )
+declare sub r_walk_brush ( _
+    g as Game, _
+    byval m as integer, _
+    byval model_count as long, _
+    campos as Vec3, _
+    ign as integer, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    nodes() as Node, _
+    planes() as Plane, _
+    pvsb() as integer, _
+    pflag() as integer, _
+    ord() as integer, _
+    fru() as DiskPlane _
+)
 declare sub r_draw_world ( _
     g as Game, _
     byval model as integer, _
@@ -330,14 +345,64 @@ sub r_emit_entities ( _
         if ( brush(m).draw and brush(m).node = nodenr ) then
             g.vis.ent_left = g.vis.ent_left - 1
             ign = true
-            r_recursive_world_node g, int( models(m).head_node0 ), _
-                              model_count, models(), brush(), _
-                              campos, ign, _
-                              nodes(), planes(), lef_buffer(), lfc_buffer(), _
-                              pvsb(), pflag(), ord(), fru()
+            r_walk_brush g, m, model_count, campos, ign, models(), brush(), _
+                         nodes(), planes(), pvsb(), pflag(), ord(), fru()
             ign = false
         end if
     next m
+
+end sub
+
+
+
+''::::::::::
+'' name: r_walk_brush
+'' desc: Walks brush entity m where it stands, not where the map put it.
+''
+''       Its nodes, bounds and planes stay in the map's coordinates while
+''       the entity moves by ofs, so the eye and the frustum move into the
+''       model's space instead -- Quake's modelorg. Walked with the world's,
+''       an open door's nodes were culled where the door used to be.
+''       ofs is bsp space (z up), campos and the frustum renderer space.
+''       The frustum is restored from saved values, not by subtracting
+''       back, so no rounding accumulates in it.
+''::::::::::
+sub r_walk_brush ( _
+    g as Game, _
+    byval m as integer, _
+    byval model_count as long, _
+    campos as Vec3, _
+    ign as integer, _
+    models() as Submodel, _
+    brush() as BrushModel, _
+    nodes() as Node, _
+    planes() as Plane, _
+    pvsb() as integer, _
+    pflag() as integer, _
+    ord() as integer, _
+    fru() as DiskPlane _
+)
+    dim lc as Vec3
+    dim saved(0 to 5) as single
+    dim i as integer
+
+    lc.x = campos.x - brush(m).ofs.x
+    lc.y = campos.y - brush(m).ofs.z
+    lc.z = campos.z - brush(m).ofs.y
+    for  i = 0 to 5
+        saved(i) = fru(i).dist
+        fru(i).dist = fru(i).dist + fru(i).norm.x * brush(m).ofs.x _
+                                  + fru(i).norm.y * brush(m).ofs.z _
+                                  + fru(i).norm.z * brush(m).ofs.y
+    next i
+    r_recursive_world_node g, int( models(m).head_node0 ), _
+                              model_count, models(), brush(), _
+                              lc, ign, _
+                              nodes(), planes(), lef_buffer(), lfc_buffer(), _
+                              pvsb(), pflag(), ord(), fru()
+    for  i = 0 to 5
+        fru(i).dist = saved(i)
+    next i
 
 end sub
 
@@ -457,10 +522,8 @@ sub r_draw_world ( _
         for  i = 1 to g.wld.count.models-1
             if ( brush(i).draw ) then
                 r_ignore_pvs = true
-                r_recursive_world_node g, int( models(i).head_node0 ), _
-                              g.wld.count.models, models(), brush(), campos, r_ignore_pvs, _
-                              nodes(), planes(), lef_buffer(), lfc_buffer(), _
-                              pvs_now(), pflag(), ord(), fru()
+                r_walk_brush g, i, g.wld.count.models, campos, r_ignore_pvs, models(), brush(), _
+                             nodes(), planes(), pvs_now(), pflag(), ord(), fru()
                 r_ignore_pvs = false
             end if
         next i

@@ -427,6 +427,11 @@ void pascal far d_draw_faces(
              */
             pl = &planes[ tri[i].plane_id ];
             dp_dist = cam_plane_dist( campos, pl );
+            if ( tri[i].side >> 1 ) {
+                /* A moved brush's plane moved with it; ofs and norm are both BSP space. */
+                BrushModel far *bm = &brush[ tri[i].side >> 1 ];
+                dp_dist -= bm->ofs.x * pl->norm.x + bm->ofs.y * pl->norm.y + bm->ofs.z * pl->norm.z;
+            }
             if ( tri[i].side & 1 ) dp_dist = -dp_dist;
             if ( dp->backface != 0 && dp_dist <= 0.01 ) continue;
 
