@@ -48,6 +48,7 @@ dim shared qgl_drop_dbg as integer
 declare function qglMemAlloc ( byval nbytes as long ) as long
 declare sub r_lcache_set ( byval p as long, byval n as integer )
 dim shared host_lc_n as integer     '' r_walk.c's LeafCache slots: the items, then the monsters
+dim shared host_plight as integer    '' -plight: the always-on test light
 dim shared host_dl_tick as integer  '' bumped when the light moves; d_faces.c keys a lit face on it
 
 const DL_RADIUS# = 200.0#   '' Quake's own rocket dlight radius
@@ -446,6 +447,10 @@ sub host_view_load ( g as Game )
     end select
 end sub
 
+sub host_plight_on ()
+    host_plight = true
+end sub
+
 sub host_tick ( _
     g as Game, _
     byval dt as single, _
@@ -565,16 +570,17 @@ sub host_tick ( _
     ls_animate g.rdr.anim_time
     host_tk g.ft.n > 0, t0, g.pt.tk_ls
 
-    '' the test dynamic light, following the player -- field by field,
-    '' not a whole-UDT assignment, matching how every other Vec3 copy in
-    '' this codebase is written
+    '' the muzzle flash, at the player -- field by field, not a whole-UDT
+    '' assignment, matching how every other Vec3 copy here is written.
+    '' Quake has no light that follows the player; -plight keeps one for
+    '' A/B, and walking with it rebuilt every face in reach every tick.
     host_tk g.ft.n > 0, t_all, g.pt.tk_all
     ox = g.rdr.dlight.pos.x : oy = g.rdr.dlight.pos.y : oz = g.rdr.dlight.pos.z : orad = g.rdr.dlight.radius
     g.rdr.dlight.pos.x = g.pl.pos.x
     g.rdr.dlight.pos.y = g.pl.pos.y
     g.rdr.dlight.pos.z = g.pl.pos.z
-    g.rdr.dlight.radius = DL_RADIUS#
-    '' and the muzzle flash, which is the same light, wider
+    g.rdr.dlight.radius = 0.0
+    if ( host_plight ) then g.rdr.dlight.radius = DL_RADIUS#
     if ( g.rdr.anim_time < g.fight.flash_until ) then g.rdr.dlight.radius = DL_RADIUS# * 2.0
     if ( ox <> g.rdr.dlight.pos.x or oy <> g.rdr.dlight.pos.y or oz <> g.rdr.dlight.pos.z or orad <> g.rdr.dlight.radius ) then
         host_dl_tick = ( host_dl_tick + 1 ) mod 32000

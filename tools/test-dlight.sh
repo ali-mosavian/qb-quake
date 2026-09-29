@@ -1,5 +1,5 @@
 #!/bin/bash
-# Regression test: the player's light glows where the player is.
+# Regression test: the player's light glows where the player is (-plight).
 #
 # A lit face was keyed -1 whenever the light reached it, so the second
 # frame was a cache hit and the glow stayed where it was first built.
@@ -15,7 +15,7 @@ OUT="$(cd "${1:?usage: test-dlight.sh <build-dir>}" && pwd)"
 frame() {
     rm -f "$OUT/BENCH.BMP"
     VBD_OUT="$OUT" TIMEOUT="${TIMEOUT:-240}" \
-        QFLAGS="-lm -nosound -nostats -noai -bench 999 -ticks 120 $1" \
+        QFLAGS="-lm -plight -nosound -nostats -noai -bench 999 -ticks 120 $1" \
         "$ROOT/tools/dosbox.sh" run >/dev/null 2>&1 || true
     [[ -s "$OUT/BENCH.BMP" ]] || { echo "FAIL: no frame written" >&2; exit 1; }
     md5 -q "$OUT/BENCH.BMP" 2>/dev/null || md5sum "$OUT/BENCH.BMP" | cut -d' ' -f1
