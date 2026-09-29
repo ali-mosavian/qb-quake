@@ -9,12 +9,10 @@
 ;;       src/render/sb_build.c, which sets up an SBPARM and used to hand
 ;;       the texel loop to uglBuildSurf.
 ;;
-;;       The maths is a faithful port of mgl's own uglsurf.asm (the
-;;       already-fixed version, badlogic/mgl:src/ugl/uglsurf.asm), which
-;;       is itself a statement-for-statement port of d_surf.bas's old
-;;       sb_build. tools/sbref.py is the byte-exact Python reference,
-;;       proven against the BASIC on the target (face 1544 mip 1: 0 of
-;;       8192 bytes differ); this must reproduce it byte for byte.
+;;       Native 1:1 mip cells take Quake's path: four fixed 16/8/4/2
+;;       block drawers, right-to-left interpolation, and no dither. The
+;;       generic path remains for atlas levels which share a larger cell
+;;       and therefore need resampling.
 ;;
 ;;       The destination is written in place, mapped once and held
 ;;       across the texel loop, which calls nothing. That is sound
@@ -99,8 +97,8 @@ sb_au0          dd      ?               ;; initial u, 16.16
 sb_av0          dd      ?               ;; initial v, 16.16
 sb_du           dd      ?               ;; u step per texel
 sb_dv           dd      ?               ;; v step per row
-sb_sw           dw      ?               ;; surface width  (padded)
-sb_sh           dw      ?               ;; surface height (padded)
+sb_sw           dw      ?               ;; logical surface width
+sb_sh           dw      ?               ;; logical surface height
 sb_lmw          dw      ?               ;; luxel grid width
 sb_lmh          dw      ?               ;; luxel grid height
 sb_shift        dw      ?               ;; log2(texels per luxel)
@@ -112,26 +110,15 @@ sb_vmsk         dw      ?               ;; v wrap mask, cell height - 1 --
 SBPARM          ends
 
 
-;; Ordered dither on t, in the surface's own x,y so a cached surface is
-;; the same picture from any camera: raw*16 + 8 - 128, about half a
-;; colormap row either way.
-.data
-sb$bayer        dw        -120,    8,  -88,   40
-                dw          72,  -56,  104,  -24
-                dw         -72,   56, -104,   24
-                dw         120,   -8,   88,  -40
-
 .data?
 sb$lgrid        dw      LM_MAXCELLS dup (?)     ;; t per luxel
-sb$drow         dw      4 dup (?)               ;; this row's four, by
-                                                ;; destination offset and 3
-sb$savebp       dw      ?
+sb$savebp       dd      ?
 
 sb$v            dd      ?
 sb$dv           dd      ?
 sb$tacc         dd      ?
 sb$tstep        dd      ?
-sb$ty           dd      ?
+sb$yin          dw      ?
 
 sb$dufrc        dw      ?
 sb$duint        dw      ?
@@ -151,6 +138,8 @@ sb$texrow       dw      ?
 sb$texseg       dw      ?
 
 sb$dstbps       dw      ?
+sb$dstw         dw      ?
+sb$dsth         dw      ?
 sb$dstbase      dw      ?               ;; row 0, in window 1
 sb$dstseg       dw      ?
 sb$dstlast      dw      ?               ;; the last row, to prove the block
@@ -183,15 +172,37 @@ sb$lx           dw      ?
 sb$nfull        dw      ?
 sb$cnt          dw      ?
 
+;; Quake block-drawer state. These are globals for the same reason as
+;; Quake's surf8.s state: the hot loop gets the registers.
+sb$q_cols       dw      ?
+sb$q_vblocks    dw      ?
+sb$q_lcol       dw      ?
+sb$q_lptr       dw      ?
+sb$q_lrow       dw      ?
+sb$q_destcol    dw      ?
+sb$q_sx         dw      ?
+sb$q_sy         dw      ?
+sb$q_texsize    dw      ?
+sb$q_srcmax     dw      ?
+sb$q_left       dw      ?
+sb$q_right      dw      ?
+sb$q_lstep      dw      ?
+sb$q_rstep      dw      ?
+sb$q_hstep      dw      ?
+sb$q_light      dw      ?
 
-;; the vertical half of the bilinear, once per span per row -- see
-;; uglsurf.asm's TLERP, which this reproduces exactly
+
+;; Quake's vertical interpolation: arithmetic-shift the signed delta
+;; first, then accumulate that integer step. Multiplying before shifting
+;; differs for every negative delta not divisible by the block size.
 SB_TLERP        macro   top:req, bot:req, dst:req
                 mov     ax, ss:&bot
                 sub     ax, ss:&top
-                movsx   eax, ax
-                imul    eax, ss:sb$ty
-                sar     eax, 16
+                push    cx
+                mov     cl, B ss:sb$shift
+                sar     ax, cl
+                imul    ax, ss:sb$yin
+                pop     cx
                 add     ax, ss:&top
                 mov     ss:&dst, ax
 endm
@@ -212,7 +223,164 @@ SB_LEVEL2T      macro
 ok:
 endm
 
+;; One Quake pixel. Horizontal blocks are written right to left: the
+;; rightmost pixel sees the right-hand light exactly, then the light
+;; walks toward the left corner. ebp is the mapped colormap offset.
+SB_QPIX         macro   ofs:req
+                mov     ax, ss:sb$q_light
+                and     ax, 0FF00h
+                or      al, ds:[si+ofs]
+                movzx   eax, ax
+                mov     al, gs:[eax+ebp]
+                mov     es:[di+ofs], al
+                mov     ax, ss:sb$q_hstep
+                add     ss:sb$q_light, ax
+endm
+
+;; Quake's four R_DrawSurfaceBlock8_mipN routines in the 16-bit memory
+;; model. Only the block width differs; assembly-time expansion keeps
+;; every texel free of a coordinate calculation or loop branch.
+SB_QDRAW        macro   name:req, block:req, divsh:req
+                local   hloop, vloop, rowloop, rowdone, nowrap, out
+name:
+                mov     es, ss:sb$dstseg
+                movzx   ebp, W ss:sb$cmofs
+                mov     ax, ss:sb$lmw
+                dec     ax
+                mov     ss:sb$q_cols, ax
+                mov     ax, O sb$lgrid
+                mov     ss:sb$q_lcol, ax
+                mov     ax, ss:sb$dstbase
+                mov     ss:sb$q_destcol, ax
+                mov     ax, ss:sb$u0int
+                and     ax, ss:sb$msk
+                mov     ss:sb$q_sx, ax
+
+                mov     eax, ss:sb$v
+                shr     eax, 16
+                and     ax, ss:sb$vmsk
+                mov     ss:sb$q_sy, ax
+
+                mov     ax, ss:sb$vmsk
+                inc     ax
+                mul     W ss:sb$texbps
+                mov     ss:sb$q_texsize, ax
+                add     ax, ss:sb$texbase
+                mov     ss:sb$q_srcmax, ax
+
+                mov     ax, ss:sb$lmw
+                shl     ax, 1
+                mov     ss:sb$q_lrow, ax
+
+hloop:          mov     ax, ss:sb$q_lcol
+                mov     ss:sb$q_lptr, ax
+                mov     ax, ss:sb$lmh
+                dec     ax
+                mov     ss:sb$q_vblocks, ax
+
+                mov     ax, ss:sb$q_sy
+                mul     W ss:sb$texbps
+                add     ax, ss:sb$texbase
+                add     ax, ss:sb$q_sx
+                mov     si, ax
+                mov     di, ss:sb$q_destcol
+
+vloop:          mov     bx, ss:sb$q_lptr
+                mov     ax, ss:[bx]
+                mov     ss:sb$q_left, ax
+                mov     dx, ss:[bx+2]
+                mov     ss:sb$q_right, dx
+                add     bx, ss:sb$q_lrow
+                mov     ss:sb$q_lptr, bx
+
+                mov     ax, ss:[bx]
+                sub     ax, ss:sb$q_left
+                sar     ax, divsh
+                mov     ss:sb$q_lstep, ax
+                mov     ax, ss:[bx+2]
+                sub     ax, ss:sb$q_right
+                sar     ax, divsh
+                mov     ss:sb$q_rstep, ax
+
+                mov     cx, block
+rowloop:        mov     ax, ss:sb$q_left
+                sub     ax, ss:sb$q_right
+                sar     ax, divsh
+                mov     ss:sb$q_hstep, ax
+                mov     ax, ss:sb$q_right
+                mov     ss:sb$q_light, ax
+
+IF block EQ 16
+                SB_QPIX 15
+                SB_QPIX 14
+                SB_QPIX 13
+                SB_QPIX 12
+                SB_QPIX 11
+                SB_QPIX 10
+                SB_QPIX 9
+                SB_QPIX 8
+                SB_QPIX 7
+                SB_QPIX 6
+                SB_QPIX 5
+                SB_QPIX 4
+                SB_QPIX 3
+                SB_QPIX 2
+                SB_QPIX 1
+                SB_QPIX 0
+ELSEIF block EQ 8
+                SB_QPIX 7
+                SB_QPIX 6
+                SB_QPIX 5
+                SB_QPIX 4
+                SB_QPIX 3
+                SB_QPIX 2
+                SB_QPIX 1
+                SB_QPIX 0
+ELSEIF block EQ 4
+                SB_QPIX 3
+                SB_QPIX 2
+                SB_QPIX 1
+                SB_QPIX 0
+ELSE
+                SB_QPIX 1
+                SB_QPIX 0
+ENDIF
+
+                mov     ax, ss:sb$q_lstep
+                add     ss:sb$q_left, ax
+                mov     ax, ss:sb$q_rstep
+                add     ss:sb$q_right, ax
+
+                add     si, ss:sb$texbps
+                cmp     si, ss:sb$q_srcmax
+                jb      nowrap
+                sub     si, ss:sb$q_texsize
+nowrap:         add     di, ss:sb$dstbps
+                dec     cx
+                jz      rowdone
+                jmp     rowloop
+rowdone:
+
+                dec     ss:sb$q_vblocks
+                jnz     vloop
+
+                add     ss:sb$q_lcol, 2
+                add     ss:sb$q_destcol, block
+                mov     ax, ss:sb$q_sx
+                add     ax, block
+                and     ax, ss:sb$msk
+                mov     ss:sb$q_sx, ax
+                dec     ss:sb$q_cols
+                jnz     hloop
+out:            ret
+endm
+
 QGL_CODE
+
+                SB_QDRAW sb$qdraw16, 16, 4
+                SB_QDRAW sb$qdraw8,   8, 3
+                SB_QDRAW sb$qdraw4,   4, 2
+                SB_QDRAW sb$qdraw2,   2, 1
 
 ;;::::::::::::::
 ;; qglSbBuild (dstDc:dword, texDc:dword, parm:dword) :word
@@ -282,14 +450,12 @@ qglSbBuild      proc    public uses bx cx dx di si es ds fs gs,\
                 cmp     ax, LM_MAXCELLS
                 ja      @@error
 
-                ;; a surface past one EMS page cannot be addressed flat.
-                ;; sc_alloc already refuses this (SC_MAXSUM).
-                mov     ax, ss:sb$sw
-                imul    ax, ss:sb$sh
-                cmp     ax, SC_PGBYTES
-                ja      @@error
+                cmp     ss:sb$sw, 1
+                jl      @@error
+                cmp     ss:sb$sh, 1
+                jl      @@error
 
-                mov     ss:sb$savebp, bp
+                mov     ss:sb$savebp, ebp
 
                 ;;
                 ;; ---- expand the luxel rows, once --------------------
@@ -349,7 +515,18 @@ qglSbBuild      proc    public uses bx cx dx di si es ds fs gs,\
                 les     bx, dstDc
                 mov     ax, es:[bx].Surface.bps
                 mov     ss:sb$dstbps, ax
-                mov     ax, ss:sb$sh
+                mov     ax, es:[bx].Surface.xRes
+                mov     ss:sb$dstw, ax
+                cmp     ss:sb$sw, ax
+                ja      @@error
+                mov     ax, es:[bx].Surface.yRes
+                mov     ss:sb$dsth, ax
+                cmp     ss:sb$sh, ax
+                ja      @@error
+
+                ;; Prove the WHOLE cache class, including the possible
+                ;; guard row, is flat in one EMS window.
+                mov     ax, ss:sb$dsth
                 dec     ax
                 invoke  qglSfWrRow, dstDc, ax
                 mov     ss:sb$dstlast, ax
@@ -361,7 +538,7 @@ qglSbBuild      proc    public uses bx cx dx di si es ds fs gs,\
                 jz      @@error
                 cmp     dx, ss:sb$dstlseg
                 jne     @@error
-                mov     ax, ss:sb$sh
+                mov     ax, ss:sb$dsth
                 dec     ax
                 mul     W ss:sb$dstbps
                 jc      @@error
@@ -369,7 +546,7 @@ qglSbBuild      proc    public uses bx cx dx di si es ds fs gs,\
                 jc      @@error
                 cmp     ax, ss:sb$dstlast
                 jne     @@error
-                add     ax, ss:sb$sw
+                add     ax, ss:sb$dstw
                 jc      @@error
                 cmp     ax, SC_PGBYTES          ;; and in that one window
                 ja      @@error
@@ -382,6 +559,77 @@ qglSbBuild      proc    public uses bx cx dx di si es ds fs gs,\
                 ;; read: every shaded texel would have come out of the
                 ;; texture's segment instead, at the colormap's offset.
                 mov     gs, ss:sb$cmseg
+
+                ;;
+                ;; ---- Quake's native-cell path ------------------------
+                ;;
+                ;; Shared tiny mip cells are resampled (du/dv != 1.0),
+                ;; and arbitrary callers may ask for partial blocks. Both
+                ;; stay on the generic builder below.
+                cmp     ss:sb$dufrc, 0
+                jne     @@generic
+                cmp     ss:sb$duint, 1
+                jne     @@generic
+                cmp     D ss:sb$dv, 10000h
+                jne     @@generic
+                cmp     ss:sb$u0frc, 0
+                jne     @@generic
+                cmp     W ss:sb$v, 0
+                jne     @@generic
+                cmp     ss:sb$lmw, 2
+                jb      @@generic
+                cmp     ss:sb$lmh, 2
+                jb      @@generic
+                cmp     ss:sb$shift, 1
+                jb      @@generic
+                cmp     ss:sb$shift, 4
+                ja      @@generic
+
+                mov     cx, ss:sb$shift
+                mov     ax, ss:sb$lmw
+                dec     ax
+                shl     ax, cl
+                cmp     ax, ss:sb$sw
+                jne     @@generic
+                mov     ax, ss:sb$lmh
+                dec     ax
+                shl     ax, cl
+                cmp     ax, ss:sb$sh
+                jne     @@generic
+
+                mov     dx, ss:sb$stp
+                dec     dx
+                test    ss:sb$u0int, dx
+                jnz     @@generic
+                mov     eax, ss:sb$v
+                shr     eax, 16
+                test    ax, dx
+                jnz     @@generic
+                mov     ax, ss:sb$msk
+                inc     ax
+                cmp     ax, ss:sb$stp
+                jb      @@generic
+                mov     ax, ss:sb$vmsk
+                inc     ax
+                cmp     ax, ss:sb$stp
+                jb      @@generic
+
+                cmp     ss:sb$shift, 4
+                jne     @F
+                call    sb$qdraw16
+                jmp     @@guard
+@@:             cmp     ss:sb$shift, 3
+                jne     @F
+                call    sb$qdraw8
+                jmp     @@guard
+@@:             cmp     ss:sb$shift, 2
+                jne     @F
+                call    sb$qdraw4
+                jmp     @@guard
+ @@:            call    sb$qdraw2
+                jmp     @@guard
+
+@@generic:
 
                 mov     ax, ss:sb$lmw
                 dec     ax
@@ -443,39 +691,16 @@ qglSbBuild      proc    public uses bx cx dx di si es ds fs gs,\
                 imul    ax, ss:sb$stp
                 mov     dx, ss:sb$yy
                 sub     dx, ax
-                movzx   edx, dx
-                shl     edx, 16
-                mov     cx, ss:sb$shift
-                shr     edx, cl
-                cmp     edx, 65536
+                cmp     dx, ss:sb$stp
                 jbe     @F
-                mov     edx, 65536
-@@:             mov     ss:sb$ty, edx
+                mov     dx, ss:sb$stp
+@@:             mov     ss:sb$yin, dx
 
                 mov     ax, ss:sb$yy
                 mul     W ss:sb$dstbps
                 add     ax, ss:sb$dstbase
                 mov     ss:sb$rowofs, ax
                 mov     di, ax
-
-                ;; the loop knows a pixel by its destination offset, di+bp,
-                ;; which is rowofs + x: rotate the row's four by rowofs
-                mov     ax, ss:sb$yy
-                and     ax, 3
-                shl     ax, 2
-                xor     si, si
-@@drow:         mov     bx, si
-                sub     bx, ss:sb$rowofs
-                and     bx, 3
-                add     bx, ax
-                shl     bx, 1
-                mov     dx, ss:sb$bayer[bx]
-                mov     bx, si
-                shl     bx, 1
-                mov     ss:sb$drow[bx], dx
-                inc     si
-                cmp     si, 4
-                jb      @@drow
 
                 mov     ax, ss:sb$u0frc
                 mov     cx, ax
@@ -531,14 +756,26 @@ qglSbBuild      proc    public uses bx cx dx di si es ds fs gs,\
                 je      @@flatspan
 
                 push    cx
-                mov     cl, B ss:sb$ishift
-                mov     ax, ss:sb$tright
-                sub     ax, ss:sb$tleft
+                push    bx
+                mov     cl, B ss:sb$shift
+                mov     ax, ss:sb$tleft
+                sub     ax, ss:sb$tright
+                sar     ax, cl                    ;; Quake's integer step
+                mov     ss:sb$q_hstep, ax
                 movsx   eax, ax
-                shl     eax, cl
+                neg     eax                       ;; this loop walks left->right
+                shl     eax, 16
                 mov     ss:sb$tstep, eax
+
+                mov     ax, ss:sb$q_hstep
+                mov     cx, ss:sb$stp
+                dec     cx
+                imul    ax, cx
+                add     ax, ss:sb$tright           ;; left pixel, one step short
+                mov     dx, ax
+                pop     bx
                 pop     cx
-                movzx   eax, W ss:sb$tleft
+                movzx   eax, dx
                 shl     eax, 16
                 mov     ss:sb$tacc, eax
 
@@ -564,8 +801,7 @@ qglSbBuild      proc    public uses bx cx dx di si es ds fs gs,\
                 pop     bx
                 SB_TLERP sb$t00, sb$t01, sb$tleft
 
-                ;; a flat span dithers per pixel too, so it is a run
-                ;; with no step
+                ;; a flat span is a run with no step
 @@flatspan:     mov     ss:sb$tstep, 0
                 movzx   eax, W ss:sb$tleft
                 shl     eax, 16
@@ -580,15 +816,7 @@ qglSbBuild      proc    public uses bx cx dx di si es ds fs gs,\
 
 @@px:           mov     eax, edx
                 shr     eax, 16
-                lea     si, [bp+di]
-                and     esi, 3
-                add     ax, ss:sb$drow[esi*2]
-                jns     @F                      ;; under 64 is row 0
-                xor     ax, ax
-@@:             cmp     ax, 16384               ;; over row 63 is row 63
-                jb      @F
-                mov     ax, 16128
-@@:             and     ax, 0FF00h
+                and     ax, 0FF00h
 sb_ptrow:       or      al, B ds:[bx+__SIMM16__]
 sb_pcmap:       mov     al, gs:[eax+__SIMM32__]
                 mov     es:[di+bp], al          ;; es: the destination
@@ -613,11 +841,62 @@ sb_pmsk:        and     bx, __SIMM16__
                 jmp     @@row
 
                 ;;
-                ;; ---- done ---------------------------------------------
+                ;; ---- padded cache guard -------------------------------
                 ;;
-                ;; bp was the texel loop's counter, and the epilogue
-                ;; unwinds through it.
-@@done:         mov     bp, ss:sb$savebp
+                ;; Quake clamps every perspective span endpoint to
+                ;; extents-1. qgl's masked sampler has no per-polygon
+                ;; clamp and can overshoot by several texels at a shallow
+                ;; angle, so extend the far edge through the whole unused
+                ;; part of the power-of-two cache class.
+@@done:
+@@guard:        mov     es, ss:sb$dstseg
+                cld
+                mov     ax, ss:sb$sw
+                cmp     ax, ss:sb$dstw
+                jae     @@guardrow
+                mov     cx, ss:sb$dstw
+                sub     cx, ax
+                mov     ss:sb$cnt, cx
+                mov     di, ss:sb$dstbase
+                add     di, ax
+                dec     di
+                mov     si, di
+                mov     dx, ss:sb$sh
+@@guardcol:     mov     al, es:[di]
+                inc     di
+                mov     cx, ss:sb$cnt
+                rep     stosb
+                add     si, ss:sb$dstbps
+                mov     di, si
+                dec     dx
+                jnz     @@guardcol
+
+@@guardrow:     mov     ax, ss:sb$sh
+                cmp     ax, ss:sb$dsth
+                jae     @@success
+                dec     ax
+                mul     W ss:sb$dstbps
+                add     ax, ss:sb$dstbase
+                mov     si, ax
+                mov     ss:sb$rowofs, ax
+                mov     di, ax
+                add     di, ss:sb$dstbps
+                mov     dx, ss:sb$dsth
+                sub     dx, ss:sb$sh
+                push    ds
+                mov     ds, ss:sb$dstseg
+@@guardrows:    mov     si, ss:sb$rowofs
+                mov     cx, ss:sb$dstw
+                rep     movsb
+                add     di, ss:sb$dstbps
+                sub     di, ss:sb$dstw
+                dec     dx
+                jnz     @@guardrows
+                pop     ds
+
+                ;; bp is the fast drawer's cmap base or the generic
+                ;; loop's counter; the generated epilogue needs its frame.
+@@success:      mov     ebp, ss:sb$savebp
                 mov     ax, 1
                 ret
 

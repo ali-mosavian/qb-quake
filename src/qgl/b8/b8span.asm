@@ -42,6 +42,9 @@
                 externdef qgl$tofs:word
                 externdef qgl$fcol:word
                 externdef qgl$mode:word
+                externdef qgl$bound:word
+                externdef qgl$bumax:dword
+                externdef qgl$bvmax:dword
 
                 public  qgl$Fixup, b8_span, qglB8Selftest
 
@@ -590,6 +593,37 @@ PDIV            macro   ?u, ?v
                 add     D fs:?v, 32768
 endm
 
+;; Quake clamps the first recovered coordinate to zero and each later
+;; sub-span endpoint to a tiny positive epsilon before deriving a
+;; negative step. QGL_SUBDIVP is 16 where Quake's span is eight, so the
+;; corresponding raw 16.16 epsilon is 16.
+PCLAMP          macro   ?u, ?v, ?lo
+                local   umin, umax, ustore, vmin, vmax, vstore, done
+                cmp     W fs:qgl$bound, 0
+                je      done
+
+                mov     eax, D fs:?u
+                cmp     eax, ?lo
+                jge     umin
+                mov     eax, ?lo
+                jmp     ustore
+umin:           cmp     eax, D fs:qgl$bumax
+                jle     ustore
+                mov     eax, D fs:qgl$bumax
+ustore:         mov     D fs:?u, eax
+
+                mov     eax, D fs:?v
+                cmp     eax, ?lo
+                jge     vmin
+                mov     eax, ?lo
+                jmp     vstore
+vmin:           cmp     eax, D fs:qgl$bvmax
+                jle     vstore
+                mov     eax, D fs:qgl$bvmax
+vstore:         mov     D fs:?v, eax
+done:
+endm
+
 ;;:::::::::::::: the triple, one sub-span on
 PSTEP           macro
                 fadd    D fs:qgl$fdudxn         ;; u' v' z'
@@ -680,6 +714,7 @@ PTEX_BODY       macro   ?p, ?zwrite, ?ztest
         endif
 
                 PDIV    qgl$ppu, qgl$ppv
+                PCLAMP  qgl$ppu, qgl$ppv, 0
 
 ;;              a sub-span, or what is left of one
 @@sub:          mov     ax, bp
@@ -690,6 +725,7 @@ PTEX_BODY       macro   ?p, ?zwrite, ?ztest
 
                 PSTEP                           ;; one WHOLE sub-span on,
                 PDIV    qgl$plu, qgl$plv        ;; short tail or not: the
+                PCLAMP  qgl$plu, qgl$plv, QGL_SUBDIVP
                 PMKSTEP                         ;; step is per pixel
 
                 mov     ecx, D fs:qgl$ppu

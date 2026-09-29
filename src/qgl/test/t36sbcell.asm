@@ -9,13 +9,14 @@
 ;; smeared down the face with a seam at its own height -- plausible
 ;; enough to be read as a mip or a lightmap fault.
 ;;
-;; Rigged for an exact answer: every luxel is 255, so t = 64 and no
-;; dither offset reaches row 1 -- the colormap row is 0; the colormap
-;; is the identity; du = dv = 1.0. The destination is twice the cell on
-;; both axes, so every pixel of it is a wrap, and the only right answer
-;; is
+;; Rigged for an exact answer: the four luxels form a gradient and the
+;; colormap adds its row to the texture byte. The first 16-pixel span
+;; therefore also proves that the generic resampler keeps Quake's
+;; right-to-left interpolation; the remaining spans hold the right edge.
+;; The destination is twice the cell on both axes, so every pixel past
+;; the cell is a wrap.
 ;;
-;;      dst(x, y) == tex(x and 31, y and 7)
+;;      texel = tex(x and 31, y and 7)
 ;;
 ;; which no single mask can produce.
 
@@ -33,7 +34,6 @@ DST_W           equ     TEX_W * 2
 DST_H           equ     TEX_H * 2
 LM_W            equ     2
 LM_H            equ     2
-LEVEL           equ     255             ;; -> t 64, row 0 under any dither
 
 ;; mirrors sb.asm's own SBPARM, which mirrors bspfile.bi's SurfBuild
 SBPARM          struc
@@ -66,7 +66,7 @@ mism            dw      0
 
 .data?
 parm            SBPARM  <>
-cmap            db      256 dup (?)     ;; identity, only row 0 is reached
+cmap            db      64*256 dup (?)
 lux             db      LM_W*LM_H dup (?)
 
 .code
@@ -87,7 +87,7 @@ sb_verify       proc    near private uses bx cx dx si di es
                 jae     @@next
 
                 invoke  qglSfPget, dst, di, si
-                mov     bx, ax
+                push    ax
 
                 mov     ax, si
                 and     ax, TEX_H-1
@@ -95,9 +95,43 @@ sb_verify       proc    near private uses bx cx dx si di es
                 mul     cx
                 mov     dx, di
                 and     dx, TEX_W-1
-                add     ax, dx
+                add     ax, dx                  ;; texture byte
+                push    ax
+
+                ;; Quake shifts each signed vertical delta FIRST, then
+                ;; accumulates it. These two slopes deliberately do not
+                ;; divide by 16: left -330 >> 4 = -21; right 264 >> 4 = 16.
+                mov     ax, si
+                mov     bx, 16
+                imul    ax, bx
+                add     ax, 15462               ;; right(y)
+
+                cmp     di, 16
+                jae     @F                      ;; tail holds right edge
+                push    ax
+                mov     ax, si
+                mov     bx, -21
+                imul    ax, bx
+                add     ax, 15660               ;; left(y)
+                pop     bx                      ;; right(y)
+                sub     ax, bx
+                sar     ax, 4
+                mov     cx, ax                  ;; horizontal step
+                mov     bx, 15
+                sub     bx, di
+                imul    bx, cx
+                mov     ax, si
+                mov     cx, 16
+                imul    ax, cx
+                add     ax, 15462
+                add     ax, bx
+@@:             and     ax, 0FF00h
+                shr     ax, 8
+                pop     bx
+                add     ax, bx
                 and     ax, 0FFh
 
+                pop     bx
                 cmp     ax, bx
                 je      @F
                 inc     mism
@@ -152,19 +186,19 @@ tmain           proc    far public uses bx cx dx si di es
                 NZ      bx
                 CHK     n_dst_new, ax, 1
 
-                ;; identity colormap, flat luxels
-                mov     cx, 256
+                ;; row r maps texel i to i + r
+                mov     cx, 64*256
                 xor     bx, bx
 @@cm:           mov     al, bl
+                add     al, bh
                 mov     cmap[bx], al
                 inc     bx
                 loop    @@cm
 
-                mov     cx, LM_W*LM_H
-                xor     bx, bx
-@@lx:           mov     byte ptr lux[bx], LEVEL
-                inc     bx
-                loop    @@lx
+                mov     byte ptr lux[0], 10
+                mov     byte ptr lux[1], 13
+                mov     byte ptr lux[2], 15
+                mov     byte ptr lux[3], 9
 
                 ;;
                 ;; one texel per surface pixel, and the surface is twice

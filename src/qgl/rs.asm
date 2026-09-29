@@ -222,6 +222,13 @@ qgl$tseg        dw      0
 qgl$twhole      dd      0                       ;; width  as an integer
 qgl$thwhole     dd      0                       ;; height as an integer
 
+;; qglRsPolyBound's logical cache rectangle. The physical texture stays
+;; power-of-two for the hot mask; the perspective divider clamps its
+;; sub-span endpoints to these Quake-style 16.16 limits first.
+qgl$bound       dw      0
+qgl$bumax       dd      0
+qgl$bvmax       dd      0
+
 ;; per polygon
 qgl$dudx        dd      0                       ;; 16.16 texels per pixel
 qgl$dvdx        dd      0
@@ -248,6 +255,7 @@ qgl$fdzdx       real4   0.0                     ;; only qgl$drawP reads them
                 public  qgl$fdudx, qgl$fdvdx, qgl$fdzdx
                 public  qgl$tshift, qgl$tumsk, qgl$tvmsk, qgl$tofs
                 public  qgl$tseg, qgl$zmode
+                public  qgl$bound, qgl$bumax, qgl$bvmax
 
 
 
@@ -1093,6 +1101,54 @@ qglRsPoly     proc    public uses bx cx dx si di ds es,\
 @@bad:          mov     ax, -1
                 ret
 qglRsPoly     endp
+
+;;::::::::::::::
+;; qglRsPolyBound ( d:far ptr Surface, v:far ptr QVert, n:word,
+;;                  mode:word, src:far ptr Surface, uw:word, vh:word )
+;;                  -> ax = scanlines covered, or -1
+;;
+;; The source remains its physical power-of-two cache class. Bounds live
+;; only around this synchronous call, so ordinary textures keep wrapping.
+;;::::::::::::::
+qglRsPolyBound proc public uses bx dx es,\
+                        d:dword, v:dword, n:word, mode:word, src:dword,\
+                        uw:word, vh:word
+
+                cmp     mode, QGL_M_PTEX
+                jne     @@bad
+                les     bx, src
+                mov     ax, es
+                or      ax, bx
+                jz      @@bad
+                mov     ax, uw
+                cmp     ax, 1
+                jl      @@bad
+                cmp     ax, es:[bx].Surface.xRes
+                ja      @@bad
+                mov     dx, vh
+                cmp     dx, 1
+                jl      @@bad
+                cmp     dx, es:[bx].Surface.yRes
+                ja      @@bad
+
+                movzx   eax, ax
+                shl     eax, 16
+                dec     eax
+                mov     qgl$bumax, eax
+                movzx   eax, dx
+                shl     eax, 16
+                dec     eax
+                mov     qgl$bvmax, eax
+                mov     qgl$bound, 1
+                invoke  qglRsPoly, d, v, n, mode, src
+                push    ax
+                mov     qgl$bound, 0
+                pop     ax
+                ret
+
+@@bad:          mov     ax, -1
+                ret
+qglRsPolyBound endp
 
 ;; qglPrfTake ( k ) -> dx:ax = qgl_cy[k], which is then zeroed
 ;;::::::::::::::

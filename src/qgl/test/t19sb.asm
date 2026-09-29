@@ -32,14 +32,10 @@
 ;;   - du = dv = 1.0 in 16.16 and msk = 15, so texel (x,y) of a 16-wide
 ;;     texture lands at (x,y) of the surface.
 ;;
-;; The row at (x,y) is t ordered-dithered by the surface's own x,y:
-;; min(max(t + raw(y and 3, x and 3)*16 - 120, 64) >> 8, 63), computed
-;; here from this file's own copy of the matrix. Three levels: 4, t
-;; 16056, straddles rows 62 and 63 where no entry and its x,y transpose
-;; fall on one side; 255, t 64, dithers under zero and must
-;; read row 0; 0, t 16320, dithers past 16383 and must read row 63 --
-;; row 64 is past the table. A wrong segment, row, offset, skipped write
-;; or stale pointer breaks the equality; none produces it by accident.
+;; The row is Quake's undithered t >> 8, clamped to 0..63. Three levels:
+;; 4 selects row 62; 255 selects row 0; 0 selects row 63. A wrong
+;; segment, row, offset, skipped write or stale pointer breaks the
+;; equality; none produces it by accident.
 ;;
 ;; The DESTINATION IS EMS on purpose: a conventional one never calls
 ;; qglGemMap, and fault 4 lives there and nowhere else.
@@ -79,16 +75,16 @@ SBPARM          ends
 n_tex_new       db      'tex surface made       $'
 n_dst_new       db      'ems dst surface made   $'
 n_built         db      'qglSbBuild returned ok $'
-n_mix           db      'level 4 rows 62 and 63 $'
+n_mix           db      'level 4 is row 62      $'
 n_low           db      'level 255 row 0        $'
 n_high          db      'level 0 row 63         $'
-
-raw             db      0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5
+n_quake         db      'four Quake block drawers$'
 
 tex             dd      0
 dst             dd      0
 parmp           dd      0
 mism            dw      0
+qtotal          dw      0
 
 .data?
 parm            SBPARM  <>
@@ -99,7 +95,7 @@ lux             db      LM_W*LM_H dup (?)
 
 ;;::::::::::::::
 ;; Every texel of dst against the byte that must have produced it: the
-;; texture's y*TEX_W + x plus the dithered row of t.
+;; texture's y*TEX_W + x plus Quake's undithered row of t.
 ;;::::::::::::::
 sb_verify       proc    near private uses bx cx dx si di es, tval:word
 
@@ -115,20 +111,8 @@ sb_verify       proc    near private uses bx cx dx si di es, tval:word
                 and     ax, 0FFh
                 push    ax
 
-                mov     bx, si
-                and     bx, 3
-                shl     bx, 2
-                mov     ax, di
-                and     ax, 3
-                add     bx, ax
-                movzx   ax, byte ptr raw[bx]
-                shl     ax, 4
-                sub     ax, 120
-                add     ax, tval
-                cmp     ax, 64
-                jge     @F
-                mov     ax, 64
-@@:             shr     ax, 8
+                mov     ax, tval
+                shr     ax, 8
                 cmp     ax, 63
                 jbe     @F
                 mov     ax, 63
@@ -165,6 +149,128 @@ sb_case         proc    near private uses bx cx, level:word
                 invoke  qglSbBuild, dst, tex, parmp
                 ret
 sb_case         endp
+
+;;::::::::::::::
+;; Quake's block drawer starts at the right-hand light and writes right
+;; to left. The right edge reaches its corner; the left and bottom are
+;; one interpolation step short. The unused cache-class padding repeats
+;; the far logical edge, matching Quake's extents-1 sampler clamp.
+;;::::::::::::::
+sb_verify_quake proc    near private uses bx cx dx si di es, dim:word, shft:word
+
+                mov     mism, 0
+                xor     si, si
+@@row:          cmp     si, TEX_H
+                jae     @@out
+                xor     di, di
+@@col:          cmp     di, TEX_W
+                jae     @@next
+
+                invoke  qglSfPget, dst, di, si
+                push    ax
+
+                mov     dx, di
+                cmp     dx, dim
+                jb      @F
+                mov     dx, dim
+                dec     dx                      ;; padding repeats far edge
+@@:             mov     bx, si
+                cmp     bx, dim
+                jb      @F
+                mov     bx, dim
+                dec     bx
+@@:
+                ;; right(y) = 12096 + y * ((3648-12096) >> shft)
+                mov     ax, -8448
+                mov     cx, shft
+                sar     ax, cl
+                imul    ax, bx
+                add     ax, 12096
+
+                ;; light(x,y) = right(y) + (dim-1-x) * (4224 >> shft)
+                push    bx
+                mov     bx, dim
+                dec     bx
+                sub     bx, dx
+                push    dx
+                mov     dx, 4224
+                sar     dx, cl
+                imul    bx, dx
+                add     ax, bx
+                pop     dx
+                pop     bx
+
+                and     ax, 0FF00h
+                shr     ax, 8
+                push    ax
+                mov     ax, bx
+                shl     ax, 4
+                add     ax, dx
+                pop     bx
+                add     ax, bx
+                and     ax, 0FFh
+                jmp     @@compare
+
+@@compare:      pop     bx
+                cmp     ax, bx
+                je      @F
+                inc     mism
+@@:             inc     di
+                jmp     @@col
+
+@@next:         inc     si
+                jmp     @@row
+
+@@out:          mov     ax, mism
+                ret
+sb_verify_quake endp
+
+sb_quake_cases  proc    near private uses bx cx dx si di es
+
+                mov     qtotal, 0
+                mov     si, 4
+@@case:
+                ;; Poison the whole cache class so the edge extension is
+                ;; part of the oracle, not stale bytes that happen to fit.
+                xor     dx, dx
+@@prow:         xor     di, di
+@@pcol:         push    dx
+                invoke  qglSfPset, dst, di, dx, 55h
+                pop     dx
+                inc     di
+                cmp     di, TEX_W
+                jb      @@pcol
+                inc     dx
+                cmp     dx, TEX_H
+                jb      @@prow
+
+                mov     byte ptr lux[0], 0
+                mov     byte ptr lux[1], 64
+                mov     byte ptr lux[2], 128
+                mov     byte ptr lux[3], 192
+
+                mov     cx, si
+                mov     ax, 1
+                shl     ax, cl
+                mov     parm.sb_sw, ax
+                mov     parm.sb_sh, ax
+                mov     parm.sb_shift, si
+
+                invoke  qglSbBuild, dst, tex, parmp
+                cmp     ax, 1
+                je      @F
+                inc     qtotal
+@@:             mov     cx, si
+                mov     ax, 1
+                shl     ax, cl
+                invoke  sb_verify_quake, ax, si
+                add     qtotal, ax
+
+                dec     si
+                jnz     @@case
+                mov     ax, qtotal
+                ret
+sb_quake_cases  endp
 
 
 tmain           proc    far public uses bx cx dx si di es
@@ -263,6 +369,9 @@ tmain           proc    far public uses bx cx dx si di es
                 CHK     n_built, ax, 1
                 invoke  sb_verify, 16320
                 CHK     n_high, ax, 0
+
+                invoke  sb_quake_cases
+                CHK     n_quake, ax, 0
 
                 invoke  qglSfFree, dst
                 invoke  qglSfFree, tex

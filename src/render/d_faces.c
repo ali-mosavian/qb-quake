@@ -102,6 +102,8 @@ extern void  pascal far qglClRect    ( short x0, short y0, short x1, short y1 );
    scanlines covered, 0 for a face clipped away, -1 for a refusal. */
 extern short pascal far qglRsPoly    ( long dst, void far *v, short cnt,
                                        short mode, long src );
+extern short pascal far qglRsPolyBound( long dst, void far *v, short cnt,
+                                        short mode, long src, short uw, short vh );
 /* Depth is not an argument: it belongs to the destination. Refuses -- and
    leaves the surface with depth OFF -- when the surface has no depth
    buffer, which is what -noz produces, so this may be called blind. */
@@ -771,17 +773,13 @@ void pascal far d_draw_faces(
                     bt0 = dp->prof ? sys_rdtsc() : 0;
                     lm_dc = sc_alloc( g, i, lm_mip, lm_sw, lm_sh, lm_fw, lm_fh, lm_stag );
                     if ( lm_dc != 0 ) {
-                        /*
-                         * Build the DC's WHOLE padded extent, not just sw
-                         * by sh: the face's far edge lands exactly on
-                         * texel sw, one past the last one a sw-wide fill
-                         * writes, so every face used to draw a black seam
-                         * of recycled DC along two of its sides.
-                         */
+                        /* Quake's exact logical rectangle: the builder
+                           copies its far row and column into the cache
+                           class's padding, and qglRsPolyBound keeps a
+                           perspective span from sampling past them. */
                         tex_dc = mod_tex_raw( g, tex_id, lm_mip );
                         sb_build( g, lm_dc, tex_dc, i, lm_mip,
-                                  (short)(1 << lm_sa),
-                                  (short)(1 << lm_sb),
+                                  lm_sw, lm_sh,
                                   a_tri, a_texinf, a_gv, a_mipinf, a_planes );
                     }
                     if ( dp->prof ) {
@@ -867,10 +865,13 @@ void pascal far d_draw_faces(
                        accepted, and a refused face must not be latched
                        as the frame's exemplar. */
                     qglSfZMode( q_dst, z_mode );
-                    if ( qglRsPoly( q_dst, (void far *)qvtx, cnt,
-                                    dp->rend_mode == 0 ? QGL_M_PTEX
-                                                       : QGL_M_ATEX,
-                                    src_dc ) >= 0 ) {
+                    if ( ( lm_on && dp->rend_mode == 0
+                           ? qglRsPolyBound( q_dst, (void far *)qvtx, cnt,
+                                             QGL_M_PTEX, src_dc, lm_sw, lm_sh )
+                           : qglRsPoly( q_dst, (void far *)qvtx, cnt,
+                                        dp->rend_mode == 0 ? QGL_M_PTEX
+                                                           : QGL_M_ATEX,
+                                        src_dc ) ) >= 0 ) {
                         /* The BIGGEST face on screen, not the first. An
                            exact texel test needs a face that is
                            magnified; the first one drawn is typically 6
