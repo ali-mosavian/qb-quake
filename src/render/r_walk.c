@@ -227,6 +227,35 @@ static void near r_walk_leaf( WalkCtx *ctx, int nodenr, int mask )
     }
 }
 
+/* Quake's node->visframe: a bit a node, set when some leaf below it is in
+   the PVS or some drawn brush entity sits below it, so the walk skips a
+   dead subtree before r_cull_box_c does six unpacks and twelve
+   multiplies on it. An entity counts because it is drawn with the PVS
+   ignored at a node the PVS pass often leaves unmarked. One post-order
+   pass a frame, no parent table: e1m1's is 5K it cannot spare. */
+static unsigned char far *sv_bits;
+
+void pascal far r_subvis_set( long p )
+{
+    sv_bits = (unsigned char far *) p;
+}
+
+static int near r_sub_mark( WalkCtx *ctx, int nodenr )
+{
+    Node far *nd;
+    int v;
+
+    if ( nodenr & 0x8000 )
+        return ctx->pvsb[ ~nodenr ] != 0 || ( ctx->vis->ent_left && r_walk_has_ent( ctx, nodenr ) );
+    nd = &ctx->nds[nodenr];
+    v  = r_sub_mark( ctx, nd->child0 );
+    v |= r_sub_mark( ctx, ctx->nds[nodenr].child1 );
+    if ( !v && ctx->vis->ent_left ) v = r_walk_has_ent( ctx, nodenr );
+    if ( v ) sv_bits[ nodenr >> 3 ] |=  (unsigned char) ( 1 << ( nodenr & 7 ) );
+    else     sv_bits[ nodenr >> 3 ] &= (unsigned char) ~( 1 << ( nodenr & 7 ) );
+    return v;
+}
+
 static void near r_walk_rec( WalkCtx *ctx, int nodenr, int mask )
 {
     Node far *nds = ctx->nds;
@@ -236,6 +265,7 @@ static void near r_walk_rec( WalkCtx *ctx, int nodenr, int mask )
         r_walk_leaf( ctx, nodenr, mask );
         return;
     }
+    if ( !ctx->ign && sv_bits && !( sv_bits[ nodenr >> 3 ] & ( 1 << ( nodenr & 7 ) ) ) ) return;
 
     mask = r_cull_box_c( &nds[nodenr].bound, ctx->fru, mask );
     if ( mask < 0 ) return;
@@ -311,6 +341,7 @@ void pascal far r_recursive_world_node(
         ent_node[k] = v;
     }
 
+    if ( !ign && sv_bits ) r_sub_mark( &ctx, nodenr );
     r_walk_rec( &ctx, nodenr, CLIP_ALL );
 }
 

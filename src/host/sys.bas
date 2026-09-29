@@ -27,6 +27,7 @@ option explicit
 declare sub ls_hold_on ()
 declare sub r_lcache_disable ()
 declare sub host_plight_on ()
+declare sub r_subvis_disable ()
 declare sub sys_parse_args ( _
     g as Game _
 )
@@ -211,6 +212,9 @@ sub sys_parse_args ( _
         end if
         if ( lcase$(argv(i)) = "-plight" ) then
             host_plight_on
+        end if
+        if ( lcase$(argv(i)) = "-nosubvis" ) then
+            r_subvis_disable
         end if
         if ( lcase$(argv(i)) = "-fire" ) then
             g.env.hold_fire = true

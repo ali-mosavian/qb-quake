@@ -182,6 +182,9 @@ sub host_bench_report ( _
     g.pt.place_stale = ent_place_stale( g.wld.count.models, models(), nodes(), planes(), brush() )
     host_kv benchf, "place_stale", str$( g.pt.place_stale )
     host_kv benchf, "polys", str$( g.rdr.polys )
+    '' the last frame's walk: nodes it ordered, leaves it kept and culled
+    host_kv benchf, "walk_nodes", str$( g.vis.ord_count )
+    host_kv benchf, "walk_leafs", str$( g.vis.drw_leafs ) + str$( g.vis.cul_leafs )
     host_kv benchf, "mdl_drawn", str$( g.mdl_drawn )
     print #benchf, "map " + lcase$( rtrim$( g.env.map_name ) )
     host_kv benchf, "gs_state", str$( g.fight.state )

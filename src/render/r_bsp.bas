@@ -202,6 +202,10 @@ dim shared r_ignore_pvs as integer
 dim shared pvs_leaf as integer
 dim shared dbg_camleaf as integer
 dim shared r_lcache_off as integer  '' -nolcache: r_mdl_visible's A/B
+dim shared r_subvis_off as integer  '' -nosubvis: the walk's subtree skip, A/B
+dim shared r_subvis_made as integer
+declare function qglMemAlloc ( byval nbytes as long ) as long
+declare sub r_subvis_set ( byval p as long )
 dim shared dbg_pvscull as integer
 
 ''
@@ -503,8 +507,13 @@ sub r_draw_world ( _
     next i
 
     ''
-    '' Traverse tree
+    '' Traverse tree. The subtree bits are allocated here, once, before
+    '' any C holds a pointer into the far heap.
     ''
+    if ( r_subvis_made = 0 ) then
+        r_subvis_made = true
+        if ( r_subvis_off = 0 ) then r_subvis_set qglMemAlloc( clng( g.wld.count.nodes ) \ 8 + 1 )
+    end if
     pt0 = sys_now()
     r_recursive_world_node g, int( models(model).head_node0 ), _
                               g.wld.count.models, models(), brush(), campos, r_ignore_pvs, _
@@ -687,6 +696,10 @@ end function
 
 sub r_lcache_disable ()
     r_lcache_off = true
+end sub
+
+sub r_subvis_disable ()
+    r_subvis_off = true
 end sub
 
 ''::::::::::
