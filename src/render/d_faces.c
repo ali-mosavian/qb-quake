@@ -22,7 +22,7 @@
  *
  * What still crosses per face, and why it is next rather than now: the
  * surface cache (sc_find/sc_held/sc_mipfloor/sc_shift/sc_alloc/
- * sc_view_ofs), ls_epoch, mod_geom_map and mod_tex_shaded all live in
+ * sc_view_ofs), ls_value, mod_geom_map and mod_tex_shaded all live in
  * BASIC and keep their own state. Moving them means moving d_surf.bas's
  * cache with them -- a second stage, with sb_build.c as precedent for
  * the subsystem already being half here.
@@ -123,11 +123,12 @@ extern long  pascal far mod_tex_raw    ( void *g, short k, short mip );
 extern long  pascal far mod_tex_shaded ( void *g, short k, short mip );
 extern short pascal far sc_ready       ( void );
 extern short pascal far sc_held        ( short face );
-extern long  pascal far sc_find        ( short face, short mip, short a, short b, short stag );
+extern long  pascal far sc_find        ( short face, short mip, short a, short b, long stag );
 extern long  pascal far sc_alloc       ( void *g, short face, short mip, short w, short h,
-                                         short fw, short fh, short stag );
+                                         short fw, short fh, long stag );
 extern long  pascal far sc_view_ofs    ( void );
-extern short pascal far ls_epoch       ( short style );
+extern short pascal far ls_value       ( short style );
+#define LS_UNSET 116
 extern long  pascal far sys_rdtsc      ( void );
 extern long  pascal far qglTmrCycles   ( void );
 
@@ -342,8 +343,9 @@ void pascal far d_draw_faces(
     long  q_dst;                /* the destination Surface */
     short q_ok = 0;             /* and whether the setup stood up */
     short q_gate = 0;
-    short lm_tms, lm_tmt, lm_extw, lm_exth, lm_stag;
-    unsigned short s01, s23; short sty[4], k; long ls_key;
+    short lm_tms, lm_tmt, lm_extw, lm_exth;
+    long lm_stag;
+    unsigned short s01, s23; short sty[4], k, lv; long ls_key, place;
     short lm_mip, lm_floor, lm_sw, lm_sh, lm_fw, lm_fh, lm_cm, lm_sa, lm_sb;
     short leaf_indx, leaf_end;
     long  gp, lm_dc, src_dc, tex_dc, texofs;
@@ -578,14 +580,19 @@ void pascal far d_draw_faces(
                     lm_exth = ( gv[GEOM_LMOFS + 5] - 1 ) * 16;
                     if ( lm_extw > 0 && lm_exth > 0 ) { lm_on = 1; dp->lm_want++; }
 
-                    /* every style's epoch: a face lit (0, 10) changes
-                       with style 10, and the sum only ever grows */
+                    /* the styles' VALUES, a base-27 digit each, so a
+                       flicker coming back to a value finds its surface:
+                       sc keeps a variant per key */
                     s01 = gv[GEOM_LMOFS + 6]; s23 = gv[GEOM_LMOFS + 7];
                     sty[0] = s01 & 255; sty[1] = s01 >> 8;
                     sty[2] = s23 & 255; sty[3] = s23 >> 8;
-                    ls_key = 0;
-                    for ( k = 0; k < 4 && sty[k] != 255; k++ ) ls_key += ls_epoch( sty[k] );
-                    lm_stag = (short) ( ls_key % 32000L );
+                    ls_key = 0; place = 1;
+                    for ( k = 0; k < 4 && sty[k] != 255; k++ ) {
+                        lv = ls_value( sty[k] );
+                        ls_key += place * ( lv == LS_UNSET ? 26 : lv / 10 );
+                        place *= 27;
+                    }
+                    lm_stag = ls_key;
 
                     /*
                      * A face the light reaches is keyed below any style key,
@@ -610,7 +617,7 @@ void pascal far d_draw_faces(
                         float lt = fx * texinf[tex].vect[0] + fy * texinf[tex].vect[1]
                                  + fz * texinf[tex].vect[2] + texinf[tex].vect[3] - lm_tmt;
                         if ( ls >= -r && ls <= lm_extw + r && lt >= -r && lt <= lm_exth + r )
-                            lm_stag = (short) ( -1 - ( dp->dl_tick + ls_key ) % 32000L );
+                            lm_stag = -1L - ( ( dp->dl_tick * 531441L + ls_key ) & 0x3FFFFFFFL );
                     }
                 }
             }

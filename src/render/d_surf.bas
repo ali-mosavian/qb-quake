@@ -82,7 +82,7 @@ declare function sc_find ( _
     byval mip as integer, _
     byval a as integer, _
     byval b as integer, _
-    byval stag as integer _
+    byval stag as long _
 ) as long
 declare function sc_alloc ( _
     g as Game, _
@@ -92,7 +92,7 @@ declare function sc_alloc ( _
     byval h as integer, _
     byval fw as integer, _
     byval fh as integer, _
-    byval stag as integer _
+    byval stag as long _
 ) as long
 declare sub sb_dump ( _
     g as Game, _
@@ -215,6 +215,7 @@ const SC_NHGT   = 5             '' the heights, one drawing view each
 '' did again at 4,176 after depth.
 ''
 const SC_NBLK   = 384
+const SC_VARIANTS = 4           '' surfaces a face keeps, one per light key
 const SC_GRAN   = 256            '' smallest class, 16x16: the offset unit
 
 ''
@@ -322,7 +323,8 @@ dim shared sc_bgrn() as integer         '' block offset / SC_GRAN
 dim shared sc_bord() as integer         '' size order: 2^(o+SC_MINORD) bytes
 dim shared sc_bown() as integer         '' owning face, -1 if none
 dim shared sc_btag() as integer         '' generation * 4 + mip the content holds
-dim shared sc_bstag() as integer        '' and the owner's light style epoch (ls_epoch)
+dim shared sc_bstag() as long           '' and the light it was built under: d_faces.c's key
+dim shared sc_bsib() as integer         '' the face's next variant, -1 none
 dim shared sc_bprev() as integer        '' the class's LRU chain
 dim shared sc_bnext() as integer
 dim shared sc_bcnt as integer           '' blocks made so far
@@ -914,7 +916,8 @@ sub sc_init ( _
     redim sc_bord(SC_NBLK-1) as integer
     redim sc_bown(SC_NBLK-1) as integer
     redim sc_btag(SC_NBLK-1) as integer
-    redim sc_bstag(SC_NBLK-1) as integer
+    redim sc_bstag(SC_NBLK-1) as long
+    redim sc_bsib(SC_NBLK-1) as integer
     redim sc_bprev(SC_NBLK-1) as integer
     redim sc_bnext(SC_NBLK-1) as integer
     sc_bcnt = 0
@@ -1050,7 +1053,7 @@ function sc_find ( _
     byval mip as integer, _
     byval a as integer, _
     byval b as integer, _
-    byval stag as integer _
+    byval stag as long _
 ) as long
     dim dc as long
     dim blk as integer, span as integer, k as integer
@@ -1059,19 +1062,13 @@ function sc_find ( _
         sc_find = 0
         exit function
     end if
+    '' the variant built at this mip and generation under this light
     blk = sc_slot(face)
+    do while ( blk >= 0 )
+        if ( sc_btag(blk) = sc_gen * 4 + mip and sc_bstag(blk) = stag ) then exit do
+        blk = sc_bsib(blk)
+    loop
     if ( blk < 0 ) then
-        sc_find = 0
-        exit function
-    end if
-    if ( sc_btag(blk) <> sc_gen * 4 + mip ) then
-        sc_find = 0
-        exit function
-    end if
-    '' A tag match says the mip and generation are right; stag is the
-    '' SEPARATE axis -- the face's light style may have moved on since
-    '' this block was built, and that has nothing to do with mip or gen.
-    if ( sc_bstag(blk) <> stag ) then
         sc_find = 0
         exit function
     end if
@@ -1102,6 +1099,58 @@ function sc_find ( _
 end function
 
 ''::::::::::
+'' name: sc_fresh
+'' desc: A block of order bord without evicting anything: a free one,
+''       a bigger free one split down, or fresh store. -1 if none.
+''::::::::::
+function sc_fresh ( byval bord as integer, byval sz as long ) as integer
+    dim blk as integer, ofs as long
+
+    blk = sc_fpop( bord )
+    if ( blk < 0 ) then blk = sc_bsplit( bord )
+    if ( blk < 0 ) then
+        '' splitting before growing keeps the store's high-water mark down
+        blk = sc_brec
+        if ( blk >= 0 ) then
+            ofs = sc_grab( sz )
+            if ( ofs < 0 ) then
+                sc_bput blk
+                blk = -1
+            else
+                sc_bgrn(blk) = cint( ofs \ SC_GRAN )
+                sc_bord(blk) = bord
+            end if
+        end if
+    end if
+    sc_fresh = blk
+end function
+
+''::::::::::
+'' name: sc_chain_drop
+'' desc: Takes a block out of its owner's variant chain.
+''::::::::::
+sub sc_chain_drop ( byval blk as integer )
+    dim f as integer, p as integer
+
+    f = sc_bown(blk)
+    if ( f < 0 ) then exit sub
+    if ( sc_slot(f) = blk ) then
+        sc_slot(f) = sc_bsib(blk)
+    else
+        p = sc_slot(f)
+        do while ( p >= 0 )
+            if ( sc_bsib(p) = blk ) then
+                sc_bsib(p) = sc_bsib(blk)
+                exit do
+            end if
+            p = sc_bsib(p)
+        loop
+    end if
+    sc_bsib(blk) = -1
+    sc_live = sc_live - 1
+end sub
+
+''::::::::::
 '' name: sc_alloc
 '' desc: A DC big enough for w by h, remembered against the face. Returns 0
 ''       if the surface is larger than the filler can address or EMS is out.
@@ -1114,11 +1163,12 @@ function sc_alloc ( _
     byval h as integer, _
     byval fw as integer, _
     byval fh as integer, _
-    byval stag as integer _
+    byval stag as long _
 ) as long
     dim a as integer, b as integer, bord as integer
     dim dc as long
-    dim vic as integer, blk as integer, j as integer, b2 as integer
+    dim vic as integer, blk as integer, j as integer
+    dim pick as integer, nvar as integer
 
     dim ofs as long, sz as long
 
@@ -1170,12 +1220,32 @@ function sc_alloc ( _
     sz   = clng(2 ^ a) * clng(2 ^ b)
 
     ''
-    '' Three ways to get bytes, cheapest first: the block this face already
-    '' owns, then fresh store while any is left, then the least recently
-    '' used surface of the SAME class -- exactly this size and already
-    '' aligned to it, so evicting one always suffices and never fragments.
+    '' Which of the face's variants to write: the one already holding this
+    '' key (a mip change), else a new one while the face has fewer than
+    '' SC_VARIANTS and free store gives one without evicting, else the most
+    '' recent. A dynamic light's key never comes back, so it gets no new one.
     ''
     blk = sc_slot(face)
+    pick = -1
+    nvar = 0
+    do while ( blk >= 0 )
+        if ( pick < 0 and sc_bstag(blk) = stag ) then pick = blk
+        nvar = nvar + 1
+        blk = sc_bsib(blk)
+    loop
+    if ( pick < 0 and nvar > 0 and nvar < SC_VARIANTS and stag >= 0 ) then
+        pick = sc_fresh( bord, sz )
+        if ( pick >= 0 ) then
+            sc_bown(pick) = face
+            sc_bprev(pick) = -1
+            sc_bnext(pick) = -1
+            sc_bsib(pick) = sc_slot(face)
+            sc_slot(face) = pick
+            sc_live = sc_live + 1
+        end if
+    end if
+    if ( pick < 0 ) then pick = sc_slot(face)
+    blk = pick
     if ( blk >= 0 and sc_bord(blk) >= bord ) then
         '' what it already owns is big enough -- a coarser mip just uses
         '' less of it, and not shrinking avoids churn on every mip step
@@ -1184,45 +1254,21 @@ function sc_alloc ( _
         if ( blk >= 0 ) then
             '' growing: the old block goes back for someone else to use,
             '' which is the leak the bump allocator never plugged
+            sc_chain_drop blk
             sc_lru_unlink blk
             sc_bfree blk
-            sc_slot(face) = -1
-            sc_live = sc_live - 1
         end if
 
         ''
         '' Five ways to get a block, cheapest first. Only the last is an
         '' eviction, and only the very last gives up.
         ''
-        blk = sc_fpop( bord )                  '' 1. already free, right size
-        if ( blk < 0 ) then blk = sc_bsplit( bord )   '' 2. halve a bigger free one
-        if ( blk < 0 ) then                     '' 3. fresh store
-            ''
-            '' Splitting comes BEFORE growing on purpose. The store is the
-            '' finite resource and free blocks are already paid for, so
-            '' reusing them keeps the high-water mark down and fits more
-            '' surfaces; taking virgin store first would leave the free
-            '' pool untouched until the store was exhausted.
-            ''
-            blk = sc_brec
-            if ( blk >= 0 ) then
-                ofs = sc_grab( sz )
-                if ( ofs < 0 ) then
-                    sc_bput blk
-                    blk = -1
-                else
-                    sc_bgrn(blk) = cint( ofs \ SC_GRAN )
-                    sc_bord(blk) = bord
-                end if
-            end if
-        end if
+        blk = sc_fresh( bord, sz )             '' 1-3. free, split or fresh store
         if ( blk < 0 ) then                     '' 4. evict LRU of this size
             blk = sc_lhead(bord)
             if ( blk >= 0 ) then
-                vic = sc_bown(blk)
-                if ( vic >= 0 ) then
-                    sc_slot(vic) = -1
-                    sc_live  = sc_live - 1
+                if ( sc_bown(blk) >= 0 ) then
+                    sc_chain_drop blk
                     sc_evict = sc_evict + 1
                 end if
                 sc_lru_unlink blk
@@ -1238,10 +1284,8 @@ function sc_alloc ( _
             for j = bord + 1 to SC_NORD - 1
                 vic = sc_lhead(j)
                 if ( vic >= 0 ) then
-                    b2 = sc_bown(vic)
-                    if ( b2 >= 0 ) then
-                        sc_slot(b2) = -1
-                        sc_live  = sc_live - 1
+                    if ( sc_bown(vic) >= 0 ) then
+                        sc_chain_drop vic
                         sc_evict = sc_evict + 1
                     end if
                     sc_lru_unlink vic
@@ -1261,6 +1305,7 @@ function sc_alloc ( _
         sc_bown(blk) = face
         sc_bprev(blk) = -1
         sc_bnext(blk) = -1
+        sc_bsib(blk) = sc_slot(face)
         sc_slot(face) = blk
         sc_live = sc_live + 1
     end if
@@ -1502,11 +1547,15 @@ function sc_selftest ( _
     if ( sc_find( 0, 0, 7, 7, 5 ) = 0 ) then sc_selftest = -51 : exit function
     if ( sc_find( 0, 0, 7, 7, 6 ) <> 0 ) then sc_selftest = -52 : exit function
 
-    '' rebuilding at the new stag must overwrite the slot's stag, not
-    '' just its tag -- a second style change has to miss again too
+    '' a second key is a second variant: a flicker coming back to 5
+    '' finds its surface instead of rebuilding
     if ( sc_alloc( g, 0, 0, 112, 112, 112, 112, 6 ) = 0 ) then sc_selftest = -53 : exit function
-    if ( sc_find( 0, 0, 7, 7, 5 ) <> 0 ) then sc_selftest = -54 : exit function
+    if ( sc_find( 0, 0, 7, 7, 5 ) = 0 ) then sc_selftest = -54 : exit function
     if ( sc_find( 0, 0, 7, 7, 6 ) = 0 ) then sc_selftest = -55 : exit function
+    '' a light's key never comes back: it overwrites the latest variant
+    if ( sc_alloc( g, 0, 0, 112, 112, 112, 112, -7 ) = 0 ) then sc_selftest = -56 : exit function
+    if ( sc_find( 0, 0, 7, 7, 6 ) <> 0 ) then sc_selftest = -57 : exit function
+    if ( sc_find( 0, 0, 7, 7, 5 ) = 0 ) then sc_selftest = -58 : exit function
 
     sc_reset g
     sc_selftest = 1
