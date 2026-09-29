@@ -467,7 +467,6 @@ wraps the body. Keep procedures tight and small enough to read whole.
     src/common.bas    tokeniser + config                       (Quake common.c)
     src/bspfile.bi    on-disk structures + cross-module DECLAREs (Quake bspfile.h)
     src/q_*.bi        one COMMON block per subsystem           (Quake quakedef.h)
-    attic/            superseded rewrite, out of the build
 
 Every module holds exactly one subsystem, which the prefixes make checkable:
 list the routines in a file and their prefixes should collapse to one.
