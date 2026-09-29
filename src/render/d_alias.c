@@ -177,7 +177,7 @@ short pascal far mdl_draw_tris(
              * 241 of them die in there, each having paid for a texture
              * map, a gradient and a clip first.
              */
-            if ( area > -2.0f ) continue;
+            if ( area < 2.0f ) continue;         /* id's d_xdenom is -area */
             qv[0].u = (float) t->u1 / MDL_UV_SCALE; qv[0].v = (float) t->v1 / MDL_UV_SCALE;
             qv[1].u = (float) t->u2 / MDL_UV_SCALE; qv[1].v = (float) t->v2 / MDL_UV_SCALE;
             qv[2].u = (float) t->u3 / MDL_UV_SCALE; qv[2].v = (float) t->v3 / MDL_UV_SCALE;
@@ -203,7 +203,7 @@ short pascal far mdl_draw_tris(
             det = vx[a] * ( vy[b] * vw[c] - vy[c] * vw[b] )
                 - vy[a] * ( vx[b] * vw[c] - vx[c] * vw[b] )
                 + vw[a] * ( vx[b] * vy[c] - vx[c] * vy[b] );
-            if ( det <= 0.0f ) continue;
+            if ( det >= 0.0f ) continue;
             bf_pre = 1;
         }
 
@@ -272,8 +272,8 @@ short pascal far mdl_draw_tris(
            first three corners answer for all of them. */
         area = ( qv[1].x - qv[0].x ) * ( qv[2].y - qv[0].y )
              - ( qv[2].x - qv[0].x ) * ( qv[1].y - qv[0].y );
-        if ( bf_pre && area >= 0.0f ) bf_bad++;
-        if ( area < 0.0f ) {
+        if ( bf_pre && area <= 0.0f ) bf_bad++;
+        if ( area > 0.0f ) {
             qglRsPoly( dst, (void far *) qv, nout, QGL_M_TEX, skin );
             drawn++;
         }
