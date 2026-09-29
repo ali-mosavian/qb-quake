@@ -365,7 +365,8 @@ end sub
 ''       an open door's nodes were culled where the door used to be.
 ''       ofs is bsp space (z up), campos and the frustum renderer space.
 ''       The frustum is restored from saved values, not by subtracting
-''       back, so no rounding accumulates in it.
+''       back, so no rounding accumulates in it -- in scalars: the C walk
+''       holds far pointers, and a local array may be put on the far heap.
 ''::::::::::
 sub r_walk_brush ( _
     g as Game, _
@@ -383,14 +384,16 @@ sub r_walk_brush ( _
     fru() as DiskPlane _
 )
     dim lc as Vec3
-    dim saved(0 to 5) as single
+    dim s0 as single, s1 as single, s2 as single
+    dim s3 as single, s4 as single, s5 as single
     dim i as integer
 
     lc.x = campos.x - brush(m).ofs.x
     lc.y = campos.y - brush(m).ofs.z
     lc.z = campos.z - brush(m).ofs.y
+    s0 = fru(0).dist : s1 = fru(1).dist : s2 = fru(2).dist
+    s3 = fru(3).dist : s4 = fru(4).dist : s5 = fru(5).dist
     for  i = 0 to 5
-        saved(i) = fru(i).dist
         fru(i).dist = fru(i).dist + fru(i).norm.x * brush(m).ofs.x _
                                   + fru(i).norm.y * brush(m).ofs.z _
                                   + fru(i).norm.z * brush(m).ofs.y
@@ -400,9 +403,8 @@ sub r_walk_brush ( _
                               lc, ign, _
                               nodes(), planes(), lef_buffer(), lfc_buffer(), _
                               pvsb(), pflag(), ord(), fru()
-    for  i = 0 to 5
-        fru(i).dist = saved(i)
-    next i
+    fru(0).dist = s0 : fru(1).dist = s1 : fru(2).dist = s2
+    fru(3).dist = s3 : fru(4).dist = s4 : fru(5).dist = s5
 
 end sub
 
