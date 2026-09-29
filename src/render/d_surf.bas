@@ -362,9 +362,10 @@ const LS_NEUTRAL   = 120         '' ls_lchar("m")'s value -- the intensity
                                   '' the compiler assumed while baking, so
                                   '' a style sitting exactly here needs no
                                   '' scaling at all
+const LS_UNSET     = 116         '' a style nothing set: id's 256 where 'm' is 264
 
 type LightStyle
-    pattern     as string * 32
+    pattern     as string * 52  '' world.qc's longest is 51
     length      as integer
     frame       as integer
     value       as integer      '' current intensity: (asc(char)-97) * 10
@@ -381,6 +382,7 @@ end type
 '' than a clean crash. sc_slot() next to it already gets this right.
 dim shared ls_tab() as LightStyle
 dim shared ls_last as single    '' anim_time ls_animate last ran at
+dim shared ls_held as integer   '' -nostyles: every style steady at 'm'
 
 ''::::::::::
 '' name: ls_lchar
@@ -415,18 +417,42 @@ sub ls_init ()
 
     for i = 0 to LS_MAXSTYLE
         ls_tab(i).pattern = "m"
-        ls_tab(i).length  = 1
         ls_tab(i).frame   = 0
-        ls_tab(i).value   = ls_lchar( "m" )
         ls_tab(i).epoch   = 0
     next i
 
+    '' world.qc's worldspawn
     ls_tab(1).pattern  = "mmnmmommommnonmmonqnmmo"
-    ls_tab(1).length   = 23
+    ls_tab(2).pattern  = "abcdefghijklmnopqrstuvwxyzyxwvutsrqponmlkjihgfedcba"
+    ls_tab(3).pattern  = "mmmmmaaaaammmmmaaaaaabcdefgabcdefg"
+    ls_tab(4).pattern  = "mamamamamama"
+    ls_tab(5).pattern  = "jklmnopqrstuvwxyzyxwvutsrqponmlkj"
+    ls_tab(6).pattern  = "nmonqnmomnmomomno"
+    ls_tab(7).pattern  = "mmmaaaabcdefgmmmmaaaammmaamm"
+    ls_tab(8).pattern  = "mmmaaammmaaammmabcdefaaaammmmabcdefmmmaaaa"
+    ls_tab(9).pattern  = "aaaaaaaazzzzzzzz"
     ls_tab(10).pattern = "mmamammmmammamamaaamammma"
-    ls_tab(10).length  = 25
+    ls_tab(11).pattern = "abcdefghijklmnopqrrqponmlkjihgfedcba"
+    ls_tab(63).pattern = "a"
+
+    for i = 0 to LS_MAXSTYLE
+        if ( ls_held ) then ls_tab(i).pattern = "m"
+        ls_tab(i).length = len( rtrim$( ls_tab(i).pattern ) )
+        ls_tab(i).value  = ls_lchar( left$( ls_tab(i).pattern, 1 ) )
+        '' id's d_lightstylevalue starts at 256 and only world.qc sets
+        '' 0..11: 256 of 'm''s 264 is 116 of its 120
+        if ( i > 11 and i < 63 and ls_held = 0 ) then ls_tab(i).value = LS_UNSET
+    next i
 
     ls_last = 0.0
+end sub
+
+''::::::::::
+'' name: ls_hold_on
+'' desc: -nostyles. Takes effect at the next ls_init.
+''::::::::::
+sub ls_hold_on ()
+    ls_held = 1
 end sub
 
 ''::::::::::
@@ -515,7 +541,8 @@ function ls_add_dlight ( _
     d = sqr( pdist*pdist + ts*ts + tt*tt )
     contrib = radius - d
     if ( contrib < 0.0 ) then contrib = 0.0
-    v = clng( raw ) + clng( contrib )
+    '' a luxel byte is id's blocklights over 264, not 256
+    v = clng( raw ) + int( contrib * 256.0 / 264.0 )
     if ( v > 255 ) then v = 255
     ls_add_dlight = v
 end function
@@ -588,15 +615,15 @@ function ls_selftest () as integer
     ''
     '' ls_add_dlight: the other thing neither map exercises for real.
     ''
-    '' dead centre: full radius added
-    if ( ls_add_dlight( 0, 0.0, 0.0, 0.0, 200.0 ) <> 200 ) then ls_selftest = -12 : exit function
+    '' dead centre: full radius added, 256/264 of it
+    if ( ls_add_dlight( 0, 0.0, 0.0, 0.0, 200.0 ) <> 193 ) then ls_selftest = -12 : exit function
     '' exactly at the edge: nothing added, raw passes through
     if ( ls_add_dlight( 50, 200.0, 0.0, 0.0, 200.0 ) <> 50 ) then ls_selftest = -13 : exit function
     '' past the edge: still nothing added, never negative
     if ( ls_add_dlight( 50, 300.0, 0.0, 0.0, 200.0 ) <> 50 ) then ls_selftest = -14 : exit function
     '' the three components combine by distance, not by summing separately
     '' -- a 3-4-5 triangle, so this is exact, not an approximation
-    if ( ls_add_dlight( 0, 0.0, 3.0, 4.0, 10.0 ) <> 5 ) then ls_selftest = -15 : exit function
+    if ( ls_add_dlight( 0, 0.0, 3.0, 4.0, 10.0 ) <> 4 ) then ls_selftest = -15 : exit function
     '' clamps at 255, does not wrap
     if ( ls_add_dlight( 200, 0.0, 0.0, 0.0, 200.0 ) <> 255 ) then ls_selftest = -16 : exit function
 

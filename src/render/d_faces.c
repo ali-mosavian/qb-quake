@@ -343,6 +343,7 @@ void pascal far d_draw_faces(
     short q_ok = 0;             /* and whether the setup stood up */
     short q_gate = 0;
     short lm_tms, lm_tmt, lm_extw, lm_exth, lm_stag;
+    unsigned short s01, s23; short sty[4], k; long ls_key;
     short lm_mip, lm_floor, lm_sw, lm_sh, lm_fw, lm_fh, lm_cm, lm_sa, lm_sb;
     short leaf_indx, leaf_end;
     long  gp, lm_dc, src_dc, tex_dc, texofs;
@@ -577,14 +578,20 @@ void pascal far d_draw_faces(
                     lm_exth = ( gv[GEOM_LMOFS + 5] - 1 ) * 16;
                     if ( lm_extw > 0 && lm_exth > 0 ) { lm_on = 1; dp->lm_want++; }
 
-                    lm_stag = ls_epoch( gv[GEOM_LMOFS + 6] & 255 );
+                    /* every style's epoch: a face lit (0, 10) changes
+                       with style 10, and the sum only ever grows */
+                    s01 = gv[GEOM_LMOFS + 6]; s23 = gv[GEOM_LMOFS + 7];
+                    sty[0] = s01 & 255; sty[1] = s01 >> 8;
+                    sty[2] = s23 & 255; sty[3] = s23 >> 8;
+                    ls_key = 0;
+                    for ( k = 0; k < 4 && sty[k] != 255; k++ ) ls_key += ls_epoch( sty[k] );
+                    lm_stag = (short) ( ls_key % 32000L );
 
                     /*
-                     * A face the light reaches is keyed on the tick, below
-                     * any ls_epoch: the light moves with the player, so a
-                     * constant key froze the glow at its first build. The
-                     * tick after it leaves misses once more and washes it
-                     * out. Reached means the plane in range AND the foot
+                     * A face the light reaches is keyed below any style key,
+                     * on the light's moves plus the styles': a constant key
+                     * froze the glow at its first build. The move after it
+                     * leaves misses once more and washes it out. Reached means the plane in range AND the foot
                      * near the luxel rect; the plane alone marks every
                      * coplanar face on the map.
                      */
@@ -603,7 +610,7 @@ void pascal far d_draw_faces(
                         float lt = fx * texinf[tex].vect[0] + fy * texinf[tex].vect[1]
                                  + fz * texinf[tex].vect[2] + texinf[tex].vect[3] - lm_tmt;
                         if ( ls >= -r && ls <= lm_extw + r && lt >= -r && lt <= lm_exth + r )
-                            lm_stag = (short) ( -1 - dp->dl_tick );
+                            lm_stag = (short) ( -1 - ( dp->dl_tick + ls_key ) % 32000L );
                     }
                 }
             }

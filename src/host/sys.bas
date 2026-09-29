@@ -24,6 +24,7 @@ option explicit
 ''
 '' This module's own procedures.
 ''
+declare sub ls_hold_on ()
 declare sub sys_parse_args ( _
     g as Game _
 )
@@ -199,6 +200,9 @@ sub sys_parse_args ( _
         end if
         if ( lcase$(argv(i)) = "-nosound" ) then
             g.snd.off = true
+        end if
+        if ( lcase$(argv(i)) = "-nostyles" ) then
+            ls_hold_on
         end if
         if ( lcase$(argv(i)) = "-fire" ) then
             g.env.hold_fire = true

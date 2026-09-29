@@ -96,6 +96,7 @@ void pascal far sb_build(
     SurfBuild sbp;
     short lseg; long lofs16;
     short style, sval; short scaled = 0;
+    unsigned short s01, s23; short nst = 1;
     long  lrow, srow; short li; long lv;
     Plane pl; float pdist; short dlit = 0;
     float impx, impy, impz;
@@ -143,6 +144,10 @@ void pascal far sb_build(
 
         style = gv[GEOM_LMOFS + 6] & 255;
         sval  = ls_value( style );
+        s01 = gv[GEOM_LMOFS + 6];
+        s23 = gv[GEOM_LMOFS + 7];
+        nst = 0;
+        while ( nst < 4 && ( ( nst < 2 ? s01 : s23 ) >> ( ( nst & 1 ) * 8 ) & 255 ) != 255 ) nst++;
 
         pl = pln[ tri[face].plane_id ];
         pdist = dlight->pos.x * pl.norm.x + dlight->pos.y * pl.norm.y +
@@ -160,18 +165,37 @@ void pascal far sb_build(
                    impz*texinf[tinfo].vect[2] + texinf[tinfo].vect[3];
         }
 
-        if ( (sval != LS_NEUTRAL || dlit) && (long) lmw * lmh <= 1024L ) {
+        if ( (sval != LS_NEUTRAL || nst > 1 || dlit) && lmw > 0 && lmh > 0 && (long) lmw * lmh <= 1024L ) {
             srow = (long) lseg * 65536L + lofs16;
             ls_far = (long) (void far *) ls_scratch_c;
-            lrow = ls_far;
-            for ( li = 0; li < lmh; li++ ) {
-                qglMemCopy( lrow, srow, (long) lmw );
-                srow += sb_pot( lmw );
-                lrow += lmw;
+            if ( nst > 1 ) {
+                /* R_BuildLightMap: each style's plane, stacked lmh rows
+                   apart in the face's slot, scaled by its value */
+                unsigned char far *src = (unsigned char far *) srow;
+                long stride = sb_pot( lmw ), v;
+                short sv[4], k, x, y;
+                for ( k = 0; k < nst; k++ )
+                    sv[k] = ls_value( (short) ( ( k < 2 ? s01 : s23 ) >> ( ( k & 1 ) * 8 ) & 255 ) );
+                li = 0;
+                for ( y = 0; y < lmh; y++ )
+                    for ( x = 0; x < lmw; x++ ) {
+                        v = 0;
+                        for ( k = 0; k < nst; k++ )
+                            v += (long) src[ ( (long) k * lmh + y ) * stride + x ] * sv[k];
+                        v /= LS_NEUTRAL;
+                        ls_scratch_c[li++] = (unsigned char) ( v > 255 ? 255 : v );
+                    }
+            } else {
+                lrow = ls_far;
+                for ( li = 0; li < lmh; li++ ) {
+                    qglMemCopy( lrow, srow, (long) lmw );
+                    srow += sb_pot( lmw );
+                    lrow += lmw;
+                }
             }
             for ( li = 0; li < lmw * lmh; li++ ) {
                 lv = ls_scratch_c[li];
-                if ( sval != LS_NEUTRAL ) lv = ls_scale_byte( (short) lv, sval );
+                if ( sval != LS_NEUTRAL && nst <= 1 ) lv = ls_scale_byte( (short) lv, sval );
                 if ( dlit ) {
                     lx = li % lmw;
                     ly = li / lmw;
