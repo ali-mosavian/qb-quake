@@ -201,6 +201,7 @@ dim shared r_ignore_pvs as integer
 '$dynamic
 dim shared pvs_leaf as integer
 dim shared dbg_camleaf as integer
+dim shared r_lcache_off as integer  '' -nolcache: r_mdl_visible's A/B
 dim shared dbg_pvscull as integer
 
 ''
@@ -215,7 +216,8 @@ declare function r_mdl_vis_c ( _
     nds() as Node, _
     pln() as Plane, _
     fru() as DiskPlane, _
-    pvs() as integer _
+    pvs() as integer, _
+    byval slot as integer _
 ) as integer
 
 declare sub r_recursive_world_node ( _
@@ -683,6 +685,10 @@ function r_cull_box ( _
     r_cull_box = -1
 end function
 
+sub r_lcache_disable ()
+    r_lcache_off = true
+end sub
+
 ''::::::::::
 '' name: r_mdl_visible
 '' desc: Whether a model at org can show at all: its box against the
@@ -698,6 +704,7 @@ function r_mdl_visible ( _
     byval radius as single, _
     byval zlo as single, _
     byval zhi as single, _
+    byval slot as integer, _
     nodes() as Node, _
     planes() as Plane, _
     frustum() as DiskPlane _
@@ -710,8 +717,9 @@ function r_mdl_visible ( _
     '' r_walk.c from here: the cull and nine descents of the tree, which
     '' forty entities a frame make 360 of. CINT stays in BASIC -- it
     '' rounds to even and a C cast truncates, and the box decides culling.
+    if ( r_lcache_off ) then slot = -1
     r_mdl_visible = r_mdl_vis_c( bb, org, (zlo + zhi) * 0.5, _
-                                 nodes(), planes(), frustum(), pvs_now() )
+                                 nodes(), planes(), frustum(), pvs_now(), slot )
 end function
 
 

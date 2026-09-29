@@ -45,6 +45,9 @@ declare sub qglM4Conc ( _
 
 dim shared qgl_faces_dbg as integer
 dim shared qgl_drop_dbg as integer
+declare function qglMemAlloc ( byval nbytes as long ) as long
+declare sub r_lcache_set ( byval p as long, byval n as integer )
+dim shared host_lc_n as integer     '' r_walk.c's LeafCache slots: the items, then the monsters
 dim shared host_dl_tick as integer  '' bumped when the light moves; d_faces.c keys a lit face on it
 
 const DL_RADIUS# = 200.0#   '' Quake's own rocket dlight radius
@@ -279,6 +282,7 @@ declare function r_mdl_visible ( _
     byval radius as single, _
     byval zlo as single, _
     byval zhi as single, _
+    byval slot as integer, _
     nodes() as Node, _
     planes() as Plane, _
     frustum() as DiskPlane _
@@ -298,6 +302,7 @@ declare function host_mdl_vis ( _
     byval radius as single, _
     byval zlo as single, _
     byval zhi as single, _
+    byval slot as integer, _
     nodes() as Node, _
     planes() as Plane, _
     frustum() as DiskPlane _
@@ -644,13 +649,14 @@ function host_mdl_vis ( _
     byval radius as single, _
     byval zlo as single, _
     byval zhi as single, _
+    byval slot as integer, _
     nodes() as Node, _
     planes() as Plane, _
     frustum() as DiskPlane _
 ) as integer
     dim t as long, d as single
     t = sys_rdtsc()
-    host_mdl_vis = r_mdl_visible( org, radius, zlo, zhi, nodes(), planes(), frustum() )
+    host_mdl_vis = r_mdl_visible( org, radius, zlo, zhi, slot, nodes(), planes(), frustum() )
     d = host_lap( t )
     if ( d > 0.0 ) then acc = acc + d
 end function
@@ -843,6 +849,11 @@ sub host_render ( _
     '' drawing reads them, same split host_tick/host_render already keep
     '' for the player.
     pt0 = sys_now()
+    '' once, before any C holds a pointer: the allocation may move the far heap
+    if ( host_lc_n = 0 ) then
+        host_lc_n = ubound( item ) + 1 + ubound( mdl_ent ) + 1
+        r_lcache_set qglMemAlloc( clng( host_lc_n ) * 48& ), host_lc_n
+    end if
     t0 = sys_rdtsc()
     g.mdl_drawn = 0
     if ( g.env.no_mdl = 0 ) then
@@ -852,6 +863,7 @@ sub host_render ( _
             elseif ( mdl_ent( mdl_i ).state = MDL_ST_DEAD% and mon( k ).ndeath = 0 ) then
                 '' gibbed: a zombie has no death frames to lie in
             elseif ( host_mdl_vis( vis_us, mdl_ent( mdl_i ).pos, mon( k ).radius, mon( k ).zlo, mon( k ).zhi, _
+                                    ubound( item ) + 1 + mdl_i, _
                                     nds_buffer(), pln_buffer(), frustum() ) ) then
                     mdl_draw g, mon( k ), mdl_ent( mdl_i ), _
                              mtx_fin, xresh, yresh, g.env.z_near, h_dst_dc
@@ -874,7 +886,7 @@ sub host_render ( _
     '' as the liquids, flat colours the world's palette already has
     for mdl_i = 0 to g.item_count - 1
         if ( item( mdl_i ).gone = 0 ) then
-            if ( host_mdl_vis( vis_us, item( mdl_i ).pos, ENT_BOX_HALF# * 1.5, 0.0, ENT_BOX_TOP# + 8.0, _
+            if ( host_mdl_vis( vis_us, item( mdl_i ).pos, ENT_BOX_HALF# * 1.5, 0.0, ENT_BOX_TOP# + 8.0, mdl_i, _
                                 nds_buffer(), pln_buffer(), frustum() ) ) then
                 bob = item( mdl_i ).pos
                 bob.z = bob.z + 4.0 + 4.0 * sin( g.rdr.anim_time * 3.0 )

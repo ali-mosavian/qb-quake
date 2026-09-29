@@ -335,6 +335,30 @@ void pascal far r_pflag_clear( BASARRAY *pflag_dsc, short nwords )
 
    The near corner alone decides, as r_cull_box does -- no clip mask,
    because there are no children to hand one to. */
+/* The nine leaves a box samples depend on the box alone, not the PVS:
+   found once, they make the per-frame test nine array reads. e1m1's
+   items and monsters were 7.7 ms a frame of descents 62 deep. Cache the
+   leaves, never the answer -- pvs_now changes with the camera's leaf. */
+typedef struct {
+    Bounds bb;
+    Vec3   org;
+    float  zmid;
+    short  lf[9];
+    short  ok;
+} LeafCache;
+
+static LeafCache far *lc_tab;
+static short lc_n;
+
+void pascal far r_lcache_set( long p, short n )
+{
+    short i;
+
+    lc_tab = (LeafCache far *) p;
+    lc_n = p ? n : 0;
+    for ( i = 0; i < lc_n; i++ ) lc_tab[i].ok = 0;
+}
+
 short pascal far r_mdl_vis_c(
     Bounds   *bb,
     Vec3     *org,
@@ -342,15 +366,17 @@ short pascal far r_mdl_vis_c(
     BASARRAY *nds_dsc,
     BASARRAY *pln_dsc,
     BASARRAY *fru_dsc,
-    BASARRAY *pvs_dsc
+    BASARRAY *pvs_dsc,
+    short     slot
 )
 {
     Node      far *nds = (Node      far *) nds_dsc->farptr;
     Plane     far *pln = (Plane     far *) pln_dsc->farptr;
     DiskPlane far *fru = (DiskPlane far *) fru_dsc->farptr;
     short     far *pvs = (short     far *) pvs_dsc->farptr;
+    LeafCache far *lc = ( slot >= 0 && slot < lc_n ) ? &lc_tab[slot] : (LeafCache far *) 0;
     float lo[3], hi[3], px, py, pz, dp;
-    short i, nodenr;
+    short i, nodenr, vis = 0;
 
     lo[0] = (float) bb->min.x; hi[0] = (float) bb->max.x;
     lo[1] = (float) bb->min.y; hi[1] = (float) bb->max.y;
@@ -363,6 +389,15 @@ short pascal far r_mdl_vis_c(
         pz = fru[i].norm.z > 0.0 ? lo[1] : hi[1];
         dp = fru[i].norm.x * px + fru[i].norm.y * py + fru[i].norm.z * pz;
         if ( ( dp + fru[i].dist ) > 0 ) return 0;
+    }
+
+    if ( lc && lc->ok && lc->zmid == zmid
+         && lc->org.x == org->x && lc->org.y == org->y && lc->org.z == org->z
+         && lc->bb.min.x == bb->min.x && lc->bb.min.y == bb->min.y && lc->bb.min.z == bb->min.z
+         && lc->bb.max.x == bb->max.x && lc->bb.max.y == bb->max.y && lc->bb.max.z == bb->max.z ) {
+        for ( i = 0; i < 9; i++ )
+            if ( lc->lf[i] > 0 && pvs[ lc->lf[i] ] ) return -1;
+        return 0;
     }
 
     for ( i = 0; i < 9; i++ ) {
@@ -381,9 +416,16 @@ short pascal far r_mdl_vis_c(
             nodenr = dp >= 0.0 ? nds[nodenr].child0 : nds[nodenr].child1;
         }
         nodenr = ~nodenr;
-        if ( nodenr > 0 && pvs[nodenr] ) return -1;
+        if ( lc ) lc->lf[i] = nodenr;
+        if ( nodenr > 0 && pvs[nodenr] ) {
+            vis = -1;
+            if ( !lc ) return -1;
+        }
     }
-    return 0;
+    if ( lc ) {
+        lc->bb = *bb; lc->org = *org; lc->zmid = zmid; lc->ok = 1;
+    }
+    return vis;
 }
 
 int pascal far r_walk_layout_ok( long off )
