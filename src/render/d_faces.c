@@ -90,6 +90,7 @@
 #define QGL_M_FLAT  1
 #define QGL_M_TEX   2
 #define QGL_M_PTEX  3
+#define QGL_M_ATEX  4
 
 typedef struct { float x, y, z, u, v; } QglVtx;
 
@@ -681,8 +682,8 @@ void pascal far d_draw_faces(
                 px[j] = dp->xresh + vt_x[j]*rw*dp->xresh;
                 py[j] = dp->yresh - vt_y[j]*rw*dp->yresh;
                 pw[j] = rw;
-                if ( dp->rend_mode == 0 ) { pu[j] = vt_u[j]*rw; pv[j] = vt_v[j]*rw; }
-                else                      { pu[j] = vt_u[j];    pv[j] = vt_v[j];    }
+                pu[j] = vt_u[j]*rw;
+                pv[j] = vt_v[j]*rw;
                 zsum += vt_w[j];
             }
             zl = zsum / cnt;
@@ -768,7 +769,7 @@ void pascal far d_draw_faces(
                      */
                     lm_su = 1.0f / (float)( (1L << lm_mip) * (1L << lm_sa) );
                     lm_sv = 1.0f / (float)( (1L << lm_mip) * (1L << lm_sb) );
-                    if ( dp->rend_mode == 0 ) {
+                    if ( dp->rend_mode != 2 ) {
                         for ( j = 0; j < cnt; j++ ) {
                             pu[j] = ( pu[j] - lm_tms*pw[j] ) * lm_su;
                             pv[j] = ( pv[j] - lm_tmt*pw[j] ) * lm_sv;
@@ -817,10 +818,9 @@ void pascal far d_draw_faces(
              * that was mgl's clipper (SH_MAXV, inc/mscshpc.inc), and
              * qgl's is QGL_MAXV, 41, which is exactly MAXV here.
              *
-             * pu and pv are already u/z and pw is 1/z when rend_mode is
-             * 0, which is the convention the perspective filler wants;
-             * the other mode hands it plain u and v and asks for the
-             * affine one. Nothing is converted here.
+             * Both textured modes carry u/z, v/z and 1/z down the edges;
+             * affine divides only at each row's two ends and takes one
+             * constant step between them.
              *
              * Wireframe alone still fans below: it wants the triangles
              * and never reads src_dc.
@@ -839,7 +839,7 @@ void pascal far d_draw_faces(
                     qglSfZMode( q_dst, z_mode );
                     if ( qglRsPoly( q_dst, (void far *)qvtx, cnt,
                                     dp->rend_mode == 0 ? QGL_M_PTEX
-                                                       : QGL_M_TEX,
+                                                       : QGL_M_ATEX,
                                     src_dc ) >= 0 ) {
                         /* The BIGGEST face on screen, not the first. An
                            exact texel test needs a face that is

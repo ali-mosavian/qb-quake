@@ -41,6 +41,8 @@ n_bg            db      'background covers it   $'
 n_bleed         db      'ztest stays in its box $'
 n_off           db      'zoff  stays in its box $'
 n_pbleed        db      'ptex ztest stays too   $'
+n_ableed        db      'atex ztest stays too   $'
+n_adrew         db      'atex tested draw drew  $'
 n_drew          db      'and it drew something  $'
 n_tdrew         db      'tested draw drew too   $'
 
@@ -231,6 +233,13 @@ tmain           proc    far public uses bx cx dx si di es
                 PAIR    QGL_M_PTEX, QGL_Z_TEST
                 invoke  cmpout, sa, sb
                 CHK     n_pbleed, ax, 0
+
+                PAIR    QGL_M_ATEX, QGL_Z_TEST
+                invoke  cmpout, sa, sb
+                CHK     n_ableed, ax, 0
+                invoke  cmpin, sa, sb
+                NZ      ax
+                CHK     n_adrew, ax, 1
                 ret
 tmain           endp
                 end

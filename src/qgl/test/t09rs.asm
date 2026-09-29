@@ -116,6 +116,12 @@ n_seg0box       db      'bounded 8..39 both ways$'
 ;; texel further from the exact answer than a flat half added AFTER the
 ;; divide, and the renderer carried it for three commits.
 n_pconst        db      'ptex half is flat in z $'
+n_aztop         db      'atex top starts with z  $'
+n_azbottom      db      'atex next row start z   $'
+n_azlinear      db      'atex row stays affine   $'
+n_avtop         db      'atex v starts with z    $'
+n_avbottom      db      'atex v next row start z $'
+n_avlinear      db      'atex v row stays affine $'
 ;; A one-pixel-wide column with a few thousand repeats of u across it.
 ;; vu is normalised, so that is legal data, and the gradient it gives is
 ;; 40000 texels per pixel -- fine as the float qgl$drawP reads, 2.62e9 in
@@ -151,6 +157,22 @@ pconst          QVert   <2.0,  8.0,  1.0,  0.15625,   0.0>
                 QVert   <2.0,  40.0, 1.0,  0.15625,   0.0>
 pconstp         dd      0
 tcol            dd      0                       ;; 64x64, column x holds x
+
+;; u/z is flat down each edge while 1/z falls toward the bottom. The
+;; recovered u must therefore move right between scanlines. Across one
+;; row ATEX takes the two recovered endpoints and steps once, affinely;
+;; PTEX's repeated divides read a different middle texel.
+atexq           QVert   <2.0,  8.0,  1.0,  0.25,  0.0>
+                QVert   <62.0, 8.0,  0.75, 0.375, 0.0>
+                QVert   <62.0, 40.0, 0.5,  0.375, 0.0>
+                QVert   <2.0,  40.0, 0.75, 0.25,  0.0>
+atexqp          dd      0
+
+atexv           QVert   <8.0,  8.0,  1.0, 0.0, 0.25>
+                QVert   <40.0, 8.0,  1.0, 0.0, 0.375>
+                QVert   <40.0, 40.0, 0.5, 0.0, 0.375>
+                QVert   <8.0,  40.0, 0.5, 0.0, 0.25>
+atexvp          dd      0
 
 ;; a square, clockwise, top-left first. z is 1/z and constant, so the
 ;; whole polygon sits at one depth and the test is about the compare and
@@ -606,6 +628,22 @@ tmain           proc    far public uses bx cx dx si di es
                 invoke  colruns
                 CHK     n_pvruns, ax, 8
 
+                ;; The other coordinate takes the same recovered endpoint
+                ;; route, including its shifted integer step.
+                mov     word ptr atexvp, offset atexv
+                mov     word ptr atexvp+2, ds
+                invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
+                invoke  qglRsPoly, dst, atexvp, 4, QGL_M_ATEX, tx
+                invoke  qglSfPget, dst, 8, 8
+                and     ax, 0FFh
+                CHK     n_avtop, ax, 17
+                invoke  qglSfPget, dst, 8, 39
+                and     ax, 0FFh
+                CHK     n_avbottom, ax, 33
+                invoke  qglSfPget, dst, 24, 39
+                and     ax, 0FFh
+                CHK     n_avlinear, ax, 41
+
                 ;;
                 ;; 11. a gradient no 16.16 can hold, in the mode that
                 ;;     never reads the 16.16
@@ -680,7 +718,30 @@ tmain           proc    far public uses bx cx dx si di es
                 CHK     n_pconst, ax, 60*32
 
                 ;;
-                ;; 15. the coverage, which is qgl$drawP's alone. Depth is
+                ;; 15. affine texture mapping on the perspective edge walk:
+                ;;     divide at both row endpoints, then take one affine step
+                ;;
+                mov     word ptr atexqp, offset atexq
+                mov     word ptr atexqp+2, ds
+                invoke  qglDrFill, dst, 0, 0, SFW-1, SFH-1, 0
+                invoke  qglRsPoly, dst, atexqp, 4, QGL_M_ATEX, tcol
+
+                invoke  qglSfRow, dst, 8
+                mov     di, ax
+                mov     es, dx
+                movzx   ax, byte ptr es:[di+2]
+                CHK     n_aztop, ax, 16
+
+                invoke  qglSfRow, dst, 39
+                mov     di, ax
+                mov     es, dx
+                movzx   ax, byte ptr es:[di+2]
+                CHK     n_azbottom, ax, 22
+                movzx   ax, byte ptr es:[di+32]
+                CHK     n_azlinear, ax, 35
+
+                ;;
+                ;; 16. the coverage, which is qgl$drawP's alone. Depth is
                 ;;     off here on purpose: coverage has to hold the span
                 ;;     back BY ITSELF, and with depth on a wrong trim
                 ;;     hides behind the compare that would have rejected
@@ -745,7 +806,7 @@ tmain           proc    far public uses bx cx dx si di es
                 CHK     n_covkeep, ax, 0
 
                 ;;
-                ;; 16. two intervals that do not touch: one row holds one,
+                ;; 17. two intervals that do not touch: one row holds one,
                 ;;     so the wider is kept and the other FORGOTTEN. Being
                 ;;     forgotten costs a skip, which is allowed; being
                 ;;     remembered wrongly would cost a pixel.
@@ -771,7 +832,7 @@ tmain           proc    far public uses bx cx dx si di es
                 CHK     n_covnarrow, ax, 0
 
                 ;;
-                ;; 17. a claim wholly INSIDE the span. Splitting would
+                ;; 18. a claim wholly INSIDE the span. Splitting would
                 ;;     need a list a row, so the middle is drawn again
                 ;;     and the row ends up claiming all of it.
                 ;;

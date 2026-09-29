@@ -33,6 +33,9 @@
                 externdef qgl$fdudxn:dword
                 externdef qgl$fdvdxn:dword
                 externdef qgl$fdzdxn:dword
+                externdef qgl$fdudx:dword
+                externdef qgl$fdvdx:dword
+                externdef qgl$fdzdx:dword
                 externdef qgl$tshift:word
                 externdef qgl$tumsk:word
                 externdef qgl$tvmsk:word
@@ -741,6 +744,114 @@ PTEX_BODY       macro   ?p, ?zwrite, ?ztest
                 ret
 endm
 
+;;::::::::::::::
+;; The affine-over-projective row. The scanner supplies the same u/z,
+;; v/z, 1/z triple as PTEX. Recover both ends of this row, derive one
+;; signed step from them, then keep that step for every pixel in between.
+ASTEP           macro
+                fild    W fs:qgl$pend           ;; w u' v' z'
+
+                fld     D fs:qgl$fdudx          ;; du w u' v' z'
+                fmul    st(0), st(1)
+                faddp   st(2), st(0)            ;; w u1' v' z'
+
+                fld     D fs:qgl$fdvdx          ;; dv w u1' v' z'
+                fmul    st(0), st(1)
+                faddp   st(3), st(0)            ;; w u1' v1' z'
+
+                fld     D fs:qgl$fdzdx          ;; dz w u1' v1' z'
+                fmulp   st(1), st(0)            ;; dz u1' v1' z'
+                faddp   st(3), st(0)            ;; u1' v1' z1'
+endm
+
+
+AMKSTEP         macro
+                mov     eax, D fs:qgl$plu
+                sub     eax, D fs:qgl$ppu
+                cdq
+                movzx   ecx, W fs:qgl$pend
+                idiv    ecx
+                mov     D fs:qgl$psdu, eax
+
+                mov     eax, D fs:qgl$plv
+                sub     eax, D fs:qgl$ppv
+                cdq
+                idiv    ecx
+                mov     W fs:qgl$psdv+0, ax
+                mov     edx, eax
+                sar     edx, 16
+                mov     cl, B fs:qgl$tshift
+                shl     dx, cl
+                mov     cx, W fs:qgl$tvmsk
+                not     cx
+                or      dx, cx
+                mov     W fs:qgl$psdv+2, dx
+endm
+
+ATEX_BODY       macro   ?p, ?zwrite, ?ztest
+
+                PS      ebx, bp
+                add     di, ax
+                mov     bp, si
+                add     di, si
+                neg     bp
+                mov     W fs:qgl$pend, si
+
+        ifnb    <?ztest>
+                ZDISP   ?p&_zcmp, ?p&_zofs
+        else
+          ifnb  <?zwrite>
+                ZDISP   ?p&_zofs
+          endif
+        endif
+
+                PDIV    qgl$ppu, qgl$ppv
+                ASTEP
+                PDIV    qgl$plu, qgl$plv
+                AMKSTEP
+
+                mov     ecx, D fs:qgl$ppu
+                mov     edx, D fs:qgl$ppv
+                PSPLIT  ?p
+
+@@inner:
+        ifnb    <?ztest>
+                mov     ax, W fs:qgl$zacc+2
+?p&_zcmp:       cmp     gs:[ebp*2+__IMM32__], ax
+                ZEND    ?p&_zcmp
+                jae     @@behind
+?p&_zofs:       mov     gs:[ebp*2+__IMM32__], ax
+                ZEND    ?p&_zofs
+                TEX_FETCH ?p
+                mov     es:[di+bp], al
+@@behind:       PSTEPPX ?p
+?p&_umsk:       and     bx, __IMM16__
+                ZEND    ?p&_umsk
+                Z_STEP  ?p
+        else
+                TEX_FETCH ?p
+                PSTEPPX ?p
+                mov     es:[di+bp], al
+?p&_umsk:       and     bx, __IMM16__
+                ZEND    ?p&_umsk
+          ifnb  <?zwrite>
+                mov     ax, W fs:qgl$zacc+2
+?p&_zofs:       mov     gs:[ebp*2+__IMM32__], ax
+                ZEND    ?p&_zofs
+                Z_STEP  ?p
+          endif
+        endif
+
+                inc     bp
+                jnz     @@inner
+
+                fstp    st(0)
+                fstp    st(0)
+                fstp    st(0)
+                PP      bp, ebx
+                ret
+endm
+
 ;;:::::::::::::: perspective, no depth
 qgl$PtexO      proc    near
                 PTEX_BODY po
@@ -756,6 +867,18 @@ qgl$PtexT      proc    near
                 PTEX_BODY pt, 1, 1
 qgl$PtexT      endp
 
+qgl$AtexO      proc    near
+                ATEX_BODY ao
+qgl$AtexO      endp
+
+qgl$AtexW      proc    near
+                ATEX_BODY aw, 1
+qgl$AtexW      endp
+
+qgl$AtexT      proc    near
+                ATEX_BODY at, 1, 1
+qgl$AtexT      endp
+
 
 qgl$Fixup       proc    near uses ax bx cx dx si di bp
 
@@ -769,6 +892,9 @@ qgl$Fixup       proc    near uses ax bx cx dx si di bp
                 FIX_TEX po
                 FIX_TEX pw
                 FIX_TEX pt
+                FIX_TEX ao
+                FIX_TEX aw
+                FIX_TEX at
 
                 ;; dvdx_int IS NOT THE PLAIN INTEGER HALF. si carries v
                 ;; already shifted by tshift, so its step must be shifted
@@ -807,6 +933,8 @@ qgl$Fixup       proc    near uses ax bx cx dx si di bp
                 FIX_Z   tt
                 FIX_Z   pw
                 FIX_Z   pt
+                FIX_Z   aw
+                FIX_Z   at
                 FIX_Z   fw
                 FIX_Z   ft
 
@@ -835,12 +963,25 @@ qgl$Fixup       endp
 ;;
 ;; qglRsRef swings the whole table over to the reference filler, which
 ;; is how a patched filler is judged against one that has no patch site.
+;; ATEX is selected directly because both reference-table rows would cost
+;; 12 bytes of the near heap; like PTEX, its FPU triple needs a real filler.
 ;;::::::::::::::
 b8_span         proc    near
                 ;; (mode * QGL_Z_KINDS + zmode) * 2. The modes are
                 ;; semantic constants, so the scaling is here rather than
                 ;; baked into values that also cross into BASIC.
                 mov     ax, qgl$mode
+                cmp     ax, QGL_M_ATEX
+                jne     @@table
+                mov     ax, O qgl$AtexO
+                cmp     qgl$zmode, QGL_Z_OFF
+                je      @@done
+                mov     ax, O qgl$AtexW
+                cmp     qgl$zmode, QGL_Z_SET
+                je      @@done
+                mov     ax, O qgl$AtexT
+@@done:         ret
+@@table:
                 imul    ax, QGL_Z_KINDS
                 add     ax, qgl$zmode
                 shl     ax, 1
@@ -944,6 +1085,26 @@ qglB8Selftest proc    far public
                 CKW     pt_dzdxf
                 CKW     pt_dzdxi
 
+                CKB     ao_shift
+                CKW     ao_umskp
+                CKW     ao_vmskp
+                CKW     ao_ofs
+                CKW     ao_umsk
+                CKW     ao_vmsk
+
+                CKB     aw_shift
+                CKW     aw_ofs
+                CKD     aw_zofs
+                CKW     aw_dzdxf
+                CKW     aw_dzdxi
+
+                CKB     at_shift
+                CKW     at_ofs
+                CKD     at_zcmp
+                CKD     at_zofs
+                CKW     at_dzdxf
+                CKW     at_dzdxi
+
                 CKB     fo_col
                 CKB     fw_col
                 CKD     fw_zofs
@@ -977,7 +1138,7 @@ qgl$plu         dd      0                       ;; and at the next
 qgl$plv         dd      0
 qgl$psdu        dd      0                       ;; per pixel, in between
 qgl$psdv        dd      0
-qgl$pend        dw      0                       ;; the bp that ends it
+qgl$pend        dw      0                       ;; PTEX boundary / ATEX width
 
 
 
@@ -991,11 +1152,11 @@ qgl$fillTB      dw      qgl$WireO, qgl$WireW, qgl$WireT
                 dw      qgl$TexO,  qgl$TexW,  qgl$TexT
                 dw      qgl$PtexO, qgl$PtexW, qgl$PtexT
 
-;; THE PERSPECTIVE ROW IS NOT qgl$Ref. There is no reference perspective
+;; THE PROJECTIVE ROWS ARE NOT qgl$Ref. There is no reference projective
 ;; filler to compare against, and more to the point the scanner pushes
-;; three values onto the FPU stack for that mode: a filler that did not
-;; consume them would overflow it in three scanlines. The row is the real
-;; one, so qglRsRef stays safe to call in any mode.
+;; three values onto the FPU stack for those modes: a filler that did not
+;; consume them would overflow it in three scanlines. PTEX stays here;
+;; b8_span routes ATEX directly to its real filler for the same reason.
 qgl$refTB       dw      qgl$Ref, qgl$Ref, qgl$Ref
                 dw      qgl$Ref, qgl$Ref, qgl$Ref
                 dw      qgl$Ref, qgl$Ref, qgl$Ref

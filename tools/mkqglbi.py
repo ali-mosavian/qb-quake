@@ -33,7 +33,7 @@ EXPORT = [
     ("Depth mode, for qglSfZMode.", [
         "QGL_Z_OFF", "QGL_Z_SET", "QGL_Z_TEST"]),
     ("Drawing mode, for qglRsPoly.", [
-        "QGL_M_WIRE", "QGL_M_FLAT", "QGL_M_TEX", "QGL_M_PTEX"]),
+        "QGL_M_WIRE", "QGL_M_FLAT", "QGL_M_TEX", "QGL_M_PTEX", "QGL_M_ATEX"]),
     ("Where a paged array store's records live.", [
         "QGL_AR_MEM", "QGL_AR_EMS"]),
     ("Pixel format, for qglNew/qglNewEx. One format, because the fill "

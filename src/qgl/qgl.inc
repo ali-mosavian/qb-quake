@@ -441,6 +441,7 @@ QGL_M_WIRE      equ     0
 QGL_M_FLAT      equ     1
 QGL_M_TEX       equ     2
 QGL_M_PTEX      equ     3
+QGL_M_ATEX      equ     4               ;; projective edges, affine per row
 
 ;;
 ;; Shortcuts, mgl's spelling (inc/equ.inc). They are here rather than
@@ -556,9 +557,10 @@ endm
 ;; tg2d, tpg2d) and generates a clipper for each. We have colour and a
 ;; texture and nothing else, so there is nothing to generate.
 ;;
-;; z is 1/z, not z. It is linear in screen space where u and v are not,
-;; which is what lets a clipped vertex's depth be an ordinary lerp along
-;; the edge and lets the affine mapper carry depth at all.
+;; z is 1/z, not z. QGL_M_TEX takes plain u and v; QGL_M_PTEX and
+;; QGL_M_ATEX take u/z and v/z so the clipper can lerp every field in
+;; screen space. ATEX recovers u and v at each row's two endpoints and
+;; uses one affine step between them.
 ;;
 QVert           struc
 vx              real4   ?

@@ -104,8 +104,8 @@ qglAbi         endp
 qgl$abiTB       dw      MEM_LARGEST, MEM_TOTAL
                 dw      SURF_CMEM, SURF_EMS
                 dw      QGL_Z_OFF, QGL_Z_SET, QGL_Z_TEST
-                dw      QGL_M_WIRE, QGL_M_FLAT, QGL_M_TEX, QGL_M_PTEX
-ABI_N           equ     11
+                dw      QGL_M_WIRE, QGL_M_FLAT, QGL_M_TEX, QGL_M_PTEX, QGL_M_ATEX
+ABI_N           equ     12
 
 
 ;;::::::::::::::

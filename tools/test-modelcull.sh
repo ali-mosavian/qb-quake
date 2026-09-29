@@ -12,7 +12,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$(cd "${1:?usage: test-modelcull.sh <build-dir>}" && pwd)"
-WANT=5437b0a3a38604ca7f797d943cfb34bb
+WANT=15910d4ec5eb0236a1fd64a1f97c74f1
 
 rm -f "$OUT/BENCH.BMP"
 VBD_OUT="$OUT" TIMEOUT="${TIMEOUT:-180}" \

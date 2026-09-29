@@ -32,7 +32,11 @@ const QGL_M_WIRE = 0
 const QGL_M_FLAT = 1
 const QGL_M_TEX  = 2
 const QGL_M_PTEX = 3
+const QGL_M_ATEX = 4
 
 '' Where a paged array store's records live.
 const QGL_AR_MEM = 0
 const QGL_AR_EMS = 1
+
+'' Pixel format, for qglNew/qglNewEx. One format, because the fill directory says so -- a second would be a sibling directory and a second table, never a flag.
+const QGL_FMT_8BIT = 0
