@@ -62,6 +62,7 @@ type EntsHead
     gravity     as single       '' world.qc's sv_gravity: 100 on e1m8, 800 elsewhere
     next_map    as string * 8   '' trigger_changelevel's map, space padded; blank for none
     nmsg        as integer      '' the message table, 40 bytes each, last in the file
+    nlight      as integer      '' switchable lights, 6 bytes each, before the messages
 end type
 
 '' A func_train, after the ambients: it rides the plat array. first is
@@ -72,6 +73,7 @@ type EntsTrain
     speed       as single
     targeted    as integer
     first       as integer
+    snd         as integer
 end type
 
 '' A path_corner, last in the file: the train's mins go here, wait
@@ -173,6 +175,7 @@ type EntsPlat
     model       as integer
     speed       as single
     travel      as single
+    snd         as integer      '' "sounds": cport plays it; read to keep the records aligned
 end type
 
 '' A func_door, resolved offline: travel is movedir * (size along it -

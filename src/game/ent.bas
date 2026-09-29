@@ -448,6 +448,7 @@ sub ent_load_teleports ( _
     dim mr as EntsMon
     dim ar as EntsAmb
     dim nr as EntsTrain
+    dim lrec as string * 6
     dim i as integer, j as integer, k as integer
     dim mdlnum as integer
 
@@ -609,6 +610,10 @@ sub ent_load_teleports ( _
     next i
     for  i = 0 to h.ncrate - 1
         ent_get u, clng( varseg( crate_tab(i) ) ) * 65536& + (clng( varptr( crate_tab(i) ) ) and 65535&), len( crate_tab(i) )
+    next i
+    '' cport's switchable lights; this renderer has none to switch yet
+    for  i = 1 to h.nlight
+        ent_get u, clng( varseg( lrec ) ) * 65536& + (clng( varptr( lrec ) ) and 65535&), 6
     next i
     for  i = 1 to h.nmsg
         ent_get u, clng( varseg( ent_msg(i) ) ) * 65536& + (clng( varptr( ent_msg(i) ) ) and 65535&), 40
