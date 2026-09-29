@@ -202,6 +202,7 @@ typedef struct {
     short qgl_drop;         /* out: faces qglRsPoly refused. Non-zero */
                             /* is a fault, not a fallback: there is   */
                             /* no mgl path left behind it.            */
+    short dl_tick;          /* ticks run: a lit face's key            */
 } DrawParams;
 
 /* q_draw.bi's FaceSetup -- the parameter block d_draw_faces fills once

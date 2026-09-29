@@ -73,6 +73,7 @@ type DrawParams
     cy_rast     as long
     qgl_drop    as integer   '' out: faces qglRsPoly refused -- a fault,
                              '' not a fallback; nothing stands behind it
+    dl_tick     as integer   '' ticks run: a lit face's key, since the light moves
 end type
 
 type FaceSetup

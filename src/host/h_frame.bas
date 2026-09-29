@@ -45,6 +45,7 @@ declare sub qglM4Conc ( _
 
 dim shared qgl_faces_dbg as integer
 dim shared qgl_drop_dbg as integer
+dim shared host_dl_tick as integer  '' bumped when the light moves; d_faces.c keys a lit face on it
 
 const DL_RADIUS# = 200.0#   '' Quake's own rocket dlight radius
 
@@ -465,6 +466,7 @@ sub host_tick ( _
     dim fire as integer, ndead as integer
     dim t0 as long
     dim t_all as long
+    dim ox as single, oy as single, oz as single, orad as single
 
     t_all = sys_rdtsc()
     '' what the player asked for
@@ -562,12 +564,16 @@ sub host_tick ( _
     '' not a whole-UDT assignment, matching how every other Vec3 copy in
     '' this codebase is written
     host_tk g.ft.n > 0, t_all, g.pt.tk_all
+    ox = g.rdr.dlight.pos.x : oy = g.rdr.dlight.pos.y : oz = g.rdr.dlight.pos.z : orad = g.rdr.dlight.radius
     g.rdr.dlight.pos.x = g.pl.pos.x
     g.rdr.dlight.pos.y = g.pl.pos.y
     g.rdr.dlight.pos.z = g.pl.pos.z
     g.rdr.dlight.radius = DL_RADIUS#
     '' and the muzzle flash, which is the same light, wider
     if ( g.rdr.anim_time < g.fight.flash_until ) then g.rdr.dlight.radius = DL_RADIUS# * 2.0
+    if ( ox <> g.rdr.dlight.pos.x or oy <> g.rdr.dlight.pos.y or oz <> g.rdr.dlight.pos.z or orad <> g.rdr.dlight.radius ) then
+        host_dl_tick = ( host_dl_tick + 1 ) mod 32000
+    end if
 
 end sub
 
@@ -784,6 +790,7 @@ sub host_render ( _
     dparm.dl_y        = g.rdr.dlight.pos.y
     dparm.dl_z        = g.rdr.dlight.pos.z
     dparm.dl_radius   = g.rdr.dlight.radius
+    dparm.dl_tick     = host_dl_tick
     dparm.ord_count   = g.vis.ord_count
     dparm.use_lm      = g.env.use_lm
     dparm.lightmap    = g.rdr.lightmap

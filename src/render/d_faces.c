@@ -580,20 +580,31 @@ void pascal far d_draw_faces(
                     lm_stag = ls_epoch( gv[GEOM_LMOFS + 6] & 255 );
 
                     /*
-                     * A face the dynamic light reaches must rebuild every
-                     * frame it stays in range, and once more the frame
-                     * after it leaves to wash the glow out. Forcing -1
-                     * here -- a value ls_epoch never returns -- makes the
-                     * miss happen before sc_find ever runs, so a plain
-                     * epoch match cannot paper over it.
+                     * A face the light reaches is keyed on the tick, below
+                     * any ls_epoch: the light moves with the player, so a
+                     * constant key froze the glow at its first build. The
+                     * tick after it leaves misses once more and washes it
+                     * out. Reached means the plane in range AND the foot
+                     * near the luxel rect; the plane alone marks every
+                     * coplanar face on the map.
                      */
                     D_ARRAYS_REFRESH();
                     pl = &planes[ tri[i].plane_id ];
                     dl_pdist = dp->dl_x * pl->norm.x
                              + dp->dl_y * pl->norm.y
                              + dp->dl_z * pl->norm.z - pl->dist;
-                    if ( dl_pdist < 0 ) dl_pdist = -dl_pdist;
-                    if ( dl_pdist < dp->dl_radius ) lm_stag = -1;
+                    if ( dl_pdist < dp->dl_radius && dl_pdist > -dp->dl_radius ) {
+                        float fx = dp->dl_x - pl->norm.x * dl_pdist;
+                        float fy = dp->dl_y - pl->norm.y * dl_pdist;
+                        float fz = dp->dl_z - pl->norm.z * dl_pdist;
+                        float r = dp->dl_radius + 1.0f;
+                        float ls = fx * texinf[tex].vecs[0] + fy * texinf[tex].vecs[1]
+                                 + fz * texinf[tex].vecs[2] + texinf[tex].vecs[3] - lm_tms;
+                        float lt = fx * texinf[tex].vect[0] + fy * texinf[tex].vect[1]
+                                 + fz * texinf[tex].vect[2] + texinf[tex].vect[3] - lm_tmt;
+                        if ( ls >= -r && ls <= lm_extw + r && lt >= -r && lt <= lm_exth + r )
+                            lm_stag = (short) ( -1 - dp->dl_tick );
+                    }
                 }
             }
 
